@@ -129,3 +129,30 @@ jobs:
           echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
           yarn start-validator &
           npx ts-mocha tests/farms_tests/**/*.test.ts --exit --parallel
+
+  tests-repay-with-coll:
+    name: Tests Repay with Collateral
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: hubbleprotocol/solana-setup-action@v0.2
+        id: solana-setup
+        with:
+          solana-version: ${{ env.solana_version }}
+          rust-shared-key: 'tests'
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/yarn.lock') }}
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 19
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      - name: Run tests
+        # Add solana binaries to path - todo should not be needed
+        run: |
+          echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+          yarn start-validator &
+          npx ts-mocha tests/repay_with_coll.test.ts --exit

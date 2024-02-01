@@ -15,6 +15,7 @@ export const repayWithCollCalcs = (props: {
   slippagePct: Decimal;
   flashLoanFee: Decimal;
 }): {
+  repayAmount: Decimal;
   collToSwapIn: Decimal;
   swapDebtExpectedOut: Decimal;
 } => {
@@ -27,6 +28,7 @@ export const repayWithCollCalcs = (props: {
   const collToSwapIn = swapDebtExpectedOut.mul(new Decimal(1.0).add(slippage)).mul(priceDebtToColl);
 
   return {
+    repayAmount,
     collToSwapIn,
     swapDebtExpectedOut,
   };
@@ -79,6 +81,7 @@ export const getRepayWithCollIxns = async (props: {
   const repayAmount = amount
     .mul(irSlippageBpsForDebt.add('0.1').div('10_000').add('1'))
     .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
+    console.log("ir", irSlippageBpsForDebt.add('0.1').div('10_000').add('1'));
 
   const calcs = repayWithCollCalcs({
     repayAmount,
