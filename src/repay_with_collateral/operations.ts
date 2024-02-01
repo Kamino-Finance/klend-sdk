@@ -117,24 +117,11 @@ export const getRepayWithCollIxns = async (props: {
     referrerTokenState: kaminoMarket.programId,
   });
 
-  // 2. Repay using the flash borrowed funds
-  const repayAction = await KaminoAction.buildRepayTxns(
+  // 2. Repay using the flash borrowed funds & withdraw collateral to swap and pay the flash loan
+  const repayAndWithdrawAction = await KaminoAction.buildRepayAndWithdrawTxns(
     kaminoMarket,
     isClosingPosition ? U64_MAX : numberToLamportsDecimal(repayAmount, debtReserve!.stats.decimals).floor().toString(),
     new PublicKey(debtTokenMint),
-    owner,
-    obligation,
-    undefined,
-    0,
-    false,
-    undefined,
-    undefined,
-    referrer
-  );
-
-  // 3. Withdraw collateral to swap and pay the flash loan
-  const withdrawAction = await KaminoAction.buildWithdrawTxns(
-    kaminoMarket,
     numberToLamportsDecimal(calcs.collToSwapIn, collReserve!.stats.decimals).ceil().toString(),
     new PublicKey(collTokenMint),
     owner,
@@ -143,6 +130,7 @@ export const getRepayWithCollIxns = async (props: {
     false,
     undefined,
     undefined,
+    isClosingPosition,
     referrer
   );
 
@@ -154,7 +142,7 @@ export const getRepayWithCollIxns = async (props: {
     'coll'
   );
 
-  // 4. Swap collateral to debt to repay flash loan
+  // 3. Swap collateral to debt to repay flash loan
   const [swapIxns, lookupTablesAddresses] = await swapper(
     numberToLamportsDecimal(calcs.collToSwapIn, collReserve!.stats.decimals).ceil().toNumber(),
     collTokenMint,
@@ -169,12 +157,11 @@ export const getRepayWithCollIxns = async (props: {
       ...budgetIxns,
       ...createAtasIxns,
       ...[flashBorrowIxn],
-      ...repayAction.setupIxs,
-      ...repayAction.lendingIxs,
-      ...repayAction.cleanupIxs,
-      ...withdrawAction.setupIxs,
-      ...withdrawAction.lendingIxs,
-      ...withdrawAction.cleanupIxs,
+      ...repayAndWithdrawAction.setupIxs,
+      ...[repayAndWithdrawAction.lendingIxs[0]],
+      ...repayAndWithdrawAction.inBetweenIxs,
+      ...[repayAndWithdrawAction.lendingIxs[1]],
+      ...repayAndWithdrawAction.cleanupIxs,
       ...swapInstructions,
       ...[flashRepayIxn],
       ...closeAtasIxns,
