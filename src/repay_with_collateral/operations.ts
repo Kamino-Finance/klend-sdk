@@ -81,7 +81,6 @@ export const getRepayWithCollIxns = async (props: {
   const repayAmount = amount
     .mul(irSlippageBpsForDebt.add('0.1').div('10_000').add('1'))
     .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
-    console.log("ir", irSlippageBpsForDebt.add('0.1').div('10_000').add('1'));
 
   const calcs = repayWithCollCalcs({
     repayAmount,
@@ -97,12 +96,10 @@ export const getRepayWithCollIxns = async (props: {
 
   const budgetIxns = getComputeBudgetAndPriorityFeeIxns(3000000);
   const {
-    atas: [collTokenAta, debtTokenAta],
+    atas: [, debtTokenAta],
     createAtasIxns,
     closeAtasIxns,
   } = await getAtasWithCreateIxnsIfMissing(connection, owner, mintsToCreateAtas);
-
-  console.log('User Atas', toJson({ collTokenAta: collTokenAta.toString(), debtTokenAta: debtTokenAta.toString() }));
 
   // 1. Flash borrow & repay the debt to repay amount needed
   const { flashBorrowIxn, flashRepayIxn } = getFlashLoanInstructions({
