@@ -5,5 +5,4 @@ export * from './obligation';
 export * from './reserve';
 export * from './shared';
 export * from './utils';
-export * from './wallet';
 export * from './jupiterPerps';

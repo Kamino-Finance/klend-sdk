@@ -686,11 +686,13 @@ export class KaminoObligation {
   ): {
     deposits: Map<PublicKey, Position>;
     userTotalDeposit: Decimal;
+    userTotalCollateralDeposit: Decimal;
     borrowLimit: Decimal;
     liquidationLtv: Decimal;
     borrowLiquidationLimit: Decimal;
   } {
     let userTotalDeposit = new Decimal(0);
+    let userTotalCollateralDeposit = new Decimal(0);
     let borrowLimit = new Decimal(0);
     let borrowLiquidationLimit = new Decimal(0);
 
@@ -725,6 +727,11 @@ export class KaminoObligation {
       const depositValueUsd = supplyAmount.mul(getPx(reserve)).dividedBy(reserve.getMintFactor());
 
       userTotalDeposit = userTotalDeposit.plus(depositValueUsd);
+
+      if (loanToValue !== 0) {
+        userTotalCollateralDeposit = userTotalCollateralDeposit.plus(depositValueUsd);
+      }
+
       borrowLimit = borrowLimit.plus(depositValueUsd.mul(loanToValue));
       borrowLiquidationLimit = borrowLiquidationLimit.plus(depositValueUsd.mul(liqThreshold));
 
@@ -740,6 +747,7 @@ export class KaminoObligation {
     return {
       deposits,
       userTotalDeposit,
+      userTotalCollateralDeposit,
       borrowLimit,
       liquidationLtv: valueOrZero(borrowLiquidationLimit.div(userTotalDeposit)),
       borrowLiquidationLimit,

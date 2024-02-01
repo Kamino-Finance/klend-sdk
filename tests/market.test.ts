@@ -3,7 +3,6 @@ import Decimal from 'decimal.js';
 import BN from 'bn.js';
 import * as anchor from '@coral-xyz/anchor';
 import {
-  ConfigType,
   getBorrowRate,
   KaminoAction,
   KaminoMarket,
@@ -14,7 +13,6 @@ import {
 } from '../src';
 import * as assert from 'assert';
 import {
-  getApiEndpoint,
   buildAndSendTxnWithLogs,
   VanillaObligation,
   sendTransactionV0,
@@ -36,7 +34,6 @@ const assertAlmostEqual = (v1: number, v2: number, epsilon_pct = 1) => {
 };
 
 describe('Main lending market instruction tests', function () {
-
   it.skip('reads_kamino_lending_main_market', async function () {
     const connection = new Connection(endpointFromCluster('mainnet-beta'), {
       commitment: 'finalized',
