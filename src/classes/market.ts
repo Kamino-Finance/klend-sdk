@@ -748,7 +748,7 @@ export class KaminoMarket {
     return [address, userMetadata];
   }
 
-  async getReferrerTokenStateForMint(
+  async getReferrerTokenStateForReserve(
     referrer: PublicKey,
     reserve: PublicKey
   ): Promise<[PublicKey, ReferrerTokenState | null]> {
@@ -812,12 +812,12 @@ export class KaminoMarket {
   }
 
   async getReferrerFeesUnclaimedForReserve(referrer: PublicKey, reserve: KaminoReserve): Promise<Decimal> {
-    const [, referrerTokenState] = await this.getReferrerTokenStateForMint(referrer, reserve.address);
+    const [, referrerTokenState] = await this.getReferrerTokenStateForReserve(referrer, reserve.address);
     return referrerTokenState ? new Fraction(referrerTokenState.amountUnclaimedSf).toDecimal() : new Decimal(0);
   }
 
   async getReferrerFeesCumulativeForReserve(referrer: PublicKey, reserve: KaminoReserve): Promise<Decimal> {
-    const [, referrerTokenState] = await this.getReferrerTokenStateForMint(referrer, reserve.address);
+    const [, referrerTokenState] = await this.getReferrerTokenStateForReserve(referrer, reserve.address);
     return referrerTokenState ? new Fraction(referrerTokenState.amountCumulativeSf).toDecimal() : new Decimal(0);
   }
 

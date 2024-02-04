@@ -34,8 +34,6 @@ export const repayWithCollCalcs = (props: {
   };
 };
 
-// TODO: allow repay from KTOKENS coll
-
 export const getRepayWithCollIxns = async (props: {
   kaminoMarket: KaminoMarket;
   amount: Decimal;
