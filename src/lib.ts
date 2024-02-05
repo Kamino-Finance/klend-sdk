@@ -5,4 +5,4 @@ export * from './classes';
 export * from './utils';
 export * from './leverage';
 export * from './referrals';
-export * from './repay_with_collateral';
+export * from './lending_operations';
