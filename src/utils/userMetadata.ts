@@ -114,11 +114,21 @@ const getDedupUserLookupTableAddresses = async (
 
   if (tableExists) {
     const userLookupTable = (await kaminoMarket.getConnection().getAddressLookupTable(table_pk)).value?.state!;
-    return requiredAddresses.filter(
-      (address) => userLookupTable.addresses.filter((a) => a.equals(address)).length === 0
+    const addressesAndLogsNotInLut = requiredAddresses.filter(
+      (addressAndLogs) => userLookupTable.addresses.filter((a) => a.equals(addressAndLogs.address)).length === 0
     );
+    console.log('Addresses to be added in LUT:');
+    const addressNotInLut = addressesAndLogsNotInLut.map((addressAndLogs) => {
+      console.log(addressAndLogs.log);
+      return addressAndLogs.address;
+    });
+    return new PublicKeySet(addressNotInLut).toArray();
   } else {
-    return requiredAddresses;
+    const addressNotInLut = requiredAddresses.map((addressAndLogs) => {
+      console.log(addressAndLogs.log);
+      return addressAndLogs.address;
+    });
+    return new PublicKeySet(addressNotInLut).toArray();
   }
 };
 
@@ -128,11 +138,11 @@ const getUserLookupTableAddresses = async (
   referrer: PublicKey,
   multiplyMints: { coll: PublicKey; debt: PublicKey }[] = [],
   leverageMints: { coll: PublicKey; debt: PublicKey }[] = []
-): Promise<PublicKey[]> => {
-  const addresses: PublicKey[] = [];
-  addresses.push(user);
+): Promise<{ address: PublicKey; log: string }[]> => {
+  const addresses: { address: PublicKey; log: string }[] = [];
+  addresses.push({ address: user, log: 'user address' });
   const [userMetadataAddress] = userMetadataPda(user, kaminoMarket.programId);
-  addresses.push(userMetadataAddress);
+  addresses.push({ address: userMetadataAddress, log: 'userMetadata address' });
 
   const allMints: PublicKey[] = [];
   multiplyMints.forEach(({ coll: collMint, debt: debtMint }) => {
@@ -153,23 +163,40 @@ const getUserLookupTableAddresses = async (
   });
 
   // reserve mint ATAs
-  const mintsAtas: PublicKey[] = await Promise.all(dedupMints.map((mint) => getAssociatedTokenAddress(mint, user)));
+  const mintsAtas: { address: PublicKey; log: string }[] = await Promise.all(
+    dedupMints.map(async (mint) => {
+      return { address: await getAssociatedTokenAddress(mint, user), log: 'ata for mint ' + mint.toString() };
+    })
+  );
   addresses.push(...mintsAtas);
   // ctoken ATAs
-  const ctokenMints: PublicKey[] = reserves.map((reserve) => reserve.getCTokenMint());
-  const ctokenMintsAtas: PublicKey[] = await Promise.all(
-    ctokenMints.map((mint) => getAssociatedTokenAddress(mint, user))
+  const ctokenMintsAtas: { address: PublicKey; log: string }[] = await Promise.all(
+    reserves.map(async (reserve) => {
+      const ctokenMint = reserve.getCTokenMint();
+      return {
+        address: await getAssociatedTokenAddress(ctokenMint, user),
+        log: 'ctoken ata for reserve ' + reserve.address.toString(),
+      };
+    })
   );
   addresses.push(...ctokenMintsAtas);
   // farm states
   const farmCollateralStates: PublicKey[] = reserves.map((reserve) => reserve.state.farmCollateral);
   const farmDebtStates: PublicKey[] = reserves.map((reserve) => reserve.state.farmDebt);
-  const farmStates = new Set(farmCollateralStates.concat(farmDebtStates).filter((address) => isNotNullPubkey(address)));
-  addresses.push(...farmStates);
-  // referrer token states
-  const referrerTokenStates: PublicKey[] = reserves.map(
-    (reserve) => referrerTokenStatePda(referrer, reserve.address, kaminoMarket.programId)[0]
+  const farmStates = new PublicKeySet(
+    farmCollateralStates.concat(farmDebtStates).filter((address) => isNotNullPubkey(address))
   );
+  const farmStatesAdressesAndLogs = farmStates.toArray().map((address) => {
+    return { address: address, log: 'farm state' };
+  });
+  addresses.push(...farmStatesAdressesAndLogs);
+  // referrer token states
+  const referrerTokenStates: { address: PublicKey; log: string }[] = reserves.map((reserve) => {
+    return {
+      address: referrerTokenStatePda(referrer, reserve.address, kaminoMarket.programId)[0],
+      log: 'referrer token state for reserve ' + reserve.address,
+    };
+  });
   addresses.push(...referrerTokenStates);
 
   const [multiplyObligations, multiplyObligationsFarmUserStates] = getMultiplyObligationAndObligationFarmStateAddresses(
@@ -178,8 +205,8 @@ const getUserLookupTableAddresses = async (
     multiplyMints
   );
 
-  addresses.push(...new PublicKeySet(multiplyObligations).toArray());
-  addresses.push(...new PublicKeySet(multiplyObligationsFarmUserStates).toArray());
+  addresses.push(...multiplyObligations);
+  addresses.push(...multiplyObligationsFarmUserStates);
 
   const [leverageObligations, leverageObligationsFarmUserStates] = getLeverageObligationAndObligationFarmStateAddresses(
     kaminoMarket,
@@ -187,8 +214,8 @@ const getUserLookupTableAddresses = async (
     leverageMints
   );
 
-  addresses.push(...new PublicKeySet(leverageObligations).toArray());
-  addresses.push(...new PublicKeySet(leverageObligationsFarmUserStates).toArray());
+  addresses.push(...leverageObligations);
+  addresses.push(...leverageObligationsFarmUserStates);
 
   return addresses;
 };
@@ -197,28 +224,44 @@ function getMultiplyObligationAndObligationFarmStateAddresses(
   kaminoMarket: KaminoMarket,
   user: PublicKey,
   mints: { coll: PublicKey; debt: PublicKey }[]
-): [PublicKey[], PublicKey[]] {
-  const obligationPdas: PublicKey[] = [];
-  const farmUserStates: PublicKey[] = [];
+): [{ address: PublicKey; log: string }[], { address: PublicKey; log: string }[]] {
+  const obligationPdas: { address: PublicKey; log: string }[] = [];
+  const farmUserStates: { address: PublicKey; log: string }[] = [];
 
   for (const { coll: collMint, debt: debtMint } of mints) {
     const collReserve = kaminoMarket.getReserveByMint(collMint);
     const debtReserve = kaminoMarket.getReserveByMint(debtMint);
     if (collReserve && debtReserve) {
       const multiplyObligation = new MultiplyObligation(collMint, WRAPPED_SOL_MINT, kaminoMarket.programId);
-      obligationPdas.push(multiplyObligation.toPda(kaminoMarket.getAddress(), user));
+      obligationPdas.push({
+        address: multiplyObligation.toPda(kaminoMarket.getAddress(), user),
+        log: 'multiply obligation coll: ' + collMint.toString() + ' debt: ' + debtMint.toString(),
+      });
       if (!collReserve.state.farmCollateral.equals(PublicKey.default)) {
-        farmUserStates.push(
-          getPdaFarmsUserState(
+        farmUserStates.push({
+          address: getPdaFarmsUserState(
             collReserve.state.farmCollateral!,
             multiplyObligation.toPda(kaminoMarket.getAddress(), user)
-          )
-        );
+          ),
+          log:
+            'collReserve farmState for multiply obligation coll: ' +
+            collMint.toString() +
+            ' debt: ' +
+            debtMint.toString(),
+        });
       }
       if (!debtReserve.state.farmDebt.equals(PublicKey.default)) {
-        farmUserStates.push(
-          getPdaFarmsUserState(debtReserve.state.farmDebt!, multiplyObligation.toPda(kaminoMarket.getAddress(), user))
-        );
+        farmUserStates.push({
+          address: getPdaFarmsUserState(
+            debtReserve.state.farmDebt!,
+            multiplyObligation.toPda(kaminoMarket.getAddress(), user)
+          ),
+          log:
+            'debtReserve farmState for multiply obligation coll: ' +
+            collMint.toString() +
+            ' debt: ' +
+            debtMint.toString(),
+        });
       }
     }
   }
@@ -230,28 +273,44 @@ function getLeverageObligationAndObligationFarmStateAddresses(
   kaminoMarket: KaminoMarket,
   user: PublicKey,
   mints: { coll: PublicKey; debt: PublicKey }[]
-): [PublicKey[], PublicKey[]] {
-  const obligationPdas: PublicKey[] = [];
-  const farmUserStates: PublicKey[] = [];
+): [{ address: PublicKey; log: string }[], { address: PublicKey; log: string }[]] {
+  const obligationPdas: { address: PublicKey; log: string }[] = [];
+  const farmUserStates: { address: PublicKey; log: string }[] = [];
 
   for (const { coll: collMint, debt: debtMint } of mints) {
     const collReserve = kaminoMarket.getReserveByMint(collMint);
     const debtReserve = kaminoMarket.getReserveByMint(debtMint);
     if (collReserve && debtReserve) {
       const leverageObligation = new LeverageObligation(collMint, debtMint, kaminoMarket.programId);
-      obligationPdas.push(leverageObligation.toPda(kaminoMarket.getAddress(), user));
+      obligationPdas.push({
+        address: leverageObligation.toPda(kaminoMarket.getAddress(), user),
+        log: 'leverage obligation coll: ' + collMint.toString() + ' debt: ' + debtMint.toString(),
+      });
       if (!collReserve.state.farmCollateral.equals(PublicKey.default)) {
-        farmUserStates.push(
-          getPdaFarmsUserState(
+        farmUserStates.push({
+          address: getPdaFarmsUserState(
             collReserve.state.farmCollateral!,
             leverageObligation.toPda(kaminoMarket.getAddress(), user)
-          )
-        );
+          ),
+          log:
+            'collReserve farmState for leverage obligation coll: ' +
+            collMint.toString() +
+            ' debt: ' +
+            debtMint.toString(),
+        });
       }
       if (!debtReserve.state.farmDebt.equals(PublicKey.default)) {
-        farmUserStates.push(
-          getPdaFarmsUserState(debtReserve.state.farmDebt!, leverageObligation.toPda(kaminoMarket.getAddress(), user))
-        );
+        farmUserStates.push({
+          address: getPdaFarmsUserState(
+            debtReserve.state.farmDebt!,
+            leverageObligation.toPda(kaminoMarket.getAddress(), user)
+          ),
+          log:
+            'debtReserve farmState for leverage obligation coll: ' +
+            collMint.toString() +
+            ' debt: ' +
+            debtMint.toString(),
+        });
       }
     }
   }
