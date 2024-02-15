@@ -18,6 +18,7 @@ export interface RedeemReserveCollateralAccounts {
   userSourceCollateral: PublicKey
   userDestinationLiquidity: PublicKey
   tokenProgram: PublicKey
+  instructionSysvarAccount: PublicKey
 }
 
 export const layout = borsh.struct([borsh.u64("collateralAmount")])
@@ -57,6 +58,11 @@ export function redeemReserveCollateral(
       isWritable: true,
     },
     { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
+    {
+      pubkey: accounts.instructionSysvarAccount,
+      isSigner: false,
+      isWritable: false,
+    },
   ]
   const identifier = Buffer.from([234, 117, 181, 125, 185, 142, 220, 29])
   const buffer = Buffer.alloc(1000)

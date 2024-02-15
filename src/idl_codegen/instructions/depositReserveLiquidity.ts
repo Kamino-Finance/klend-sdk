@@ -18,6 +18,7 @@ export interface DepositReserveLiquidityAccounts {
   userSourceLiquidity: PublicKey
   userDestinationCollateral: PublicKey
   tokenProgram: PublicKey
+  instructionSysvarAccount: PublicKey
 }
 
 export const layout = borsh.struct([borsh.u64("liquidityAmount")])
@@ -53,6 +54,11 @@ export function depositReserveLiquidity(
       isWritable: true,
     },
     { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
+    {
+      pubkey: accounts.instructionSysvarAccount,
+      isSigner: false,
+      isWritable: false,
+    },
   ]
   const identifier = Buffer.from([169, 201, 30, 126, 6, 205, 102, 68])
   const buffer = Buffer.alloc(1000)

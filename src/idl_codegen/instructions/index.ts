@@ -139,3 +139,8 @@ export type {
   UpdateUserMetadataOwnerArgs,
   UpdateUserMetadataOwnerAccounts,
 } from "./updateUserMetadataOwner"
+export { idlMissingTypes } from "./idlMissingTypes"
+export type {
+  IdlMissingTypesArgs,
+  IdlMissingTypesAccounts,
+} from "./idlMissingTypes"
