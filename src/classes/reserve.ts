@@ -212,7 +212,10 @@ export class KaminoReserve {
     const currentUtilization = this.calculateUtilizationRatio();
 
     const borrowAPR = this.calculateBorrowAPR();
-    return currentUtilization * borrowAPR;
+    const protocolTakeRatePct = new Decimal(1)
+      .minus(new Decimal(this.state.config.protocolTakeRatePct / 100))
+      .toNumber();
+    return currentUtilization * borrowAPR * protocolTakeRatePct;
   }
 
   calculateUtilizationRatio() {
