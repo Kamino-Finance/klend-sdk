@@ -1,7 +1,7 @@
-import { createMarketWithLoan } from './setup_utils';
+import { borrow, createMarketWithLoan, createMarketWithTwoReservesToppedUp, deposit, newUser } from './setup_utils';
 import { updateReserve } from './setup_operations';
 import { fuzzyEq, newFlat, sleep } from '../src';
-import { expect } from 'chai';
+import { assert, expect } from 'chai';
 import { INITIAL_COLLATERAL_RATE } from '../src/utils';
 import { BN } from '@coral-xyz/anchor';
 import { ReserveConfig } from '../src/idl_codegen/types';
@@ -78,5 +78,38 @@ describe('reserve', function () {
 
     expect(updatedReserve.depositLimitCrossed()).eq(true);
     expect(updatedReserve.borrowLimitCrossed()).eq(true);
+  });
+
+  it('retrieves_apr_protocol_take_rate', async function () {
+    const [collToken, debtToken] = ['MSOL', 'USDH'];
+
+    console.log('Setting up market ===');
+    const { env, kaminoMarket } = await createMarketWithTwoReservesToppedUp(
+      [collToken, new Decimal(1000.05)],
+      [debtToken, new Decimal(10)]
+    );
+    const fetchedReserve = kaminoMarket.getReserveBySymbol('USDH')!;
+    const config = new ReserveConfig({
+      ...fetchedReserve.state.config,
+      protocolTakeRatePct: 20,
+    });
+    await updateReserve(env, fetchedReserve.address, config);
+
+    console.log('Creating user ===');
+    const borrower = await newUser(env, kaminoMarket, [[collToken, new Decimal(1000)]]);
+
+    await deposit(env, kaminoMarket, borrower, collToken, new Decimal(1000));
+    await borrow(env, kaminoMarket, borrower, debtToken, new Decimal(10));
+
+    await fetchedReserve.load(fetchedReserve.tokenOraclePrice);
+    await sleep(8000);
+
+    const borrowAPR = fetchedReserve.calculateBorrowAPR();
+    const supplyAPR =
+      borrowAPR *
+      (1 - fetchedReserve.state.config.protocolTakeRatePct / 100) *
+      fetchedReserve.calculateUtilizationRatio();
+
+    assert(supplyAPR == borrowAPR * (1 - fetchedReserve.state.config.protocolTakeRatePct / 100));
   });
 });

@@ -87,6 +87,9 @@ describe('obligation', function () {
 
     const fetchedObligation = (await kaminoMarket.getObligationByAddress(obligation))!;
 
+    // Reload the reserve to get the updated config
+    await reserve.load(reserve.tokenOraclePrice);
+
     const interestRate = fetchedObligation.estimateObligationInterestRate(
       reserve,
       fetchedObligation.state.borrows[0],
@@ -97,5 +100,11 @@ describe('obligation', function () {
 
     assert(interestRate.gt(1));
     assert.ok(fuzzyEq(interestRate, 1));
+
+    const reserveBorrowApr = reserve.totalBorrowAPY();
+    assert(reserveBorrowApr.totalAPY > 1);
+
+    const reserveSupplyApr = reserve.totalSupplyAPY();
+    assert(reserveSupplyApr.totalAPY === 0);
   });
 });
