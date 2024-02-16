@@ -208,13 +208,11 @@ export class KaminoReserve {
     return this.getBorrowedAmount().gt(new Decimal(this.state.config.borrowLimit.toString()));
   }
 
-  private calculateSupplyAPR() {
+  calculateSupplyAPR() {
     const currentUtilization = this.calculateUtilizationRatio();
 
     const borrowAPR = this.calculateBorrowAPR();
-    const protocolTakeRatePct = new Decimal(1)
-      .minus(new Decimal(this.state.config.protocolTakeRatePct / 100))
-      .toNumber();
+    const protocolTakeRatePct = 1 - this.state.config.protocolTakeRatePct / 100;
     return currentUtilization * borrowAPR * protocolTakeRatePct;
   }
 

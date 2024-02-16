@@ -105,11 +105,8 @@ describe('reserve', function () {
     await sleep(8000);
 
     const borrowAPR = fetchedReserve.calculateBorrowAPR();
-    const supplyAPR =
-      borrowAPR *
-      (1 - fetchedReserve.state.config.protocolTakeRatePct / 100) *
-      fetchedReserve.calculateUtilizationRatio();
+    const supplyAPR = fetchedReserve.calculateSupplyAPR();
 
-    assert(supplyAPR == borrowAPR * (1 - fetchedReserve.state.config.protocolTakeRatePct / 100));
+    assert(supplyAPR === borrowAPR * (1 - fetchedReserve.state.config.protocolTakeRatePct / 100));
   });
 });
