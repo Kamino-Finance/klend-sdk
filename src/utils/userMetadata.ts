@@ -231,11 +231,13 @@ function getMultiplyObligationAndObligationFarmStateAddresses(
   for (const { coll: collMint, debt: debtMint } of mints) {
     const collReserve = kaminoMarket.getReserveByMint(collMint);
     const debtReserve = kaminoMarket.getReserveByMint(debtMint);
+    const collMintString = collMint.toString();
+    const debtMintString = debtMint.toString();
     if (collReserve && debtReserve) {
       const multiplyObligation = new MultiplyObligation(collMint, WRAPPED_SOL_MINT, kaminoMarket.programId);
       obligationPdas.push({
         address: multiplyObligation.toPda(kaminoMarket.getAddress(), user),
-        log: 'multiply obligation coll: ' + collMint.toString() + ' debt: ' + debtMint.toString(),
+        log: 'multiply obligation coll: ' + collMintString + ' debt: ' + debtMintString,
       });
       if (!collReserve.state.farmCollateral.equals(PublicKey.default)) {
         farmUserStates.push({
@@ -243,11 +245,7 @@ function getMultiplyObligationAndObligationFarmStateAddresses(
             collReserve.state.farmCollateral!,
             multiplyObligation.toPda(kaminoMarket.getAddress(), user)
           ),
-          log:
-            'collReserve farmState for multiply obligation coll: ' +
-            collMint.toString() +
-            ' debt: ' +
-            debtMint.toString(),
+          log: 'collReserve farmState for multiply obligation coll: ' + collMintString + ' debt: ' + debtMintString,
         });
       }
       if (!debtReserve.state.farmDebt.equals(PublicKey.default)) {
@@ -256,11 +254,7 @@ function getMultiplyObligationAndObligationFarmStateAddresses(
             debtReserve.state.farmDebt!,
             multiplyObligation.toPda(kaminoMarket.getAddress(), user)
           ),
-          log:
-            'debtReserve farmState for multiply obligation coll: ' +
-            collMint.toString() +
-            ' debt: ' +
-            debtMint.toString(),
+          log: 'debtReserve farmState for multiply obligation coll: ' + collMintString + ' debt: ' + debtMintString,
         });
       }
     }
@@ -280,11 +274,13 @@ function getLeverageObligationAndObligationFarmStateAddresses(
   for (const { coll: collMint, debt: debtMint } of mints) {
     const collReserve = kaminoMarket.getReserveByMint(collMint);
     const debtReserve = kaminoMarket.getReserveByMint(debtMint);
+    const collMintString = collMint.toString();
+    const debtMintString = debtMint.toString();
     if (collReserve && debtReserve) {
       const leverageObligation = new LeverageObligation(collMint, debtMint, kaminoMarket.programId);
       obligationPdas.push({
         address: leverageObligation.toPda(kaminoMarket.getAddress(), user),
-        log: 'leverage obligation coll: ' + collMint.toString() + ' debt: ' + debtMint.toString(),
+        log: 'leverage obligation coll: ' + collMintString + ' debt: ' + debtMintString,
       });
       if (!collReserve.state.farmCollateral.equals(PublicKey.default)) {
         farmUserStates.push({
@@ -292,11 +288,7 @@ function getLeverageObligationAndObligationFarmStateAddresses(
             collReserve.state.farmCollateral!,
             leverageObligation.toPda(kaminoMarket.getAddress(), user)
           ),
-          log:
-            'collReserve farmState for leverage obligation coll: ' +
-            collMint.toString() +
-            ' debt: ' +
-            debtMint.toString(),
+          log: 'collReserve farmState for leverage obligation coll: ' + collMintString + ' debt: ' + debtMintString,
         });
       }
       if (!debtReserve.state.farmDebt.equals(PublicKey.default)) {
@@ -305,11 +297,7 @@ function getLeverageObligationAndObligationFarmStateAddresses(
             debtReserve.state.farmDebt!,
             leverageObligation.toPda(kaminoMarket.getAddress(), user)
           ),
-          log:
-            'debtReserve farmState for leverage obligation coll: ' +
-            collMint.toString() +
-            ' debt: ' +
-            debtMint.toString(),
+          log: 'debtReserve farmState for leverage obligation coll: ' + collMintString + ' debt: ' + debtMintString,
         });
       }
     }
