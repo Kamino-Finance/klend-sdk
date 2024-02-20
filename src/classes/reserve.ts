@@ -285,7 +285,9 @@ export class KaminoReserve {
   calcSimulatedSupplyAPR(amount: Decimal, action: ActionType, outflowAmount?: Decimal) {
     const newUtilization = this.calcSimulatedUtilizationRatio(amount, action, outflowAmount);
     const simulatedBorrowAPR = this.calcSimulatedBorrowAPR(amount, action, outflowAmount);
-    return newUtilization * simulatedBorrowAPR;
+    const protocolTakeRatePct = 1 - this.state.config.protocolTakeRatePct / 100;
+
+    return newUtilization * simulatedBorrowAPR * protocolTakeRatePct;
   }
 
   calculateBorrowAPR() {
