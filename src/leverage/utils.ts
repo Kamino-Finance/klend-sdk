@@ -5,7 +5,6 @@ import { PriceAinBProvider, SwapIxnsProvider } from './operations';
 import Decimal from 'decimal.js';
 import { getTokenAccountBalanceDecimal } from '../utils';
 import { numberToLamportsDecimal } from '../classes/utils';
-import { toJson } from './calcs';
 import BN from 'bn.js';
 
 export interface KaminoSwapperIxBuilder {
@@ -140,7 +139,7 @@ export const getKtokenToTokenSwapper = async (
       amountToWithdraw
     );
 
-    if (amountOutMint.toString() === kaminoStrategy?.strategy.tokenAMint.toString()) {
+    if (amountOutMint.equals(kaminoStrategy?.strategy.tokenAMint!)) {
       const [swapIxs, swapLookupTables] = await swapper(
         estimatedBOut.toNumber(),
         kaminoStrategy?.strategy.tokenBMint!,
@@ -149,7 +148,7 @@ export const getKtokenToTokenSwapper = async (
       );
 
       return [[...ixWithdraw.prerequisiteIxs, ixWithdraw.withdrawIx, ...swapIxs], swapLookupTables];
-    } else if (amountOutMint.toString() === kaminoStrategy?.strategy.tokenBMint.toString()) {
+    } else if (amountOutMint.equals(kaminoStrategy?.strategy.tokenBMint!)) {
       const [swapIxs, swapLookupTables] = await swapper(
         estimatedAOut.toNumber(),
         kaminoStrategy?.strategy.tokenAMint!,
@@ -189,8 +188,6 @@ export async function getKtokenWithdrawEstimatesAndPrice(
     .toDecimalPlaces(18);
 
   const withdrawFee = new Decimal(10_000).sub(new Decimal(kaminoStrategy.strategy.withdrawFee.toString()));
-
-  console.log('sharesData', toJson(sharesData));
 
   // TODO: Mihai/Marius improve - currently subtracting due to decimal accuracy issues compared to yvaults SC
   // for both A and B op: .sub(0.000002)
