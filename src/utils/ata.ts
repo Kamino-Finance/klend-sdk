@@ -151,11 +151,11 @@ export function removeBudgetAndAtaIxns(ixns: TransactionInstruction[], mints: st
   return ixns.filter((ixn) => {
     const { programId, keys } = ixn;
 
-    if (programId.toString() === ComputeBudgetProgram.programId.toString()) {
+    if (programId.equals(ComputeBudgetProgram.programId)) {
       return false;
     }
 
-    if (programId.toString() === ASSOCIATED_TOKEN_PROGRAM_ID.toString()) {
+    if (programId.equals(ASSOCIATED_TOKEN_PROGRAM_ID)) {
       const mint = keys[3];
 
       return !mints.includes(mint.pubkey.toString());

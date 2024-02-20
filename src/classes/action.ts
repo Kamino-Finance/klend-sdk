@@ -400,7 +400,7 @@ export class KaminoAction {
     amount: string | BN,
     mint: PublicKey,
     owner: PublicKey,
-    obligationType: ObligationType,
+    obligation: KaminoObligation | ObligationType,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
@@ -414,7 +414,7 @@ export class KaminoAction {
       mint,
       owner,
       kaminoMarket,
-      obligationType,
+      obligation,
       referrer,
       hostAta
     );
