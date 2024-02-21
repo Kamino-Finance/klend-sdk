@@ -1,14 +1,4 @@
 import { Keypair, PublicKey } from '@solana/web3.js';
-import {
-  buildVersionedTransaction,
-  getAssociatedTokenAddress,
-  getExpectedTokenBalanceAfterBorrow,
-  getKtokenToTokenSwapper,
-  getTokenAccountBalance,
-  getTokenToKtokenSwapper,
-  sendAndConfirmVersionedTransaction,
-  sleep,
-} from '../src';
 import { WSOL_MINT, getLocalSwapper, getPriceAinB } from './leverage_utils';
 import { setupStrategyAndMarketWithInitialLiquidity, newUser, createLookupTable } from './setup_utils';
 import Decimal from 'decimal.js';
@@ -17,6 +7,14 @@ import { TOKEN_PROGRAM_ID, Token } from '@solana/spl-token';
 import { Price } from './kamino/price';
 import { assertFuzzyEq } from './assert';
 import { reloadReservesAndRefreshMarket } from './setup_operations';
+import { sleep } from '../src/classes/utils';
+import {
+  getExpectedTokenBalanceAfterBorrow,
+  getKtokenToTokenSwapper,
+  getTokenToKtokenSwapper,
+} from '../src/leverage/utils';
+import { getAssociatedTokenAddress, getTokenAccountBalance } from '../src/utils/ata';
+import { buildVersionedTransaction, sendAndConfirmVersionedTransaction } from '../src/utils/instruction';
 
 describe('Leverage SDK kTokens swapper tests', function () {
   it('swap_A_to_kAB_A_is_SOL_B_is_SPL', async function () {

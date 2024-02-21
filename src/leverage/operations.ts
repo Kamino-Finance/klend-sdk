@@ -1,16 +1,7 @@
 import { Connection, LAMPORTS_PER_SOL, PublicKey, TransactionInstruction } from '@solana/web3.js';
 import Decimal from 'decimal.js';
-import { KaminoAction, KaminoMarket, KaminoObligation } from '../classes';
+import { KaminoAction, KaminoMarket, KaminoObligation, lamportsToNumberDecimal as fromLamports } from '../classes';
 import { getFlashLoanInstructions } from './instructions';
-
-import {
-  lamportsToNumberDecimal as fromLamports,
-  getExpectedTokenBalanceAfterBorrow,
-  getKtokenToTokenSwapper,
-  getTokenToKtokenSwapper,
-  WRAPPED_SOL_MINT,
-  simulateMintKToken,
-} from '../lib';
 
 import { numberToLamportsDecimal as toLamports } from '../classes';
 import {
@@ -19,15 +10,17 @@ import {
   ObligationType,
   ObligationTypeTag,
   U64_MAX,
+  WRAPPED_SOL_MINT,
   getAssociatedTokenAddress,
   getAtasWithCreateIxnsIfMissing,
   getComputeBudgetAndPriorityFeeIxns,
   getDepositWsolIxns,
   removeBudgetAndAtaIxns,
 } from '../utils';
-import { calcAdjustAmounts, calcWithdrawAmounts, toJson } from './calcs';
+import { calcAdjustAmounts, calcWithdrawAmounts, simulateMintKToken, toJson } from './calcs';
 import { TOKEN_PROGRAM_ID, Token } from '@solana/spl-token';
 import { Kamino, InstructionsWithLookupTables, StrategyWithAddress, TokenAmounts } from '@hubbleprotocol/kamino-sdk';
+import { getExpectedTokenBalanceAfterBorrow, getKtokenToTokenSwapper, getTokenToKtokenSwapper } from './utils';
 
 export type SwapIxnsProvider = (
   amountInLamports: number,
@@ -237,7 +230,7 @@ export const getDepositWithLeverageIxns = async (props: {
   priceAinB: PriceAinBProvider;
   kamino: Kamino | undefined;
   obligationTypeTagOverride: ObligationTypeTag;
-  obligation: KaminoObligation | undefined;
+  obligation: KaminoObligation | null;
 }): Promise<{ ixns: TransactionInstruction[]; lookupTablesAddresses: PublicKey[] }> => {
   const {
     connection,
@@ -517,7 +510,7 @@ export const getWithdrawWithLeverageIxns = async (props: {
   isKtoken: IsKtokenProvider;
   kamino: Kamino | undefined;
   obligationTypeTagOverride: ObligationTypeTag;
-  obligation: KaminoObligation | undefined;
+  obligation: KaminoObligation | null;
 }): Promise<{ ixns: TransactionInstruction[]; lookupTablesAddresses: PublicKey[] }> => {
   const {
     connection,
@@ -755,7 +748,7 @@ export const getAdjustLeverageIxns = async (props: {
   priceAinB: PriceAinBProvider;
   kamino: Kamino | undefined;
   obligationTypeTagOverride: ObligationTypeTag;
-  obligation: KaminoObligation | undefined;
+  obligation: KaminoObligation | null;
 }) => {
   const {
     connection,
@@ -886,7 +879,7 @@ export const getIncreaseLeverageIxns = async (
   priceAinB: PriceAinBProvider,
   kamino: Kamino | undefined,
   obligationTypeTagOverride: ObligationTypeTag = 1,
-  obligation: KaminoObligation | undefined
+  obligation: KaminoObligation | null
 ) => {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
