@@ -1,26 +1,22 @@
 import { Keypair, PublicKey } from '@solana/web3.js';
 import Decimal from 'decimal.js';
 import { Env, createLookupTable, getLocalSwapIxs } from './setup_utils';
+import { Kamino } from '@hubbleprotocol/kamino-sdk';
+import { MultiplyObligation, ObligationTypeTag } from '../src/utils/ObligationType';
+import { isKToken } from './kamino/utils';
 import {
-  KaminoMarket,
-  buildVersionedTransaction,
   getDepositWithLeverageIxns,
-  sendAndConfirmVersionedTransaction,
-  sleep,
-} from '../src';
-import {
-  IsKtokenProvider,
-  KaminoReserve,
+  getWithdrawWithLeverageIxns,
+  getAdjustLeverageIxns,
   PriceAinBProvider,
   SwapIxnsProvider,
-  lamportsToNumberDecimal as fromLamports,
-  getAdjustLeverageIxns,
-  getUserLutAddressAndSetupIxns,
-  getWithdrawWithLeverageIxns,
-} from '../src/lib';
-import { Kamino } from '@hubbleprotocol/kamino-sdk';
-import { ObligationTypeTag } from '../src/utils/ObligationType';
-import { isKToken } from './kamino/utils';
+  IsKtokenProvider,
+} from '../src/leverage/operations';
+import { KaminoMarket } from '../src/classes/market';
+import { getUserLutAddressAndSetupIxns } from '../src/utils/userMetadata';
+import { buildVersionedTransaction, sendAndConfirmVersionedTransaction } from '../src/utils/instruction';
+import { lamportsToNumberDecimal as fromLamports, sleep } from '../src/classes/utils';
+import { KaminoReserve } from '../src/classes/reserve';
 
 export const pk = () => Keypair.generate().publicKey;
 export const USDC_MINT = pk();
@@ -112,6 +108,11 @@ export const depositLeverageTestAdapter = async (
     await sleep(2000);
   }
 
+  const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, kaminoMarket.programId);
+  const obligation = await kaminoMarket.getObligationByAddress(
+    obligationType.toPda(kaminoMarket.getAddress(), user.publicKey)
+  );
+
   const { ixns, lookupTablesAddresses } = await getDepositWithLeverageIxns({
     connection: env.provider.connection,
     user: user.publicKey,
@@ -129,6 +130,7 @@ export const depositLeverageTestAdapter = async (
     priceAinB: getPriceAinB(kaminoMarket),
     kamino,
     obligationTypeTagOverride: ObligationTypeTag.Multiply,
+    obligation,
   });
 
   // Create lookup table
@@ -216,6 +218,11 @@ export const withdrawLeverageTestAdapter = async (
     }
   }
 
+  const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, kaminoMarket.programId);
+  const obligation = await kaminoMarket.getObligationByAddress(
+    obligationType.toPda(kaminoMarket.getAddress(), user.publicKey)
+  );
+
   const { ixns, lookupTablesAddresses } = await getWithdrawWithLeverageIxns({
     connection: env.provider.connection,
     user: user.publicKey,
@@ -234,6 +241,7 @@ export const withdrawLeverageTestAdapter = async (
     isKtoken: getIsKtoken(kaminoMarket),
     kamino,
     obligationTypeTagOverride: ObligationTypeTag.Multiply,
+    obligation,
   });
 
   // Create lookup table
@@ -306,6 +314,15 @@ export const adjustLeverageTestAdapter = async (
     }
   }
 
+  const obligationType = new MultiplyObligation(
+    collReserve?.getLiquidityMint()!,
+    debtReserve?.getLiquidityMint()!,
+    kaminoMarket.programId
+  );
+  const obligation = await kaminoMarket.getObligationByAddress(
+    obligationType.toPda(kaminoMarket.getAddress(), user.publicKey)
+  );
+
   const { ixns, lookupTablesAddresses } = await getAdjustLeverageIxns({
     connection: env.provider.connection,
     user: user.publicKey,
@@ -324,6 +341,7 @@ export const adjustLeverageTestAdapter = async (
     priceAinB: getPriceAinB(kaminoMarket),
     kamino,
     obligationTypeTagOverride: ObligationTypeTag.Multiply,
+    obligation,
   });
 
   // Create lookup table
