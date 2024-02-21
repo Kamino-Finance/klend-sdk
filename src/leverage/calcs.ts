@@ -28,6 +28,7 @@ export interface LeverageFormsCalcsArgs {
   flashBorrowReserveFlashLoanFeePercentage: Decimal;
   debtBorrowFactorPct: Decimal;
   priceCollToDebt: Decimal;
+  priceDebtToColl: Decimal;
 }
 
 export interface FormsCalcsResult {
@@ -54,10 +55,9 @@ export async function calculateMultiplyEffects(
     flashBorrowReserveFlashLoanFeePercentage,
     debtBorrowFactorPct,
     priceCollToDebt,
+    priceDebtToColl,
   }: LeverageFormsCalcsArgs
 ): Promise<FormsCalcsResult> {
-  const priceDebtToColl = new Decimal(1).div(priceCollToDebt);
-
   // calculate estimations for deposit operation
   const {
     adjustDepositPosition: depositModeEstimatedDepositAmount,

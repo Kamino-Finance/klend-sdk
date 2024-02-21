@@ -42,6 +42,7 @@ describe('Leverage calculation tests', function () {
     const [depositAmount, withdrawAmount] = [new Decimal(1.0), new Decimal(0)];
     const targetLeverage = new Decimal(3);
     const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint);
+    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceByTokenMintDecimal, {
       depositAmount,
@@ -56,6 +57,7 @@ describe('Leverage calculation tests', function () {
       flashBorrowReserveFlashLoanFeePercentage: new Decimal(0.0),
       debtBorrowFactorPct: new Decimal(100),
       priceCollToDebt,
+      priceDebtToColl,
     });
 
     console.log('calculateMultiplyEffects: ', toJson(res));
@@ -228,6 +230,7 @@ describe('Leverage calculation tests', function () {
     const [depositAmount, withdrawAmount] = [new Decimal('0.8333333333333334'), new Decimal(0)];
     const targetLeverage = new Decimal(3);
     const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint);
+    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceByTokenMintDecimal, {
       depositAmount,
@@ -242,6 +245,7 @@ describe('Leverage calculation tests', function () {
       flashBorrowReserveFlashLoanFeePercentage: new Decimal(0.0),
       debtBorrowFactorPct: new Decimal(100),
       priceCollToDebt,
+      priceDebtToColl,
     });
 
     console.log('calculateMultiplyEffects: ', toJson(res));
@@ -268,6 +272,7 @@ describe('Leverage calculation tests', function () {
     const [depositAmount, withdrawAmount] = [new Decimal('1.0'), new Decimal('0')];
     const targetLeverage = new Decimal('3');
     const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint);
+    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceByTokenMintDecimal, {
       depositAmount,
@@ -282,6 +287,7 @@ describe('Leverage calculation tests', function () {
       flashBorrowReserveFlashLoanFeePercentage: new Decimal(0.0),
       debtBorrowFactorPct: new Decimal(100),
       priceCollToDebt,
+      priceDebtToColl,
     });
 
     console.log('calculateMultiplyEffects: ', toJson(res));
@@ -308,6 +314,7 @@ describe('Leverage calculation tests', function () {
     const [depositAmount, withdrawAmount] = [new Decimal('0.8333333333333334'), new Decimal(0)];
     const targetLeverage = new Decimal('3');
     const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint);
+    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceByTokenMintDecimal, {
       depositAmount,
@@ -322,6 +329,7 @@ describe('Leverage calculation tests', function () {
       flashBorrowReserveFlashLoanFeePercentage: new Decimal(0.0),
       debtBorrowFactorPct: new Decimal(100),
       priceCollToDebt,
+      priceDebtToColl,
     });
 
     console.log('calculateMultiplyEffects: ', toJson(res));
@@ -350,6 +358,7 @@ describe('Leverage calculation tests', function () {
     const [depositAmount, withdrawAmount] = [new Decimal('0'), new Decimal('1')];
     const targetLeverage = new Decimal('5');
     const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint);
+    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceByTokenMintDecimal, {
       depositAmount,
@@ -364,6 +373,7 @@ describe('Leverage calculation tests', function () {
       flashBorrowReserveFlashLoanFeePercentage: new Decimal(0.0),
       debtBorrowFactorPct: new Decimal(100),
       priceCollToDebt,
+      priceDebtToColl,
     });
 
     console.log('calculateMultiplyEffects: ', toJson(res));
@@ -392,6 +402,7 @@ describe('Leverage calculation tests', function () {
     const [depositAmount, withdrawAmount] = [new Decimal('0'), new Decimal('0.8333333333333334')];
     const targetLeverage = new Decimal('5');
     const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint);
+    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceByTokenMintDecimal, {
       depositAmount,
@@ -406,6 +417,7 @@ describe('Leverage calculation tests', function () {
       flashBorrowReserveFlashLoanFeePercentage: new Decimal(0.0),
       debtBorrowFactorPct: new Decimal(100),
       priceCollToDebt,
+      priceDebtToColl,
     });
 
     console.log('calculateMultiplyEffects: ', toJson(res));
@@ -435,6 +447,7 @@ describe('Leverage calculation tests', function () {
     const [depositAmount, withdrawAmount] = [new Decimal('0'), new Decimal('0.0')];
     const targetLeverage = new Decimal('3');
     const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint);
+    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceByTokenMintDecimal, {
       depositAmount,
@@ -449,6 +462,7 @@ describe('Leverage calculation tests', function () {
       flashBorrowReserveFlashLoanFeePercentage: new Decimal(0.0),
       debtBorrowFactorPct: new Decimal(100),
       priceCollToDebt,
+      priceDebtToColl,
     });
 
     console.log('calculateMultiplyEffects: ', toJson(res));
@@ -465,6 +479,7 @@ describe('Leverage calculation tests', function () {
     const [depositAmount, withdrawAmount] = [new Decimal('0'), new Decimal('0.0')];
     const targetLeverage = new Decimal('3');
     const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint);
+    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceByTokenMintDecimal, {
       depositAmount,
@@ -479,6 +494,7 @@ describe('Leverage calculation tests', function () {
       flashBorrowReserveFlashLoanFeePercentage: new Decimal(0.0),
       debtBorrowFactorPct: new Decimal(100),
       priceCollToDebt,
+      priceDebtToColl,
     });
 
     console.log('calculateMultiplyEffects: ', toJson(res));
@@ -530,6 +546,7 @@ describe('Leverage calculation tests', function () {
     const [depositAmount, withdrawAmount] = [new Decimal('0'), new Decimal('0.0')];
     const targetLeverage = new Decimal('2');
     const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint, getPriceToUsd);
+    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceToUsd, {
       depositAmount,
@@ -544,6 +561,7 @@ describe('Leverage calculation tests', function () {
       flashBorrowReserveFlashLoanFeePercentage: new Decimal(0.0),
       debtBorrowFactorPct: new Decimal(100),
       priceCollToDebt,
+      priceDebtToColl,
     });
 
     console.log('calculateMultiplyEffects: ', toJson(res));
