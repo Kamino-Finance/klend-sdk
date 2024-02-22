@@ -15,12 +15,10 @@ import {
 import * as fs from 'fs';
 import { Connection, GetProgramAccountsFilter, Keypair, PublicKey, TransactionInstruction } from '@solana/web3.js';
 import { BN } from '@coral-xyz/anchor';
-import { Reserve } from './idl_codegen/accounts';
 import { buildAndSendTxnWithLogs, buildVersionedTransaction } from './utils/instruction';
 import { VanillaObligation } from './utils/ObligationType';
 import { parseTokenSymbol } from './classes/utils';
 import { Env, initEnv } from '../tests/setup_utils';
-import { initializeFarmsForReserve } from '../tests/farms_operations';
 import * as anchor from '@coral-xyz/anchor';
 
 const STAGING_LENDING_MARKET = new PublicKey('6WVSwDQXrBZeQVnu6hpnsRZhodaJTZBUaC334SiiBKdb');
@@ -126,21 +124,6 @@ async function main() {
       const connection = new Connection(url, {});
       const borrowAmount = new BN(amount);
       await repay(connection, wallet, token, borrowAmount);
-    });
-
-  commands
-    .command('init-farms-for-reserve')
-    .option(`--cluster <string>`, 'Custom RPC URL')
-    .option(`--owner <string>`, 'Owner keypair file')
-    .option(`--reserve <string>`, 'Reserve pubkey')
-    .option(`--farms-global-config <string>`, 'Reserve pubkey')
-    .option(`--kind <string>`, '`Debt` or `Collateral`')
-    .option(`--multisig`, 'Wether to use multisig or not -> prints bs58 txn')
-    .option(`--simulate`, 'Wether to simulate the transaction or not')
-    .action(async ({ cluster, owner, reserve, farmsGlobalConfig, kind, multisig, simulate }) => {
-      const admin = parseKeypairFile(owner);
-      const env = await initEnv(cluster, admin);
-      await initFarmsForReserveCommand(env, reserve, kind, farmsGlobalConfig, multisig, simulate);
     });
 
   commands
@@ -351,27 +334,6 @@ async function printReserve(connection: Connection, reserve?: string, symbol?: s
     : kaminoMarket.getReserveBySymbol(symbol!);
   console.log(result);
   console.log(result?.stats?.reserveDepositLimit.toString());
-}
-
-async function initFarmsForReserveCommand(
-  env: Env,
-  reserve: string,
-  kind: string,
-  farmsGlobalConfig: string,
-  multisig: boolean,
-  simulate: boolean,
-  programId: PublicKey = PROGRAM_ID
-) {
-  const reserveState = await Reserve.fetch(env.provider.connection, new PublicKey(reserve), programId);
-  await initializeFarmsForReserve(
-    env,
-    reserveState!!.lendingMarket,
-    new PublicKey(reserve),
-    kind,
-    multisig,
-    simulate,
-    farmsGlobalConfig
-  );
 }
 
 async function getMarket(connection: Connection, programId: PublicKey) {

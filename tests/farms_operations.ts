@@ -3,24 +3,15 @@ import {
   PublicKey,
   SystemProgram,
   SYSVAR_RENT_PUBKEY,
-  TransactionSignature,
+  Transaction,
   VersionedTransaction,
 } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { Env } from './setup_utils';
-import {
-  initFarmsForReserve,
-  InitFarmsForReserveAccounts,
-  KaminoObligation,
-  LendingMarket,
-  lendingMarketAuthPda,
-  Reserve,
-  sleep,
-} from '../src';
+import { initFarmsForReserve, InitFarmsForReserveAccounts, LendingMarket, lendingMarketAuthPda } from '../src';
 import { ReserveFarmKind } from '../src/idl_codegen/types';
 import { buildAndSendTxnWithLogs, buildVersionedTransaction } from '../src/utils';
-import Decimal from 'decimal.js';
-import { FarmConfigOption, Farms, farmsId, getFarmAuthorityPDA, UserState } from '@hubbleprotocol/farms-sdk';
+import { farmsId, getFarmAuthorityPDA } from '@hubbleprotocol/farms-sdk';
 import base58 from 'bs58';
 import { base64 } from '@coral-xyz/anchor/dist/cjs/utils/bytes';
 
@@ -29,7 +20,7 @@ export async function initializeFarmsForReserve(
   lendingMarket: PublicKey,
   reserve: PublicKey,
   kind: string,
-  multisig: boolean,
+  multisig: PublicKey | null,
   simulate: boolean,
   farmsGlobalConfigOverride?: string
 ) {
@@ -42,7 +33,7 @@ export async function initializeFarmsForReserve(
   const SIZE_FARM_STATE = 8336;
   const farmState: Keypair = Keypair.generate();
   const createFarmIx = SystemProgram.createAccount({
-    fromPubkey: env.admin.publicKey,
+    fromPubkey: multisig ? multisig : env.admin.publicKey,
     newAccountPubkey: farmState.publicKey,
     space: SIZE_FARM_STATE,
     lamports: await env.provider.connection.getMinimumBalanceForRentExemption(SIZE_FARM_STATE),
@@ -68,18 +59,23 @@ export async function initializeFarmsForReserve(
     } as InitFarmsForReserveAccounts
   );
 
-  const tx = await buildVersionedTransaction(env.provider.connection, lendingMarketOwner, [createFarmIx, ix]);
+  const versionedTx = await buildVersionedTransaction(env.provider.connection, lendingMarketOwner, [createFarmIx, ix]);
+  const { blockhash } = await env.provider.connection.getLatestBlockhash();
+  const txn = new Transaction();
+  txn.recentBlockhash = blockhash;
+  txn.feePayer = lendingMarketOwner;
+  txn.add(...[createFarmIx, ix]);
 
   if (simulate) {
-    await simulateClientTransaction(env, tx);
+    await simulateClientTransaction(env, versionedTx);
   } else {
     if (multisig) {
-      console.log(base58.encode(tx.message.serialize()));
+      console.log(base58.encode(txn.serializeMessage()));
     } else {
       if (!env.admin.publicKey.equals(lendingMarketOwner)) {
         throw new Error('Lending market owner must be the admin');
       }
-      const sig = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, [farmState], true);
+      const sig = await buildAndSendTxnWithLogs(env.provider.connection, versionedTx, env.admin, [farmState], true);
       console.log('Transaction signature: ' + sig);
     }
   }
@@ -94,77 +90,4 @@ async function simulateClientTransaction(env: Env, tx: VersionedTransaction) {
   const sanitisedUrl = baseUrl + 'message=' + encodeURIComponent(base64.encode(Buffer.from(tx.message.serialize())));
 
   console.log('Simulation explorer URL: ', sanitisedUrl);
-}
-
-export async function addRewardToFarm(
-  env: Env,
-  rewardMint: PublicKey,
-  reserve: PublicKey,
-  kind: string,
-  farmsGlobalConfigOverride?: string
-): Promise<TransactionSignature> {
-  const farmsGlobalConfig = new PublicKey(farmsGlobalConfigOverride ?? '6UodrBjL2ZreDy7QdR4YV1oxqMBjVYSEyrFpctqqwGwL');
-  const farmsClient = new Farms(env.provider.connection);
-  const reserveState: Reserve = (await Reserve.fetch(env.provider.connection, reserve))!!;
-  const farmAddress = kind === 'Collateral' ? reserveState.farmCollateral : reserveState.farmDebt;
-
-  const ix = await farmsClient.addRewardToFarmIx(env.admin.publicKey, farmsGlobalConfig, farmAddress, rewardMint);
-  const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [ix]);
-  const sig = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
-  return sig;
-}
-
-export async function topUpRewardToFarm(
-  env: Env,
-  rewardMint: PublicKey,
-  amount: Decimal,
-  reserve: PublicKey,
-  kind: string
-): Promise<TransactionSignature> {
-  const farmsClient = new Farms(env.provider.connection);
-  await sleep(3000);
-  const reserveState: Reserve = (await Reserve.fetch(env.provider.connection, reserve))!!;
-  const farmAddress = kind === 'Collateral' ? reserveState.farmCollateral : reserveState.farmDebt;
-
-  const ix = await farmsClient.addRewardAmountToFarmIx(env.admin.publicKey, farmAddress, rewardMint, amount);
-  const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [ix]);
-  const sig = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
-  return sig;
-}
-
-export async function updateRps(
-  env: Env,
-  rewardMint: PublicKey,
-  rps: number,
-  reserve: PublicKey,
-  kind: string
-): Promise<TransactionSignature> {
-  const farmsClient = new Farms(env.provider.connection);
-  await sleep(3000);
-  const reserveState: Reserve = (await Reserve.fetch(env.provider.connection, reserve))!!;
-  const farmAddress = kind === 'Collateral' ? reserveState.farmCollateral : reserveState.farmDebt;
-  const ix = await farmsClient.updateRewardToFarmIx(
-    env.admin.publicKey,
-    farmAddress,
-    rewardMint,
-    new FarmConfigOption.UpdateRewardRps(),
-    rps
-  );
-  const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [ix]);
-  const sig = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
-  return sig;
-}
-
-export async function getObligationFarmState(
-  env: Env,
-  obligation: KaminoObligation,
-  farm: PublicKey
-): Promise<UserState | null> {
-  const BASE_SEED_USER_STATE = Buffer.from('user');
-  const pda = PublicKey.findProgramAddressSync(
-    [BASE_SEED_USER_STATE, farm.toBytes(), obligation.obligationAddress.toBytes()],
-    farmsId
-  )[0];
-
-  return await UserState.fetch(env.provider.connection, pda);
 }
