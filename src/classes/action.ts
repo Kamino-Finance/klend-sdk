@@ -1246,13 +1246,13 @@ export class KaminoAction {
 
     this.addRefreshReserveIxs(allReservesExcludingCurrent, addAllToSetupIxns);
     this.addRefreshFarmsForReserve(
-      allReservesExcludingCurrent.map((r) => this.kaminoMarket.getReserveByAddress(r)!),
+      this.depositReserves.map((r) => this.kaminoMarket.getReserveByAddress(r)!),
       addAllToSetupIxns,
       ReserveFarmKind.Collateral,
       crank
     );
     this.addRefreshFarmsForReserve(
-      allReservesExcludingCurrent.map((r) => this.kaminoMarket.getReserveByAddress(r)!),
+      this.borrowReserves.map((r) => this.kaminoMarket.getReserveByAddress(r)!),
       addAllToSetupIxns,
       ReserveFarmKind.Debt,
       crank
