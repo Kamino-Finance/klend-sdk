@@ -70,6 +70,7 @@ export class KaminoObligation {
     market: KaminoMarket,
     obligationAddress: PublicKey,
     obligation: Obligation,
+    slot: number,
     collateralExchangeRates: Map<PublicKey, Decimal> | null,
     cumulativeBorrowRates: Map<PublicKey, Decimal> | null
   ) {
@@ -87,7 +88,8 @@ export class KaminoObligation {
       market,
       obligation,
       collateralExchangeRates,
-      cumulativeBorrowRates
+      cumulativeBorrowRates,
+      slot
     );
     this.deposits = deposits;
     this.borrows = borrows;
@@ -105,10 +107,13 @@ export class KaminoObligation {
     if (obligation === null) {
       return null;
     }
+
+    const slot = await kaminoMarket.getConnection().getSlot();
     return new KaminoObligation(
       kaminoMarket,
       obligationAddress,
       obligation,
+      slot,
       collateralExchangeRates || null,
       cumulativeBorrowRates || null
     );
@@ -136,6 +141,8 @@ export class KaminoObligation {
       }
     }
 
+    const slot = await kaminoMarket.getConnection().getSlot();
+
     return obligations.map((obligation, i) => {
       if (obligation === null) {
         return null;
@@ -144,6 +151,7 @@ export class KaminoObligation {
         kaminoMarket,
         obligationAddresses[i],
         obligation,
+        slot,
         collateralExchangeRates,
         cumulativeBorrowRates
       );
@@ -629,16 +637,18 @@ export class KaminoObligation {
     market: KaminoMarket,
     obligation: Obligation,
     cumulativeBorrowRates: Map<PublicKey, Decimal>,
-    getPx: (reserve: KaminoReserve) => Decimal
+    getPx: (reserve: KaminoReserve) => Decimal,
+    slot: number
   ): BorrowStats {
-    return KaminoObligation.calculateObligationBorrows(market, obligation, cumulativeBorrowRates, getPx);
+    return KaminoObligation.calculateObligationBorrows(market, obligation, cumulativeBorrowRates, getPx, slot);
   }
 
   private calculatePositions(
     market: KaminoMarket,
     obligation: Obligation,
     collateralExchangeRates: Map<PublicKey, Decimal>,
-    cumulativeBorrowRates: Map<PublicKey, Decimal>
+    cumulativeBorrowRates: Map<PublicKey, Decimal>,
+    slot: number
   ): {
     borrows: Map<PublicKey, Position>;
     deposits: Map<PublicKey, Position>;
@@ -649,7 +659,7 @@ export class KaminoObligation {
     const getOraclePx = (reserve: KaminoReserve) => reserve.getOracleMarketPrice();
     const depositStatsOraclePrice = this.calculateDeposits(market, obligation, collateralExchangeRates, getOraclePx);
 
-    const borrowStatsOraclePrice = this.calculateBorrows(market, obligation, cumulativeBorrowRates, getOraclePx);
+    const borrowStatsOraclePrice = this.calculateBorrows(market, obligation, cumulativeBorrowRates, getOraclePx, slot);
 
     const netAccountValueScopeRefreshed = depositStatsOraclePrice.userTotalDeposit.minus(
       borrowStatsOraclePrice.userTotalBorrow
@@ -758,7 +768,8 @@ export class KaminoObligation {
     market: KaminoMarket,
     obligation: Obligation,
     cumulativeBorrowRates: Map<PublicKey, Decimal> | null,
-    getPx: (reserve: KaminoReserve) => Decimal
+    getPx: (reserve: KaminoReserve) => Decimal,
+    slot: number
   ): BorrowStats {
     let userTotalBorrow = new Decimal(0);
     let userTotalBorrowBorrowFactorAdjusted = new Decimal(0);
@@ -784,7 +795,7 @@ export class KaminoObligation {
       if (cumulativeBorrowRates !== null) {
         cumulativeBorrowRate = cumulativeBorrowRates.get(reserve.address)!;
       } else {
-        cumulativeBorrowRate = reserve.getCumulativeBorrowRate();
+        cumulativeBorrowRate = reserve.getEstimatedCumulativeBorrowRate(slot);
       }
 
       const borrowAmount = KaminoObligation.getBorrowAmount(borrow)

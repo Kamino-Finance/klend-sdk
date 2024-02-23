@@ -1326,15 +1326,15 @@ export class KaminoAction {
               if (!borrow) {
                 throw Error(`Unable to find obligation borrow to repay for ${this.obligation.state.owner.toBase58()}`);
               }
+              const currentSlot = await this.kaminoMarket.getConnection().getSlot();
+              const compoundInterestRate = this.obligation.estimateObligationInterestRate(
+                this.reserve,
+                borrow,
+                currentSlot
+              );
 
-              const cumulativeBorrowRateObligation = KaminoObligation.getCumulativeBorrowRate(borrow);
-
-              const cumulativeBorrowRateReserve = this.reserve.getCumulativeBorrowRate();
               const _fullRepay = Math.floor(
-                KaminoObligation.getBorrowAmount(borrow)
-                  .mul(cumulativeBorrowRateReserve)
-                  .div(cumulativeBorrowRateObligation)
-                  .toNumber()
+                KaminoObligation.getBorrowAmount(borrow).mul(compoundInterestRate).toNumber()
               );
 
               // TODO: Investigate this !!?
@@ -2209,14 +2209,14 @@ export class KaminoAction {
         throw Error(`Unable to find obligation borrow to repay for ${this.obligation.state.owner.toBase58()}`);
       }
 
-      const cumulativeBorrowRateObligation = KaminoObligation.getCumulativeBorrowRate(borrow);
-      const cumulativeBorrowRateReserve = this.reserve.getCumulativeBorrowRate();
+      const currentSlot = await this.kaminoMarket.getConnection().getSlot();
+      const compoundInterestRate = this.obligation.estimateObligationInterestRate(this.reserve, borrow, currentSlot);
+
       // TODO: shouldn't this calc be added to all other stuff as well?
       safeRepay = new BN(
         Math.floor(
           KaminoObligation.getBorrowAmount(borrow)
-            .mul(cumulativeBorrowRateReserve)
-            .div(cumulativeBorrowRateObligation)
+            .mul(compoundInterestRate)
             .add(new Decimal(SOL_PADDING_FOR_INTEREST.toString()))
             .toNumber()
         ).toString()
