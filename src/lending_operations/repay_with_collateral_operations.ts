@@ -46,6 +46,7 @@ export const getRepayWithCollIxns = async (props: {
   obligation: KaminoObligation;
   referrer: PublicKey;
   swapper: SwapIxnsProvider;
+  budgetIxnsOverride: TransactionInstruction[];
 }): Promise<{ ixns: TransactionInstruction[]; lookupTablesAddresses: PublicKey[] }> => {
   const {
     kaminoMarket,
@@ -59,7 +60,10 @@ export const getRepayWithCollIxns = async (props: {
     obligation,
     referrer,
     swapper,
+    budgetIxnsOverride,
   } = props;
+
+  console.log('is closin', isClosingPosition);
 
   const connection = kaminoMarket.getConnection();
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
@@ -92,7 +96,8 @@ export const getRepayWithCollIxns = async (props: {
   // // 1. Create atas & budget txns
   const mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint()];
 
-  const budgetIxns = getComputeBudgetAndPriorityFeeIxns(3000000);
+  const budgetIxns = budgetIxnsOverride ? budgetIxnsOverride : getComputeBudgetAndPriorityFeeIxns(3000000);
+
   const {
     atas: [, debtTokenAta],
     createAtasIxns,
@@ -117,7 +122,9 @@ export const getRepayWithCollIxns = async (props: {
     kaminoMarket,
     isClosingPosition ? U64_MAX : numberToLamportsDecimal(repayAmount, debtReserve!.stats.decimals).floor().toString(),
     new PublicKey(debtTokenMint),
-    numberToLamportsDecimal(calcs.collToSwapIn, collReserve!.stats.decimals).ceil().toString(),
+    isClosingPosition
+      ? U64_MAX
+      : numberToLamportsDecimal(calcs.collToSwapIn, collReserve!.stats.decimals).ceil().toString(),
     new PublicKey(collTokenMint),
     owner,
     obligation,
@@ -134,7 +141,7 @@ export const getRepayWithCollIxns = async (props: {
     calcs.collToSwapIn.toString(),
     'coll for',
     calcs.swapDebtExpectedOut.toString(),
-    'coll'
+    'debt'
   );
 
   // 3. Swap collateral to debt to repay flash loan

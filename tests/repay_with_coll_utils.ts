@@ -63,6 +63,7 @@ export const repayWithCollTestAdapter = async (
     obligation,
     referrer,
     swapper: getLocalSwapper(env, kaminoMarket, owner.publicKey),
+    budgetIxnsOverride: [],
   });
 
   // Create lookup table

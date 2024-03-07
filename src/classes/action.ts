@@ -1330,17 +1330,19 @@ export class KaminoAction {
               const cumulativeBorrowRateObligation = KaminoObligation.getCumulativeBorrowRate(borrow);
 
               const cumulativeBorrowRateReserve = this.reserve.getCumulativeBorrowRate();
-              const _fullRepay = Math.floor(
-                KaminoObligation.getBorrowAmount(borrow)
-                  .mul(cumulativeBorrowRateReserve)
-                  .div(cumulativeBorrowRateObligation)
-                  .toNumber()
+              const fullRepay = new BN(
+                Math.floor(
+                  KaminoObligation.getBorrowAmount(borrow)
+                    .mul(cumulativeBorrowRateReserve)
+                    .div(cumulativeBorrowRateObligation)
+                    .toNumber()
+                )
               );
 
-              // TODO: Investigate this !!?
-              // if (fullRepay.lte(this.amount)) {
-              //   this.preLoadedBorrowReservesSameTx.push(this.reserve.address);
-              // }
+              // TODO: Investigate this !!? - without it repay with coll won't work
+              if (fullRepay.lte(this.amount)) {
+                this.preLoadedBorrowReservesSameTx.push(this.reserve.address);
+              }
             }
           } else {
             // Obligation doesn't exist yet, so we have to preload the deposit reserve
