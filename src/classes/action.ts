@@ -145,6 +145,8 @@ export class KaminoAction {
   preLoadedDepositReservesSameTx: Array<PublicKey>;
   preLoadedBorrowReservesSameTx: Array<PublicKey>;
 
+  currentSlot: number;
+
   private constructor(
     kaminoMarket: KaminoMarket,
     owner: PublicKey,
@@ -157,6 +159,7 @@ export class KaminoAction {
     depositReserves: Array<PublicKey>,
     borrowReserves: Array<PublicKey>,
     reserveState: KaminoReserve,
+    currentSlot: number,
     hostAta?: PublicKey,
     secondaryMint?: PublicKey,
     additionalTokenAccountAddress?: PublicKey,
@@ -204,6 +207,7 @@ export class KaminoAction {
     this.preLoadedDepositReservesSameTx = [];
     this.preLoadedBorrowReservesSameTx = [];
     this.referrer = referrer ? referrer : PublicKey.default;
+    this.currentSlot = currentSlot;
   }
 
   static async initialize(
@@ -235,6 +239,8 @@ export class KaminoAction {
       referrer = userMetadata.referrer;
     }
 
+    const currentSlot = await kaminoMarket.getConnection().getSlot();
+
     const referrerKey = kaminoObligation ? kaminoObligation.state.referrer : referrer;
 
     return new KaminoAction(
@@ -249,6 +255,7 @@ export class KaminoAction {
       depositReserves,
       borrowReserves,
       reserve,
+      currentSlot,
       hostAta,
       undefined,
       undefined,
@@ -1329,18 +1336,21 @@ export class KaminoAction {
 
               const cumulativeBorrowRateObligation = KaminoObligation.getCumulativeBorrowRate(borrow);
 
-              const cumulativeBorrowRateReserve = this.reserve.getCumulativeBorrowRate();
-              const fullRepay = new BN(
-                Math.floor(
-                  KaminoObligation.getBorrowAmount(borrow)
-                    .mul(cumulativeBorrowRateReserve)
-                    .div(cumulativeBorrowRateObligation)
-                    .toNumber()
-                )
+              const cumulativeBorrowRateReserve = this.reserve.getEstimatedCumulativeBorrowRate(this.currentSlot);
+              const fullRepay = KaminoObligation.getBorrowAmount(borrow)
+                .mul(cumulativeBorrowRateReserve)
+                .div(cumulativeBorrowRateObligation);
+
+              console.log(
+                'cumm',
+                cumulativeBorrowRateReserve,
+                cumulativeBorrowRateObligation,
+                KaminoObligation.getBorrowAmount(borrow)
               );
 
               // TODO: Investigate this !!? - without it repay with coll won't work
-              if (fullRepay.lte(this.amount)) {
+              if (fullRepay.lte(new Decimal(this.amount.toNumber()))) {
+                console.log('cmp', fullRepay.toNumber(), this.amount.toNumber());
                 this.preLoadedBorrowReservesSameTx.push(this.reserve.address);
               }
             }
@@ -2372,6 +2382,8 @@ export class KaminoAction {
       throw new Error('Invalid action');
     }
 
+    const currentSlot = await kaminoMarket.getConnection().getSlot();
+
     return new KaminoAction(
       kaminoMarket,
       payer,
@@ -2384,6 +2396,7 @@ export class KaminoAction {
       depositReserves,
       borrowReserves,
       inflowReserve,
+      currentSlot,
       undefined,
       secondaryMint,
       additionalUserTokenAccountAddress,
@@ -2410,6 +2423,8 @@ export class KaminoAction {
 
     const userTokenAccountAddress = atas[0];
 
+    const currentSlot = await kaminoMarket.getConnection().getSlot();
+
     return {
       axn: new KaminoAction(
         kaminoMarket,
@@ -2423,6 +2438,7 @@ export class KaminoAction {
         [],
         [],
         reserve,
+        currentSlot,
         hostAta,
         undefined,
         undefined,
