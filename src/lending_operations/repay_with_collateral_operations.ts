@@ -63,8 +63,6 @@ export const getRepayWithCollIxns = async (props: {
     budgetIxnsOverride,
   } = props;
 
-  console.log('is closin', isClosingPosition);
-
   const connection = kaminoMarket.getConnection();
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
