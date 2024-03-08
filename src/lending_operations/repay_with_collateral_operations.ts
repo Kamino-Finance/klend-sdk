@@ -1,5 +1,5 @@
 import { KaminoAction, KaminoMarket, KaminoObligation, numberToLamportsDecimal } from '../classes';
-import { SwapIxnsProvider, getFlashLoanInstructions, toJson } from '../leverage';
+import { SwapInputs, SwapIxnsProvider, getFlashLoanInstructions, toJson } from '../leverage';
 import {
   U64_MAX,
   getAtasWithCreateIxnsIfMissing,
@@ -34,6 +34,34 @@ export const repayWithCollCalcs = (props: {
   };
 };
 
+export const getRepayWithCollSwapInputs = (props: {
+  repayAmount: Decimal;
+  priceDebtToColl: Decimal;
+  slippagePct: Decimal;
+  kaminoMarket: KaminoMarket;
+  debtTokenMint: PublicKey;
+  collTokenMint: PublicKey;
+}): {
+  swapInputs: SwapInputs;
+} => {
+  const { repayAmount, priceDebtToColl, slippagePct, kaminoMarket, debtTokenMint, collTokenMint } = props;
+  const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
+  const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
+  const flashLoanFee = debtReserve?.getFlashLoanFee() || new Decimal(0);
+
+  const repayCalcs = repayWithCollCalcs({ repayAmount, priceDebtToColl, slippagePct, flashLoanFee });
+
+  return {
+    swapInputs: {
+      inputAmountLamports: numberToLamportsDecimal(repayCalcs.collToSwapIn, collReserve!.stats.decimals)
+        .ceil()
+        .toNumber(),
+      inputMint: collTokenMint,
+      outputMint: debtTokenMint,
+    },
+  };
+};
+
 export const getRepayWithCollIxns = async (props: {
   kaminoMarket: KaminoMarket;
   amount: Decimal;
@@ -46,7 +74,7 @@ export const getRepayWithCollIxns = async (props: {
   obligation: KaminoObligation;
   referrer: PublicKey;
   swapper: SwapIxnsProvider;
-}): Promise<{ ixns: TransactionInstruction[]; lookupTablesAddresses: PublicKey[] }> => {
+}): Promise<{ ixns: TransactionInstruction[]; lookupTablesAddresses: PublicKey[]; swapInputs: SwapInputs }> => {
   const {
     kaminoMarket,
     amount,
@@ -137,11 +165,17 @@ export const getRepayWithCollIxns = async (props: {
     'coll'
   );
 
+  const swapInputs: SwapInputs = {
+    inputAmountLamports: numberToLamportsDecimal(calcs.collToSwapIn, collReserve!.stats.decimals).ceil().toNumber(),
+    inputMint: collTokenMint,
+    outputMint: debtTokenMint,
+  };
+
   // 3. Swap collateral to debt to repay flash loan
   const [swapIxns, lookupTablesAddresses] = await swapper(
-    numberToLamportsDecimal(calcs.collToSwapIn, collReserve!.stats.decimals).ceil().toNumber(),
-    collTokenMint,
-    debtTokenMint,
+    swapInputs.inputAmountLamports,
+    swapInputs.inputMint,
+    swapInputs.outputMint,
     slippagePct.toNumber()
   );
 
@@ -162,5 +196,6 @@ export const getRepayWithCollIxns = async (props: {
       ...closeAtasIxns,
     ],
     lookupTablesAddresses,
+    swapInputs,
   };
 };

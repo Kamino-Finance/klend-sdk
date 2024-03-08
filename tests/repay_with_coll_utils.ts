@@ -51,7 +51,7 @@ export const repayWithCollTestAdapter = async (
     await sleep(1000);
   }
 
-  const { ixns, lookupTablesAddresses } = await getRepayWithCollIxns({
+  const { ixns, lookupTablesAddresses, swapInputs } = await getRepayWithCollIxns({
     kaminoMarket,
     amount,
     debtTokenMint,
@@ -85,5 +85,8 @@ export const repayWithCollTestAdapter = async (
   tx.sign([env.admin]);
 
   const txid = await sendAndConfirmVersionedTransaction(env.provider.connection, tx, 'confirmed');
-  return txid;
+  return {
+    txid,
+    swapInputs,
+  };
 };
