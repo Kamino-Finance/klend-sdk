@@ -370,6 +370,8 @@ describe('Repay with collateral SDK tests', function () {
       kaminoMarket,
       debtTokenMint: new PublicKey(debtTokenMint),
       collTokenMint: new PublicKey(collTokenMint),
+      obligation: obligationBefore,
+      currentSlot: await kaminoMarket.getConnection().getSlot(),
     });
 
     assertSwapInputsMatch(swapInputsCalcs.swapInputs, repayWithCollTxRes?.swapInputs!);
