@@ -19,7 +19,7 @@ import {
   getWithdrawWithLeverageIxns,
 } from '../src/lib';
 import { Kamino } from '@hubbleprotocol/kamino-sdk';
-import { ObligationTypeTag } from '../src/utils/ObligationType';
+import { MultiplyObligation, ObligationTypeTag } from '../src/utils/ObligationType';
 import { isKToken } from './kamino/utils';
 
 export const pk = () => Keypair.generate().publicKey;
@@ -112,7 +112,12 @@ export const depositLeverageTestAdapter = async (
     await sleep(2000);
   }
 
-  const { ixns, lookupTablesAddresses } = await getDepositWithLeverageIxns({
+  const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, kaminoMarket.programId);
+  const obligation = await kaminoMarket.getObligationByAddress(
+    obligationType.toPda(kaminoMarket.getAddress(), user.publicKey)
+  );
+
+  const { ixns, lookupTablesAddresses, swapInputs } = await getDepositWithLeverageIxns({
     connection: env.provider.connection,
     user: user.publicKey,
     amount: amount,
@@ -155,6 +160,7 @@ export const depositLeverageTestAdapter = async (
     txid,
     collTokenMint,
     debtTokenMint,
+    swapInputs,
   };
 };
 
@@ -216,8 +222,14 @@ export const withdrawLeverageTestAdapter = async (
     }
   }
 
-  const { ixns, lookupTablesAddresses } = await getWithdrawWithLeverageIxns({
+  const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, kaminoMarket.programId);
+  const obligation = await kaminoMarket.getObligationByAddress(
+    obligationType.toPda(kaminoMarket.getAddress(), user.publicKey)
+  );
+
+  const { ixns, lookupTablesAddresses, swapInputs } = await getWithdrawWithLeverageIxns({
     connection: env.provider.connection,
+    budgetAndPriorityFeeIxns: [],
     user: user.publicKey,
     amount,
     deposited,
@@ -261,6 +273,7 @@ export const withdrawLeverageTestAdapter = async (
     txid,
     collTokenMint,
     debtTokenMint,
+    swapInputs,
   };
 };
 
@@ -306,8 +319,18 @@ export const adjustLeverageTestAdapter = async (
     }
   }
 
-  const { ixns, lookupTablesAddresses } = await getAdjustLeverageIxns({
+  const obligationType = new MultiplyObligation(
+    collReserve?.getLiquidityMint()!,
+    debtReserve?.getLiquidityMint()!,
+    kaminoMarket.programId
+  );
+  const obligation = await kaminoMarket.getObligationByAddress(
+    obligationType.toPda(kaminoMarket.getAddress(), user.publicKey)
+  );
+
+  const { ixns, lookupTablesAddresses, swapInputs } = await getAdjustLeverageIxns({
     connection: env.provider.connection,
+    budgetAndPriorityFeeIxns: [],
     user: user.publicKey,
     kaminoMarket,
     priceDebtToColl,
@@ -351,6 +374,7 @@ export const adjustLeverageTestAdapter = async (
     txid,
     collTokenMint: collReserve?.getLiquidityMint(),
     debtTokenMint: debtReserve?.getLiquidityMint(),
+    swapInputs,
   };
 };
 
