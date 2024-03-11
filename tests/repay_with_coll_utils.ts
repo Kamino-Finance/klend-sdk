@@ -53,6 +53,7 @@ export const repayWithCollTestAdapter = async (
 
   const { ixns, lookupTablesAddresses } = await getRepayWithCollIxns({
     kaminoMarket,
+    budgetAndPriorityFeeIxns: [],
     amount,
     debtTokenMint,
     collTokenMint,

@@ -36,6 +36,7 @@ export const repayWithCollCalcs = (props: {
 
 export const getRepayWithCollIxns = async (props: {
   kaminoMarket: KaminoMarket;
+  budgetAndPriorityFeeIxns: TransactionInstruction[];
   amount: Decimal;
   debtTokenMint: PublicKey;
   collTokenMint: PublicKey;
@@ -49,6 +50,7 @@ export const getRepayWithCollIxns = async (props: {
 }): Promise<{ ixns: TransactionInstruction[]; lookupTablesAddresses: PublicKey[] }> => {
   const {
     kaminoMarket,
+    budgetAndPriorityFeeIxns,
     amount,
     debtTokenMint,
     collTokenMint,
@@ -92,7 +94,7 @@ export const getRepayWithCollIxns = async (props: {
   // // 1. Create atas & budget txns
   const mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint()];
 
-  const budgetIxns = getComputeBudgetAndPriorityFeeIxns(3000000);
+  const budgetIxns = budgetAndPriorityFeeIxns || getComputeBudgetAndPriorityFeeIxns(3000000);
   const {
     atas: [, debtTokenAta],
     createAtasIxns,
