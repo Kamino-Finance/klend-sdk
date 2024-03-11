@@ -1117,8 +1117,8 @@ describe('Leverage SDK tests', function () {
       isClosingPosition: false,
       kaminoMarket,
       selectedTokenMint: new PublicKey(withdrawToken),
-      debtTokenMint: new PublicKey(debtToken),
-      collTokenMint: new PublicKey(collToken),
+      debtTokenMint: kaminoMarket.getReserveBySymbol(debtToken)?.address!,
+      collTokenMint: kaminoMarket.getReserveBySymbol(collToken)?.address!,
       userObligation: obligation,
       currentSlot,
     });
@@ -1456,8 +1456,8 @@ describe('Leverage SDK tests', function () {
       slippagePct,
       targetLeverage: initialLeverage.add(1),
       kaminoMarket,
-      debtTokenMint: new PublicKey(debtToken),
-      collTokenMint: new PublicKey(collToken),
+      debtTokenMint: kaminoMarket.getReserveBySymbol(debtToken)?.address!,
+      collTokenMint: kaminoMarket.getReserveBySymbol(collToken)?.address!,
     });
 
     assertSwapInputsMatch(swapInputsCalcs.swapInputs, res?.swapInputs!);
@@ -1775,8 +1775,8 @@ describe('Leverage SDK tests', function () {
       targetLeverage,
       kaminoMarket,
       selectedTokenMint: new PublicKey(depositToken),
-      debtTokenMint: new PublicKey(debtToken),
-      collTokenMint: new PublicKey(collToken),
+      debtTokenMint: kaminoMarket.getReserveBySymbol(debtToken)?.address!,
+      collTokenMint: kaminoMarket.getReserveBySymbol(collToken)?.address!,
     });
 
     assertSwapInputsMatch(swapInputsCalcs.swapInputs, res?.swapInputs!);
@@ -1836,8 +1836,8 @@ describe('Leverage SDK tests', function () {
       slippagePct,
       targetLeverage: initialLeverage.sub(1),
       kaminoMarket,
-      debtTokenMint: new PublicKey(debtToken),
-      collTokenMint: new PublicKey(collToken),
+      debtTokenMint: kaminoMarket.getReserveBySymbol(debtToken)?.address!,
+      collTokenMint: kaminoMarket.getReserveBySymbol(collToken)?.address!,
     });
 
     assertSwapInputsMatch(swapInputsCalcsAdjustDown.swapInputs, resAdjustDown?.swapInputs!);

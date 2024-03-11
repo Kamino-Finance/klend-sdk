@@ -368,8 +368,8 @@ describe('Repay with collateral SDK tests', function () {
       priceDebtToColl: new Decimal(await getPriceMock(kaminoMarket, debtToken, collToken)),
       slippagePct: new Decimal(slippagePct),
       kaminoMarket,
-      debtTokenMint: new PublicKey(debtToken),
-      collTokenMint: new PublicKey(collToken),
+      debtTokenMint: new PublicKey(debtTokenMint),
+      collTokenMint: new PublicKey(collTokenMint),
     });
 
     assertSwapInputsMatch(swapInputsCalcs.swapInputs, repayWithCollTxRes?.swapInputs!);
