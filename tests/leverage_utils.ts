@@ -19,7 +19,7 @@ import {
   getWithdrawWithLeverageIxns,
 } from '../src/lib';
 import { Kamino } from '@hubbleprotocol/kamino-sdk';
-import { MultiplyObligation, ObligationTypeTag } from '../src/utils/ObligationType';
+import { ObligationTypeTag } from '../src/utils/ObligationType';
 import { isKToken } from './kamino/utils';
 
 export const pk = () => Keypair.generate().publicKey;
@@ -111,11 +111,6 @@ export const depositLeverageTestAdapter = async (
     const _txid = await sendAndConfirmVersionedTransaction(env.provider.connection, tx, 'confirmed');
     await sleep(2000);
   }
-
-  const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, kaminoMarket.programId);
-  const obligation = await kaminoMarket.getObligationByAddress(
-    obligationType.toPda(kaminoMarket.getAddress(), user.publicKey)
-  );
 
   const { ixns, lookupTablesAddresses, swapInputs } = await getDepositWithLeverageIxns({
     connection: env.provider.connection,
@@ -222,11 +217,6 @@ export const withdrawLeverageTestAdapter = async (
     }
   }
 
-  const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, kaminoMarket.programId);
-  const obligation = await kaminoMarket.getObligationByAddress(
-    obligationType.toPda(kaminoMarket.getAddress(), user.publicKey)
-  );
-
   const { ixns, lookupTablesAddresses, swapInputs } = await getWithdrawWithLeverageIxns({
     connection: env.provider.connection,
     budgetAndPriorityFeeIxns: [],
@@ -318,15 +308,6 @@ export const adjustLeverageTestAdapter = async (
       await sleep(2000);
     }
   }
-
-  const obligationType = new MultiplyObligation(
-    collReserve?.getLiquidityMint()!,
-    debtReserve?.getLiquidityMint()!,
-    kaminoMarket.programId
-  );
-  const obligation = await kaminoMarket.getObligationByAddress(
-    obligationType.toPda(kaminoMarket.getAddress(), user.publicKey)
-  );
 
   const { ixns, lookupTablesAddresses, swapInputs } = await getAdjustLeverageIxns({
     connection: env.provider.connection,
