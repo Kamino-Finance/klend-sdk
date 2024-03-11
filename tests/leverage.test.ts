@@ -23,7 +23,6 @@ import {
   getPriceMock,
   withdrawLeverageTestAdapter,
 } from './leverage_utils';
-import { PublicKey } from '@solana/web3.js';
 import { assertSwapInputsMatch } from './assert';
 
 // TODO: test with sol and wrapped sol
@@ -1116,9 +1115,9 @@ describe('Leverage SDK tests', function () {
       slippagePct,
       isClosingPosition: false,
       kaminoMarket,
-      selectedTokenMint: new PublicKey(withdrawToken),
-      debtTokenMint: kaminoMarket.getReserveBySymbol(debtToken)?.address!,
-      collTokenMint: kaminoMarket.getReserveBySymbol(collToken)?.address!,
+      selectedTokenMint: kaminoMarket.getReserveBySymbol(withdrawToken)?.getLiquidityMint()!,
+      debtTokenMint: kaminoMarket.getReserveBySymbol(debtToken)?.getLiquidityMint()!,
+      collTokenMint: kaminoMarket.getReserveBySymbol(collToken)?.getLiquidityMint()!,
       userObligation: obligation,
       currentSlot,
     });
@@ -1456,8 +1455,8 @@ describe('Leverage SDK tests', function () {
       slippagePct,
       targetLeverage: initialLeverage.add(1),
       kaminoMarket,
-      debtTokenMint: kaminoMarket.getReserveBySymbol(debtToken)?.address!,
-      collTokenMint: kaminoMarket.getReserveBySymbol(collToken)?.address!,
+      debtTokenMint: kaminoMarket.getReserveBySymbol(debtToken)?.getLiquidityMint()!,
+      collTokenMint: kaminoMarket.getReserveBySymbol(collToken)?.getLiquidityMint()!,
     });
 
     assertSwapInputsMatch(swapInputsCalcs.swapInputs, res?.swapInputs!);
@@ -1768,15 +1767,17 @@ describe('Leverage SDK tests', function () {
       (a: string, b: string) => getPriceMock(kaminoMarket, a, b)
     );
 
+    await kaminoMarket.reload();
+
     const swapInputsCalcs = getDepositWithLeverageSwapInputs({
       depositAmount,
       priceDebtToColl: new Decimal(await getPriceMock(kaminoMarket, debtToken, collToken)),
       slippagePct: new Decimal(slippagePct),
       targetLeverage,
       kaminoMarket,
-      selectedTokenMint: new PublicKey(depositToken),
-      debtTokenMint: kaminoMarket.getReserveBySymbol(debtToken)?.address!,
-      collTokenMint: kaminoMarket.getReserveBySymbol(collToken)?.address!,
+      selectedTokenMint: kaminoMarket.getReserveBySymbol(depositToken)?.getLiquidityMint()!,
+      debtTokenMint: kaminoMarket.getReserveBySymbol(debtToken)?.getLiquidityMint()!,
+      collTokenMint: kaminoMarket.getReserveBySymbol(collToken)?.getLiquidityMint()!,
     });
 
     assertSwapInputsMatch(swapInputsCalcs.swapInputs, res?.swapInputs!);
@@ -1836,8 +1837,8 @@ describe('Leverage SDK tests', function () {
       slippagePct,
       targetLeverage: initialLeverage.sub(1),
       kaminoMarket,
-      debtTokenMint: kaminoMarket.getReserveBySymbol(debtToken)?.address!,
-      collTokenMint: kaminoMarket.getReserveBySymbol(collToken)?.address!,
+      debtTokenMint: kaminoMarket.getReserveBySymbol(debtToken)?.getLiquidityMint()!,
+      collTokenMint: kaminoMarket.getReserveBySymbol(collToken)?.getLiquidityMint()!,
     });
 
     assertSwapInputsMatch(swapInputsCalcsAdjustDown.swapInputs, resAdjustDown?.swapInputs!);

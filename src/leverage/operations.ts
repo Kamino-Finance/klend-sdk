@@ -259,7 +259,9 @@ export const getDepositWithLeverageSwapInputs = (props: {
 
   return {
     swapInputs: {
-      inputAmountLamports: toLamports(calcs.swapDebtTokenIn, debtReserve!.stats.decimals).ceil().toNumber(),
+      inputAmountLamports: toLamports(calcs.swapDebtTokenIn, debtReserve!.state.liquidity.mintDecimals.toNumber())
+        .ceil()
+        .toNumber(),
       inputMint: debtTokenMint,
       outputMint: collTokenMint,
     },
@@ -596,8 +598,8 @@ export const getWithdrawWithLeverageSwapInputs = (props: {
     : calcWithdrawAmounts({
         collTokenMint: collTokenMint,
         priceCollToDebt: new Decimal(priceCollToDebt),
-        currentDepositPosition: deposited,
-        currentBorrowPosition: borrowed,
+        currentDepositPosition: fromLamports(deposited, collReserve!.stats.decimals),
+        currentBorrowPosition: fromLamports(borrowed, debtReserve!.stats.decimals),
         withdrawAmount: new Decimal(amount),
         selectedTokenMint: selectedTokenMint,
       });
@@ -621,7 +623,9 @@ export const getWithdrawWithLeverageSwapInputs = (props: {
 
   return {
     swapInputs: {
-      inputAmountLamports: toLamports(collTokenSwapIn, collReserve!.stats.decimals).ceil().toNumber(),
+      inputAmountLamports: toLamports(collTokenSwapIn, collReserve!.state.liquidity.mintDecimals.toNumber())
+        .ceil()
+        .toNumber(),
       inputMint: collTokenMint,
       outputMint: debtTokenMint,
     },
@@ -901,9 +905,11 @@ export const getAdjustLeverageSwapInputs = (props: {
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
   const flashLoanFee = debtReserve?.getFlashLoanFee() || new Decimal(0);
 
+  console.log('depositSwapInput', deposited, borrowed, targetLeverage, priceCollToDebt, new Decimal(flashLoanFee));
+
   const { adjustDepositPosition, adjustBorrowPosition } = calcAdjustAmounts({
-    currentDepositPosition: deposited,
-    currentBorrowPosition: borrowed,
+    currentDepositPosition: fromLamports(deposited, collReserve!.stats.decimals),
+    currentBorrowPosition: fromLamports(borrowed, debtReserve!.stats.decimals),
     targetLeverage: targetLeverage,
     priceCollToDebt: priceCollToDebt,
     flashLoanFee: new Decimal(flashLoanFee),
@@ -918,7 +924,9 @@ export const getAdjustLeverageSwapInputs = (props: {
 
     return {
       swapInputs: {
-        inputAmountLamports: toLamports(borrowAmount, debtReserve!.stats.decimals).ceil().toNumber(),
+        inputAmountLamports: toLamports(borrowAmount, debtReserve!.state.liquidity.mintDecimals.toNumber())
+          .ceil()
+          .toNumber(),
         inputMint: debtTokenMint,
         outputMint: collTokenMint,
       },
@@ -930,7 +938,10 @@ export const getAdjustLeverageSwapInputs = (props: {
 
     return {
       swapInputs: {
-        inputAmountLamports: toLamports(withdrawAmountWithSlippageAndFlashLoanFee, collReserve!.stats.decimals)
+        inputAmountLamports: toLamports(
+          withdrawAmountWithSlippageAndFlashLoanFee,
+          collReserve!.state.liquidity.mintDecimals.toNumber()
+        )
           .ceil()
           .toNumber(),
         inputMint: collTokenMint,
@@ -1002,6 +1013,9 @@ export const getAdjustLeverageIxns = async (props: {
   } else {
     flashLoanFee = debtReserve?.getFlashLoanFee() || new Decimal(0);
   }
+
+  console.log('depositSwapInput', deposited, borrowed, targetLeverage, priceCollToDebt, new Decimal(flashLoanFee));
+
   const { adjustDepositPosition, adjustBorrowPosition } = calcAdjustAmounts({
     currentDepositPosition: deposited,
     currentBorrowPosition: borrowed,
