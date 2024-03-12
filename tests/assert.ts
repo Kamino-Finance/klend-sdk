@@ -1,5 +1,5 @@
-import { fuzzyEq, sleep } from '../src';
-import { AssertionError } from 'chai';
+import { SwapInputs, fuzzyEq, sleep } from '../src';
+import { AssertionError, assert } from 'chai';
 import Decimal from 'decimal.js';
 
 export async function waitUntilMatches(condition: () => Promise<void>, waitMillis: number = 10_000): Promise<void> {
@@ -25,4 +25,10 @@ export function assertFuzzyEq(actual: Decimal.Value, expected: Decimal.Value, ep
   if (!fuzzyEq(actual, expected, epsilon)) {
     throw new AssertionError(`Expected approx ${expected}, got ${actual} (epsilon=${epsilon})`);
   }
+}
+
+export function assertSwapInputsMatch(a: SwapInputs, b: SwapInputs): void {
+  assert.equal(a.inputAmountLamports, b.inputAmountLamports);
+  assert(a.inputMint.equals(b.inputMint));
+  assert(a.outputMint.equals(b.outputMint));
 }

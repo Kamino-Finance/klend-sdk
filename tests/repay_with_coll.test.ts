@@ -6,12 +6,12 @@ import {
   makeReserveConfigWithBorrowFeeAndTakeRate,
   newUser,
 } from './setup_utils';
-import { VanillaObligation, sleep } from '../src';
+import { VanillaObligation, getRepayWithCollSwapInputs, sleep } from '../src';
 import { repayWithCollTestAdapter } from './repay_with_coll_utils';
 import { Keypair, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { getPriceMock } from './leverage_utils';
 import { assert } from 'chai';
-import { assertFuzzyEq } from './assert';
+import { assertFuzzyEq, assertSwapInputsMatch } from './assert';
 import { Fraction } from '../src/classes/fraction';
 import { lamportsToNumberDecimal } from '../src/classes/utils';
 import { updateMarketReferralFeeBps, updateReserve } from './setup_operations';
@@ -52,7 +52,7 @@ describe('Repay with collateral SDK tests', function () {
 
     const obligationBefore = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))[0];
 
-    const repayWithCollTxSig = await repayWithCollTestAdapter(
+    const repayWithCollTxRes = await repayWithCollTestAdapter(
       env,
       borrower,
       kaminoMarket,
@@ -66,7 +66,7 @@ describe('Repay with collateral SDK tests', function () {
       PublicKey.default
     );
 
-    console.log('Repay with Coll txn:', repayWithCollTxSig);
+    console.log('Repay with Coll txn:', repayWithCollTxRes);
 
     await sleep(2000);
 
@@ -151,7 +151,7 @@ describe('Repay with collateral SDK tests', function () {
 
     const obligationBefore = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))[0];
 
-    const repayWithCollTxSig = await repayWithCollTestAdapter(
+    const repayWithCollTxRes = await repayWithCollTestAdapter(
       env,
       borrower,
       kaminoMarket,
@@ -165,7 +165,7 @@ describe('Repay with collateral SDK tests', function () {
       PublicKey.default
     );
 
-    console.log('Repay with Coll txn:', repayWithCollTxSig);
+    console.log('Repay with Coll txn:', repayWithCollTxRes);
 
     await sleep(2000);
 
@@ -250,7 +250,7 @@ describe('Repay with collateral SDK tests', function () {
 
     const obligationBefore = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))[0];
 
-    const repayWithCollTxSig = await repayWithCollTestAdapter(
+    const repayWithCollTxRes = await repayWithCollTestAdapter(
       env,
       borrower,
       kaminoMarket,
@@ -264,7 +264,7 @@ describe('Repay with collateral SDK tests', function () {
       PublicKey.default
     );
 
-    console.log('Repay with Coll txn:', repayWithCollTxSig);
+    console.log('Repay with Coll txn:', repayWithCollTxRes);
 
     await sleep(2000);
 
@@ -349,7 +349,7 @@ describe('Repay with collateral SDK tests', function () {
 
     const obligationBefore = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))[0];
 
-    const repayWithCollTxSig = await repayWithCollTestAdapter(
+    const repayWithCollTxRes = await repayWithCollTestAdapter(
       env,
       borrower,
       kaminoMarket,
@@ -363,7 +363,20 @@ describe('Repay with collateral SDK tests', function () {
       PublicKey.default
     );
 
-    console.log('Repay with Coll txn:', repayWithCollTxSig);
+    const swapInputsCalcs = getRepayWithCollSwapInputs({
+      repayAmount: amountToRepay,
+      priceDebtToColl: new Decimal(await getPriceMock(kaminoMarket, debtToken, collToken)),
+      slippagePct: new Decimal(slippagePct),
+      kaminoMarket,
+      debtTokenMint: new PublicKey(debtTokenMint),
+      collTokenMint: new PublicKey(collTokenMint),
+      obligation: obligationBefore,
+      currentSlot: await kaminoMarket.getConnection().getSlot(),
+    });
+
+    assertSwapInputsMatch(swapInputsCalcs.swapInputs, repayWithCollTxRes?.swapInputs!);
+
+    console.log('Repay with Coll txn:', repayWithCollTxRes);
 
     await sleep(2000);
 
@@ -445,7 +458,7 @@ describe('Repay with collateral SDK tests', function () {
 
     const obligationBefore = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))[0];
 
-    const repayWithCollTxSig = await repayWithCollTestAdapter(
+    const repayWithCollTxRes = await repayWithCollTestAdapter(
       env,
       borrower,
       kaminoMarket,
@@ -459,7 +472,7 @@ describe('Repay with collateral SDK tests', function () {
       PublicKey.default
     );
 
-    console.log('Repay with Coll txn:', repayWithCollTxSig);
+    console.log('Repay with Coll txn:', repayWithCollTxRes);
 
     await sleep(2000);
 
@@ -541,7 +554,7 @@ describe('Repay with collateral SDK tests', function () {
 
     const obligationBefore = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))[0];
 
-    const repayWithCollTxSig = await repayWithCollTestAdapter(
+    const repayWithCollTxRes = await repayWithCollTestAdapter(
       env,
       borrower,
       kaminoMarket,
@@ -555,7 +568,7 @@ describe('Repay with collateral SDK tests', function () {
       PublicKey.default
     );
 
-    console.log('Repay with Coll txn:', repayWithCollTxSig);
+    console.log('Repay with Coll txn:', repayWithCollTxRes);
 
     await sleep(2000);
 
@@ -656,7 +669,7 @@ describe('Repay with collateral SDK tests', function () {
 
     const obligationBefore = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))[0];
 
-    const repayWithCollTxSig = await repayWithCollTestAdapter(
+    const repayWithCollTxRes = await repayWithCollTestAdapter(
       env,
       borrower,
       kaminoMarket,
@@ -670,7 +683,7 @@ describe('Repay with collateral SDK tests', function () {
       PublicKey.default
     );
 
-    console.log('Repay with Coll txn:', repayWithCollTxSig);
+    console.log('Repay with Coll txn:', repayWithCollTxRes);
 
     await sleep(2000);
 
