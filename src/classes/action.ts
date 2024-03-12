@@ -1349,7 +1349,7 @@ export class KaminoAction {
               );
 
               // TODO: Investigate this !!? - without it repay with coll won't work
-              if (fullRepay.lte(new Decimal(this.amount.toNumber()))) {
+              if (fullRepay.lte(new Decimal(this.amount.toString()))) {
                 console.log('cmp', fullRepay.toNumber(), this.amount.toNumber());
                 this.preLoadedBorrowReservesSameTx.push(this.reserve.address);
               }
