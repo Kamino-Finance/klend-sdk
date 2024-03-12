@@ -11,13 +11,19 @@ import Decimal from 'decimal.js';
 import * as assert from 'assert';
 import { MultiplyObligation, fuzzyEq, sleep } from '../src';
 
-import { toJson } from '../src/lib';
+import {
+  getAdjustLeverageSwapInputs,
+  getDepositWithLeverageSwapInputs,
+  getWithdrawWithLeverageSwapInputs,
+  toJson,
+} from '../src/lib';
 import {
   adjustLeverageTestAdapter,
   depositLeverageTestAdapter,
   getPriceMock,
   withdrawLeverageTestAdapter,
 } from './leverage_utils';
+import { assertSwapInputsMatch } from './assert';
 
 // TODO: test with sol and wrapped sol
 // - [x] test when the one of the tokens is 0 entirely
@@ -1084,7 +1090,7 @@ describe('Leverage SDK tests', function () {
     await sleep(2000);
 
     console.log('Withdrawing with leverage ===', withdrawToken);
-    await withdrawLeverageTestAdapter(
+    const res = await withdrawLeverageTestAdapter(
       env,
       borrower,
       kaminoMarket,
@@ -1098,6 +1104,25 @@ describe('Leverage SDK tests', function () {
       false,
       (a: string, b: string) => getPriceMock(kaminoMarket, a, b)
     );
+
+    const currentSlot = await kaminoMarket.getConnection().getSlot();
+
+    const swapInputsCalcs = getWithdrawWithLeverageSwapInputs({
+      amount: withdrawAmount,
+      deposited: obligation.getDeposits()[0].amount,
+      borrowed: obligation.getBorrows()[0].amount,
+      priceCollToDebt: new Decimal(await getPriceMock(kaminoMarket, collToken, debtToken)),
+      slippagePct,
+      isClosingPosition: false,
+      kaminoMarket,
+      selectedTokenMint: kaminoMarket.getReserveBySymbol(withdrawToken)?.getLiquidityMint()!,
+      debtTokenMint: kaminoMarket.getReserveBySymbol(debtToken)?.getLiquidityMint()!,
+      collTokenMint: kaminoMarket.getReserveBySymbol(collToken)?.getLiquidityMint()!,
+      userObligation: obligation,
+      currentSlot,
+    });
+
+    assertSwapInputsMatch(swapInputsCalcs.swapInputs, res?.swapInputs!);
 
     await sleep(2000);
 
@@ -1409,7 +1434,7 @@ describe('Leverage SDK tests', function () {
     await sleep(2000);
 
     console.log('Adjusting with leverage up ===', withdrawToken);
-    await adjustLeverageTestAdapter(
+    const res = await adjustLeverageTestAdapter(
       env,
       borrower,
       kaminoMarket,
@@ -1421,6 +1446,20 @@ describe('Leverage SDK tests', function () {
       initialLeverage.add(1),
       (a: string, b: string) => getPriceMock(kaminoMarket, a, b)
     );
+
+    const swapInputsCalcs = getAdjustLeverageSwapInputs({
+      deposited: obligation.getDeposits()[0].amount,
+      borrowed: obligation.getBorrows()[0].amount,
+      priceCollToDebt: new Decimal(await getPriceMock(kaminoMarket, collToken, debtToken)),
+      priceDebtToColl: new Decimal(await getPriceMock(kaminoMarket, debtToken, collToken)),
+      slippagePct,
+      targetLeverage: initialLeverage.add(1),
+      kaminoMarket,
+      debtTokenMint: kaminoMarket.getReserveBySymbol(debtToken)?.getLiquidityMint()!,
+      collTokenMint: kaminoMarket.getReserveBySymbol(collToken)?.getLiquidityMint()!,
+    });
+
+    assertSwapInputsMatch(swapInputsCalcs.swapInputs, res?.swapInputs!);
 
     {
       const obligation = (await kaminoMarket.getUserObligationsByTag(MultiplyObligation.tag, borrower.publicKey))[0];
@@ -1715,7 +1754,7 @@ describe('Leverage SDK tests', function () {
     const debtBalanceBeforeDeposit = await balance(env, borrower, kaminoMarket, debtToken);
 
     console.log('Depositing with leverage ===', depositToken);
-    await depositLeverageTestAdapter(
+    const res = await depositLeverageTestAdapter(
       env,
       borrower,
       kaminoMarket,
@@ -1727,6 +1766,21 @@ describe('Leverage SDK tests', function () {
       slippagePct,
       (a: string, b: string) => getPriceMock(kaminoMarket, a, b)
     );
+
+    await kaminoMarket.reload();
+
+    const swapInputsCalcs = getDepositWithLeverageSwapInputs({
+      depositAmount,
+      priceDebtToColl: new Decimal(await getPriceMock(kaminoMarket, debtToken, collToken)),
+      slippagePct: new Decimal(slippagePct),
+      targetLeverage,
+      kaminoMarket,
+      selectedTokenMint: kaminoMarket.getReserveBySymbol(depositToken)?.getLiquidityMint()!,
+      debtTokenMint: kaminoMarket.getReserveBySymbol(debtToken)?.getLiquidityMint()!,
+      collTokenMint: kaminoMarket.getReserveBySymbol(collToken)?.getLiquidityMint()!,
+    });
+
+    assertSwapInputsMatch(swapInputsCalcs.swapInputs, res?.swapInputs!);
 
     await sleep(2000);
 
@@ -1761,8 +1815,8 @@ describe('Leverage SDK tests', function () {
 
     await sleep(2000);
 
-    console.log('Adjusting with leverage up ===', withdrawToken);
-    await adjustLeverageTestAdapter(
+    console.log('Adjusting with leverage down ===', withdrawToken);
+    const resAdjustDown = await adjustLeverageTestAdapter(
       env,
       borrower,
       kaminoMarket,
@@ -1774,6 +1828,20 @@ describe('Leverage SDK tests', function () {
       initialLeverage.sub(1),
       (a: string, b: string) => getPriceMock(kaminoMarket, a, b)
     );
+
+    const swapInputsCalcsAdjustDown = getAdjustLeverageSwapInputs({
+      deposited: obligation.getDeposits()[0].amount,
+      borrowed: obligation.getBorrows()[0].amount,
+      priceCollToDebt: new Decimal(await getPriceMock(kaminoMarket, collToken, debtToken)),
+      priceDebtToColl: new Decimal(await getPriceMock(kaminoMarket, debtToken, collToken)),
+      slippagePct,
+      targetLeverage: initialLeverage.sub(1),
+      kaminoMarket,
+      debtTokenMint: kaminoMarket.getReserveBySymbol(debtToken)?.getLiquidityMint()!,
+      collTokenMint: kaminoMarket.getReserveBySymbol(collToken)?.getLiquidityMint()!,
+    });
+
+    assertSwapInputsMatch(swapInputsCalcsAdjustDown.swapInputs, resAdjustDown?.swapInputs!);
 
     {
       const obligation = (await kaminoMarket.getUserObligationsByTag(MultiplyObligation.tag, borrower.publicKey))[0];
