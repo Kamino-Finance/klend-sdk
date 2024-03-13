@@ -2455,6 +2455,10 @@ export class KaminoAction {
       throw new Error('Invalid action');
     }
 
+    if (currentSlot === 0) {
+      currentSlot = await kaminoMarket.getConnection().getSlot();
+    }
+
     return new KaminoAction(
       kaminoMarket,
       payer,
@@ -2494,6 +2498,10 @@ export class KaminoAction {
     ]);
 
     const userTokenAccountAddress = atas[0];
+
+    if (currentSlot === 0) {
+      currentSlot = await kaminoMarket.getConnection().getSlot();
+    }
 
     return {
       axn: new KaminoAction(
