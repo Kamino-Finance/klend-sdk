@@ -24,6 +24,7 @@ import {
   withdrawLeverageTestAdapter,
 } from './leverage_utils';
 import { assertSwapInputsMatch } from './assert';
+import { lamportsToNumberDecimal } from '../src/classes/utils';
 
 // TODO: test with sol and wrapped sol
 // - [x] test when the one of the tokens is 0 entirely
@@ -1109,8 +1110,14 @@ describe('Leverage SDK tests', function () {
 
     const swapInputsCalcs = getWithdrawWithLeverageSwapInputs({
       amount: withdrawAmount,
-      deposited: obligation.getDeposits()[0].amount,
-      borrowed: obligation.getBorrows()[0].amount,
+      deposited: lamportsToNumberDecimal(
+        obligation.getDeposits()[0].amount,
+        kaminoMarket.getReserveBySymbol(collToken)?.state.liquidity.mintDecimals.toNumber()!
+      ),
+      borrowed: lamportsToNumberDecimal(
+        obligation.getBorrows()[0].amount,
+        kaminoMarket.getReserveBySymbol(debtToken)?.state.liquidity.mintDecimals.toNumber()!
+      ),
       priceCollToDebt: new Decimal(await getPriceMock(kaminoMarket, collToken, debtToken)),
       slippagePct,
       isClosingPosition: false,
@@ -1448,8 +1455,14 @@ describe('Leverage SDK tests', function () {
     );
 
     const swapInputsCalcs = getAdjustLeverageSwapInputs({
-      deposited: obligation.getDeposits()[0].amount,
-      borrowed: obligation.getBorrows()[0].amount,
+      deposited: lamportsToNumberDecimal(
+        obligation.getDeposits()[0].amount,
+        kaminoMarket.getReserveBySymbol(collToken)?.state.liquidity.mintDecimals.toNumber()!
+      ),
+      borrowed: lamportsToNumberDecimal(
+        obligation.getBorrows()[0].amount,
+        kaminoMarket.getReserveBySymbol(debtToken)?.state.liquidity.mintDecimals.toNumber()!
+      ),
       priceCollToDebt: new Decimal(await getPriceMock(kaminoMarket, collToken, debtToken)),
       priceDebtToColl: new Decimal(await getPriceMock(kaminoMarket, debtToken, collToken)),
       slippagePct,
