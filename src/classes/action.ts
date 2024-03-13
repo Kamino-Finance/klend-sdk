@@ -2294,7 +2294,7 @@ export class KaminoAction {
       }
 
       const cumulativeBorrowRateObligation = KaminoObligation.getCumulativeBorrowRate(borrow);
-      const cumulativeBorrowRateReserve = this.reserve.getCumulativeBorrowRate();
+      const cumulativeBorrowRateReserve = this.reserve.getEstimatedCumulativeBorrowRate(this.currentSlot);
       // TODO: shouldn't this calc be added to all other stuff as well?
       safeRepay = new BN(
         Math.floor(
