@@ -1348,9 +1348,11 @@ export class KaminoAction {
                 KaminoObligation.getBorrowAmount(borrow)
               );
 
+              const amountDecimal = new Decimal(this.amount.toString());
+
               // TODO: Investigate this !!? - without it repay with coll won't work
-              if (fullRepay.lte(new Decimal(this.amount.toString()))) {
-                console.log('cmp', fullRepay.toNumber(), this.amount.toNumber());
+              if (fullRepay.lte(amountDecimal)) {
+                console.log('cmp', fullRepay.toNumber(), amountDecimal.toNumber());
                 this.preLoadedBorrowReservesSameTx.push(this.reserve.address);
               }
             }
