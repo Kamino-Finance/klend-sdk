@@ -1843,8 +1843,14 @@ describe('Leverage SDK tests', function () {
     );
 
     const swapInputsCalcsAdjustDown = getAdjustLeverageSwapInputs({
-      deposited: obligation.getDeposits()[0].amount,
-      borrowed: obligation.getBorrows()[0].amount,
+      deposited: lamportsToNumberDecimal(
+        obligation.getDeposits()[0].amount,
+        kaminoMarket.getReserveBySymbol(collToken)?.state.liquidity.mintDecimals.toNumber()!
+      ),
+      borrowed: lamportsToNumberDecimal(
+        obligation.getBorrows()[0].amount,
+        kaminoMarket.getReserveBySymbol(debtToken)?.state.liquidity.mintDecimals.toNumber()!
+      ),
       priceCollToDebt: new Decimal(await getPriceMock(kaminoMarket, collToken, debtToken)),
       priceDebtToColl: new Decimal(await getPriceMock(kaminoMarket, debtToken, collToken)),
       slippagePct,
