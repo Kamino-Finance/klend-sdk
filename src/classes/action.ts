@@ -914,6 +914,7 @@ export class KaminoAction {
           userSourceLiquidity: this.userTokenAccountAddress,
           userDestinationCollateral: this.userCollateralAccountAddress,
           tokenProgram: TOKEN_PROGRAM_ID,
+          instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
         },
         this.kaminoMarket.programId
       )
@@ -937,6 +938,7 @@ export class KaminoAction {
           userSourceCollateral: this.userCollateralAccountAddress,
           userDestinationLiquidity: this.userTokenAccountAddress,
           tokenProgram: TOKEN_PROGRAM_ID,
+          instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
         },
         this.kaminoMarket.programId
       )
@@ -1802,38 +1804,33 @@ export class KaminoAction {
         if (addToSetupIxs) {
           this.setupIxs.push(refreshFarmForObligationix);
           this.setupIxsLabels.push(
-            `RefreshFarmForObligation[${
-              arg[0].kind
+            `RefreshFarmForObligation[${arg[0].kind
             }, res=${arg[3].address.toString()}, obl=${this.getObligationPda().toString()}]`
           );
           if (twoTokenAction) {
             // If two token action, this refresh needs to be the first inbetween ix
             this.inBetweenIxs.push(refreshFarmForObligationix);
             this.inBetweenIxsLabels.push(
-              `RefreshFarmForObligation[${
-                arg[0].kind
+              `RefreshFarmForObligation[${arg[0].kind
               }, res=${arg[3].address.toString()}, obl=${this.getObligationPda().toString()}]`
             );
           } else {
             this.refreshFarmsCleanupTxnIxs.push(refreshFarmForObligationix);
             this.refreshFarmsCleanupTxnIxsLabels.push(
-              `RefreshFarmForObligation[${
-                arg[0].kind
+              `RefreshFarmForObligation[${arg[0].kind
               }, res=${arg[3].address.toString()}, obl=${this.getObligationPda().toString()}]`
             );
           }
         } else {
           this.inBetweenIxs.push(refreshFarmForObligationix);
           this.inBetweenIxsLabels.push(
-            `RefreshFarmForObligation[${
-              arg[0].kind
+            `RefreshFarmForObligation[${arg[0].kind
             }, res=${arg[3].address.toString()}, obl=${this.getObligationPda().toString()}]`
           );
 
           this.refreshFarmsCleanupTxnIxs.push(refreshFarmForObligationix);
           this.refreshFarmsCleanupTxnIxsLabels.push(
-            `RefreshFarmForObligation[${
-              arg[0].kind
+            `RefreshFarmForObligation[${arg[0].kind
             }, res=${arg[3].address.toString()}, obl=${this.getObligationPda().toString()}]`
           );
         }

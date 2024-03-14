@@ -23,7 +23,7 @@ export interface LendingMarketFields {
   emergencyMode: number
   autodeleverageEnabled: number
   /** Padding used for alignment */
-  reserved: Array<number>
+  borrowDisabled: number
   /**
    * Refresh price from oracle only if it's older than this percentage of the price max age.
    * e.g. if the max age is set to 100s and this is set to 80%, the price will be refreshed if it's older than 80s.
@@ -34,8 +34,8 @@ export interface LendingMarketFields {
   liquidationMaxDebtCloseFactorPct: number
   /** Minimum acceptable unhealthy LTV before max_debt_close_factor_pct becomes 100% */
   insolvencyRiskUnhealthyLtvPct: number
-  /** Minimum liquidation amount threshold triggering full liquidation for an obligation */
-  minFullLiquidationAmountThreshold: BN
+  /** Minimum liquidation value threshold triggering full liquidation for an obligation */
+  minFullLiquidationValueThreshold: BN
   /** Max allowed liquidation value in one ix call */
   maxLiquidatableDebtMarketValueAtOnce: BN
   /** Global maximum unhealthy borrow value allowed for any obligation */
@@ -71,7 +71,7 @@ export interface LendingMarketJSON {
   emergencyMode: number
   autodeleverageEnabled: number
   /** Padding used for alignment */
-  reserved: Array<number>
+  borrowDisabled: number
   /**
    * Refresh price from oracle only if it's older than this percentage of the price max age.
    * e.g. if the max age is set to 100s and this is set to 80%, the price will be refreshed if it's older than 80s.
@@ -82,8 +82,8 @@ export interface LendingMarketJSON {
   liquidationMaxDebtCloseFactorPct: number
   /** Minimum acceptable unhealthy LTV before max_debt_close_factor_pct becomes 100% */
   insolvencyRiskUnhealthyLtvPct: number
-  /** Minimum liquidation amount threshold triggering full liquidation for an obligation */
-  minFullLiquidationAmountThreshold: string
+  /** Minimum liquidation value threshold triggering full liquidation for an obligation */
+  minFullLiquidationValueThreshold: string
   /** Max allowed liquidation value in one ix call */
   maxLiquidatableDebtMarketValueAtOnce: string
   /** Global maximum unhealthy borrow value allowed for any obligation */
@@ -119,7 +119,7 @@ export class LendingMarket {
   readonly emergencyMode: number
   readonly autodeleverageEnabled: number
   /** Padding used for alignment */
-  readonly reserved: Array<number>
+  readonly borrowDisabled: number
   /**
    * Refresh price from oracle only if it's older than this percentage of the price max age.
    * e.g. if the max age is set to 100s and this is set to 80%, the price will be refreshed if it's older than 80s.
@@ -130,8 +130,8 @@ export class LendingMarket {
   readonly liquidationMaxDebtCloseFactorPct: number
   /** Minimum acceptable unhealthy LTV before max_debt_close_factor_pct becomes 100% */
   readonly insolvencyRiskUnhealthyLtvPct: number
-  /** Minimum liquidation amount threshold triggering full liquidation for an obligation */
-  readonly minFullLiquidationAmountThreshold: BN
+  /** Minimum liquidation value threshold triggering full liquidation for an obligation */
+  readonly minFullLiquidationValueThreshold: BN
   /** Max allowed liquidation value in one ix call */
   readonly maxLiquidatableDebtMarketValueAtOnce: BN
   /** Global maximum unhealthy borrow value allowed for any obligation */
@@ -160,11 +160,11 @@ export class LendingMarket {
     borsh.u16("referralFeeBps"),
     borsh.u8("emergencyMode"),
     borsh.u8("autodeleverageEnabled"),
-    borsh.array(borsh.u8(), 1, "reserved"),
+    borsh.u8("borrowDisabled"),
     borsh.u8("priceRefreshTriggerToMaxAgePct"),
     borsh.u8("liquidationMaxDebtCloseFactorPct"),
     borsh.u8("insolvencyRiskUnhealthyLtvPct"),
-    borsh.u64("minFullLiquidationAmountThreshold"),
+    borsh.u64("minFullLiquidationValueThreshold"),
     borsh.u64("maxLiquidatableDebtMarketValueAtOnce"),
     borsh.u64("globalUnhealthyBorrowValue"),
     borsh.u64("globalAllowedBorrowValue"),
@@ -184,13 +184,13 @@ export class LendingMarket {
     this.referralFeeBps = fields.referralFeeBps
     this.emergencyMode = fields.emergencyMode
     this.autodeleverageEnabled = fields.autodeleverageEnabled
-    this.reserved = fields.reserved
+    this.borrowDisabled = fields.borrowDisabled
     this.priceRefreshTriggerToMaxAgePct = fields.priceRefreshTriggerToMaxAgePct
     this.liquidationMaxDebtCloseFactorPct =
       fields.liquidationMaxDebtCloseFactorPct
     this.insolvencyRiskUnhealthyLtvPct = fields.insolvencyRiskUnhealthyLtvPct
-    this.minFullLiquidationAmountThreshold =
-      fields.minFullLiquidationAmountThreshold
+    this.minFullLiquidationValueThreshold =
+      fields.minFullLiquidationValueThreshold
     this.maxLiquidatableDebtMarketValueAtOnce =
       fields.maxLiquidatableDebtMarketValueAtOnce
     this.globalUnhealthyBorrowValue = fields.globalUnhealthyBorrowValue
@@ -256,11 +256,11 @@ export class LendingMarket {
       referralFeeBps: dec.referralFeeBps,
       emergencyMode: dec.emergencyMode,
       autodeleverageEnabled: dec.autodeleverageEnabled,
-      reserved: dec.reserved,
+      borrowDisabled: dec.borrowDisabled,
       priceRefreshTriggerToMaxAgePct: dec.priceRefreshTriggerToMaxAgePct,
       liquidationMaxDebtCloseFactorPct: dec.liquidationMaxDebtCloseFactorPct,
       insolvencyRiskUnhealthyLtvPct: dec.insolvencyRiskUnhealthyLtvPct,
-      minFullLiquidationAmountThreshold: dec.minFullLiquidationAmountThreshold,
+      minFullLiquidationValueThreshold: dec.minFullLiquidationValueThreshold,
       maxLiquidatableDebtMarketValueAtOnce:
         dec.maxLiquidatableDebtMarketValueAtOnce,
       globalUnhealthyBorrowValue: dec.globalUnhealthyBorrowValue,
@@ -287,12 +287,12 @@ export class LendingMarket {
       referralFeeBps: this.referralFeeBps,
       emergencyMode: this.emergencyMode,
       autodeleverageEnabled: this.autodeleverageEnabled,
-      reserved: this.reserved,
+      borrowDisabled: this.borrowDisabled,
       priceRefreshTriggerToMaxAgePct: this.priceRefreshTriggerToMaxAgePct,
       liquidationMaxDebtCloseFactorPct: this.liquidationMaxDebtCloseFactorPct,
       insolvencyRiskUnhealthyLtvPct: this.insolvencyRiskUnhealthyLtvPct,
-      minFullLiquidationAmountThreshold:
-        this.minFullLiquidationAmountThreshold.toString(),
+      minFullLiquidationValueThreshold:
+        this.minFullLiquidationValueThreshold.toString(),
       maxLiquidatableDebtMarketValueAtOnce:
         this.maxLiquidatableDebtMarketValueAtOnce.toString(),
       globalUnhealthyBorrowValue: this.globalUnhealthyBorrowValue.toString(),
@@ -317,12 +317,12 @@ export class LendingMarket {
       referralFeeBps: obj.referralFeeBps,
       emergencyMode: obj.emergencyMode,
       autodeleverageEnabled: obj.autodeleverageEnabled,
-      reserved: obj.reserved,
+      borrowDisabled: obj.borrowDisabled,
       priceRefreshTriggerToMaxAgePct: obj.priceRefreshTriggerToMaxAgePct,
       liquidationMaxDebtCloseFactorPct: obj.liquidationMaxDebtCloseFactorPct,
       insolvencyRiskUnhealthyLtvPct: obj.insolvencyRiskUnhealthyLtvPct,
-      minFullLiquidationAmountThreshold: new BN(
-        obj.minFullLiquidationAmountThreshold
+      minFullLiquidationValueThreshold: new BN(
+        obj.minFullLiquidationValueThreshold
       ),
       maxLiquidatableDebtMarketValueAtOnce: new BN(
         obj.maxLiquidatableDebtMarketValueAtOnce

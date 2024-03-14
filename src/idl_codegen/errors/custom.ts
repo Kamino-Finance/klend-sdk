@@ -86,6 +86,9 @@ export type CustomError =
   | ObligationInDeprecatedReserve
   | ReferrerStateOwnerMismatch
   | UserMetadataOwnerAlreadySet
+  | BorrowingDisabled
+  | BorrowLimitExceeded
+  | DepositLimitExceeded
 
 export class InvalidMarketAuthority extends Error {
   static readonly code = 6000
@@ -1077,6 +1080,39 @@ export class UserMetadataOwnerAlreadySet extends Error {
   }
 }
 
+export class BorrowingDisabled extends Error {
+  static readonly code = 6087
+  readonly code = 6087
+  readonly name = "BorrowingDisabled"
+  readonly msg = "Borrowing is disabled"
+
+  constructor(readonly logs?: string[]) {
+    super("6087: Borrowing is disabled")
+  }
+}
+
+export class BorrowLimitExceeded extends Error {
+  static readonly code = 6088
+  readonly code = 6088
+  readonly name = "BorrowLimitExceeded"
+  readonly msg = "Cannot borrow above borrow limit"
+
+  constructor(readonly logs?: string[]) {
+    super("6088: Cannot borrow above borrow limit")
+  }
+}
+
+export class DepositLimitExceeded extends Error {
+  static readonly code = 6089
+  readonly code = 6089
+  readonly name = "DepositLimitExceeded"
+  readonly msg = "Cannot deposit above deposit limit"
+
+  constructor(readonly logs?: string[]) {
+    super("6089: Cannot deposit above deposit limit")
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 6000:
@@ -1253,6 +1289,12 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new ReferrerStateOwnerMismatch(logs)
     case 6086:
       return new UserMetadataOwnerAlreadySet(logs)
+    case 6087:
+      return new BorrowingDisabled(logs)
+    case 6088:
+      return new BorrowLimitExceeded(logs)
+    case 6089:
+      return new DepositLimitExceeded(logs)
   }
 
   return null
