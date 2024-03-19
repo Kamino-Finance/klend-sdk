@@ -170,6 +170,7 @@ export const getRepayWithCollIxns = async (props: {
     destinationAta: debtTokenAta,
     referrerAccount: kaminoMarket.programId,
     referrerTokenState: kaminoMarket.programId,
+    programId: kaminoMarket.programId,
   });
 
   // 2. Repay using the flash borrowed funds & withdraw collateral to swap and pay the flash loan
