@@ -294,7 +294,9 @@ export class KaminoMarket {
       return null;
     }
 
-    return new KaminoObligation(this, obligationAddress, obligationState, null, null);
+    const slot = await this.getConnection().getSlot();
+
+    return new KaminoObligation(this, obligationAddress, obligationState, slot, null, null);
   }
 
   async loadReserves() {
@@ -494,8 +496,10 @@ export class KaminoMarket {
       });
     }
 
+    const slot = await this.getConnection().getSlot();
+
     const collateralExcnangeRates = this.getCollateralExchangeRatesByReserve();
-    const cumulativeBorrowRates = this.getCumulativeBorrowRatesByReserve();
+    const cumulativeBorrowRates = this.getEstimatedCumulativeBorrowRatesByReserve(slot);
 
     const obligations = await this.connection.getProgramAccounts(this.programId, {
       filters,
@@ -516,6 +520,7 @@ export class KaminoMarket {
         this,
         obligation.pubkey,
         obligationAccount,
+        slot,
         collateralExcnangeRates,
         cumulativeBorrowRates
       );
@@ -553,8 +558,9 @@ export class KaminoMarket {
       });
     }
 
-    const collateralExcnangeRates = this.getCollateralExchangeRatesByReserve();
-    const cumulativeBorrowRates = this.getCumulativeBorrowRatesByReserve();
+    const collateralExchangeRates = this.getCollateralExchangeRatesByReserve();
+    const slot = await this.getConnection().getSlot();
+    const cumulativeBorrowRates = this.getEstimatedCumulativeBorrowRatesByReserve(slot);
 
     const obligationPubkeys = await this.connection.getProgramAccounts(this.programId, {
       filters,
@@ -581,7 +587,7 @@ export class KaminoMarket {
         }
 
         obligationsBatch.push(
-          new KaminoObligation(this, pubkey, obligationAccount, collateralExcnangeRates, cumulativeBorrowRates)
+          new KaminoObligation(this, pubkey, obligationAccount, slot, collateralExchangeRates, cumulativeBorrowRates)
         );
       }
       yield obligationsBatch;
@@ -609,7 +615,8 @@ export class KaminoMarket {
       ],
     });
     const collateralExcnangeRates = await this.getCollateralExchangeRatesByReserve();
-    const cumulativeBorrowRates = await this.getCumulativeBorrowRatesByReserve();
+    const slot = await this.getConnection().getSlot();
+    const cumulativeBorrowRates = await this.getEstimatedCumulativeBorrowRatesByReserve(slot);
 
     return obligations.map((obligation) => {
       if (obligation.account === null) {
@@ -629,6 +636,7 @@ export class KaminoMarket {
         this,
         obligation.pubkey,
         obligationAccount,
+        slot,
         collateralExcnangeRates,
         cumulativeBorrowRates
       );
@@ -662,6 +670,8 @@ export class KaminoMarket {
       ],
     });
 
+    const slot = await this.getConnection().getSlot();
+
     return obligations.map((obligation) => {
       if (obligation.account === null) {
         throw new Error('Invalid account');
@@ -676,7 +686,7 @@ export class KaminoMarket {
         throw Error('Could not parse obligation.');
       }
 
-      return new KaminoObligation(this, obligation.pubkey, obligationAccount, null, null);
+      return new KaminoObligation(this, obligation.pubkey, obligationAccount, slot, null, null);
     });
   }
 
@@ -707,6 +717,8 @@ export class KaminoMarket {
       ],
     });
 
+    const slot = await this.getConnection().getSlot();
+
     return obligations.map((obligation) => {
       if (obligation.account === null) {
         throw new Error('Invalid account');
@@ -721,7 +733,7 @@ export class KaminoMarket {
         throw Error('Could not parse obligation.');
       }
 
-      return new KaminoObligation(this, obligation.pubkey, obligationAccount, null, null);
+      return new KaminoObligation(this, obligation.pubkey, obligationAccount, slot, null, null);
     });
   }
 
