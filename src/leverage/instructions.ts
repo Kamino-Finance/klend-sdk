@@ -27,6 +27,7 @@ export const getFlashLoanInstructions = (args: {
   destinationAta: PublicKey;
   referrerAccount: PublicKey;
   referrerTokenState: PublicKey;
+  programId: PublicKey;
 }) => {
   const flashBorrowIxn = getBorrowFlashLoanInstruction({
     walletPublicKey: args.walletPublicKey,
@@ -37,6 +38,7 @@ export const getFlashLoanInstructions = (args: {
     destinationAta: args.destinationAta,
     referrerAccount: args.referrerAccount,
     referrerTokenState: args.referrerTokenState,
+    programId: args.programId,
   });
   const flashRepayIxn = getRepayFlashLoanInstruction({
     borrowIxnIndex: args.borrowIxnIndex,
@@ -48,6 +50,7 @@ export const getFlashLoanInstructions = (args: {
     userSourceLiquidity: args.destinationAta,
     referrerAccount: args.referrerAccount,
     referrerTokenState: args.referrerTokenState,
+    programId: args.programId,
   });
 
   return { flashBorrowIxn, flashRepayIxn };
@@ -62,6 +65,7 @@ export const getBorrowFlashLoanInstruction = ({
   destinationAta,
   referrerAccount,
   referrerTokenState,
+  programId,
 }: {
   walletPublicKey: PublicKey;
   lendingMarketAuthority: PublicKey;
@@ -71,6 +75,7 @@ export const getBorrowFlashLoanInstruction = ({
   destinationAta: PublicKey;
   referrerAccount: PublicKey;
   referrerTokenState: PublicKey;
+  programId: PublicKey;
 }) => {
   const args: FlashBorrowReserveLiquidityArgs = {
     liquidityAmount: new anchor.BN(amountLamports.floor().toString()),
@@ -89,7 +94,7 @@ export const getBorrowFlashLoanInstruction = ({
     tokenProgram: TOKEN_PROGRAM_ID,
   };
 
-  return flashBorrowReserveLiquidity(args, accounts);
+  return flashBorrowReserveLiquidity(args, accounts, programId);
 };
 
 export const getRepayFlashLoanInstruction = ({
@@ -102,6 +107,7 @@ export const getRepayFlashLoanInstruction = ({
   userSourceLiquidity,
   referrerAccount,
   referrerTokenState,
+  programId,
 }: {
   borrowIxnIndex: number;
   walletPublicKey: PublicKey;
@@ -112,6 +118,7 @@ export const getRepayFlashLoanInstruction = ({
   userSourceLiquidity: PublicKey;
   referrerAccount: PublicKey;
   referrerTokenState: PublicKey;
+  programId: PublicKey;
 }) => {
   const args: FlashRepayReserveLiquidityArgs = {
     borrowInstructionIndex: borrowIxnIndex,
@@ -132,5 +139,5 @@ export const getRepayFlashLoanInstruction = ({
     tokenProgram: TOKEN_PROGRAM_ID,
   };
 
-  return flashRepayReserveLiquidity(args, accounts);
+  return flashRepayReserveLiquidity(args, accounts, programId);
 };

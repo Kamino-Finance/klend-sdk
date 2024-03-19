@@ -414,6 +414,7 @@ export const getDepositWithLeverageIxns = async (props: {
     destinationAta: !collIsKtoken ? collTokenAta : debtTokenAta,
     referrerAccount: kaminoMarket.programId,
     referrerTokenState: kaminoMarket.programId,
+    programId: kaminoMarket.programId,
   });
 
   console.log(
@@ -803,6 +804,7 @@ export const getWithdrawWithLeverageIxns = async (props: {
     destinationAta: debtTokenAta,
     referrerAccount: kaminoMarket.programId,
     referrerTokenState: kaminoMarket.programId,
+    programId: kaminoMarket.programId,
   });
 
   let withdrawSwapper: SwapIxnsProvider;
@@ -1186,6 +1188,7 @@ export const getIncreaseLeverageIxns = async (props: {
     destinationAta: !collIsKtoken ? collTokenAta : debtTokenAta,
     referrerAccount: kaminoMarket.programId,
     referrerTokenState: kaminoMarket.programId,
+    programId: kaminoMarket.programId,
   });
 
   // 3. Deposit initial tokens +  borrowed tokens into reserve
@@ -1419,6 +1422,7 @@ export const getDecreaseLeverageIxns = async (props: {
     destinationAta: debtTokenAta,
     referrerAccount: kaminoMarket.programId,
     referrerTokenState: kaminoMarket.programId,
+    programId: kaminoMarket.programId,
   });
 
   // 4. Actually do the repay of the flash borrowed amounts

@@ -62,7 +62,8 @@ export const getUserLutAddressAndSetupIxns = async (
           referrerUserMetadata: referrerUserMetadata,
           rent: SYSVAR_RENT_PUBKEY,
           systemProgram: SystemProgram.programId,
-        }
+        },
+        kaminoMarket.programId
       )
     );
   } else {
