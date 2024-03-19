@@ -74,3 +74,12 @@ await sendTransactionFromAction(env, sendTransaction); // sendTransaction from w
 ## TODO: 
 
 Better sdk documentation
+
+## Sync with smart contracts 
+* Copy the program .so, idl and codegen
+```sh
+$ yarn
+$ cp ../kamino-lending/target/deploy/kamino_lending.so deps/programs/kamino_lending.so
+$ cp ../kamino-lending/target/idl/kamino_lending.json src/idl.json
+$ yarn codegen
+```

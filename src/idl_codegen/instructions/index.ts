@@ -134,8 +134,8 @@ export type {
 } from "./initReferrerStateAndShortUrl"
 export { deleteReferrerStateAndShortUrl } from "./deleteReferrerStateAndShortUrl"
 export type { DeleteReferrerStateAndShortUrlAccounts } from "./deleteReferrerStateAndShortUrl"
-export { updateUserMetadataOwner } from "./updateUserMetadataOwner"
+export { idlMissingTypes } from "./idlMissingTypes"
 export type {
-  UpdateUserMetadataOwnerArgs,
-  UpdateUserMetadataOwnerAccounts,
-} from "./updateUserMetadataOwner"
+  IdlMissingTypesArgs,
+  IdlMissingTypesAccounts,
+} from "./idlMissingTypes"

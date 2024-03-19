@@ -18,7 +18,6 @@ export interface DepositReserveLiquidityAndObligationCollateralAccounts {
   reserveCollateralMint: PublicKey
   reserveDestinationDepositCollateral: PublicKey
   userSourceLiquidity: PublicKey
-  userDestinationCollateral: PublicKey
   tokenProgram: PublicKey
   instructionSysvarAccount: PublicKey
 }
@@ -56,11 +55,6 @@ export function depositReserveLiquidityAndObligationCollateral(
       isWritable: true,
     },
     { pubkey: accounts.userSourceLiquidity, isSigner: false, isWritable: true },
-    {
-      pubkey: accounts.userDestinationCollateral,
-      isSigner: false,
-      isWritable: true,
-    },
     { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
     {
       pubkey: accounts.instructionSysvarAccount,

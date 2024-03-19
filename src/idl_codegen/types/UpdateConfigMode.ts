@@ -900,6 +900,52 @@ export class UpdateReserveStatus {
   }
 }
 
+export interface UpdateFarmCollateralJSON {
+  kind: "UpdateFarmCollateral"
+}
+
+export class UpdateFarmCollateral {
+  static readonly discriminator = 39
+  static readonly kind = "UpdateFarmCollateral"
+  readonly discriminator = 39
+  readonly kind = "UpdateFarmCollateral"
+
+  toJSON(): UpdateFarmCollateralJSON {
+    return {
+      kind: "UpdateFarmCollateral",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateFarmCollateral: {},
+    }
+  }
+}
+
+export interface UpdateFarmDebtJSON {
+  kind: "UpdateFarmDebt"
+}
+
+export class UpdateFarmDebt {
+  static readonly discriminator = 40
+  static readonly kind = "UpdateFarmDebt"
+  readonly discriminator = 40
+  readonly kind = "UpdateFarmDebt"
+
+  toJSON(): UpdateFarmDebtJSON {
+    return {
+      kind: "UpdateFarmDebt",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateFarmDebt: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if (typeof obj !== "object") {
@@ -1022,6 +1068,12 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   }
   if ("UpdateReserveStatus" in obj) {
     return new UpdateReserveStatus()
+  }
+  if ("UpdateFarmCollateral" in obj) {
+    return new UpdateFarmCollateral()
+  }
+  if ("UpdateFarmDebt" in obj) {
+    return new UpdateFarmDebt()
   }
 
   throw new Error("Invalid enum object")
@@ -1148,6 +1200,12 @@ export function fromJSON(
     case "UpdateReserveStatus": {
       return new UpdateReserveStatus()
     }
+    case "UpdateFarmCollateral": {
+      return new UpdateFarmCollateral()
+    }
+    case "UpdateFarmDebt": {
+      return new UpdateFarmDebt()
+    }
   }
 }
 
@@ -1192,6 +1250,8 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateMultiplierSideBoost"),
     borsh.struct([], "UpdateMultiplierTagBoost"),
     borsh.struct([], "UpdateReserveStatus"),
+    borsh.struct([], "UpdateFarmCollateral"),
+    borsh.struct([], "UpdateFarmDebt"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)
