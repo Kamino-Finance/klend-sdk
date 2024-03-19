@@ -24,7 +24,7 @@ import {
 import { buildAndSendTxnWithLogs, buildVersionedTransaction } from '../src/utils';
 import { Env } from './setup_utils';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { ElevationGroupFields, ReserveConfig, UpdateLendingMarketMode } from '../src/idl_codegen/types';
+import { ElevationGroupFields, ReserveConfig } from '../src/idl_codegen/types';
 import { BN } from '@coral-xyz/anchor';
 
 export async function createMarket(env: Env): Promise<[TransactionSignature, Keypair]> {
@@ -185,7 +185,7 @@ export async function updateMarketReferralFeeBps(
   buffer.writeUInt16LE(referralFeeBps, 0);
 
   const args: UpdateLendingMarketArgs = {
-    mode: new BN(UpdateLendingMarketMode.UpdateReferralFeeBps.discriminator),
+    mode: new BN(10), // UpdateLendingMarketMode.UpdateReferralFeeBps.discriminator
     value: [...buffer],
   };
 
@@ -216,7 +216,7 @@ export async function updateMarketMultiplierPoints(
   }
 
   const args: UpdateLendingMarketArgs = {
-    mode: new BN(UpdateLendingMarketMode.UpdateMultiplierPoints.discriminator),
+    mode: new BN(11), // UpdateLendingMarketMode.UpdateMultiplierPoints.discriminator,
     value: [...buffer],
   };
 
