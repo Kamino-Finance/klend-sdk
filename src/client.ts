@@ -5,15 +5,12 @@ import {
   KaminoObligation,
   PROGRAM_ID,
   STAGING_PROGRAM_ID,
-  batchGetAllUserMetadatasWithoutOwner,
   getAllUserMetadatasWithFilter,
   getProgramId,
   toJson,
-  updateUserMetadataOwner,
-  updateUserMetadataOwnerIx,
 } from './lib';
 import * as fs from 'fs';
-import { Connection, GetProgramAccountsFilter, Keypair, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { Connection, GetProgramAccountsFilter, Keypair, PublicKey } from '@solana/web3.js';
 import { BN } from '@coral-xyz/anchor';
 import { Reserve } from './idl_codegen/accounts';
 import { buildAndSendTxnWithLogs, buildVersionedTransaction } from './utils/instruction';
@@ -21,7 +18,6 @@ import { VanillaObligation } from './utils/ObligationType';
 import { parseTokenSymbol } from './classes/utils';
 import { Env, initEnv } from '../tests/setup_utils';
 import { initializeFarmsForReserve } from '../tests/farms_operations';
-import * as anchor from '@coral-xyz/anchor';
 
 const STAGING_LENDING_MARKET = new PublicKey('6WVSwDQXrBZeQVnu6hpnsRZhodaJTZBUaC334SiiBKdb');
 const MAINNET_LENDING_MARKET = new PublicKey('7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF');
@@ -141,35 +137,6 @@ async function main() {
       const admin = parseKeypairFile(owner);
       const env = await initEnv(cluster, admin);
       await initFarmsForReserveCommand(env, reserve, kind, farmsGlobalConfig, multisig, simulate);
-    });
-
-  commands
-    .command('update-all-user-metadata-owners')
-    .option(`--cluster <string>`, 'Custom RPC URL')
-    .option(`--payer <string>`, 'Payer keypair file')
-    .option(`--program <string>`, 'Program pubkey')
-    .action(async ({ cluster, payer, program }) => {
-      const admin = parseKeypairFile(payer);
-      const env = await initEnv(cluster, admin);
-      await updateAllUserMetadataOwnerCommand(env, new PublicKey(program));
-    });
-
-  commands
-    .command('update-user-metadata-owner')
-    .option(`--cluster <string>`, 'Custom RPC URL')
-    .option(`--payer <string>`, 'Payer keypair file')
-    .option(`--program <string>`, 'Program pubkey')
-    .option(`--user-metadata <string>`, 'UserMetadata pubkey')
-    .option(`--owner <string>`, 'Owner pubkey')
-    .action(async ({ cluster, payer, program, userMetadata, owner }) => {
-      const admin = parseKeypairFile(payer);
-      const env = await initEnv(cluster, admin);
-      await updateUserMetadataOwnerCommand(
-        env,
-        new PublicKey(userMetadata),
-        new PublicKey(owner),
-        new PublicKey(program)
-      );
     });
 
   commands
@@ -390,52 +357,6 @@ async function getMarket(connection: Connection, programId: PublicKey) {
   return kaminoMarket;
 }
 
-async function updateAllUserMetadataOwnerCommand(env: Env, programId: PublicKey) {
-  const userMetadatasWithoutLookupTable: PublicKey[] = [];
-
-  const userMetadatasGenerator = batchGetAllUserMetadatasWithoutOwner(env.provider.connection, programId);
-  for await (const userMetadatas of userMetadatasGenerator) {
-    console.log('got a batch of ' + userMetadatas.length + ' obligations:');
-
-    const updateIxnsBatch: TransactionInstruction[] = [];
-    for (const userMetadata of userMetadatas) {
-      const updateIxn = await updateUserMetadataOwnerIx(env.provider.connection, userMetadata, programId);
-      if (updateIxn) {
-        updateIxnsBatch.push(updateIxn);
-      } else {
-        userMetadatasWithoutLookupTable.push(userMetadata.address);
-      }
-    }
-
-    await sendTransactionBatch(env, updateIxnsBatch);
-  }
-
-  console.log('>>> Done!!!\n');
-  console.log('>>> UserMetadatasWithoutLookupTable\n');
-  for (const userMetadata of userMetadatasWithoutLookupTable) {
-    console.log(userMetadata.toString());
-  }
-}
-
-async function updateUserMetadataOwnerCommand(
-  env: Env,
-  userMetadata: PublicKey,
-  owner: PublicKey,
-  programId: PublicKey
-) {
-  const updateIxn = updateUserMetadataOwner(
-    {
-      owner: owner,
-    },
-    {
-      userMetadata: userMetadata,
-    },
-    programId
-  );
-  const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [updateIxn]);
-  await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
-}
-
 async function downloadUserMetadatasWithFilter(
   env: Env,
   filter: GetProgramAccountsFilter[],
@@ -455,34 +376,6 @@ async function downloadUserMetadatasWithFilter(
     }
   }
   console.log('Total of ' + userPubkeys.length + ' userMetadatas filtered');
-}
-
-async function sendTransactionBatch(env: Env, ixns: TransactionInstruction[]) {
-  let ixnStartIndex = 0;
-  for (let i = 1; i <= ixns.length; i++) {
-    const testTx = new anchor.web3.Transaction(await env.provider.connection.getLatestBlockhash());
-    testTx.add(...ixns.slice(ixnStartIndex, i));
-    testTx.feePayer = env.admin.publicKey;
-
-    // Txn size too large, create txn with all ixns exlcuding current one
-    if (testTx.serializeMessage().byteLength > 1104) {
-      const tx = await buildVersionedTransaction(
-        env.provider.connection,
-        env.admin.publicKey,
-        ixns.slice(ixnStartIndex, i - 1)
-      );
-      await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
-
-      ixnStartIndex = i - 1;
-    }
-  }
-  // send last one
-  const tx = await buildVersionedTransaction(
-    env.provider.connection,
-    env.admin.publicKey,
-    ixns.slice(ixnStartIndex, ixns.length + 1)
-  );
-  await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
 }
 
 main()

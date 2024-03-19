@@ -19,11 +19,8 @@ import {
   userMetadataPda,
   isNotNullPubkey,
   UserMetadata,
-  updateUserMetadataOwner,
-  PROGRAM_ID,
   PublicKeySet,
 } from '../lib';
-import { chunks } from '@hubbleprotocol/kamino-sdk';
 import { farmsId } from '@hubbleprotocol/farms-sdk';
 import { KaminoReserve } from '../classes/reserve';
 
@@ -311,51 +308,6 @@ const BASE_SEED_USER_STATE = Buffer.from('user');
 const getPdaFarmsUserState = (farm: PublicKey, obligation: PublicKey) =>
   PublicKey.findProgramAddressSync([BASE_SEED_USER_STATE, farm.toBytes(), obligation.toBytes()], farmsId)[0];
 
-export async function* batchGetAllUserMetadatasWithoutOwner(
-  connection: Connection,
-  programId: PublicKey
-): AsyncGenerator<KaminoUserMetadata[], void, unknown> {
-  const filters = [
-    {
-      dataSize: UserMetadata.layout.span + 8,
-    },
-    {
-      memcmp: {
-        offset: 80,
-        bytes: PublicKey.default.toBase58(),
-      },
-    },
-  ];
-
-  const userMetadataPubkeys = await connection.getProgramAccounts(programId, {
-    filters,
-  });
-
-  for (const batch of chunks(
-    userMetadataPubkeys.map((x) => x.pubkey),
-    100
-  )) {
-    const userMetadataAccounts = await connection.getMultipleAccountsInfo(batch);
-    const userMetadatasBatch: KaminoUserMetadata[] = [];
-    for (let i = 0; i < userMetadataAccounts.length; i++) {
-      const userMetadata = userMetadataAccounts[i];
-      const pubkey = batch[i];
-      if (userMetadata === null) {
-        continue;
-      }
-
-      const userMetadataAccount = UserMetadata.decode(userMetadata.data);
-
-      if (!userMetadataAccount) {
-        throw Error(`Could not decode userMetadataAccount ${pubkey.toString()}`);
-      }
-
-      userMetadatasBatch.push({ address: pubkey, state: userMetadataAccount });
-    }
-    yield userMetadatasBatch;
-  }
-}
-
 export async function getAllUserMetadatasWithFilter(
   connection: Connection,
   filter: GetProgramAccountsFilter[],
@@ -388,25 +340,4 @@ export async function getAllUserMetadatasWithFilter(
 
     return { address: userMetadata.pubkey, state: userMetadataAccount };
   });
-}
-
-export async function updateUserMetadataOwnerIx(
-  connection: Connection,
-  userMetadata: KaminoUserMetadata,
-  programId: PublicKey = PROGRAM_ID
-): Promise<TransactionInstruction | null> {
-  if (userMetadata.state.userLookupTable.equals(PublicKey.default)) {
-    // user has no lookuptable
-    return null;
-  }
-  const userLookupTable = await connection.getAddressLookupTable(userMetadata.state.userLookupTable);
-  return updateUserMetadataOwner(
-    {
-      owner: userLookupTable?.value?.state.authority!,
-    },
-    {
-      userMetadata: userMetadata.address,
-    },
-    programId
-  );
 }

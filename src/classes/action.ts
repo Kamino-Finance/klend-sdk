@@ -2141,10 +2141,6 @@ export class KaminoAction {
     }
 
     if (action === 'withdraw' || action === 'mint' || action === 'deposit' || action === 'repayAndWithdraw') {
-      const userCollateralAccountInfo = await this.kaminoMarket
-        .getConnection()
-        .getAccountInfo(this.userCollateralAccountAddress);
-
       const userTokenAccountInfo = await this.kaminoMarket.getConnection().getAccountInfo(this.userTokenAccountAddress);
 
       // TODO: Might need to remove this
@@ -2165,7 +2161,7 @@ export class KaminoAction {
         .getAccountInfo(this.userCollateralAccountAddress);
 
       if (!userCollateralAccountInfo) {
-        let collateralMintPubkey = this.reserve.getCTokenMint();
+        const collateralMintPubkey = this.reserve.getCTokenMint();
         const [, createUserCollateralAccountIx] = await createAssociatedTokenAccountIdempotentInstruction(
           this.owner,
           collateralMintPubkey,
