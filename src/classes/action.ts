@@ -888,7 +888,6 @@ export class KaminoAction {
           reserveCollateralMint: this.reserve.getCTokenMint(),
           reserveDestinationDepositCollateral: this.reserve.state.collateral.supplyVault, // destinationCollateral
           userSourceLiquidity: this.userTokenAccountAddress,
-          userDestinationCollateral: this.userCollateralAccountAddress,
           tokenProgram: TOKEN_PROGRAM_ID,
           instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
         },
@@ -914,6 +913,7 @@ export class KaminoAction {
           userSourceLiquidity: this.userTokenAccountAddress,
           userDestinationCollateral: this.userCollateralAccountAddress,
           tokenProgram: TOKEN_PROGRAM_ID,
+          instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
         },
         this.kaminoMarket.programId
       )
@@ -937,6 +937,7 @@ export class KaminoAction {
           userSourceCollateral: this.userCollateralAccountAddress,
           userDestinationLiquidity: this.userTokenAccountAddress,
           tokenProgram: TOKEN_PROGRAM_ID,
+          instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
         },
         this.kaminoMarket.programId
       )
@@ -1012,7 +1013,6 @@ export class KaminoAction {
           reserveCollateralMint: this.reserve.getCTokenMint(),
           reserveDestinationDepositCollateral: this.reserve.state.collateral.supplyVault, // destinationCollateral
           userSourceLiquidity: this.userTokenAccountAddress,
-          userDestinationCollateral: this.userCollateralAccountAddress,
           tokenProgram: TOKEN_PROGRAM_ID,
           instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
         },
@@ -1113,7 +1113,6 @@ export class KaminoAction {
           reserveCollateralMint: this.outflowReserve.getCTokenMint(),
           reserveLiquiditySupply: this.outflowReserve.state.liquidity.supplyVault,
           reserveSourceCollateral: this.outflowReserve.state.collateral.supplyVault,
-          userDestinationCollateral: this.userCollateralAccountAddress,
           userDestinationLiquidity: this.additionalTokenAccountAddress,
           tokenProgram: TOKEN_PROGRAM_ID,
           instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
@@ -1145,7 +1144,6 @@ export class KaminoAction {
           reserveCollateralMint: this.reserve.getCTokenMint(),
           reserveLiquiditySupply: this.reserve.state.liquidity.supplyVault,
           reserveSourceCollateral: this.reserve.state.collateral.supplyVault,
-          userDestinationCollateral: this.userCollateralAccountAddress,
           userDestinationLiquidity: this.userTokenAccountAddress,
           tokenProgram: TOKEN_PROGRAM_ID,
           instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
@@ -2160,16 +2158,14 @@ export class KaminoAction {
         this.preTxnIxs.push(createUserTokenAccountIx);
         this.preTxnIxsLabels.push(`CreateUserAta[${this.userTokenAccountAddress.toBase58()}]`);
       }
+    }
+    if (action === 'mint') {
+      const userCollateralAccountInfo = await this.kaminoMarket
+        .getConnection()
+        .getAccountInfo(this.userCollateralAccountAddress);
 
       if (!userCollateralAccountInfo) {
         let collateralMintPubkey = this.reserve.getCTokenMint();
-        if (action === 'repayAndWithdraw') {
-          if (!this.outflowReserve) {
-            throw new Error(`Outflow reserve state not found ${this.mint}`);
-          }
-
-          collateralMintPubkey = this.outflowReserve.getCTokenMint();
-        }
         const [, createUserCollateralAccountIx] = await createAssociatedTokenAccountIdempotentInstruction(
           this.owner,
           collateralMintPubkey,
