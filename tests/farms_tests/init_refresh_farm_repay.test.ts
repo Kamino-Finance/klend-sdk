@@ -41,7 +41,8 @@ describe('init_and_refresh_farm_repay_tests', function () {
       numberToLamportsDecimal(500, debtReserve.stats.decimals).floor().toString(),
       debtReserve.getLiquidityMint(),
       borrower.publicKey,
-      new VanillaObligation(PROGRAM_ID)
+      new VanillaObligation(PROGRAM_ID),
+      await env.provider.connection.getSlot()
     );
 
     await sendTransactionsFromAction(env, repayAction, [borrower]);
@@ -83,7 +84,8 @@ describe('init_and_refresh_farm_repay_tests', function () {
       numberToLamportsDecimal(500, debtReserve.stats.decimals).floor().toString(),
       debtReserve.getLiquidityMint(),
       borrower.publicKey,
-      new VanillaObligation(PROGRAM_ID)
+      new VanillaObligation(PROGRAM_ID),
+      await env.provider.connection.getSlot()
     );
 
     await sendTransactionsFromAction(env, repayAction, [borrower]);
@@ -138,7 +140,8 @@ describe('init_and_refresh_farm_repay_tests', function () {
       numberToLamportsDecimal(500, debtReserve.stats.decimals).floor().toString(),
       debtReserve.getLiquidityMint(),
       borrower.publicKey,
-      new VanillaObligation(PROGRAM_ID)
+      new VanillaObligation(PROGRAM_ID),
+      await env.provider.connection.getSlot()
     );
 
     await sendTransactionsFromAction(env, repayAction, [borrower]);
@@ -193,7 +196,8 @@ describe('init_and_refresh_farm_repay_tests', function () {
       numberToLamportsDecimal(500, debtReserve.stats.decimals).floor().toString(),
       debtReserve.getLiquidityMint(),
       borrower.publicKey,
-      new VanillaObligation(PROGRAM_ID)
+      new VanillaObligation(PROGRAM_ID),
+      await env.provider.connection.getSlot()
     );
 
     await sendTransactionsFromAction(env, repayAction, [borrower]);
@@ -248,7 +252,8 @@ describe('init_and_refresh_farm_repay_tests', function () {
       numberToLamportsDecimal(5, debtReserve.stats.decimals).floor().toString(),
       debtReserve.getLiquidityMint(),
       borrower.publicKey,
-      new VanillaObligation(PROGRAM_ID)
+      new VanillaObligation(PROGRAM_ID),
+      await env.provider.connection.getSlot()
     );
 
     await sendTransactionsFromAction(env, repayAction, [borrower]);

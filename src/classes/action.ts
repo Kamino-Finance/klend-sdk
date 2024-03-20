@@ -145,6 +145,8 @@ export class KaminoAction {
   preLoadedDepositReservesSameTx: Array<PublicKey>;
   preLoadedBorrowReservesSameTx: Array<PublicKey>;
 
+  currentSlot: number;
+
   private constructor(
     kaminoMarket: KaminoMarket,
     owner: PublicKey,
@@ -157,6 +159,7 @@ export class KaminoAction {
     depositReserves: Array<PublicKey>,
     borrowReserves: Array<PublicKey>,
     reserveState: KaminoReserve,
+    currentSlot: number,
     hostAta?: PublicKey,
     secondaryMint?: PublicKey,
     additionalTokenAccountAddress?: PublicKey,
@@ -204,6 +207,7 @@ export class KaminoAction {
     this.preLoadedDepositReservesSameTx = [];
     this.preLoadedBorrowReservesSameTx = [];
     this.referrer = referrer ? referrer : PublicKey.default;
+    this.currentSlot = currentSlot;
   }
 
   static async initialize(
@@ -214,6 +218,7 @@ export class KaminoAction {
     kaminoMarket: KaminoMarket,
     obligation: KaminoObligation | ObligationType,
     referrer: PublicKey = PublicKey.default,
+    currentSlot: number = 0,
     hostAta?: PublicKey,
     payer?: PublicKey
   ) {
@@ -249,6 +254,7 @@ export class KaminoAction {
       depositReserves,
       borrowReserves,
       reserve,
+      currentSlot,
       hostAta,
       undefined,
       undefined,
@@ -337,7 +343,8 @@ export class KaminoAction {
     kaminoMarket: KaminoMarket,
     payer: PublicKey,
     obligation: KaminoObligation,
-    extraComputeBudget: number = 1_000_000 // if > 0 then adds the ixn
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
+    currentSlot: number = 0
   ) {
     //  placeholder for action initialization
     const firstReserve = obligation.state.deposits[0].depositReserve;
@@ -352,7 +359,8 @@ export class KaminoAction {
       obligation.state.owner,
       kaminoMarket,
       obligation,
-      kaminoMarket.programId
+      kaminoMarket.programId,
+      currentSlot
     );
 
     if (extraComputeBudget > 0) {
@@ -374,9 +382,19 @@ export class KaminoAction {
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
-    referrer: PublicKey = PublicKey.default
+    referrer: PublicKey = PublicKey.default,
+    currentSlot: number = 0
   ) {
-    const axn = await KaminoAction.initialize('deposit', amount, mint, owner, kaminoMarket, obligation, referrer);
+    const axn = await KaminoAction.initialize(
+      'deposit',
+      amount,
+      mint,
+      owner,
+      kaminoMarket,
+      obligation,
+      referrer,
+      currentSlot
+    );
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
@@ -406,6 +424,7 @@ export class KaminoAction {
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
     referrer: PublicKey = PublicKey.default,
+    currentSlot: number = 0,
     hostAta?: PublicKey
   ) {
     const axn = await KaminoAction.initialize(
@@ -416,6 +435,7 @@ export class KaminoAction {
       kaminoMarket,
       obligation,
       referrer,
+      currentSlot,
       hostAta
     );
     const addInitObligationForFarm = true;
@@ -444,9 +464,20 @@ export class KaminoAction {
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas
     requestElevationGroup: boolean = false,
-    includeUserMetadata: boolean = true // if true it includes user metadata
+    includeUserMetadata: boolean = true, // if true it includes user metadata
+    referrer: PublicKey = PublicKey.default,
+    currentSlot: number = 0
   ) {
-    const axn = await KaminoAction.initialize('mint', amount, mint, owner, kaminoMarket, obligation);
+    const axn = await KaminoAction.initialize(
+      'mint',
+      amount,
+      mint,
+      owner,
+      kaminoMarket,
+      obligation,
+      referrer,
+      currentSlot
+    );
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
@@ -473,9 +504,20 @@ export class KaminoAction {
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas
     requestElevationGroup: boolean = false,
-    includeUserMetadata: boolean = true // if true it includes user metadata
+    includeUserMetadata: boolean = true, // if true it includes user metadata,
+    referrer: PublicKey = PublicKey.default,
+    currentSlot: number = 0
   ) {
-    const axn = await KaminoAction.initialize('redeem', amount, mint, owner, kaminoMarket, obligation);
+    const axn = await KaminoAction.initialize(
+      'redeem',
+      amount,
+      mint,
+      owner,
+      kaminoMarket,
+      obligation,
+      referrer,
+      currentSlot
+    );
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
@@ -502,9 +544,20 @@ export class KaminoAction {
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas
     requestElevationGroup: boolean = false,
-    includeUserMetadata: boolean = true // if true it includes user metadata
+    includeUserMetadata: boolean = true, // if true it includes user metadata
+    referrer: PublicKey = PublicKey.default,
+    currentSlot: number = 0
   ) {
-    const axn = await KaminoAction.initialize('depositCollateral', amount, mint, owner, kaminoMarket, obligation);
+    const axn = await KaminoAction.initialize(
+      'depositCollateral',
+      amount,
+      mint,
+      owner,
+      kaminoMarket,
+      obligation,
+      referrer,
+      currentSlot
+    );
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
@@ -534,7 +587,8 @@ export class KaminoAction {
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata,
-    referrer: PublicKey = PublicKey.default
+    referrer: PublicKey = PublicKey.default,
+    currentSlot: number = 0
   ) {
     const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
@@ -546,7 +600,8 @@ export class KaminoAction {
       payer,
       obligation,
       borrowAmount,
-      referrer
+      referrer,
+      currentSlot
     );
     const addInitObligationForFarmForDeposit = true;
     const addInitObligationForFarmForBorrow = false;
@@ -582,6 +637,7 @@ export class KaminoAction {
     withdrawAmount: string | BN,
     withdrawMint: PublicKey,
     payer: PublicKey,
+    currentSlot: number,
     obligation: KaminoObligation | ObligationType,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
@@ -600,7 +656,8 @@ export class KaminoAction {
       payer,
       obligation,
       withdrawAmount,
-      referrer
+      referrer,
+      currentSlot
     );
     const addInitObligationForFarmForRepay = true;
     const addInitObligationForFarmForWithdraw = false;
@@ -638,9 +695,19 @@ export class KaminoAction {
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
-    referrer: PublicKey = PublicKey.default
+    referrer: PublicKey = PublicKey.default,
+    currentSlot: number = 0
   ) {
-    const axn = await KaminoAction.initialize('withdraw', amount, mint, owner, kaminoMarket, obligation, referrer);
+    const axn = await KaminoAction.initialize(
+      'withdraw',
+      amount,
+      mint,
+      owner,
+      kaminoMarket,
+      obligation,
+      referrer,
+      currentSlot
+    );
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
@@ -679,6 +746,7 @@ export class KaminoAction {
     mint: PublicKey,
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType,
+    currentSlot: number,
     payer: PublicKey | undefined = undefined,
     extraComputeBudget: number = 1_000_000,
     includeAtaIxns: boolean = true,
@@ -694,6 +762,7 @@ export class KaminoAction {
       kaminoMarket,
       obligation,
       referrer,
+      currentSlot,
       undefined,
       payer
     );
@@ -729,7 +798,8 @@ export class KaminoAction {
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
     referrer: PublicKey = PublicKey.default,
-    maxAllowedLtvOverridePercent: number = 0
+    maxAllowedLtvOverridePercent: number = 0,
+    currentSlot: number = 0
   ) {
     const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
@@ -741,7 +811,8 @@ export class KaminoAction {
       obligationOwner,
       obligation,
       minCollateralReceiveAmount,
-      referrer
+      referrer,
+      currentSlot
     );
     const addInitObligationForFarm = true;
 
@@ -761,8 +832,18 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildWithdrawReferrerFeeTxns(owner: PublicKey, tokenMint: PublicKey, kaminoMarket: KaminoMarket) {
-    const { axn, createAtasIxns } = await KaminoAction.initializeWithdrawReferrerFees(tokenMint, owner, kaminoMarket);
+  static async buildWithdrawReferrerFeeTxns(
+    owner: PublicKey,
+    tokenMint: PublicKey,
+    kaminoMarket: KaminoMarket,
+    currentSlot: number = 0
+  ) {
+    const { axn, createAtasIxns } = await KaminoAction.initializeWithdrawReferrerFees(
+      tokenMint,
+      owner,
+      kaminoMarket,
+      currentSlot
+    );
 
     axn.preTxnIxs.push(...createAtasIxns);
     axn.preTxnIxsLabels.push(`createAtasIxs[${axn.userTokenAccountAddress.toString()}]`);
@@ -1327,18 +1408,16 @@ export class KaminoAction {
 
               const cumulativeBorrowRateObligation = KaminoObligation.getCumulativeBorrowRate(borrow);
 
-              const cumulativeBorrowRateReserve = this.reserve.getCumulativeBorrowRate();
-              const _fullRepay = Math.floor(
-                KaminoObligation.getBorrowAmount(borrow)
-                  .mul(cumulativeBorrowRateReserve)
-                  .div(cumulativeBorrowRateObligation)
-                  .toNumber()
-              );
+              const cumulativeBorrowRateReserve = this.reserve.getEstimatedCumulativeBorrowRate(this.currentSlot);
+              const fullRepay = KaminoObligation.getBorrowAmount(borrow)
+                .mul(cumulativeBorrowRateReserve)
+                .div(cumulativeBorrowRateObligation);
 
-              // TODO: Investigate this !!?
-              // if (fullRepay.lte(this.amount)) {
-              //   this.preLoadedBorrowReservesSameTx.push(this.reserve.address);
-              // }
+              const amountDecimal = new Decimal(this.amount.toString());
+
+              if (fullRepay.lte(amountDecimal)) {
+                this.preLoadedBorrowReservesSameTx.push(this.reserve.address);
+              }
             }
           } else {
             // Obligation doesn't exist yet, so we have to preload the deposit reserve
@@ -2202,7 +2281,7 @@ export class KaminoAction {
       }
 
       const cumulativeBorrowRateObligation = KaminoObligation.getCumulativeBorrowRate(borrow);
-      const cumulativeBorrowRateReserve = this.reserve.getCumulativeBorrowRate();
+      const cumulativeBorrowRateReserve = this.reserve.getEstimatedCumulativeBorrowRate(this.currentSlot);
       // TODO: shouldn't this calc be added to all other stuff as well?
       safeRepay = new BN(
         Math.floor(
@@ -2298,7 +2377,8 @@ export class KaminoAction {
     obligationOwner: PublicKey,
     obligation: KaminoObligation | ObligationType,
     outflowAmount?: string | BN,
-    referrer: PublicKey = PublicKey.default
+    referrer: PublicKey = PublicKey.default,
+    currentSlot: number = 0
   ) {
     const inflowReserve = kaminoMarket.getReserveByMint(inflowTokenMint);
     const outflowReserve = kaminoMarket.getReserveByMint(outflowTokenMint);
@@ -2374,6 +2454,7 @@ export class KaminoAction {
       depositReserves,
       borrowReserves,
       inflowReserve,
+      currentSlot,
       undefined,
       secondaryMint,
       additionalUserTokenAccountAddress,
@@ -2387,6 +2468,7 @@ export class KaminoAction {
     mint: PublicKey,
     owner: PublicKey,
     kaminoMarket: KaminoMarket,
+    currentSlot: number = 0,
     hostAta?: PublicKey
   ) {
     const reserve = kaminoMarket.getReserveByMint(mint);
@@ -2413,6 +2495,7 @@ export class KaminoAction {
         [],
         [],
         reserve,
+        currentSlot,
         hostAta,
         undefined,
         undefined,

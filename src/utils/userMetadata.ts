@@ -6,7 +6,7 @@ import {
   Connection,
   GetProgramAccountsFilter,
 } from '@solana/web3.js';
-import { KaminoMarket } from '../classes';
+import { KaminoMarket, KaminoObligation } from '../classes';
 import {
   LeverageObligation,
   MultiplyObligation,
@@ -36,6 +36,7 @@ export const getUserLutAddressAndSetupIxns = async (
   withExtendLut: boolean = true,
   multiplyMints: { coll: PublicKey; debt: PublicKey }[] = [],
   leverageMints: { coll: PublicKey; debt: PublicKey }[] = [],
+  repayWithCollObligation: KaminoObligation | undefined = undefined,
   payer: PublicKey = PublicKey.default
 ): Promise<[PublicKey, TransactionInstruction[][]]> => {
   const [userMetadataAddress, userMetadataState] = await kaminoMarket.getUserMetadata(user);
@@ -80,7 +81,8 @@ export const getUserLutAddressAndSetupIxns = async (
       referrer,
       multiplyMints,
       leverageMints,
-      userMetadataState !== null
+      userMetadataState !== null,
+      repayWithCollObligation
     );
 
     const extendLookupTableChunkIxs = extendLookupTableIxs(user, userLookupTableAddress, dedupUserLutAddresses, payer);
@@ -100,14 +102,16 @@ const getDedupUserLookupTableAddresses = async (
   referrer: PublicKey,
   multiplyMints: { coll: PublicKey; debt: PublicKey }[] = [],
   leverageMints: { coll: PublicKey; debt: PublicKey }[] = [],
-  tableExists: boolean
+  tableExists: boolean,
+  repayWithCollObligation: KaminoObligation | undefined = undefined
 ): Promise<PublicKey[]> => {
   const requiredAddresses = await getUserLookupTableAddresses(
     kaminoMarket,
     user,
     referrer,
     multiplyMints,
-    leverageMints
+    leverageMints,
+    repayWithCollObligation
   );
 
   if (tableExists) {
@@ -135,7 +139,8 @@ const getUserLookupTableAddresses = async (
   user: PublicKey,
   referrer: PublicKey,
   multiplyMints: { coll: PublicKey; debt: PublicKey }[] = [],
-  leverageMints: { coll: PublicKey; debt: PublicKey }[] = []
+  leverageMints: { coll: PublicKey; debt: PublicKey }[] = [],
+  repayWithCollObligation: KaminoObligation | undefined = undefined
 ): Promise<{ address: PublicKey; log: string }[]> => {
   const addresses: { address: PublicKey; log: string }[] = [];
   addresses.push({ address: user, log: 'user address' });
@@ -151,6 +156,17 @@ const getUserLookupTableAddresses = async (
     allMints.push(collMint);
     allMints.push(debtMint);
   });
+
+  if (repayWithCollObligation) {
+    repayWithCollObligation.borrows.forEach((borrow) => {
+      allMints.push(borrow.mintAddress);
+    });
+
+    repayWithCollObligation.deposits.forEach((deposit) => {
+      allMints.push(deposit.mintAddress);
+    });
+  }
+
   const dedupMints = [...new PublicKeySet(allMints).toArray()];
   const reserves: KaminoReserve[] = [];
   dedupMints.forEach((mint) => {
@@ -195,7 +211,9 @@ const getUserLookupTableAddresses = async (
       log: 'referrer token state for reserve ' + reserve.address,
     };
   });
-  addresses.push(...referrerTokenStates);
+  if (!referrer.equals(PublicKey.default)) {
+    addresses.push(...referrerTokenStates);
+  }
 
   const [multiplyObligations, multiplyObligationsFarmUserStates] = getMultiplyObligationAndObligationFarmStateAddresses(
     kaminoMarket,
@@ -214,6 +232,14 @@ const getUserLookupTableAddresses = async (
 
   addresses.push(...leverageObligations);
   addresses.push(...leverageObligationsFarmUserStates);
+
+  if (repayWithCollObligation) {
+    const repayWithCollFarmUserStates = getRepayWithCollObligationFarmStateAddresses(
+      kaminoMarket,
+      repayWithCollObligation
+    );
+    addresses.push(...repayWithCollFarmUserStates);
+  }
 
   return addresses;
 };
@@ -302,6 +328,36 @@ function getLeverageObligationAndObligationFarmStateAddresses(
   }
 
   return [obligationPdas, farmUserStates];
+}
+
+function getRepayWithCollObligationFarmStateAddresses(
+  kaminoMarket: KaminoMarket,
+  obligation: KaminoObligation
+): { address: PublicKey; log: string }[] {
+  const farmUserStates: { address: PublicKey; log: string }[] = [];
+  const obligationString = obligation.obligationAddress.toString();
+
+  obligation.borrows.forEach((borrow) => {
+    const borrowReserve = kaminoMarket.getReserveByMint(borrow.mintAddress)!;
+    if (!borrowReserve.state.farmDebt.equals(PublicKey.default)) {
+      farmUserStates.push({
+        address: getPdaFarmsUserState(borrowReserve.state.farmDebt!, obligation.obligationAddress),
+        log: 'debtReserve farmState for vanilla obligation: ' + obligationString,
+      });
+    }
+  });
+
+  obligation.deposits.forEach((deposit) => {
+    const depositReserve = kaminoMarket.getReserveByMint(deposit.mintAddress)!;
+    if (!depositReserve.state.farmCollateral.equals(PublicKey.default)) {
+      farmUserStates.push({
+        address: getPdaFarmsUserState(depositReserve.state.farmCollateral!, obligation.obligationAddress),
+        log: 'collReserve farmState for vanilla obligation' + obligationString,
+      });
+    }
+  });
+
+  return farmUserStates;
 }
 
 const BASE_SEED_USER_STATE = Buffer.from('user');

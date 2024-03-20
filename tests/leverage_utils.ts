@@ -112,6 +112,7 @@ export const depositLeverageTestAdapter = async (
   const obligation = await kaminoMarket.getObligationByAddress(
     obligationType.toPda(kaminoMarket.getAddress(), user.publicKey)
   );
+  const currentSlot = await kaminoMarket.getConnection().getSlot();
 
   const { ixns, lookupTablesAddresses, swapInputs } = await getDepositWithLeverageIxns({
     connection: env.provider.connection,
@@ -131,6 +132,7 @@ export const depositLeverageTestAdapter = async (
     kamino,
     obligationTypeTagOverride: ObligationTypeTag.Multiply,
     obligation,
+    currentSlot,
     getTotalKlendAccountsOnly: false,
   });
 
@@ -224,6 +226,7 @@ export const withdrawLeverageTestAdapter = async (
   const obligation = await kaminoMarket.getObligationByAddress(
     obligationType.toPda(kaminoMarket.getAddress(), user.publicKey)
   );
+  const currentSlot = await kaminoMarket.getConnection().getSlot();
 
   const { ixns, lookupTablesAddresses, swapInputs } = await getWithdrawWithLeverageIxns({
     connection: env.provider.connection,
@@ -245,6 +248,7 @@ export const withdrawLeverageTestAdapter = async (
     kamino,
     obligationTypeTagOverride: ObligationTypeTag.Multiply,
     obligation,
+    currentSlot,
     getTotalKlendAccountsOnly: false,
   });
 
@@ -327,6 +331,7 @@ export const adjustLeverageTestAdapter = async (
   const obligation = await kaminoMarket.getObligationByAddress(
     obligationType.toPda(kaminoMarket.getAddress(), user.publicKey)
   );
+  const currentSlot = await kaminoMarket.getConnection().getSlot();
 
   const { ixns, lookupTablesAddresses, swapInputs } = await getAdjustLeverageIxns({
     connection: env.provider.connection,
@@ -348,6 +353,7 @@ export const adjustLeverageTestAdapter = async (
     kamino,
     obligationTypeTagOverride: ObligationTypeTag.Multiply,
     obligation,
+    currentSlot,
     getTotalKlendAccountsOnly: false,
   });
 

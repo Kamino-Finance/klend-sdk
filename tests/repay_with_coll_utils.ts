@@ -51,6 +51,8 @@ export const repayWithCollTestAdapter = async (
     await sleep(1000);
   }
 
+  const currentSlot = await kaminoMarket.getConnection().getSlot();
+
   const { ixns, lookupTablesAddresses, swapInputs } = await getRepayWithCollIxns({
     kaminoMarket,
     budgetAndPriorityFeeIxns: [],
@@ -64,6 +66,7 @@ export const repayWithCollTestAdapter = async (
     obligation,
     referrer,
     swapper: getLocalSwapper(env, kaminoMarket, owner.publicKey),
+    currentSlot,
     getTotalKlendAccountsOnly: false,
   });
 
