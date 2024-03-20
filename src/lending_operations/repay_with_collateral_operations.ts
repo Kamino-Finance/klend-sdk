@@ -1,6 +1,7 @@
 import { KaminoAction, KaminoMarket, KaminoObligation, numberToLamportsDecimal } from '../classes';
 import { SwapInputs, SwapIxnsProvider, getFlashLoanInstructions, toJson } from '../leverage';
 import {
+  PublicKeySet,
   U64_MAX,
   getAtasWithCreateIxnsIfMissing,
   getComputeBudgetAndPriorityFeeIxns,
@@ -103,7 +104,13 @@ export const getRepayWithCollIxns = async (props: {
   obligation: KaminoObligation;
   referrer: PublicKey;
   swapper: SwapIxnsProvider;
-}): Promise<{ ixns: TransactionInstruction[]; lookupTablesAddresses: PublicKey[]; swapInputs: SwapInputs }> => {
+  getTotalKlendAccountsOnly: boolean;
+}): Promise<{
+  ixns: TransactionInstruction[];
+  lookupTablesAddresses: PublicKey[];
+  swapInputs: SwapInputs;
+  totalKlendAccounts: number;
+}> => {
   const {
     kaminoMarket,
     budgetAndPriorityFeeIxns,
@@ -117,6 +124,7 @@ export const getRepayWithCollIxns = async (props: {
     obligation,
     referrer,
     swapper,
+    getTotalKlendAccountsOnly,
   } = props;
 
   const connection = kaminoMarket.getConnection();
@@ -190,6 +198,37 @@ export const getRepayWithCollIxns = async (props: {
     referrer
   );
 
+  const ixns = [
+    ...budgetIxns,
+    ...createAtasIxns,
+    ...[flashBorrowIxn],
+    ...repayAndWithdrawAction.setupIxs,
+    ...[repayAndWithdrawAction.lendingIxs[0]],
+    ...repayAndWithdrawAction.inBetweenIxs,
+    ...[repayAndWithdrawAction.lendingIxs[1]],
+    ...repayAndWithdrawAction.cleanupIxs,
+    ...[flashRepayIxn],
+    ...closeAtasIxns,
+  ];
+
+  const uniqueAccounts = new PublicKeySet<PublicKey>([]);
+  ixns.forEach((ixn) => {
+    ixn.keys.forEach((key) => {
+      uniqueAccounts.add(key.pubkey);
+    });
+  });
+  const totalKlendAccounts = uniqueAccounts.toArray().length;
+
+  // return early to avoid extra swapper calls
+  if (getTotalKlendAccountsOnly) {
+    return {
+      ixns: [],
+      lookupTablesAddresses: [],
+      swapInputs: { inputAmountLamports: 0, inputMint: PublicKey.default, outputMint: PublicKey.default },
+      totalKlendAccounts: totalKlendAccounts,
+    };
+  }
+
   console.log(
     'Expected to swap in',
     calcs.collToSwapIn.toString(),
@@ -230,76 +269,6 @@ export const getRepayWithCollIxns = async (props: {
     ],
     lookupTablesAddresses,
     swapInputs,
+    totalKlendAccounts,
   };
-};
-
-export const estimateRepayWithCollAccounts = (props: {
-  kaminoMarket: KaminoMarket;
-  obligation: KaminoObligation;
-  collTokenMint: PublicKey;
-  debtTokenMint: PublicKey;
-}): {
-  estimatedAccountsRequired: number;
-} => {
-  const { kaminoMarket, obligation, collTokenMint, debtTokenMint } = props;
-
-  const hasReferrer = !obligation.state.referrer.equals(PublicKey.default);
-  const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
-  const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
-
-  let accountsForBorrowsRefresh = 0;
-  obligation.borrows.forEach((borrow) => {
-    const borrowReserve = kaminoMarket.getReserveByMint(borrow.mintAddress);
-    if (borrowReserve) {
-      accountsForBorrowsRefresh =
-        1 + // reserve address
-        (hasReferrer ? 1 : 0) + // referrer token state
-        (borrowReserve.state.config.tokenInfo.pythConfiguration.price.equals(PublicKey.default) ? 0 : 1) + // Pyth Oracle
-        (borrowReserve?.state.config.tokenInfo.switchboardConfiguration.priceAggregator.equals(PublicKey.default)
-          ? 0
-          : 1) + // Switchboard Price Oracle
-        (borrowReserve?.state.config.tokenInfo.switchboardConfiguration.twapAggregator.equals(PublicKey.default)
-          ? 0
-          : 1) + // Switchboard Twap Oracle
-        (borrowReserve?.state.config.tokenInfo.scopeConfiguration.priceFeed.equals(PublicKey.default) ? 0 : 1); // Scope Prices
-    }
-  });
-  let accountsForDepositsRefresh = 0;
-  obligation.deposits.forEach((deposit) => {
-    const depositReserves = kaminoMarket.getReserveByMint(deposit.mintAddress);
-    if (depositReserves) {
-      accountsForDepositsRefresh =
-        1 + // reserve address
-        (depositReserves.state.config.tokenInfo.pythConfiguration.price.equals(PublicKey.default) ? 0 : 1) + // Pyth Oracle
-        (depositReserves?.state.config.tokenInfo.switchboardConfiguration.priceAggregator.equals(PublicKey.default)
-          ? 0
-          : 1) + // Switchboard Price Oracle
-        (depositReserves?.state.config.tokenInfo.switchboardConfiguration.twapAggregator.equals(PublicKey.default)
-          ? 0
-          : 1) + // Switchboard Twap Oracle
-        (depositReserves?.state.config.tokenInfo.scopeConfiguration.priceFeed.equals(PublicKey.default) ? 0 : 1); // Scope Prices
-    }
-  });
-
-  const estimatedAccountsRequired =
-    5 + // computeBudgetProgram, associatedTokenProgram, systemProgram, klendProgram, tokenProgram
-    1 + // sysvar: instructions, sysvar: rent
-    1 + // user wallet
-    2 + // user atas for token A and token B
-    2 + // mints for token A and token B
-    2 + // ledning market, lending market authority
-    1 + // reserve liquidity vault - token collateral
-    2 + // reserve liquidity vault, reserve fee vault - token debt
-    accountsForBorrowsRefresh + // accounts for refresh borrows + refresh obligation
-    accountsForDepositsRefresh + // accounts for refresh deposits + refresh obligation
-    (hasReferrer ? 1 : 0) + // if there is a referrer - referrer account address
-    2 + // obligation, userMetadata
-    (collReserve?.state.farmCollateral.equals(PublicKey.default) ? 0 : 2) + // farmState, obligationFarm (userState)
-    (debtReserve?.state.farmDebt.equals(PublicKey.default) ? 0 : 2) + // farmState, obligationFarm (userState)
-    (debtReserve?.state.farmDebt.equals(PublicKey.default) &&
-    collReserve?.state.farmCollateral.equals(PublicKey.default)
-      ? 0
-      : 1) + // farmProgram
-    2; // ctoken mint and ctoken reserve vault for collateral token
-  return { estimatedAccountsRequired };
 };

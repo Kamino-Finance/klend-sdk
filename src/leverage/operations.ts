@@ -9,6 +9,7 @@ import {
   MultiplyObligation,
   ObligationType,
   ObligationTypeTag,
+  PublicKeySet,
   U64_MAX,
   WRAPPED_SOL_MINT,
   getAssociatedTokenAddress,
@@ -287,7 +288,13 @@ export const getDepositWithLeverageIxns = async (props: {
   kamino: Kamino | undefined;
   obligationTypeTagOverride: ObligationTypeTag;
   obligation: KaminoObligation | null;
-}): Promise<{ ixns: TransactionInstruction[]; lookupTablesAddresses: PublicKey[]; swapInputs: SwapInputs }> => {
+  getTotalKlendAccountsOnly: boolean;
+}): Promise<{
+  ixns: TransactionInstruction[];
+  lookupTablesAddresses: PublicKey[];
+  swapInputs: SwapInputs;
+  totalKlendAccounts: number;
+}> => {
   const {
     connection,
     budgetAndPriorityFeeIxns,
@@ -307,6 +314,7 @@ export const getDepositWithLeverageIxns = async (props: {
     kamino,
     obligationTypeTagOverride = 1,
     obligation,
+    getTotalKlendAccountsOnly,
   } = props;
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
@@ -462,6 +470,38 @@ export const getDepositWithLeverageIxns = async (props: {
     'coll'
   );
 
+  const ixns = [
+    ...budgetIxns,
+    ...createAtasIxns,
+    ...fillWsolAtaIxns,
+    ...[flashBorrowIxn],
+    ...kaminoDepositAndBorrowAction.setupIxs,
+    ...[kaminoDepositAndBorrowAction.lendingIxs[0]],
+    ...kaminoDepositAndBorrowAction.inBetweenIxs,
+    ...[kaminoDepositAndBorrowAction.lendingIxs[1]],
+    ...kaminoDepositAndBorrowAction.cleanupIxs,
+    ...[flashRepayIxn],
+    ...closeAtasIxns,
+  ];
+
+  const uniqueAccounts = new PublicKeySet<PublicKey>([]);
+  ixns.forEach((ixn) => {
+    ixn.keys.forEach((key) => {
+      uniqueAccounts.add(key.pubkey);
+    });
+  });
+  const totalKlendAccounts = uniqueAccounts.toArray().length;
+
+  // return early to avoid extra swapper calls
+  if (getTotalKlendAccountsOnly) {
+    return {
+      ixns: [],
+      lookupTablesAddresses: [],
+      swapInputs: { inputAmountLamports: 0, inputMint: PublicKey.default, outputMint: PublicKey.default },
+      totalKlendAccounts: totalKlendAccounts,
+    };
+  }
+
   let depositSwapper: SwapIxnsProvider;
   let expectedDebtTokenAtaBalance: Decimal = new Decimal(0); // only needed for kTokens
 
@@ -538,6 +578,7 @@ export const getDepositWithLeverageIxns = async (props: {
       ],
       lookupTablesAddresses,
       swapInputs,
+      totalKlendAccounts: totalKlendAccounts,
     };
   } else {
     return {
@@ -557,6 +598,7 @@ export const getDepositWithLeverageIxns = async (props: {
       ],
       lookupTablesAddresses,
       swapInputs,
+      totalKlendAccounts: totalKlendAccounts,
     };
   }
 };
@@ -655,7 +697,13 @@ export const getWithdrawWithLeverageIxns = async (props: {
   kamino: Kamino | undefined;
   obligationTypeTagOverride: ObligationTypeTag;
   obligation: KaminoObligation | null;
-}): Promise<{ ixns: TransactionInstruction[]; lookupTablesAddresses: PublicKey[]; swapInputs: SwapInputs }> => {
+  getTotalKlendAccountsOnly: boolean;
+}): Promise<{
+  ixns: TransactionInstruction[];
+  lookupTablesAddresses: PublicKey[];
+  swapInputs: SwapInputs;
+  totalKlendAccounts;
+}> => {
   const {
     connection,
     budgetAndPriorityFeeIxns,
@@ -676,6 +724,7 @@ export const getWithdrawWithLeverageIxns = async (props: {
     kamino,
     obligationTypeTagOverride,
     obligation,
+    getTotalKlendAccountsOnly,
   } = props;
 
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
@@ -807,6 +856,55 @@ export const getWithdrawWithLeverageIxns = async (props: {
     programId: kaminoMarket.programId,
   });
 
+  // 6. Repay borrowed tokens and Withdraw tokens from reserve that will be swapped to repay flash loan
+  const repayAndWithdrawAction = await KaminoAction.buildRepayAndWithdrawTxns(
+    kaminoMarket,
+    isClosingPosition ? U64_MAX : toLamports(repayAmount, debtReserve!.stats.decimals).floor().toString(),
+    debtTokenMint,
+    isClosingPosition ? U64_MAX : toLamports(depositTokenWithdrawAmount, collReserve!.stats.decimals).ceil().toString(),
+    collTokenMint,
+    user,
+    userObligation ? userObligation : obligationType,
+    0,
+    false,
+    false,
+    false, // to be checked and created in a setup tx in the UI (won't be the case for withdraw anyway as this would be created in deposit)
+    isClosingPosition,
+    referrer
+  );
+
+  const klendIxns = [
+    ...budgetIxns,
+    ...createAtasIxns,
+    ...fillWsolAtaIxns,
+    ...[flashBorrowIxn],
+    ...repayAndWithdrawAction.setupIxs,
+    ...[repayAndWithdrawAction.lendingIxs[0]],
+    ...repayAndWithdrawAction.inBetweenIxs,
+    ...[repayAndWithdrawAction.lendingIxs[1]],
+    ...repayAndWithdrawAction.cleanupIxs,
+    ...[flashRepayIxn],
+    ...closeAtasIxns,
+  ];
+
+  const uniqueAccounts = new PublicKeySet<PublicKey>([]);
+  klendIxns.forEach((ixn) => {
+    ixn.keys.forEach((key) => {
+      uniqueAccounts.add(key.pubkey);
+    });
+  });
+  const totalKlendAccounts = uniqueAccounts.toArray().length;
+
+  // return early to avoid extra swapper calls
+  if (getTotalKlendAccountsOnly) {
+    return {
+      ixns: [],
+      lookupTablesAddresses: [],
+      swapInputs: { inputAmountLamports: 0, inputMint: PublicKey.default, outputMint: PublicKey.default },
+      totalKlendAccounts: totalKlendAccounts,
+    };
+  }
+
   let withdrawSwapper: SwapIxnsProvider;
 
   if (collIsKtoken) {
@@ -832,23 +930,6 @@ export const getWithdrawWithLeverageIxns = async (props: {
   );
 
   // TODO MARIUS: remove first instruction that is setBudget ixn
-
-  // 6. Repay borrowed tokens and Withdraw tokens from reserve that will be swapped to repay flash loan
-  const repayAndWithdrawAction = await KaminoAction.buildRepayAndWithdrawTxns(
-    kaminoMarket,
-    isClosingPosition ? U64_MAX : toLamports(repayAmount, debtReserve!.stats.decimals).floor().toString(),
-    debtTokenMint,
-    isClosingPosition ? U64_MAX : toLamports(depositTokenWithdrawAmount, collReserve!.stats.decimals).ceil().toString(),
-    collTokenMint,
-    user,
-    userObligation ? userObligation : obligationType,
-    0,
-    false,
-    false,
-    false, // to be checked and created in a setup tx in the UI (won't be the case for withdraw anyway as this would be created in deposit)
-    isClosingPosition,
-    referrer
-  );
 
   if (collIsKtoken) {
     if (strategy?.strategy.strategyLookupTable) {
@@ -880,6 +961,7 @@ export const getWithdrawWithLeverageIxns = async (props: {
     ixns,
     lookupTablesAddresses,
     swapInputs,
+    totalKlendAccounts: totalKlendAccounts,
   };
 };
 
@@ -975,6 +1057,7 @@ export const getAdjustLeverageIxns = async (props: {
   kamino: Kamino | undefined;
   obligationTypeTagOverride: ObligationTypeTag;
   obligation: KaminoObligation | null;
+  getTotalKlendAccountsOnly: boolean;
 }) => {
   const {
     connection,
@@ -996,6 +1079,7 @@ export const getAdjustLeverageIxns = async (props: {
     kamino,
     obligationTypeTagOverride,
     obligation,
+    getTotalKlendAccountsOnly,
   } = props;
 
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
@@ -1031,6 +1115,7 @@ export const getAdjustLeverageIxns = async (props: {
   let ixns: TransactionInstruction[] = [];
   let lookupTablesAddresses: PublicKey[] = [];
   let swapInputs: SwapInputs;
+  let totalKlendAccounts: number = 0;
 
   const isDeposit = adjustDepositPosition.gte(0) && adjustBorrowPosition.gte(0);
   if (isDepositViaLeverage !== isDeposit) {
@@ -1059,10 +1144,12 @@ export const getAdjustLeverageIxns = async (props: {
       kamino,
       obligationTypeTagOverride,
       obligation: userObligation,
+      getTotalKlendAccountsOnly,
     });
     ixns = res.ixns;
     lookupTablesAddresses = res.lookupTablesAddresses;
     swapInputs = res.swapInputs;
+    totalKlendAccounts = res.totalKlendAccounts;
   } else {
     console.log('Decreasing leverage');
     const res = await getDecreaseLeverageIxns({
@@ -1081,16 +1168,19 @@ export const getAdjustLeverageIxns = async (props: {
       kamino,
       obligationTypeTagOverride,
       obligation: userObligation,
+      getTotalKlendAccountsOnly,
     });
     ixns = res.ixns;
     lookupTablesAddresses = res.lookupTablesAddresses;
     swapInputs = res.swapInputs;
+    totalKlendAccounts = res.totalKlendAccounts;
   }
 
   return {
     ixns,
     lookupTablesAddresses,
     swapInputs,
+    totalKlendAccounts,
   };
 };
 
@@ -1115,6 +1205,7 @@ export const getIncreaseLeverageIxns = async (props: {
   kamino: Kamino | undefined;
   obligationTypeTagOverride: ObligationTypeTag;
   obligation: KaminoObligation | null;
+  getTotalKlendAccountsOnly: boolean;
 }) => {
   const {
     connection,
@@ -1134,6 +1225,7 @@ export const getIncreaseLeverageIxns = async (props: {
     kamino,
     obligationTypeTagOverride = 1,
     obligation,
+    getTotalKlendAccountsOnly,
   } = props;
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
@@ -1239,6 +1331,38 @@ export const getIncreaseLeverageIxns = async (props: {
     debtTokenAta
   );
 
+  const klendIxns = [
+    ...budgetIxns,
+    ...createAtasIxns,
+    ...[flashBorrowIxn],
+    ...depositAction.setupIxs,
+    ...depositAction.lendingIxs,
+    ...depositAction.cleanupIxs,
+    ...borrowAction.setupIxs,
+    ...borrowAction.lendingIxs,
+    ...borrowAction.cleanupIxs,
+    ...[flashRepayIxn],
+    ...closeAtasIxns,
+  ];
+
+  const uniqueAccounts = new PublicKeySet<PublicKey>([]);
+  klendIxns.forEach((ixn) => {
+    ixn.keys.forEach((key) => {
+      uniqueAccounts.add(key.pubkey);
+    });
+  });
+  const totalKlendAccounts = uniqueAccounts.toArray().length;
+
+  // return early to avoid extra swapper calls
+  if (getTotalKlendAccountsOnly) {
+    return {
+      ixns: [],
+      lookupTablesAddresses: [],
+      swapInputs: { inputAmountLamports: 0, inputMint: PublicKey.default, outputMint: PublicKey.default },
+      totalKlendAccounts: totalKlendAccounts,
+    };
+  }
+
   let depositSwapper: SwapIxnsProvider;
   let expectedDebtTokenAtaBalance = new Decimal(0);
 
@@ -1323,6 +1447,7 @@ export const getIncreaseLeverageIxns = async (props: {
     ixns,
     lookupTablesAddresses,
     swapInputs,
+    totalKlendAccounts,
   };
 };
 
@@ -1345,6 +1470,7 @@ export const getDecreaseLeverageIxns = async (props: {
   kamino: Kamino | undefined;
   obligationTypeTagOverride: ObligationTypeTag;
   obligation: KaminoObligation | null;
+  getTotalKlendAccountsOnly: boolean;
 }) => {
   const {
     connection,
@@ -1362,6 +1488,7 @@ export const getDecreaseLeverageIxns = async (props: {
     kamino,
     obligationTypeTagOverride = 1,
     obligation,
+    getTotalKlendAccountsOnly,
   } = props;
 
   console.log(
@@ -1470,6 +1597,39 @@ export const getDecreaseLeverageIxns = async (props: {
     referrer
   );
 
+  const klendIxns = [
+    ...budgetIxns,
+    ...createAtasIxns,
+    ...fillWsolAtaIxns,
+    ...[flashBorrowIxn],
+    ...repayAction.setupIxs,
+    ...repayAction.lendingIxs,
+    ...repayAction.cleanupIxs,
+    ...withdrawAction.setupIxs,
+    ...withdrawAction.lendingIxs,
+    ...withdrawAction.cleanupIxs,
+    ...[flashRepayIxn],
+    ...closeAtasIxns,
+  ];
+
+  const uniqueAccounts = new PublicKeySet<PublicKey>([]);
+  klendIxns.forEach((ixn) => {
+    ixn.keys.forEach((key) => {
+      uniqueAccounts.add(key.pubkey);
+    });
+  });
+  const totalKlendAccounts = uniqueAccounts.toArray().length;
+
+  // return early to avoid extra swapper calls
+  if (getTotalKlendAccountsOnly) {
+    return {
+      ixns: [],
+      lookupTablesAddresses: [],
+      swapInputs: { inputAmountLamports: 0, inputMint: PublicKey.default, outputMint: PublicKey.default },
+      totalKlendAccounts: totalKlendAccounts,
+    };
+  }
+
   let withdrawSwapper: SwapIxnsProvider;
 
   if (collIsKtoken) {
@@ -1531,51 +1691,6 @@ export const getDecreaseLeverageIxns = async (props: {
     ixns,
     lookupTablesAddresses,
     swapInputs,
+    totalKlendAccounts,
   };
-};
-
-// for withdraw, we would have slightly different accounts (2 less) - won't have coll reserve fee vault & userMetadata
-// this can be used for both however, as the estimation that we give to jupiter is not consistent
-// with the amount we get back in the route and we can get back more accounts than we ask for
-export const estimateOperationsWithLeverageAccounts = (props: {
-  kaminoMarket: KaminoMarket;
-  collTokenMint: PublicKey;
-  debtTokenMint: PublicKey;
-  referrer: PublicKey;
-}): {
-  estimatedAccountsRequired: number;
-} => {
-  const { kaminoMarket, collTokenMint, debtTokenMint, referrer } = props;
-
-  const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
-  const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
-
-  const estimatedAccountsRequired =
-    5 + // computeBudgetProgram, associatedTokenProgram, systemProgram, klendProgram, tokenProgram
-    1 + // sysvar: instructions, sysvar: rent
-    1 + // user wallet
-    2 + // user atas for token A and token B
-    2 + // mints for token A and token B
-    2 + // ledning market, lending market authority
-    3 + // reserve, reserve liquidity vault, reserve fee vault - coll
-    3 + // reserve, reserve liquidity vault, reserve fee vault - debt
-    (referrer.equals(PublicKey.default) ? 0 : 2) + // if there is a referrer - referrer token state for borrow token, referrer account address
-    2 + // obligation, userMetadata
-    (collReserve?.state.farmCollateral.equals(PublicKey.default) ? 0 : 2) + // farmState, obligationFarm (userState)
-    (debtReserve?.state.farmDebt.equals(PublicKey.default) ? 0 : 2) + // farmState, obligationFarm (userState)
-    (debtReserve?.state.farmDebt.equals(PublicKey.default) &&
-    collReserve?.state.farmCollateral.equals(PublicKey.default)
-      ? 0
-      : 1) + // farmProgram
-    // all oracles as they are passed in refresh reserve for each reserve
-    (collReserve?.state.config.tokenInfo.pythConfiguration.price.equals(PublicKey.default) ? 0 : 1) + // Pyth Oracle
-    (collReserve?.state.config.tokenInfo.switchboardConfiguration.priceAggregator.equals(PublicKey.default) ? 0 : 1) + // Switchboard Price Oracle
-    (collReserve?.state.config.tokenInfo.switchboardConfiguration.twapAggregator.equals(PublicKey.default) ? 0 : 1) + // Switchboard Twap Oracle
-    (collReserve?.state.config.tokenInfo.scopeConfiguration.priceFeed.equals(PublicKey.default) ? 0 : 1) + // Scope Prices
-    (debtReserve?.state.config.tokenInfo.pythConfiguration.price.equals(PublicKey.default) ? 0 : 1) + // Pyth Oracle
-    (debtReserve?.state.config.tokenInfo.switchboardConfiguration.priceAggregator.equals(PublicKey.default) ? 0 : 1) + // Switchboard Price Oracle
-    (debtReserve?.state.config.tokenInfo.switchboardConfiguration.twapAggregator.equals(PublicKey.default) ? 0 : 1) + // Switchboard Twap Oracle
-    (debtReserve?.state.config.tokenInfo.scopeConfiguration.priceFeed.equals(PublicKey.default) ? 0 : 1) + // Scope Prices
-    2; // ctoken mint and ctoken reserve vault for deposit token
-  return { estimatedAccountsRequired };
 };

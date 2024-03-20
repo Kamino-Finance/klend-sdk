@@ -131,6 +131,7 @@ export const depositLeverageTestAdapter = async (
     kamino,
     obligationTypeTagOverride: ObligationTypeTag.Multiply,
     obligation,
+    getTotalKlendAccountsOnly: false,
   });
 
   // Create lookup table
@@ -244,6 +245,7 @@ export const withdrawLeverageTestAdapter = async (
     kamino,
     obligationTypeTagOverride: ObligationTypeTag.Multiply,
     obligation,
+    getTotalKlendAccountsOnly: false,
   });
 
   // Create lookup table
@@ -346,6 +348,7 @@ export const adjustLeverageTestAdapter = async (
     kamino,
     obligationTypeTagOverride: ObligationTypeTag.Multiply,
     obligation,
+    getTotalKlendAccountsOnly: false,
   });
 
   // Create lookup table
