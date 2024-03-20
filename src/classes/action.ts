@@ -218,7 +218,7 @@ export class KaminoAction {
     kaminoMarket: KaminoMarket,
     obligation: KaminoObligation | ObligationType,
     referrer: PublicKey = PublicKey.default,
-    currentSlot: number,
+    currentSlot: number = 0,
     hostAta?: PublicKey,
     payer?: PublicKey
   ) {
@@ -241,10 +241,6 @@ export class KaminoAction {
     }
 
     const referrerKey = kaminoObligation ? kaminoObligation.state.referrer : referrer;
-
-    if (currentSlot === 0) {
-      currentSlot = await kaminoMarket.getConnection().getSlot();
-    }
 
     return new KaminoAction(
       kaminoMarket,
@@ -1422,7 +1418,6 @@ export class KaminoAction {
               const amountDecimal = new Decimal(this.amount.toString());
 
               if (fullRepay.lte(amountDecimal)) {
-                console.log('cmp', fullRepay.toNumber(), amountDecimal.toNumber());
                 this.preLoadedBorrowReservesSameTx.push(this.reserve.address);
               }
             }
@@ -2455,10 +2450,6 @@ export class KaminoAction {
       throw new Error('Invalid action');
     }
 
-    if (currentSlot === 0) {
-      currentSlot = await kaminoMarket.getConnection().getSlot();
-    }
-
     return new KaminoAction(
       kaminoMarket,
       payer,
@@ -2498,10 +2489,6 @@ export class KaminoAction {
     ]);
 
     const userTokenAccountAddress = atas[0];
-
-    if (currentSlot === 0) {
-      currentSlot = await kaminoMarket.getConnection().getSlot();
-    }
 
     return {
       axn: new KaminoAction(

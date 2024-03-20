@@ -103,6 +103,7 @@ export const getRepayWithCollIxns = async (props: {
   obligation: KaminoObligation;
   referrer: PublicKey;
   swapper: SwapIxnsProvider;
+  currentSlot: number;
 }): Promise<{ ixns: TransactionInstruction[]; lookupTablesAddresses: PublicKey[]; swapInputs: SwapInputs }> => {
   const {
     kaminoMarket,
@@ -117,6 +118,7 @@ export const getRepayWithCollIxns = async (props: {
     obligation,
     referrer,
     swapper,
+    currentSlot,
   } = props;
 
   const connection = kaminoMarket.getConnection();
@@ -125,7 +127,6 @@ export const getRepayWithCollIxns = async (props: {
   // const solTokenReserve = kaminoMarket.getReserveByMint(WRAPPED_SOL_MINT);
   const flashLoanFee = debtReserve?.getFlashLoanFee() || new Decimal(0);
 
-  const currentSlot = await kaminoMarket.getConnection().getSlot();
   const irSlippageBpsForDebt = obligation!
     .estimateObligationInterestRate(
       debtReserve!,
