@@ -53,6 +53,7 @@ export const repayWithCollTestAdapter = async (
 
   const { ixns, lookupTablesAddresses, swapInputs } = await getRepayWithCollIxns({
     kaminoMarket,
+    budgetAndPriorityFeeIxns: [],
     amount,
     debtTokenMint,
     collTokenMint,
@@ -63,6 +64,7 @@ export const repayWithCollTestAdapter = async (
     obligation,
     referrer,
     swapper: getLocalSwapper(env, kaminoMarket, owner.publicKey),
+    getTotalKlendAccountsOnly: false,
   });
 
   // Create lookup table
