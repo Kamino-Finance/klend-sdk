@@ -843,14 +843,14 @@ export const getWithdrawWithLeverageIxns = async (props: {
     isClosingPosition ? U64_MAX : toLamports(depositTokenWithdrawAmount, collReserve!.stats.decimals).ceil().toString(),
     collTokenMint,
     user,
+    currentSlot,
     userObligation ? userObligation : obligationType,
     0,
     false,
     false,
     false, // to be checked and created in a setup tx in the UI (won't be the case for withdraw anyway as this would be created in deposit)
     isClosingPosition,
-    referrer,
-    currentSlot
+    referrer
   );
 
   if (collIsKtoken) {
@@ -1454,13 +1454,13 @@ export const getDecreaseLeverageIxns = async (props: {
     debtTokenMint,
     user,
     obligation ? obligation : obligationType,
+    currentSlot,
     undefined,
     0,
     false,
     false,
     false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
-    referrer,
-    currentSlot
+    referrer
   );
 
   // 6. Withdraw collateral (a little bit more to be able to pay for the slippage on swap)

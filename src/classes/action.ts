@@ -637,14 +637,14 @@ export class KaminoAction {
     withdrawAmount: string | BN,
     withdrawMint: PublicKey,
     payer: PublicKey,
+    currentSlot: number,
     obligation: KaminoObligation | ObligationType,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata,
     isClosingPosition: boolean = false,
-    referrer: PublicKey = PublicKey.default,
-    currentSlot: number = 0
+    referrer: PublicKey = PublicKey.default
   ) {
     const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
@@ -746,13 +746,13 @@ export class KaminoAction {
     mint: PublicKey,
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType,
+    currentSlot: number,
     payer: PublicKey | undefined = undefined,
     extraComputeBudget: number = 1_000_000,
     includeAtaIxns: boolean = true,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true,
-    referrer: PublicKey = PublicKey.default,
-    currentSlot: number = 0
+    referrer: PublicKey = PublicKey.default
   ) {
     const axn = await KaminoAction.initialize(
       'repay',
