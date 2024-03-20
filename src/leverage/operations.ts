@@ -1533,3 +1533,49 @@ export const getDecreaseLeverageIxns = async (props: {
     swapInputs,
   };
 };
+
+// for withdraw, we would have slightly different accounts (2 less) - won't have coll reserve fee vault & userMetadata
+// this can be used for both however, as the estimation that we give to jupiter is not consistent
+// with the amount we get back in the route and we can get back more accounts than we ask for
+export const estimateOperationsWithLeverageAccounts = (props: {
+  kaminoMarket: KaminoMarket;
+  collTokenMint: PublicKey;
+  debtTokenMint: PublicKey;
+  referrer: PublicKey;
+}): {
+  estimatedAccountsRequired: number;
+} => {
+  const { kaminoMarket, collTokenMint, debtTokenMint, referrer } = props;
+
+  const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
+  const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
+
+  const estimatedAccountsRequired =
+    5 + // computeBudgetProgram, associatedTokenProgram, systemProgram, klendProgram, tokenProgram
+    1 + // sysvar: instructions, sysvar: rent
+    1 + // user wallet
+    2 + // user atas for token A and token B
+    2 + // mints for token A and token B
+    2 + // ledning market, lending market authority
+    3 + // reserve, reserve liquidity vault, reserve fee vault - coll
+    3 + // reserve, reserve liquidity vault, reserve fee vault - debt
+    (referrer.equals(PublicKey.default) ? 0 : 2) + // if there is a referrer - referrer token state for borrow token, referrer account address
+    2 + // obligation, userMetadata
+    (collReserve?.state.farmCollateral.equals(PublicKey.default) ? 0 : 2) + // farmState, obligationFarm (userState)
+    (debtReserve?.state.farmDebt.equals(PublicKey.default) ? 0 : 2) + // farmState, obligationFarm (userState)
+    (debtReserve?.state.farmDebt.equals(PublicKey.default) &&
+    collReserve?.state.farmCollateral.equals(PublicKey.default)
+      ? 0
+      : 1) + // farmProgram
+    // all oracles as they are passed in refresh reserve for each reserve
+    (collReserve?.state.config.tokenInfo.pythConfiguration.price.equals(PublicKey.default) ? 0 : 1) + // Pyth Oracle
+    (collReserve?.state.config.tokenInfo.switchboardConfiguration.priceAggregator.equals(PublicKey.default) ? 0 : 1) + // Switchboard Price Oracle
+    (collReserve?.state.config.tokenInfo.switchboardConfiguration.twapAggregator.equals(PublicKey.default) ? 0 : 1) + // Switchboard Twap Oracle
+    (collReserve?.state.config.tokenInfo.scopeConfiguration.priceFeed.equals(PublicKey.default) ? 0 : 1) + // Scope Prices
+    (debtReserve?.state.config.tokenInfo.pythConfiguration.price.equals(PublicKey.default) ? 0 : 1) + // Pyth Oracle
+    (debtReserve?.state.config.tokenInfo.switchboardConfiguration.priceAggregator.equals(PublicKey.default) ? 0 : 1) + // Switchboard Price Oracle
+    (debtReserve?.state.config.tokenInfo.switchboardConfiguration.twapAggregator.equals(PublicKey.default) ? 0 : 1) + // Switchboard Twap Oracle
+    (debtReserve?.state.config.tokenInfo.scopeConfiguration.priceFeed.equals(PublicKey.default) ? 0 : 1) + // Scope Prices
+    2; // ctoken mint and ctoken reserve vault for deposit token
+  return { estimatedAccountsRequired };
+};
