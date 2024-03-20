@@ -978,6 +978,7 @@ const initUserMetadataAndReferrerAccounts = async (
     false,
     [],
     [],
+    undefined,
     user.publicKey
   );
   // Create user metadata + referrer token state for this user so it doesn't propagate

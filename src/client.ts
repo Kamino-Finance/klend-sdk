@@ -294,7 +294,8 @@ async function repay(connection: Connection, wallet: Keypair, token: string, bor
     borrowAmount,
     kaminoMarket.getReserveBySymbol(token)!.getLiquidityMint(),
     wallet.publicKey,
-    new VanillaObligation(new PublicKey(STAGING_LENDING_MARKET))
+    new VanillaObligation(new PublicKey(STAGING_LENDING_MARKET)),
+    await connection.getSlot()
   );
   console.log('User obligation', kaminoAction.obligation!.obligationAddress.toString());
 

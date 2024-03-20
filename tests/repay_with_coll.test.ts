@@ -59,7 +59,7 @@ describe('Repay with collateral SDK tests', function () {
       amountToRepay,
       debtTokenMint,
       collTokenMint,
-      amountToBorrow.equals(amountToRepay),
+      false,
       slippagePct,
       obligationBefore,
       (a: PublicKey, b: PublicKey) => getPriceMock(kaminoMarket, a, b),
@@ -158,7 +158,7 @@ describe('Repay with collateral SDK tests', function () {
       amountToRepay,
       debtTokenMint,
       collTokenMint,
-      amountToBorrow.equals(amountToRepay),
+      false,
       slippagePct,
       obligationBefore,
       (a: PublicKey, b: PublicKey) => getPriceMock(kaminoMarket, a, b),
@@ -257,7 +257,7 @@ describe('Repay with collateral SDK tests', function () {
       amountToRepay,
       debtTokenMint,
       collTokenMint,
-      amountToBorrow.equals(amountToRepay),
+      false,
       slippagePct,
       obligationBefore,
       (a: PublicKey, b: PublicKey) => getPriceMock(kaminoMarket, a, b),
@@ -356,7 +356,7 @@ describe('Repay with collateral SDK tests', function () {
       amountToRepay,
       debtTokenMint,
       collTokenMint,
-      amountToBorrow.equals(amountToRepay),
+      false,
       slippagePct,
       obligationBefore,
       (a: PublicKey, b: PublicKey) => getPriceMock(kaminoMarket, a, b),
@@ -465,7 +465,7 @@ describe('Repay with collateral SDK tests', function () {
       amountToRepay,
       debtTokenMint,
       collTokenMint,
-      amountToBorrow.equals(amountToRepay),
+      false,
       slippagePct,
       obligationBefore,
       (a: PublicKey, b: PublicKey) => getPriceMock(kaminoMarket, a, b),
@@ -561,7 +561,7 @@ describe('Repay with collateral SDK tests', function () {
       amountToRepay,
       debtTokenMint,
       collTokenMint,
-      amountToBorrow.equals(amountToRepay),
+      false,
       slippagePct,
       obligationBefore,
       (a: PublicKey, b: PublicKey) => getPriceMock(kaminoMarket, a, b),
@@ -676,7 +676,7 @@ describe('Repay with collateral SDK tests', function () {
       amountToRepay,
       debtTokenMint,
       collTokenMint,
-      amountToBorrow.equals(amountToRepay),
+      false,
       slippagePct,
       obligationBefore,
       (a: PublicKey, b: PublicKey) => getPriceMock(kaminoMarket, a, b),
@@ -735,5 +735,67 @@ describe('Repay with collateral SDK tests', function () {
     );
 
     assert(referrerDebtFeesUnclaimed.gt(0));
+  });
+
+  it('repay_with_coll_close_position', async function () {
+    const [collToken, debtToken] = ['SOL', 'USDC'];
+    const amountToDeposit = new Decimal(2.5);
+    const amountToBorrow = new Decimal(15);
+    const amountToRepay = amountToBorrow;
+    const slippagePct = 0.5;
+
+    console.log('Setting up market ===');
+    const { env, kaminoMarket } = await createMarketWithTwoReservesToppedUp(
+      [collToken, new Decimal(1000.05)],
+      [debtToken, new Decimal(1000.05)]
+    );
+    const collTokenMint = kaminoMarket.getReserveBySymbol(collToken)?.getLiquidityMint()!;
+    const debtTokenMint = kaminoMarket.getReserveBySymbol(debtToken)?.getLiquidityMint()!;
+
+    console.log('Creating user ===');
+    const borrower = await newUser(env, kaminoMarket, [
+      [collToken, new Decimal(10)],
+      [debtToken, new Decimal(10)],
+    ]);
+
+    console.log('Depositing coll ===');
+    await sleep(1000);
+    await deposit(env, kaminoMarket, borrower, collToken, amountToDeposit);
+
+    console.log('Borrowing debt ===');
+    await sleep(1000);
+    await borrow(env, kaminoMarket, borrower, debtToken, amountToBorrow);
+
+    console.log('Repaying with collateral ===');
+
+    await sleep(2000);
+
+    const obligationBefore = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))[0];
+
+    const repayWithCollTxRes = await repayWithCollTestAdapter(
+      env,
+      borrower,
+      kaminoMarket,
+      amountToRepay,
+      debtTokenMint,
+      collTokenMint,
+      true,
+      slippagePct,
+      obligationBefore,
+      (a: PublicKey, b: PublicKey) => getPriceMock(kaminoMarket, a, b),
+      PublicKey.default
+    );
+
+    console.log('Repay with Coll txn:', repayWithCollTxRes);
+
+    await sleep(2000);
+
+    await kaminoMarket.reload();
+
+    const obligationAfterArray = await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey);
+
+    console.log('obligationBefore: ', obligationBefore.refreshedStats);
+    // assert obligation has been closed
+    assert.equal(obligationAfterArray.length, 0);
   });
 });
