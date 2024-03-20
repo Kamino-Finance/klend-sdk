@@ -129,6 +129,7 @@ describe('init_and_refresh_farm_deposit_borrow_and_repay_withdraw_tests', functi
       numberToLamportsDecimal(toDeposit, collReserve.stats.decimals).floor().toString(),
       collReserve.getLiquidityMint(),
       borrower.publicKey,
+      await env.provider.connection.getSlot(),
       new VanillaObligation(PROGRAM_ID)
     );
 
@@ -300,6 +301,7 @@ describe('init_and_refresh_farm_deposit_borrow_and_repay_withdraw_tests', functi
       numberToLamportsDecimal(toDeposit, collReserve.stats.decimals).floor().toString(),
       collReserve.getLiquidityMint(),
       borrower.publicKey,
+      await env.provider.connection.getSlot(),
       new VanillaObligation(PROGRAM_ID)
     );
 
@@ -479,6 +481,7 @@ describe('init_and_refresh_farm_deposit_borrow_and_repay_withdraw_tests', functi
       numberToLamportsDecimal(toDeposit, collReserve.stats.decimals).floor().toString(),
       collReserve.getLiquidityMint(),
       borrower.publicKey,
+      await env.provider.connection.getSlot(),
       new VanillaObligation(PROGRAM_ID)
     );
 
@@ -661,6 +664,7 @@ describe('init_and_refresh_farm_deposit_borrow_and_repay_withdraw_tests', functi
       numberToLamportsDecimal(toDeposit, collReserve.stats.decimals).floor().toString(),
       collReserve.getLiquidityMint(),
       borrower.publicKey,
+      await env.provider.connection.getSlot(),
       new VanillaObligation(PROGRAM_ID)
     );
 
@@ -844,6 +848,7 @@ describe('init_and_refresh_farm_deposit_borrow_and_repay_withdraw_tests', functi
       numberToLamportsDecimal(toDeposit, collReserve.stats.decimals).floor().toString(),
       collReserve.getLiquidityMint(),
       borrower.publicKey,
+      await env.provider.connection.getSlot(),
       new VanillaObligation(PROGRAM_ID)
     );
 
@@ -1152,6 +1157,7 @@ describe('init_and_refresh_farm_deposit_borrow_and_repay_withdraw_tests', functi
       numberToLamportsDecimal(toDeposit, collReserve.stats.decimals).floor().toString(),
       collReserve.getLiquidityMint(),
       borrower.publicKey,
+      await env.provider.connection.getSlot(),
       new VanillaObligation(PROGRAM_ID)
     );
 
@@ -1463,6 +1469,7 @@ describe('init_and_refresh_farm_deposit_borrow_and_repay_withdraw_tests', functi
       numberToLamportsDecimal(toDeposit, collReserve.stats.decimals).floor().toString(),
       collReserve.getLiquidityMint(),
       borrower.publicKey,
+      await env.provider.connection.getSlot(),
       new VanillaObligation(PROGRAM_ID)
     );
 

@@ -183,6 +183,7 @@ export const getRepayWithCollIxns = async (props: {
       : numberToLamportsDecimal(calcs.collToSwapIn, collReserve!.stats.decimals).ceil().toString(),
     new PublicKey(collTokenMint),
     owner,
+    currentSlot,
     obligation,
     0,
     false,

@@ -487,6 +487,7 @@ describe('Main lending market instruction tests', function () {
       withdrawAmount,
       NATIVE_MINT,
       env.admin.publicKey,
+      await env.provider.connection.getSlot(),
       new VanillaObligation(PROGRAM_ID),
       1_400_000,
       undefined,
@@ -719,7 +720,8 @@ describe('Main lending market instruction tests', function () {
       borrowAmount,
       usdh,
       env.admin.publicKey,
-      new VanillaObligation(PROGRAM_ID)
+      new VanillaObligation(PROGRAM_ID),
+      await env.provider.connection.getSlot()
     );
 
     {
@@ -848,7 +850,8 @@ describe('Main lending market instruction tests', function () {
       borrowAmount,
       NATIVE_MINT,
       env.admin.publicKey,
-      new VanillaObligation(PROGRAM_ID)
+      new VanillaObligation(PROGRAM_ID),
+      await env.provider.connection.getSlot()
     );
 
     {
