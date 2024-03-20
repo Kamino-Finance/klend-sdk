@@ -226,6 +226,7 @@ export const withdrawLeverageTestAdapter = async (
 
   const { ixns, lookupTablesAddresses, swapInputs } = await getWithdrawWithLeverageIxns({
     connection: env.provider.connection,
+    budgetAndPriorityFeeIxns: [],
     user: user.publicKey,
     amount,
     deposited,
@@ -327,6 +328,7 @@ export const adjustLeverageTestAdapter = async (
 
   const { ixns, lookupTablesAddresses, swapInputs } = await getAdjustLeverageIxns({
     connection: env.provider.connection,
+    budgetAndPriorityFeeIxns: [],
     user: user.publicKey,
     kaminoMarket,
     priceDebtToColl,

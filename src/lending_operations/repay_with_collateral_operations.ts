@@ -233,7 +233,7 @@ export const getRepayWithCollIxns = async (props: {
   };
 };
 
-export const estimateOperationsWithLeverageAccounts = (props: {
+export const estimateRepayWithCollAccounts = (props: {
   kaminoMarket: KaminoMarket;
   obligation: KaminoObligation;
   collTokenMint: PublicKey;
