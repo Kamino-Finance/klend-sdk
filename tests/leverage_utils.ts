@@ -131,6 +131,7 @@ export const depositLeverageTestAdapter = async (
     kamino,
     obligationTypeTagOverride: ObligationTypeTag.Multiply,
     obligation,
+    getTotalKlendAccountsOnly: false,
   });
 
   // Create lookup table
@@ -226,6 +227,7 @@ export const withdrawLeverageTestAdapter = async (
 
   const { ixns, lookupTablesAddresses, swapInputs } = await getWithdrawWithLeverageIxns({
     connection: env.provider.connection,
+    budgetAndPriorityFeeIxns: [],
     user: user.publicKey,
     amount,
     deposited,
@@ -243,6 +245,7 @@ export const withdrawLeverageTestAdapter = async (
     kamino,
     obligationTypeTagOverride: ObligationTypeTag.Multiply,
     obligation,
+    getTotalKlendAccountsOnly: false,
   });
 
   // Create lookup table
@@ -327,6 +330,7 @@ export const adjustLeverageTestAdapter = async (
 
   const { ixns, lookupTablesAddresses, swapInputs } = await getAdjustLeverageIxns({
     connection: env.provider.connection,
+    budgetAndPriorityFeeIxns: [],
     user: user.publicKey,
     kaminoMarket,
     priceDebtToColl,
@@ -344,6 +348,7 @@ export const adjustLeverageTestAdapter = async (
     kamino,
     obligationTypeTagOverride: ObligationTypeTag.Multiply,
     obligation,
+    getTotalKlendAccountsOnly: false,
   });
 
   // Create lookup table
