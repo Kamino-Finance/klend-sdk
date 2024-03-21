@@ -1,5 +1,6 @@
 import * as UpdateConfigMode from "./UpdateConfigMode"
 import * as UpdateLendingMarketConfigValue from "./UpdateLendingMarketConfigValue"
+import * as UpdateLendingMarketMode from "./UpdateLendingMarketMode"
 import * as AssetTier from "./AssetTier"
 import * as FeeCalculation from "./FeeCalculation"
 import * as ReserveFarmKind from "./ReserveFarmKind"
@@ -110,6 +111,41 @@ export type UpdateLendingMarketConfigValueJSON =
   | UpdateLendingMarketConfigValue.U64JSON
   | UpdateLendingMarketConfigValue.PubkeyJSON
   | UpdateLendingMarketConfigValue.ElevationGroupJSON
+
+export { UpdateLendingMarketMode }
+
+export type UpdateLendingMarketModeKind =
+  | UpdateLendingMarketMode.UpdateOwner
+  | UpdateLendingMarketMode.UpdateEmergencyMode
+  | UpdateLendingMarketMode.UpdateLiquidationCloseFactor
+  | UpdateLendingMarketMode.UpdateLiquidationMaxValue
+  | UpdateLendingMarketMode.UpdateGlobalUnhealthyBorrow
+  | UpdateLendingMarketMode.UpdateGlobalAllowedBorrow
+  | UpdateLendingMarketMode.UpdateRiskCouncil
+  | UpdateLendingMarketMode.UpdateMinFullLiquidationThreshold
+  | UpdateLendingMarketMode.UpdateInsolvencyRiskLtv
+  | UpdateLendingMarketMode.UpdateElevationGroup
+  | UpdateLendingMarketMode.UpdateReferralFeeBps
+  | UpdateLendingMarketMode.UpdateMultiplierPoints
+  | UpdateLendingMarketMode.UpdatePriceRefreshTriggerToMaxAgePct
+  | UpdateLendingMarketMode.UpdateAutodeleverageEnabled
+  | UpdateLendingMarketMode.UpdateBorrowingDisabled
+export type UpdateLendingMarketModeJSON =
+  | UpdateLendingMarketMode.UpdateOwnerJSON
+  | UpdateLendingMarketMode.UpdateEmergencyModeJSON
+  | UpdateLendingMarketMode.UpdateLiquidationCloseFactorJSON
+  | UpdateLendingMarketMode.UpdateLiquidationMaxValueJSON
+  | UpdateLendingMarketMode.UpdateGlobalUnhealthyBorrowJSON
+  | UpdateLendingMarketMode.UpdateGlobalAllowedBorrowJSON
+  | UpdateLendingMarketMode.UpdateRiskCouncilJSON
+  | UpdateLendingMarketMode.UpdateMinFullLiquidationThresholdJSON
+  | UpdateLendingMarketMode.UpdateInsolvencyRiskLtvJSON
+  | UpdateLendingMarketMode.UpdateElevationGroupJSON
+  | UpdateLendingMarketMode.UpdateReferralFeeBpsJSON
+  | UpdateLendingMarketMode.UpdateMultiplierPointsJSON
+  | UpdateLendingMarketMode.UpdatePriceRefreshTriggerToMaxAgePctJSON
+  | UpdateLendingMarketMode.UpdateAutodeleverageEnabledJSON
+  | UpdateLendingMarketMode.UpdateBorrowingDisabledJSON
 
 export { LastUpdate } from "./LastUpdate"
 export type { LastUpdateFields, LastUpdateJSON } from "./LastUpdate"

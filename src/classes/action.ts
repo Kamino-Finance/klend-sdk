@@ -969,6 +969,7 @@ export class KaminoAction {
           reserveCollateralMint: this.reserve.getCTokenMint(),
           reserveDestinationDepositCollateral: this.reserve.state.collateral.supplyVault, // destinationCollateral
           userSourceLiquidity: this.userTokenAccountAddress,
+          placeholderUserDestinationCollateral: this.kaminoMarket.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
           instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
         },
@@ -1094,6 +1095,7 @@ export class KaminoAction {
           reserveCollateralMint: this.reserve.getCTokenMint(),
           reserveDestinationDepositCollateral: this.reserve.state.collateral.supplyVault, // destinationCollateral
           userSourceLiquidity: this.userTokenAccountAddress,
+          placeholderUserDestinationCollateral: this.kaminoMarket.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
           instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
         },
@@ -1195,6 +1197,7 @@ export class KaminoAction {
           reserveLiquiditySupply: this.outflowReserve.state.liquidity.supplyVault,
           reserveSourceCollateral: this.outflowReserve.state.collateral.supplyVault,
           userDestinationLiquidity: this.additionalTokenAccountAddress,
+          placeholderUserDestinationCollateral: this.kaminoMarket.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
           instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
         },
@@ -1226,6 +1229,7 @@ export class KaminoAction {
           reserveLiquiditySupply: this.reserve.state.liquidity.supplyVault,
           reserveSourceCollateral: this.reserve.state.collateral.supplyVault,
           userDestinationLiquidity: this.userTokenAccountAddress,
+          placeholderUserDestinationCollateral: this.kaminoMarket.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
           instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
         },

@@ -11,6 +11,7 @@ export interface IdlMissingTypesArgs {
   reserveStatus: types.ReserveStatusKind
   updateConfigMode: types.UpdateConfigModeKind
   updateLendingMarketConfigValue: types.UpdateLendingMarketConfigValueKind
+  updateLendingMarketConfigMode: types.UpdateLendingMarketModeKind
 }
 
 export interface IdlMissingTypesAccounts {
@@ -26,6 +27,7 @@ export const layout = borsh.struct([
   types.ReserveStatus.layout("reserveStatus"),
   types.UpdateConfigMode.layout("updateConfigMode"),
   types.UpdateLendingMarketConfigValue.layout("updateLendingMarketConfigValue"),
+  types.UpdateLendingMarketMode.layout("updateLendingMarketConfigMode"),
 ])
 
 export function idlMissingTypes(
@@ -49,6 +51,8 @@ export function idlMissingTypes(
       updateConfigMode: args.updateConfigMode.toEncodable(),
       updateLendingMarketConfigValue:
         args.updateLendingMarketConfigValue.toEncodable(),
+      updateLendingMarketConfigMode:
+        args.updateLendingMarketConfigMode.toEncodable(),
     },
     buffer
   )

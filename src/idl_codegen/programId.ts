@@ -6,8 +6,4 @@ export const PROGRAM_ID_CLI = new PublicKey(
 )
 
 // This constant will not get overwritten on subsequent code generations and it's safe to modify it's value.
-export let PROGRAM_ID: PublicKey = PROGRAM_ID_CLI
-
-export const setKLendProgramId = (programId: PublicKey) => {
-  PROGRAM_ID = programId;
-};
+export const PROGRAM_ID: PublicKey = PROGRAM_ID_CLI
