@@ -943,6 +943,12 @@
           "isSigner": false
         },
         {
+          "name": "placeholderUserDestinationCollateral",
+          "isMut": false,
+          "isSigner": false,
+          "isOptional": true
+        },
+        {
           "name": "tokenProgram",
           "isMut": false,
           "isSigner": false
@@ -1007,6 +1013,12 @@
           "name": "userDestinationLiquidity",
           "isMut": true,
           "isSigner": false
+        },
+        {
+          "name": "placeholderUserDestinationCollateral",
+          "isMut": false,
+          "isSigner": false,
+          "isOptional": true
         },
         {
           "name": "tokenProgram",
@@ -1664,6 +1676,12 @@
           "name": "updateLendingMarketConfigValue",
           "type": {
             "defined": "UpdateLendingMarketConfigValue"
+          }
+        },
+        {
+          "name": "updateLendingMarketConfigMode",
+          "type": {
+            "defined": "UpdateLendingMarketMode"
           }
         }
       ]
@@ -2584,6 +2602,59 @@
                 "defined": "ElevationGroup"
               }
             ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateLendingMarketMode",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "UpdateOwner"
+          },
+          {
+            "name": "UpdateEmergencyMode"
+          },
+          {
+            "name": "UpdateLiquidationCloseFactor"
+          },
+          {
+            "name": "UpdateLiquidationMaxValue"
+          },
+          {
+            "name": "UpdateGlobalUnhealthyBorrow"
+          },
+          {
+            "name": "UpdateGlobalAllowedBorrow"
+          },
+          {
+            "name": "UpdateRiskCouncil"
+          },
+          {
+            "name": "UpdateMinFullLiquidationThreshold"
+          },
+          {
+            "name": "UpdateInsolvencyRiskLtv"
+          },
+          {
+            "name": "UpdateElevationGroup"
+          },
+          {
+            "name": "UpdateReferralFeeBps"
+          },
+          {
+            "name": "UpdateMultiplierPoints"
+          },
+          {
+            "name": "UpdatePriceRefreshTriggerToMaxAgePct"
+          },
+          {
+            "name": "UpdateAutodeleverageEnabled"
+          },
+          {
+            "name": "UpdateBorrowingDisabled"
           }
         ]
       }
