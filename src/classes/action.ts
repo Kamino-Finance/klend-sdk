@@ -733,6 +733,7 @@ export class KaminoAction {
    * @param mint
    * @param owner
    * @param obligation - obligation to repay or the PDA seeds
+   * @param currentSlot
    * @param payer - if not set then owner is used
    * @param extraComputeBudget - if > 0 then adds the ixn
    * @param includeAtaIxns - if true it includes create and close wsol and token atas
@@ -1178,7 +1179,10 @@ export class KaminoAction {
       throw new Error(`outflowAmount not set`);
     }
 
-    const collateralExchangeRate = this.outflowReserve.getCollateralExchangeRate();
+    const collateralExchangeRate = this.outflowReserve.getEstimatedCollateralExchangeRate(
+      this.currentSlot,
+      this.kaminoMarket.state.referralFeeBps
+    );
 
     this.lendingIxs.push(
       withdrawObligationCollateralAndRedeemReserveCollateral(
@@ -1207,7 +1211,10 @@ export class KaminoAction {
   }
 
   async addWithdrawIx() {
-    const collateralExchangeRate = this.reserve.getCollateralExchangeRate();
+    const collateralExchangeRate = this.reserve.getEstimatedCollateralExchangeRate(
+      this.currentSlot,
+      this.kaminoMarket.state.referralFeeBps
+    );
 
     const collateralAmount = this.amount.eq(new BN(U64_MAX))
       ? this.amount
