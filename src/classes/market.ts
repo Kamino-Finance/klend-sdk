@@ -80,6 +80,7 @@ export class KaminoMarket {
    * @param connection
    * @param marketAddress
    * @param programId
+   * @param setupLocalTest
    */
   static async load(
     connection: Connection,
@@ -289,12 +290,7 @@ export class KaminoMarket {
       throw Error('Market must be initialized to call initialize.');
     }
     const obligationAddress = obligationType.toPda(this.getAddress(), publicKey);
-    const obligationState = await Obligation.fetch(this.connection, obligationAddress, this.programId);
-    if (obligationState === null) {
-      return null;
-    }
-
-    return new KaminoObligation(this, obligationAddress, obligationState, null, null);
+    return KaminoObligation.load(this, obligationAddress);
   }
 
   async loadReserves() {
@@ -413,14 +409,14 @@ export class KaminoMarket {
       },
     };
 
-    if (collateralFarmAddress.toString() !== PublicKey.default.toString()) {
+    if (isNotNullPubkey(collateralFarmAddress)) {
       result.depositingRewards = await this.getRewardInfoForFarm(
         collateralFarmAddress,
         totalDepositAmount,
         getRewardPrice
       );
     }
-    if (debtFarmAddress.toString() !== PublicKey.default.toString()) {
+    if (isNotNullPubkey(debtFarmAddress)) {
       result.depositingRewards = await this.getRewardInfoForFarm(debtFarmAddress, totalBorrowAmount, getRewardPrice);
     }
 
@@ -494,12 +490,15 @@ export class KaminoMarket {
       });
     }
 
-    const collateralExcnangeRates = this.getCollateralExchangeRatesByReserve();
-    const cumulativeBorrowRates = this.getCumulativeBorrowRatesByReserve();
+    const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
+    const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
 
-    const obligations = await this.connection.getProgramAccounts(this.programId, {
-      filters,
-    });
+    const [slot, obligations] = await Promise.all([
+      this.connection.getSlot(),
+      this.connection.getProgramAccounts(this.programId, {
+        filters,
+      }),
+    ]);
 
     return obligations.map((obligation) => {
       if (obligation.account === null) {
@@ -512,11 +511,18 @@ export class KaminoMarket {
         throw Error('Could not parse obligation.');
       }
 
+      KaminoObligation.addRatesForObligation(
+        this,
+        obligationAccount,
+        collateralExchangeRates,
+        cumulativeBorrowRates,
+        slot
+      );
       return new KaminoObligation(
         this,
         obligation.pubkey,
         obligationAccount,
-        collateralExcnangeRates,
+        collateralExchangeRates,
         cumulativeBorrowRates
       );
     });
@@ -553,8 +559,9 @@ export class KaminoMarket {
       });
     }
 
-    const collateralExcnangeRates = this.getCollateralExchangeRatesByReserve();
-    const cumulativeBorrowRates = this.getCumulativeBorrowRatesByReserve();
+    const slot = await this.connection.getSlot();
+    const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
+    const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
 
     const obligationPubkeys = await this.connection.getProgramAccounts(this.programId, {
       filters,
@@ -580,8 +587,15 @@ export class KaminoMarket {
           throw Error(`Could not decode obligation ${pubkey.toString()}`);
         }
 
+        KaminoObligation.addRatesForObligation(
+          this,
+          obligationAccount,
+          collateralExchangeRates,
+          cumulativeBorrowRates,
+          slot
+        );
         obligationsBatch.push(
-          new KaminoObligation(this, pubkey, obligationAccount, collateralExcnangeRates, cumulativeBorrowRates)
+          new KaminoObligation(this, pubkey, obligationAccount, collateralExchangeRates, cumulativeBorrowRates)
         );
       }
       yield obligationsBatch;
@@ -589,27 +603,30 @@ export class KaminoMarket {
   }
 
   async getAllObligationsByTag(tag: number, market: PublicKey) {
-    const obligations = await this.connection.getProgramAccounts(this.programId, {
-      filters: [
-        {
-          dataSize: Obligation.layout.span + 8,
-        },
-        {
-          memcmp: {
-            offset: 8,
-            bytes: base58.encode(new BN(tag).toBuffer()),
+    const [slot, obligations] = await Promise.all([
+      this.connection.getSlot(),
+      this.connection.getProgramAccounts(this.programId, {
+        filters: [
+          {
+            dataSize: Obligation.layout.span + 8,
           },
-        },
-        {
-          memcmp: {
-            offset: 32,
-            bytes: market.toBase58(),
+          {
+            memcmp: {
+              offset: 8,
+              bytes: base58.encode(new BN(tag).toBuffer()),
+            },
           },
-        },
-      ],
-    });
-    const collateralExcnangeRates = await this.getCollateralExchangeRatesByReserve();
-    const cumulativeBorrowRates = await this.getCumulativeBorrowRatesByReserve();
+          {
+            memcmp: {
+              offset: 32,
+              bytes: market.toBase58(),
+            },
+          },
+        ],
+      }),
+    ]);
+    const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
+    const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
 
     return obligations.map((obligation) => {
       if (obligation.account === null) {
@@ -625,43 +642,56 @@ export class KaminoMarket {
         throw Error('Could not parse obligation.');
       }
 
+      KaminoObligation.addRatesForObligation(
+        this,
+        obligationAccount,
+        collateralExchangeRates,
+        cumulativeBorrowRates,
+        slot
+      );
+
       return new KaminoObligation(
         this,
         obligation.pubkey,
         obligationAccount,
-        collateralExcnangeRates,
+        collateralExchangeRates,
         cumulativeBorrowRates
       );
     });
   }
 
   async getAllUserObligations(user: PublicKey) {
-    const obligations = await this.connection.getProgramAccounts(this.programId, {
-      filters: [
-        {
-          dataSize: Obligation.layout.span + 8,
-        },
-        {
-          memcmp: {
-            offset: 0,
-            bytes: bs58.encode(Obligation.discriminator),
+    const [currentSlot, obligations] = await Promise.all([
+      this.connection.getSlot(),
+      this.connection.getProgramAccounts(this.programId, {
+        filters: [
+          {
+            dataSize: Obligation.layout.span + 8,
           },
-        },
-        {
-          memcmp: {
-            offset: 64,
-            bytes: user.toBase58(),
+          {
+            memcmp: {
+              offset: 0,
+              bytes: bs58.encode(Obligation.discriminator),
+            },
           },
-        },
-        {
-          memcmp: {
-            offset: 32,
-            bytes: this.address,
+          {
+            memcmp: {
+              offset: 64,
+              bytes: user.toBase58(),
+            },
           },
-        },
-      ],
-    });
+          {
+            memcmp: {
+              offset: 32,
+              bytes: this.address,
+            },
+          },
+        ],
+      }),
+    ]);
 
+    const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
+    const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
     return obligations.map((obligation) => {
       if (obligation.account === null) {
         throw new Error('Invalid account');
@@ -676,37 +706,54 @@ export class KaminoMarket {
         throw Error('Could not parse obligation.');
       }
 
-      return new KaminoObligation(this, obligation.pubkey, obligationAccount, null, null);
+      KaminoObligation.addRatesForObligation(
+        this,
+        obligationAccount,
+        collateralExchangeRates,
+        cumulativeBorrowRates,
+        currentSlot
+      );
+      return new KaminoObligation(
+        this,
+        obligation.pubkey,
+        obligationAccount,
+        collateralExchangeRates,
+        cumulativeBorrowRates
+      );
     });
   }
 
   async getUserObligationsByTag(tag: number, user: PublicKey): Promise<KaminoObligation[]> {
-    const obligations = await this.connection.getProgramAccounts(this.programId, {
-      filters: [
-        {
-          dataSize: Obligation.layout.span + 8,
-        },
-        {
-          memcmp: {
-            offset: 8,
-            bytes: base58.encode(new BN(tag).toBuffer()),
+    const [currentSlot, obligations] = await Promise.all([
+      this.connection.getSlot(),
+      this.connection.getProgramAccounts(this.programId, {
+        filters: [
+          {
+            dataSize: Obligation.layout.span + 8,
           },
-        },
-        {
-          memcmp: {
-            offset: 32,
-            bytes: this.address,
+          {
+            memcmp: {
+              offset: 8,
+              bytes: base58.encode(new BN(tag).toBuffer()),
+            },
           },
-        },
-        {
-          memcmp: {
-            offset: 64,
-            bytes: user.toBase58(),
+          {
+            memcmp: {
+              offset: 32,
+              bytes: this.address,
+            },
           },
-        },
-      ],
-    });
-
+          {
+            memcmp: {
+              offset: 64,
+              bytes: user.toBase58(),
+            },
+          },
+        ],
+      }),
+    ]);
+    const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
+    const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
     return obligations.map((obligation) => {
       if (obligation.account === null) {
         throw new Error('Invalid account');
@@ -720,8 +767,20 @@ export class KaminoMarket {
       if (!obligationAccount) {
         throw Error('Could not parse obligation.');
       }
-
-      return new KaminoObligation(this, obligation.pubkey, obligationAccount, null, null);
+      KaminoObligation.addRatesForObligation(
+        this,
+        obligationAccount,
+        collateralExchangeRates,
+        cumulativeBorrowRates,
+        currentSlot
+      );
+      return new KaminoObligation(
+        this,
+        obligation.pubkey,
+        obligationAccount,
+        collateralExchangeRates,
+        cumulativeBorrowRates
+      );
     });
   }
 
@@ -947,15 +1006,7 @@ export class KaminoMarket {
     return klendPrices;
   }
 
-  getCumulativeBorrowRatesByReserve(): Map<PublicKey, Decimal> {
-    const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
-    for (const reserve of this.reserves.values()) {
-      cumulativeBorrowRates.set(reserve.address, reserve.getCumulativeBorrowRate());
-    }
-    return cumulativeBorrowRates;
-  }
-
-  getEstimatedCumulativeBorrowRatesByReserve(slot: number): Map<PublicKey, Decimal> {
+  getCumulativeBorrowRatesByReserve(slot: number): Map<PublicKey, Decimal> {
     const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
     for (const reserve of this.reserves.values()) {
       cumulativeBorrowRates.set(reserve.address, reserve.getEstimatedCumulativeBorrowRate(slot));
@@ -963,10 +1014,13 @@ export class KaminoMarket {
     return cumulativeBorrowRates;
   }
 
-  getCollateralExchangeRatesByReserve(): Map<PublicKey, Decimal> {
+  getCollateralExchangeRatesByReserve(slot: number): Map<PublicKey, Decimal> {
     const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
     for (const reserve of this.reserves.values()) {
-      collateralExchangeRates.set(reserve.address, reserve.getCollateralExchangeRate());
+      collateralExchangeRates.set(
+        reserve.address,
+        reserve.getEstimatedCollateralExchangeRate(slot, this.state.referralFeeBps)
+      );
     }
     return collateralExchangeRates;
   }

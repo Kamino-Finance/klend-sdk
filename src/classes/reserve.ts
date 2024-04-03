@@ -120,7 +120,8 @@ export class KaminoReserve {
   };
 
   /**
-   * Calculates the total liquidity supply of the reserve
+   * Use getEstimatedTotalSupply() for the most accurate value
+   * @returns the stale total liquidity supply of the reserve from the last refresh
    */
   getTotalSupply(): Decimal {
     return this.getLiquidityAvailableAmount()
@@ -128,6 +129,23 @@ export class KaminoReserve {
       .sub(this.getAccumulatedProtocolFees())
       .sub(this.getAccumulatedReferrerFees())
       .sub(this.getPendingReferrerFees());
+  }
+
+  /**
+   * Calculates the total liquidity supply of the reserve
+   */
+  getEstimatedTotalSupply(slot: number, referralFeeBps: number): Decimal {
+    const slotsElapsed = Math.max(slot - this.state.lastUpdate.slot.toNumber(), 0);
+    if (slotsElapsed === 0) {
+      return this.getTotalSupply();
+    }
+    const { newDebt, newAccProtocolFees, pendingReferralFees } = this.compoundInterest(slotsElapsed, referralFeeBps);
+
+    return this.getLiquidityAvailableAmount()
+      .add(newDebt)
+      .sub(newAccProtocolFees)
+      .sub(this.getAccumulatedReferrerFees())
+      .sub(pendingReferralFees);
   }
 
   /**
@@ -146,22 +164,22 @@ export class KaminoReserve {
   /**
    * @Returns estimated cumulative borrow rate of the reserve
    */
-  getEstimatedCumulativeBorrowRate = (currentSlot: number): Decimal => {
+  getEstimatedCumulativeBorrowRate(currentSlot: number): Decimal {
     const currentBorrowRate = new Decimal(this.calculateBorrowAPR());
     const slotsElapsed = Math.max(currentSlot - this.state.lastUpdate.slot.toNumber(), 0);
 
-    const compoundInterest = new Decimal(1).add(currentBorrowRate.div(SLOTS_PER_YEAR)).pow(slotsElapsed);
+    const compoundInterest = this.approximateCompoundedInterest(currentBorrowRate, slotsElapsed);
 
     const previousCumulativeBorrowRate = this.getCumulativeBorrowRate();
 
     return previousCumulativeBorrowRate.mul(compoundInterest);
-  };
+  }
 
   /**
-   * Returns the exchange rate between the collateral tokens and the liquidity
-   * This is a decimal number scaled by 1e18
+   * Use getEstimatedCollateralExchangeRate() for the most accurate value
+   * @returns the stale exchange rate between the collateral tokens and the liquidity - this is a decimal number scaled by 1e18
    */
-  getCollateralExchangeRate = (): Decimal => {
+  getCollateralExchangeRate(): Decimal {
     const totalSupply = this.getTotalSupply();
     const mintTotalSupply = this.state.collateral.mintTotalSupply;
     if (mintTotalSupply.isZero() || totalSupply.isZero()) {
@@ -169,7 +187,21 @@ export class KaminoReserve {
     } else {
       return new Decimal(mintTotalSupply.toString()).dividedBy(totalSupply.toString());
     }
-  };
+  }
+
+  /**
+   *
+   * @returns the estimated exchange rate between the collateral tokens and the liquidity - this is a decimal number scaled by 1e18
+   */
+  getEstimatedCollateralExchangeRate(slot: number, referralFeeBps: number): Decimal {
+    const totalSupply = this.getEstimatedTotalSupply(slot, referralFeeBps);
+    const mintTotalSupply = this.state.collateral.mintTotalSupply;
+    if (mintTotalSupply.isZero() || totalSupply.isZero()) {
+      return INITIAL_COLLATERAL_RATE;
+    } else {
+      return new Decimal(mintTotalSupply.toString()).dividedBy(totalSupply.toString());
+    }
+  }
 
   /**
    *
@@ -399,6 +431,96 @@ export class KaminoReserve {
       borrowLimitCrossedSlot: parsedData.liquidity.borrowLimitCrossedSlot.toNumber(),
       borrowFactor: parsedData.config.borrowFactorPct.toNumber(),
     };
+  }
+
+  /**
+   * Compound current borrow rate over elapsed slots
+   *
+   * This also calculates protocol fees, which are taken for all obligations that have borrowed from current reserve.
+   *
+   * This also calculates referral fees, which are taken into pendingReferralFees.
+   *
+   * https://github.com/Kamino-Finance/klend/blob/release/1.3.0/programs/klend/src/state/reserve.rs#L517
+   *
+   * @param slotsElapsed
+   * @param referralFeeBps
+   */
+  private compoundInterest(
+    slotsElapsed: number,
+    referralFeeBps: number
+  ): {
+    newDebt: Decimal;
+    netNewDebt: Decimal;
+    totalProtocolFee: Decimal;
+    absoluteReferralFee: Decimal;
+    maxReferralFees: Decimal;
+    newAccProtocolFees: Decimal;
+    pendingReferralFees: Decimal;
+  } {
+    const currentBorrowRate = this.calculateBorrowAPR();
+    const protocolTakeRate = new Decimal(this.state.config.protocolTakeRatePct).div(100);
+    const referralRate = new Decimal(referralFeeBps).div(10_000);
+
+    const compoundInterestRate = this.approximateCompoundedInterest(new Decimal(currentBorrowRate), slotsElapsed);
+
+    const previousDebt = this.getBorrowedAmount();
+    const newDebt = previousDebt.mul(compoundInterestRate);
+    const netNewDebt = newDebt.sub(previousDebt);
+
+    const totalProtocolFee = netNewDebt.mul(protocolTakeRate);
+    const absoluteReferralFee = protocolTakeRate.mul(referralRate);
+    const maxReferralFees = netNewDebt.mul(absoluteReferralFee);
+
+    const newAccProtocolFees = totalProtocolFee.sub(maxReferralFees.add(this.getAccumulatedProtocolFees()));
+
+    const pendingReferralFees = this.getPendingReferrerFees().add(maxReferralFees);
+
+    return {
+      newDebt,
+      netNewDebt,
+      totalProtocolFee,
+      absoluteReferralFee,
+      maxReferralFees,
+      newAccProtocolFees,
+      pendingReferralFees,
+    };
+  }
+
+  /**
+   * Approximation to match the smart contract calculation
+   * https://github.com/Kamino-Finance/klend/blob/release/1.3.0/programs/klend/src/state/reserve.rs#L1026
+   * @param rate
+   * @param elapsedSlots
+   * @private
+   */
+  private approximateCompoundedInterest(rate: Decimal, elapsedSlots: number): Decimal {
+    const base = rate.div(SLOTS_PER_YEAR);
+    switch (elapsedSlots) {
+      case 0:
+        return new Decimal(1);
+      case 1:
+        return base.add(1);
+      case 2:
+        return base.add(1).mul(base.add(1));
+      case 3:
+        return base.add(1).mul(base.add(1)).mul(base.add(1));
+      case 4:
+        // eslint-disable-next-line no-case-declarations
+        const pow2 = base.add(1).mul(base.add(1));
+        return pow2.mul(pow2);
+    }
+    const exp = elapsedSlots;
+    const expMinus1 = exp - 1;
+    const expMinus2 = exp - 2;
+
+    const basePow2 = base.mul(base);
+    const basePow3 = basePow2.mul(base);
+
+    const firstTerm = base.mul(exp);
+    const secondTerm = basePow2.mul(exp).mul(expMinus1).div(2);
+    const thirdTerm = basePow3.mul(exp).mul(expMinus1).mul(expMinus2).div(6);
+
+    return new Decimal(1).add(firstTerm).add(secondTerm).add(thirdTerm);
   }
 }
 
