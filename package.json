@@ -1,6 +1,9 @@
 {
   "name": "@hubbleprotocol/kamino-lending-sdk",
   "version": "2.10.2",
+  "description": "Typescript SDK for interacting with the Kamino Lending (klend) protocol",
+  "repository": "https://github.com/kamino-Finance/klend-sdk",
+  "author": "Kamino Finance",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
