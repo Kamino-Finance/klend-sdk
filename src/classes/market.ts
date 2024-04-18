@@ -87,10 +87,9 @@ export class KaminoMarket {
     marketAddress: PublicKey,
     programId: PublicKey = PROGRAM_ID,
     setupLocalTest: boolean = false,
-    withReserves: boolean = true,
-    lendingMarket?: LendingMarket
+    withReserves: boolean = true
   ) {
-    const market = lendingMarket ? lendingMarket : await LendingMarket.fetch(connection, marketAddress, programId);
+    const market = await LendingMarket.fetch(connection, marketAddress, programId);
 
     if (market === null) {
       return null;
