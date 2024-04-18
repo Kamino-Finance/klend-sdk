@@ -1,17 +1,25 @@
-name: Release Action Workflow
+name: Release Workflow
 on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
     inputs:
+      branch:
+        description: 'Branch name'
+        required: true
+        default: master
       version:
         description: 'Version to publish, by semver keyword.'
         required: true
         default: patch
-        type: choice
         options:
           - patch
           - minor
           - major
+      prerelease:
+        description: 'Release a beta version.'
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   release:
@@ -23,6 +31,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
+          ref: ${{ github.event.inputs.branch }}
           fetch-depth: 0
           submodules: recursive
           token: ${{ secrets.HUBBLEPROTOCOLBOT_WRITE_REPO_PAT }} # use bot to avoid branch protection
@@ -31,7 +40,7 @@ jobs:
         run: |
           echo "Must be on master branch to publish the package."
           exit 1
-        if: github.ref != 'refs/heads/master'
+        if: github.ref != 'refs/heads/master' && github.event.inputs.prerelease == 'false'
 
       - name: Setup .npmrc file for publish
         uses: actions/setup-node@v3
@@ -65,12 +74,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.HUBBLEPROTOCOLBOT_WRITE_REPO_PAT }}
           DEFAULT_BUMP: ${{ inputs.version }}
-          DEFAULT_BRANCH: master
+          DEFAULT_BRANCH: ${{ github.event.inputs.branch }}
           INITIAL_VERSION: ${{ steps.get_latest_version.outputs.latest_version }}
           WITH_V: false
-          RELEASE_BRANCHES: master
+          RELEASE_BRANCHES: ${{ github.event.inputs.branch }}
           TAG_CONTEXT: repo
-          PRERELEASE: false
+          PRERELEASE: ${{ github.event.inputs.prerelease }}
           VERBOSE: false
 
       - name: Publish to npm
@@ -80,7 +89,7 @@ jobs:
         # force push to avoid branch protection
         run: |
           yarn version --new-version ${{ steps.semver.outputs.new_tag }}
-          git push --force origin master
+          git push --force origin ${{ github.event.inputs.branch }}
 
       - name: Create Git tag
         if: steps.semver.outputs.tag_created == 'true'
