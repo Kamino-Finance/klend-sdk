@@ -135,17 +135,8 @@ export class KaminoReserve {
    * Calculates the total liquidity supply of the reserve
    */
   getEstimatedTotalSupply(slot: number, referralFeeBps: number): Decimal {
-    const slotsElapsed = Math.max(slot - this.state.lastUpdate.slot.toNumber(), 0);
-    if (slotsElapsed === 0) {
-      return this.getTotalSupply();
-    }
-    const { newDebt, newAccProtocolFees, pendingReferralFees } = this.compoundInterest(slotsElapsed, referralFeeBps);
-
-    return this.getLiquidityAvailableAmount()
-      .add(newDebt)
-      .sub(newAccProtocolFees)
-      .sub(this.getAccumulatedReferrerFees())
-      .sub(pendingReferralFees);
+    const { totalSupply } = this.getEstimatedDebtAndSupply(slot, referralFeeBps);
+    return totalSupply;
   }
 
   /**
@@ -248,6 +239,26 @@ export class KaminoReserve {
     return currentUtilization * borrowAPR * protocolTakeRatePct;
   }
 
+  getEstimatedDebtAndSupply(slot: number, referralFeeBps: number): { totalBorrow: Decimal; totalSupply: Decimal } {
+    const slotsElapsed = Math.max(slot - this.state.lastUpdate.slot.toNumber(), 0);
+    let totalBorrow: Decimal;
+    let totalSupply: Decimal;
+    if (slotsElapsed === 0) {
+      totalBorrow = this.getBorrowedAmount();
+      totalSupply = this.getTotalSupply();
+    } else {
+      const { newDebt, newAccProtocolFees, pendingReferralFees } = this.compoundInterest(slotsElapsed, referralFeeBps);
+      const newTotalSupply = this.getLiquidityAvailableAmount()
+        .add(newDebt)
+        .sub(newAccProtocolFees)
+        .sub(this.getAccumulatedReferrerFees())
+        .sub(pendingReferralFees);
+      totalBorrow = newDebt;
+      totalSupply = newTotalSupply;
+    }
+    return { totalBorrow, totalSupply };
+  }
+
   calculateUtilizationRatio() {
     const totalBorrows = this.getBorrowedAmount();
     const totalSupply = this.getTotalSupply();
@@ -257,9 +268,17 @@ export class KaminoReserve {
     return totalBorrows.dividedBy(totalSupply).toNumber();
   }
 
-  calcSimulatedUtilizationRatio(amount: Decimal, action: ActionType, outflowAmount?: Decimal): number {
-    const previousTotalBorrowed = this.getBorrowedAmount();
-    const previousTotalSupply = this.getTotalSupply();
+  calcSimulatedUtilizationRatio(
+    amount: Decimal,
+    action: ActionType,
+    slot: number,
+    referralFeeBps: number,
+    outflowAmount?: Decimal
+  ): number {
+    const { totalBorrow: previousTotalBorrowed, totalSupply: previousTotalSupply } = this.getEstimatedDebtAndSupply(
+      slot,
+      referralFeeBps
+    );
 
     switch (action) {
       case 'deposit': {
@@ -308,15 +327,27 @@ export class KaminoReserve {
     }
   }
 
-  calcSimulatedBorrowAPR(amount: Decimal, action: ActionType, outflowAmount?: Decimal) {
-    const newUtilization = this.calcSimulatedUtilizationRatio(amount, action, outflowAmount);
+  calcSimulatedBorrowAPR(
+    amount: Decimal,
+    action: ActionType,
+    slot: number,
+    referralFeeBps: number,
+    outflowAmount?: Decimal
+  ) {
+    const newUtilization = this.calcSimulatedUtilizationRatio(amount, action, slot, referralFeeBps, outflowAmount);
     const curve = truncateBorrowCurve(this.state.config.borrowRateCurve.points);
     return getBorrowRate(newUtilization, curve);
   }
 
-  calcSimulatedSupplyAPR(amount: Decimal, action: ActionType, outflowAmount?: Decimal) {
-    const newUtilization = this.calcSimulatedUtilizationRatio(amount, action, outflowAmount);
-    const simulatedBorrowAPR = this.calcSimulatedBorrowAPR(amount, action, outflowAmount);
+  calcSimulatedSupplyAPR(
+    amount: Decimal,
+    action: ActionType,
+    slot: number,
+    referralFeeBps: number,
+    outflowAmount?: Decimal
+  ) {
+    const newUtilization = this.calcSimulatedUtilizationRatio(amount, action, slot, referralFeeBps, outflowAmount);
+    const simulatedBorrowAPR = this.calcSimulatedBorrowAPR(amount, action, slot, referralFeeBps, outflowAmount);
     const protocolTakeRatePct = 1 - this.state.config.protocolTakeRatePct / 100;
 
     return newUtilization * simulatedBorrowAPR * protocolTakeRatePct;
@@ -471,7 +502,7 @@ export class KaminoReserve {
     const absoluteReferralFee = protocolTakeRate.mul(referralRate);
     const maxReferralFees = netNewDebt.mul(absoluteReferralFee);
 
-    const newAccProtocolFees = totalProtocolFee.sub(maxReferralFees.add(this.getAccumulatedProtocolFees()));
+    const newAccProtocolFees = totalProtocolFee.sub(maxReferralFees).add(this.getAccumulatedProtocolFees());
 
     const pendingReferralFees = this.getPendingReferrerFees().add(maxReferralFees);
 

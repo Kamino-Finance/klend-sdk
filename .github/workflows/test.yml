@@ -44,6 +44,7 @@ jobs:
           npx ts-mocha tests/flash_loan.test.ts --exit
           npx ts-mocha tests/liquidation*.test.ts --exit
           npx ts-mocha tests/pubkey_map.test.ts --exit
+          npx ts-mocha tests/reserve_calcs.test.ts --exit
 
   tests-general-2:
     name: Tests General 2
