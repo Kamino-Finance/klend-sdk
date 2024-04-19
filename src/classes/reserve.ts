@@ -471,7 +471,7 @@ export class KaminoReserve {
     const absoluteReferralFee = protocolTakeRate.mul(referralRate);
     const maxReferralFees = netNewDebt.mul(absoluteReferralFee);
 
-    const newAccProtocolFees = totalProtocolFee.sub(maxReferralFees.add(this.getAccumulatedProtocolFees()));
+    const newAccProtocolFees = totalProtocolFee.sub(maxReferralFees).add(this.getAccumulatedProtocolFees());
 
     const pendingReferralFees = this.getPendingReferrerFees().add(maxReferralFees);
 
