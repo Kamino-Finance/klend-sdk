@@ -734,18 +734,18 @@ export class KaminoObligation {
       } else {
         exchangeRate = reserve.getCollateralExchangeRate();
       }
-      const supplyAmount = new Decimal(deposit.depositedAmount.toString()).dividedBy(exchangeRate).floor();
+      const supplyAmount = new Decimal(deposit.depositedAmount.toString()).div(exchangeRate);
 
-      const depositValueUsd = supplyAmount.mul(getPx(reserve)).dividedBy(reserve.getMintFactor());
+      const depositValueUsd = supplyAmount.mul(getPx(reserve)).div(reserve.getMintFactor());
 
-      userTotalDeposit = userTotalDeposit.plus(depositValueUsd);
+      userTotalDeposit = userTotalDeposit.add(depositValueUsd);
 
       if (loanToValue !== 0) {
-        userTotalCollateralDeposit = userTotalCollateralDeposit.plus(depositValueUsd);
+        userTotalCollateralDeposit = userTotalCollateralDeposit.add(depositValueUsd);
       }
 
-      borrowLimit = borrowLimit.plus(depositValueUsd.mul(loanToValue));
-      borrowLiquidationLimit = borrowLiquidationLimit.plus(depositValueUsd.mul(liqThreshold));
+      borrowLimit = borrowLimit.add(depositValueUsd.mul(loanToValue));
+      borrowLiquidationLimit = borrowLiquidationLimit.add(depositValueUsd.mul(liqThreshold));
 
       const position: Position = {
         reserveAddress: reserve.address,
