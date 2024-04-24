@@ -152,6 +152,10 @@ export function userMetadataPda(user: PublicKey, programId: PublicKey = PROGRAM_
  * @returns [pda, bump]
  */
 export function referrerTokenStatePda(referrer: PublicKey, reserve: PublicKey, programId: PublicKey = PROGRAM_ID) {
+  if (referrer.equals(PublicKey.default)) {
+    return [programId];
+  }
+
   return PublicKey.findProgramAddressSync(
     [Buffer.from(BASE_SEED_REFERRER_TOKEN_STATE), referrer.toBuffer(), reserve.toBuffer()],
     programId
