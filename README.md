@@ -2,10 +2,10 @@
 
 ```shell
 # npm
-npm install @hubbleprotocol/kamino-lending-sdk
+npm install @kamino-finance/klend-sdk
 
 # yarn
-yarn add @hubbleprotocol/kamino-lending-sdk
+yarn add @kamino-finance/klend-sdk
 ```
 
 # Kamino Lending Typescript SDK

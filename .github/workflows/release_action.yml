@@ -1,4 +1,4 @@
-name: Release Action Workflow
+name: Publish Release
 on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -55,7 +55,7 @@ jobs:
       - name: Get latest version kamino-lending-sdk
         id: get_latest_version
         run: |
-          latest_version=$(npm view @hubbleprotocol/kamino-lending-sdk version)
+          latest_version=$(npm view @kamino-finance/klend-sdk version)
           echo "Latest version: $latest_version"
           echo "::set-output name=latest_version::$latest_version"
 
@@ -79,6 +79,7 @@ jobs:
       - name: Create git commit
         # force push to avoid branch protection
         run: |
+          yarn config set version-git-message "@kamino-finance/klend-sdk:%s"
           yarn version --new-version ${{ steps.semver.outputs.new_tag }}
           git push --force origin master
 
