@@ -1,9 +1,22 @@
 {
-  "name": "@hubbleprotocol/kamino-lending-sdk",
+  "name": "@kamino-finance/klend-sdk",
   "version": "2.10.6",
   "description": "Typescript SDK for interacting with the Kamino Lending (klend) protocol",
-  "repository": "https://github.com/kamino-Finance/klend-sdk",
+  "repository": {
+    "type": "git",
+    "url": "git+github.com:Kamino-Finance/klend-sdk.git"
+  },
   "author": "Kamino Finance",
+  "homepage": "https://kamino.finance",
+  "bugs": {
+    "url": "https://github.com/Kamino-Finance/klend-sdk/issues"
+  },
+  "keywords": [
+    "solana",
+    "anchor",
+    "klend",
+    "kamino"
+  ],
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
