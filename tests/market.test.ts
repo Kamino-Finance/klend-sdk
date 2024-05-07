@@ -518,7 +518,7 @@ describe('Main lending market instruction tests', function () {
     );
     await sleep(2000);
 
-    const txRepay = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, depositAndBorrowIxs, [
+    const txRepay = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, ixs, [
       ...[],
       lookupTableRepay,
     ]);

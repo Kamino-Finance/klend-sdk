@@ -423,7 +423,7 @@
   dependencies:
     "@jridgewell/trace-mapping" "0.3.9"
 
-"@cykura/sdk-core@npm:@jup-ag/cykura-sdk-core@0.1.8", "@jup-ag/cykura-sdk-core@0.1.8":
+"@cykura/sdk-core@npm:@jup-ag/cykura-sdk-core@0.1.8":
   version "0.1.8"
   resolved "https://registry.yarnpkg.com/@jup-ag/cykura-sdk-core/-/cykura-sdk-core-0.1.8.tgz#ba8724644e18d1006422dbba5c7701360a729b91"
   integrity sha512-bVtDA4oEuzj/amuTPVlk1OFpdlYKK6H9nKWg6Tv6mn6MydS/ArC2EY2zuMHtWP+1YJ5CAwxHL/7Kl1k+7XBSoQ==
@@ -435,7 +435,7 @@
     tiny-invariant "^1.1.0"
     toformat "^2.0.0"
 
-"@dradex/idl@npm:@jup-ag/dradex-idl@0.2.1", "@jup-ag/dradex-idl@0.2.1":
+"@dradex/idl@npm:@jup-ag/dradex-idl@0.2.1":
   version "0.2.1"
   resolved "https://registry.yarnpkg.com/@jup-ag/dradex-idl/-/dradex-idl-0.2.1.tgz#36cf9a75ca9712c0a588b6c0050744eab3a46c49"
   integrity sha512-CZ5GZTLExy1+fw/tFOo6C4AbU0o/PcqJxxQpDp5UkSJ0SXbz7ZGMz9DfKu+htJuAwxwGgS/rbQfeBoU9fhDXuQ==
@@ -912,6 +912,18 @@
     decimal.js "^10.3.1"
     jsbi "^4.3.0"
 
+"@jup-ag/cykura-sdk-core@0.1.8":
+  version "0.1.8"
+  resolved "https://registry.yarnpkg.com/@jup-ag/cykura-sdk-core/-/cykura-sdk-core-0.1.8.tgz#ba8724644e18d1006422dbba5c7701360a729b91"
+  integrity sha512-bVtDA4oEuzj/amuTPVlk1OFpdlYKK6H9nKWg6Tv6mn6MydS/ArC2EY2zuMHtWP+1YJ5CAwxHL/7Kl1k+7XBSoQ==
+  dependencies:
+    "@project-serum/anchor" "^0.22.0"
+    big.js "^5.2.2"
+    decimal.js "^10.3.1"
+    jsbi "^4.1.0"
+    tiny-invariant "^1.1.0"
+    toformat "^2.0.0"
+
 "@jup-ag/cykura-sdk@0.1.25":
   version "0.1.25"
   resolved "https://registry.yarnpkg.com/@jup-ag/cykura-sdk/-/cykura-sdk-0.1.25.tgz#03b73f9bb580cccb02e6240e43562330e0f396b6"
@@ -933,6 +945,14 @@
     bigint-buffer "^1.1.5"
     bignumber.js "^9.1.0"
     bn.js "^5.2.0"
+
+"@jup-ag/dradex-idl@0.2.1":
+  version "0.2.1"
+  resolved "https://registry.yarnpkg.com/@jup-ag/dradex-idl/-/dradex-idl-0.2.1.tgz#36cf9a75ca9712c0a588b6c0050744eab3a46c49"
+  integrity sha512-CZ5GZTLExy1+fw/tFOo6C4AbU0o/PcqJxxQpDp5UkSJ0SXbz7ZGMz9DfKu+htJuAwxwGgS/rbQfeBoU9fhDXuQ==
+  dependencies:
+    "@solana/buffer-layout" "4.0.0"
+    bn.js "5.2.1"
 
 "@jup-ag/dradex-sdk@0.2.3":
   version "0.2.3"
@@ -1138,6 +1158,54 @@
     "@metaplex-foundation/mpl-core" "^0.0.2"
     "@solana/spl-token" "^0.1.8"
     "@solana/web3.js" "^1.31.0"
+
+"@mongodb-js/zstd-darwin-arm64@1.2.0":
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/@mongodb-js/zstd-darwin-arm64/-/zstd-darwin-arm64-1.2.0.tgz#186182bebaf0b8b5d00ffe4bd4a46d94800a20d4"
+  integrity sha512-QWgW6IkWp3ErBXOvlOj9lw3lwMfey7eXh/p/Srb/7sEiu1e0yEO+LQ8IctmDWh8bfznKXmwUC0h7LKDbYR30yw==
+
+"@mongodb-js/zstd-darwin-x64@1.2.0":
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/@mongodb-js/zstd-darwin-x64/-/zstd-darwin-x64-1.2.0.tgz#5c181984677eef1f27cada8d0f81ae0fded6fac4"
+  integrity sha512-VnxYO8P2SWubdnydGId5+6veO6Ki6nxCr/pTaDZd8s4Urn6bDdXSX6YsZ0r42dO3Fa0FVYzrlcVAuNB67e2b6w==
+
+"@mongodb-js/zstd-linux-arm64-gnu@1.2.0":
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/@mongodb-js/zstd-linux-arm64-gnu/-/zstd-linux-arm64-gnu-1.2.0.tgz#34c05199f23833426202a7a322064b81612b2d23"
+  integrity sha512-TYF0XgNJW6UrvtY2u4Uuo5HiVWNgWNZ/ae2BhVp8hNsDhwFqb/YNoyiZqBei6whUwr8hecMy0UaHAXm3h+O2+Q==
+
+"@mongodb-js/zstd-linux-arm64-musl@1.2.0":
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/@mongodb-js/zstd-linux-arm64-musl/-/zstd-linux-arm64-musl-1.2.0.tgz#5578b724bbc57599e514da96cddf60a4caf8684a"
+  integrity sha512-e2ClmJI1BvJq23VSLH14hgjjjcMOad3R/Ap7Q7dTa1uiVSJG4xKd2CmrWQgX1Az4/EfUMWEI7pb4yuanbdd2AQ==
+
+"@mongodb-js/zstd-linux-x64-gnu@1.2.0":
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/@mongodb-js/zstd-linux-x64-gnu/-/zstd-linux-x64-gnu-1.2.0.tgz#56ba44c79deb8165bd7588b994d3c7b3458e981a"
+  integrity sha512-JuoK8lxUlkFPDBfsBUJKnLxpXA5ar+v7G43lIUlBKgjOp5aEWO/qQp5sNgCRnYA7x6PItYqIkEJjsays4N6JOA==
+
+"@mongodb-js/zstd-linux-x64-musl@1.2.0":
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/@mongodb-js/zstd-linux-x64-musl/-/zstd-linux-x64-musl-1.2.0.tgz#811e2b8858f2901fa02437d63467b028fd82bbac"
+  integrity sha512-pSb1iUF3Gc/qrJuP/Mi5ry4YFAUdUVFKNRZh1KTDDhSWyRCLd9gKcNdRnXqJjIdeGGEKf4bhtZAbYw4i/g0foA==
+
+"@mongodb-js/zstd-win32-x64-msvc@1.2.0":
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/@mongodb-js/zstd-win32-x64-msvc/-/zstd-win32-x64-msvc-1.2.0.tgz#9ada3fe023e1fb3d599275019b4c7ea078da55cd"
+  integrity sha512-iz4Yl+WK3yr/4Yg6F4tKz3X9+yMZDK6pyBMA0CdXydSDZs6o2XQ2I0ZSu3oSk/ACfaZX3SNfRi3XTGgAM1eKZA==
+
+"@mongodb-js/zstd@^1.2.0":
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/@mongodb-js/zstd/-/zstd-1.2.0.tgz#8a191bc598d36d9a155beb8f9ba789ff08b64daf"
+  integrity sha512-sKHsJU2MXsp822IFXOHw/4mpFulScNHpZzVy1Zi5k5wBsdiAPx1QramyOXZkpacla+2QPEC/s7TxPlEhG/HuNQ==
+  optionalDependencies:
+    "@mongodb-js/zstd-darwin-arm64" "1.2.0"
+    "@mongodb-js/zstd-darwin-x64" "1.2.0"
+    "@mongodb-js/zstd-linux-arm64-gnu" "1.2.0"
+    "@mongodb-js/zstd-linux-arm64-musl" "1.2.0"
+    "@mongodb-js/zstd-linux-x64-gnu" "1.2.0"
+    "@mongodb-js/zstd-linux-x64-musl" "1.2.0"
+    "@mongodb-js/zstd-win32-x64-msvc" "1.2.0"
 
 "@noble/curves@^1.2.0":
   version "1.2.0"
@@ -2432,6 +2500,15 @@ axios@^1.2.6:
   integrity sha512-Q28iYCWzNHjAm+yEAot5QaAMxhMghWLFVf7rRdwhUI+c2jix2DUXjAHXVi+s1ibs3mjPO/cCgbA++3BjD0vP/A==
   dependencies:
     follow-redirects "^1.15.0"
+    form-data "^4.0.0"
+    proxy-from-env "^1.1.0"
+
+axios@^1.6.8:
+  version "1.6.8"
+  resolved "https://registry.yarnpkg.com/axios/-/axios-1.6.8.tgz#66d294951f5d988a00e87a0ffb955316a619ea66"
+  integrity sha512-v/ZHtJDU39mDpyBoFVkETcd/uNdxrWRrg3bKpOKzXFA6Bvqopts6ALSMU3y6ijYxbw2B+wPrIv46egTzJXCLGQ==
+  dependencies:
+    follow-redirects "^1.15.6"
     form-data "^4.0.0"
     proxy-from-env "^1.1.0"
 
@@ -3824,6 +3901,11 @@ follow-redirects@^1.14.7, follow-redirects@^1.14.9, follow-redirects@^1.15.0:
   version "1.15.3"
   resolved "https://registry.yarnpkg.com/follow-redirects/-/follow-redirects-1.15.3.tgz#fe2f3ef2690afce7e82ed0b44db08165b207123a"
   integrity sha512-1VzOtuEM8pC9SFU1E+8KfTjZyMztRsgEfwQl44z8A25uy13jSzTj6dyK2Df52iV0vgHCfBwLhDWevLn95w5v6Q==
+
+follow-redirects@^1.15.6:
+  version "1.15.6"
+  resolved "https://registry.yarnpkg.com/follow-redirects/-/follow-redirects-1.15.6.tgz#7f815c0cda4249c74ff09e95ef97c23b5fd0399b"
+  integrity sha512-wWN62YITEaOpSK584EZXJafH1AGpO8RVgElfkuXbTOrPX4fIfOyEpW/CsiNd8JdYrAoOvafRTOEnvsO++qCqFA==
 
 for-each@^0.3.3:
   version "0.3.3"

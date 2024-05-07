@@ -50,12 +50,14 @@
     "@solana/spl-token": "^0.1.8",
     "@solana/web3.js": "^1.87.6",
     "@switchboard-xyz/sbv2-lite": "^0.1.0",
+    "axios": "^1.6.8",
     "bn.js": "^5.2.1",
     "buffer": "^6.0.3",
     "buffer-layout": "^1.2.2",
     "commander": "^9.3.0",
     "decimal.js": "^10.4.3",
-    "exponential-backoff": "^3.1.1"
+    "exponential-backoff": "^3.1.1",
+    "@mongodb-js/zstd": "^1.2.0"
   },
   "devDependencies": {
     "@jup-ag/core": "=3.0.0-beta.18",
