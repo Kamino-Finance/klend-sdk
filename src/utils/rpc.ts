@@ -64,7 +64,6 @@ export async function getProgramAccounts(
     pubkey: new PublicKey(account.pubkey),
   }));
   const x = await Promise.all(deser);
-  // @ts-ignore
   return x as GetProgramAccountsResponse;
 }
 
