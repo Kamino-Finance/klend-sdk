@@ -253,6 +253,10 @@
               32
             ]
           }
+        },
+        {
+          "name": "skipValidation",
+          "type": "bool"
         }
       ]
     },
@@ -288,6 +292,124 @@
               648
             ]
           }
+        }
+      ]
+    },
+    {
+      "name": "redeemFees",
+      "accounts": [
+        {
+          "name": "reserve",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "reserveLiquidityFeeReceiver",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "reserveSupplyLiquidity",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "lendingMarket",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "lendingMarketAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "socializeLoss",
+      "accounts": [
+        {
+          "name": "riskCouncil",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "obligation",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "lendingMarket",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "reserve",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "instructionSysvarAccount",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "liquidityAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "withdrawProtocolFee",
+      "accounts": [
+        {
+          "name": "lendingMarketOwner",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "lendingMarket",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "reserve",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "lendingMarketAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "feeVault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "lendingMarketOwnerAta",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
         }
       ]
     },
@@ -1138,42 +1260,6 @@
       ]
     },
     {
-      "name": "redeemFees",
-      "accounts": [
-        {
-          "name": "reserve",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "reserveLiquidityFeeReceiver",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "reserveSupplyLiquidity",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "lendingMarket",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "lendingMarketAuthority",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "tokenProgram",
-          "isMut": false,
-          "isSigner": false
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "flashRepayReserveLiquidity",
       "accounts": [
         {
@@ -1302,42 +1388,6 @@
         },
         {
           "name": "tokenProgram",
-          "isMut": false,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "liquidityAmount",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "socializeLoss",
-      "accounts": [
-        {
-          "name": "riskCouncil",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
-          "name": "obligation",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "lendingMarket",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "reserve",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "instructionSysvarAccount",
           "isMut": false,
           "isSigner": false
         }
@@ -1503,52 +1553,6 @@
         }
       ],
       "args": []
-    },
-    {
-      "name": "withdrawProtocolFee",
-      "accounts": [
-        {
-          "name": "lendingMarketOwner",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
-          "name": "lendingMarket",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "reserve",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "lendingMarketAuthority",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "feeVault",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "lendingMarketOwnerAta",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tokenProgram",
-          "isMut": false,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
     },
     {
       "name": "initReferrerStateAndShortUrl",
@@ -1986,11 +1990,18 @@
             }
           },
           {
+            "name": "minNetValueInObligationSf",
+            "docs": [
+              "Min net value accepted to be found in a position after any lending action in an obligation (scaled by quote currency decimals)"
+            ],
+            "type": "u128"
+          },
+          {
             "name": "padding1",
             "type": {
               "array": [
                 "u64",
-                180
+                178
               ]
             }
           }
@@ -2159,11 +2170,27 @@
             "type": "publicKey"
           },
           {
+            "name": "borrowingDisabled",
+            "docs": [
+              "Marked = 1 if borrowing disabled, 0 = borrowing enabled"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                7
+              ]
+            }
+          },
+          {
             "name": "padding3",
             "type": {
               "array": [
                 "u64",
-                128
+                127
               ]
             }
           }
@@ -2545,6 +2572,9 @@
           },
           {
             "name": "UpdateFarmDebt"
+          },
+          {
+            "name": "UpdateDisableUsageAsCollateralOutsideEmode"
           }
         ]
       }
@@ -2587,6 +2617,12 @@
             "name": "U64",
             "fields": [
               "u64"
+            ]
+          },
+          {
+            "name": "U128",
+            "fields": [
+              "u128"
             ]
           },
           {
@@ -2655,6 +2691,9 @@
           },
           {
             "name": "UpdateBorrowingDisabled"
+          },
+          {
+            "name": "UpdateMinNetValueObligationPostAction"
           }
         ]
       }
@@ -3170,11 +3209,15 @@
             }
           },
           {
+            "name": "disableUsageAsCollOutsideEmode",
+            "type": "u8"
+          },
+          {
             "name": "reserved1",
             "type": {
               "array": [
                 "u8",
-                4
+                3
               ]
             }
           }
@@ -4097,6 +4140,41 @@
       "code": 6090,
       "name": "DepositLimitExceeded",
       "msg": "Cannot deposit above deposit limit"
+    },
+    {
+      "code": 6091,
+      "name": "BorrowingDisabledOutsideElevationGroup",
+      "msg": "Reserve does not accept any new borrows outside elevation group"
+    },
+    {
+      "code": 6092,
+      "name": "NetValueRemainingTooSmall",
+      "msg": "Net value remaining too small"
+    },
+    {
+      "code": 6093,
+      "name": "WorseLTVBlocked",
+      "msg": "Cannot get the obligation in a worse position"
+    },
+    {
+      "code": 6094,
+      "name": "LiabilitiesBiggerThanAssets",
+      "msg": "Cannot have more liabilities than assets in a position"
+    },
+    {
+      "code": 6095,
+      "name": "ReserveTokenBalanceMismatch",
+      "msg": "Reserve state and token account cannot drift"
+    },
+    {
+      "code": 6096,
+      "name": "ReserveVaultBalanceMismatch",
+      "msg": "Reserve token account has been unexpectedly modified"
+    },
+    {
+      "code": 6097,
+      "name": "ReserveAccountingMismatch",
+      "msg": "Reserve internal state accounting has been unexpectedly modified"
     }
   ]
 }
