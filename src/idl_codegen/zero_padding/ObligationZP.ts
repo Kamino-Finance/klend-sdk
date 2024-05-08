@@ -166,6 +166,8 @@ export class ObligationZP {
       numOfObsoleteReserves: dec.numOfObsoleteReserves,
       hasDebt: dec.hasDebt,
       referrer: dec.referrer,
+      borrowingDisabled: dec.borrowingDisabled,
+      reserved: [],
       padding3: [],
     })
   }
