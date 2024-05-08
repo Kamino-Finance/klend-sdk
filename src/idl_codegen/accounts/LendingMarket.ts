@@ -49,6 +49,8 @@ export interface LendingMarketFields {
   /** Elevation groups are used to group together reserves that have the same risk parameters and can bump the ltv and liquidation threshold */
   elevationGroups: Array<types.ElevationGroupFields>
   elevationGroupPadding: Array<BN>
+  /** Min net value accepted to be found in a position after any lending action in an obligation (scaled by quote currency decimals) */
+  minNetValueInObligationSf: BN
   padding1: Array<BN>
 }
 
@@ -97,6 +99,8 @@ export interface LendingMarketJSON {
   /** Elevation groups are used to group together reserves that have the same risk parameters and can bump the ltv and liquidation threshold */
   elevationGroups: Array<types.ElevationGroupJSON>
   elevationGroupPadding: Array<string>
+  /** Min net value accepted to be found in a position after any lending action in an obligation (scaled by quote currency decimals) */
+  minNetValueInObligationSf: string
   padding1: Array<string>
 }
 
@@ -145,6 +149,8 @@ export class LendingMarket {
   /** Elevation groups are used to group together reserves that have the same risk parameters and can bump the ltv and liquidation threshold */
   readonly elevationGroups: Array<types.ElevationGroup>
   readonly elevationGroupPadding: Array<BN>
+  /** Min net value accepted to be found in a position after any lending action in an obligation (scaled by quote currency decimals) */
+  readonly minNetValueInObligationSf: BN
   readonly padding1: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -172,7 +178,8 @@ export class LendingMarket {
     borsh.array(borsh.u8(), 8, "multiplierPointsTagBoost"),
     borsh.array(types.ElevationGroup.layout(), 32, "elevationGroups"),
     borsh.array(borsh.u64(), 90, "elevationGroupPadding"),
-    borsh.array(borsh.u64(), 180, "padding1"),
+    borsh.u128("minNetValueInObligationSf"),
+    borsh.array(borsh.u64(), 178, "padding1"),
   ])
 
   constructor(fields: LendingMarketFields) {
@@ -201,6 +208,7 @@ export class LendingMarket {
       (item) => new types.ElevationGroup({ ...item })
     )
     this.elevationGroupPadding = fields.elevationGroupPadding
+    this.minNetValueInObligationSf = fields.minNetValueInObligationSf
     this.padding1 = fields.padding1
   }
 
@@ -273,6 +281,7 @@ export class LendingMarket {
         ) => types.ElevationGroup.fromDecoded(item)
       ),
       elevationGroupPadding: dec.elevationGroupPadding,
+      minNetValueInObligationSf: dec.minNetValueInObligationSf,
       padding1: dec.padding1,
     })
   }
@@ -303,6 +312,7 @@ export class LendingMarket {
       elevationGroupPadding: this.elevationGroupPadding.map((item) =>
         item.toString()
       ),
+      minNetValueInObligationSf: this.minNetValueInObligationSf.toString(),
       padding1: this.padding1.map((item) => item.toString()),
     }
   }
@@ -337,6 +347,7 @@ export class LendingMarket {
       elevationGroupPadding: obj.elevationGroupPadding.map(
         (item) => new BN(item)
       ),
+      minNetValueInObligationSf: new BN(obj.minNetValueInObligationSf),
       padding1: obj.padding1.map((item) => new BN(item)),
     })
   }

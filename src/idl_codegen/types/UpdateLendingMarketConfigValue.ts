@@ -178,6 +178,41 @@ export class U64 {
   }
 }
 
+export type U128Fields = [BN]
+export type U128Value = [BN]
+
+export interface U128JSON {
+  kind: "U128"
+  value: [string]
+}
+
+export class U128 {
+  static readonly discriminator = 5
+  static readonly kind = "U128"
+  readonly discriminator = 5
+  readonly kind = "U128"
+  readonly value: U128Value
+
+  constructor(value: U128Fields) {
+    this.value = [value[0]]
+  }
+
+  toJSON(): U128JSON {
+    return {
+      kind: "U128",
+      value: [this.value[0].toString()],
+    }
+  }
+
+  toEncodable() {
+    return {
+      U128: {
+        _0: this.value[0],
+      },
+    }
+  }
+}
+
 export type PubkeyFields = [PublicKey]
 export type PubkeyValue = [PublicKey]
 
@@ -187,9 +222,9 @@ export interface PubkeyJSON {
 }
 
 export class Pubkey {
-  static readonly discriminator = 5
+  static readonly discriminator = 6
   static readonly kind = "Pubkey"
-  readonly discriminator = 5
+  readonly discriminator = 6
   readonly kind = "Pubkey"
   readonly value: PubkeyValue
 
@@ -222,9 +257,9 @@ export interface ElevationGroupJSON {
 }
 
 export class ElevationGroup {
-  static readonly discriminator = 6
+  static readonly discriminator = 7
   static readonly kind = "ElevationGroup"
-  readonly discriminator = 6
+  readonly discriminator = 7
   readonly kind = "ElevationGroup"
   readonly value: ElevationGroupValue
 
@@ -276,6 +311,10 @@ export function fromDecoded(
     const val = obj["U64"]
     return new U64([val["_0"]])
   }
+  if ("U128" in obj) {
+    const val = obj["U128"]
+    return new U128([val["_0"]])
+  }
   if ("Pubkey" in obj) {
     const val = obj["Pubkey"]
     return new Pubkey([val["_0"]])
@@ -307,6 +346,9 @@ export function fromJSON(
     case "U64": {
       return new U64([new BN(obj.value[0])])
     }
+    case "U128": {
+      return new U128([new BN(obj.value[0])])
+    }
     case "Pubkey": {
       return new Pubkey([new PublicKey(obj.value[0])])
     }
@@ -323,6 +365,7 @@ export function layout(property?: string) {
     borsh.struct([borsh.array(borsh.u8(), 8, "_0")], "U8Array"),
     borsh.struct([borsh.u16("_0")], "U16"),
     borsh.struct([borsh.u64("_0")], "U64"),
+    borsh.struct([borsh.u128("_0")], "U128"),
     borsh.struct([borsh.publicKey("_0")], "Pubkey"),
     borsh.struct([types.ElevationGroup.layout("_0")], "ElevationGroup"),
   ])
