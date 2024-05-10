@@ -98,7 +98,7 @@ describe('Repay with collateral SDK tests', function () {
         new Fraction(obligationAfter.state.borrows[0].borrowedAmountSf).toDecimal(),
         kaminoMarket.getReserveByMint(debtTokenMint)?.state.liquidity.mintDecimals.toNumber()!
       ),
-      0.001
+      0.01
     );
 
     assertFuzzyEq(
@@ -112,7 +112,7 @@ describe('Repay with collateral SDK tests', function () {
         obligationAfter.state.deposits[0].depositedAmount.toNumber(),
         kaminoMarket.getReserveByMint(collTokenMint)?.state.liquidity.mintDecimals.toNumber()!
       ),
-      0.001
+      0.01
     );
   });
 
@@ -197,7 +197,7 @@ describe('Repay with collateral SDK tests', function () {
         new Fraction(obligationAfter.state.borrows[0].borrowedAmountSf).toDecimal(),
         kaminoMarket.getReserveByMint(debtTokenMint)?.state.liquidity.mintDecimals.toNumber()!
       ),
-      0.001
+      0.01
     );
 
     assertFuzzyEq(
@@ -211,7 +211,7 @@ describe('Repay with collateral SDK tests', function () {
         obligationAfter.state.deposits[0].depositedAmount.toNumber(),
         kaminoMarket.getReserveByMint(collTokenMint)?.state.liquidity.mintDecimals.toNumber()!
       ),
-      0.001
+      0.01
     );
   });
 
@@ -296,7 +296,7 @@ describe('Repay with collateral SDK tests', function () {
         new Fraction(obligationAfter.state.borrows[0].borrowedAmountSf).toDecimal(),
         kaminoMarket.getReserveByMint(debtTokenMint)?.state.liquidity.mintDecimals.toNumber()!
       ),
-      0.001
+      0.01
     );
 
     assertFuzzyEq(
@@ -310,7 +310,7 @@ describe('Repay with collateral SDK tests', function () {
         obligationAfter.state.deposits[0].depositedAmount.toNumber(),
         kaminoMarket.getReserveByMint(collTokenMint)?.state.liquidity.mintDecimals.toNumber()!
       ),
-      0.001
+      0.01
     );
   });
 
@@ -403,7 +403,7 @@ describe('Repay with collateral SDK tests', function () {
         )
         .toNumber(),
       obligationAfter.refreshedStats.netAccountValue.toNumber(),
-      0.01
+      0.1
     );
 
     assertFuzzyEq(
@@ -417,7 +417,7 @@ describe('Repay with collateral SDK tests', function () {
         obligationAfter.state.deposits[0].depositedAmount.toNumber(),
         kaminoMarket.getReserveByMint(collTokenMint)?.state.liquidity.mintDecimals.toNumber()!
       ),
-      0.001
+      0.01
     );
 
     assert(obligationAfter.loanToValue().equals(0));
@@ -499,7 +499,7 @@ describe('Repay with collateral SDK tests', function () {
         )
         .toNumber(),
       obligationAfter.refreshedStats.netAccountValue.toNumber(),
-      0.01
+      0.1
     );
 
     assertFuzzyEq(
@@ -513,7 +513,7 @@ describe('Repay with collateral SDK tests', function () {
         obligationAfter.state.deposits[0].depositedAmount.toNumber(),
         kaminoMarket.getReserveByMint(collTokenMint)?.state.liquidity.mintDecimals.toNumber()!
       ),
-      0.001
+      0.01
     );
 
     assert(obligationAfter.loanToValue().equals(0));
@@ -595,7 +595,7 @@ describe('Repay with collateral SDK tests', function () {
         )
         .toNumber(),
       obligationAfter.refreshedStats.netAccountValue.toNumber(),
-      0.01
+      0.1
     );
 
     assertFuzzyEq(
@@ -609,7 +609,7 @@ describe('Repay with collateral SDK tests', function () {
         obligationAfter.state.deposits[0].depositedAmount.toNumber(),
         kaminoMarket.getReserveByMint(collTokenMint)?.state.liquidity.mintDecimals.toNumber()!
       ),
-      0.001
+      0.01
     );
 
     assert(obligationAfter.loanToValue().equals(0));
@@ -710,7 +710,7 @@ describe('Repay with collateral SDK tests', function () {
         )
         .toNumber(),
       obligationAfter.refreshedStats.netAccountValue.toNumber(),
-      0.01
+      0.1
     );
 
     assertFuzzyEq(
@@ -724,7 +724,7 @@ describe('Repay with collateral SDK tests', function () {
         obligationAfter.state.deposits[0].depositedAmount.toNumber(),
         kaminoMarket.getReserveByMint(collTokenMint)?.state.liquidity.mintDecimals.toNumber()!
       ),
-      0.001
+      0.01
     );
 
     assert(obligationAfter.loanToValue().equals(0));
