@@ -33,6 +33,8 @@ import { Fraction } from './fraction';
 import { chunks, KaminoPrices, MintToPriceMap } from '@hubbleprotocol/kamino-sdk';
 import { parseTokenSymbol } from './utils';
 import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
+import { ObligationZP } from '../idl_codegen/zero_padding';
+import { getProgramAccounts } from '../utils/rpc';
 
 export interface ReserveRewardInfo {
   rewardsPerSecond: Decimal; // not lamport
@@ -472,6 +474,12 @@ export class KaminoMarket {
     return rewardsPerYear.dividedBy(totalInvestmentUsd);
   }
 
+  /**
+   * Get all obligations for lending market, optionally filter by obligation tag
+   * This function will likely require an RPC capable of returning more than the default 100k rows in a single scan
+   *
+   * @param tag
+   */
   async getAllObligationsForMarket(tag?: number): Promise<KaminoObligation[]> {
     const filters = [
       {
@@ -499,8 +507,10 @@ export class KaminoMarket {
 
     const [slot, obligations] = await Promise.all([
       this.connection.getSlot(),
-      this.connection.getProgramAccounts(this.programId, {
+      getProgramAccounts(this.connection, this.programId, {
+        commitment: this.connection.commitment ?? 'processed',
         filters,
+        dataSlice: { offset: 0, length: ObligationZP.layout.span + 8 }, // truncate the padding
       }),
     ]);
 
@@ -509,8 +519,7 @@ export class KaminoMarket {
         throw new Error('Invalid account');
       }
 
-      const obligationAccount = Obligation.decode(obligation.account.data);
-
+      const obligationAccount = ObligationZP.decode(obligation.account.data);
       if (!obligationAccount) {
         throw Error('Could not parse obligation.');
       }
@@ -563,14 +572,16 @@ export class KaminoMarket {
       });
     }
 
-    const slot = await this.connection.getSlot();
     const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
     const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
 
-    const obligationPubkeys = await this.connection.getProgramAccounts(this.programId, {
-      filters,
-      dataSlice: { offset: 0, length: 0 },
-    });
+    const [obligationPubkeys, slot] = await Promise.all([
+      this.connection.getProgramAccounts(this.programId, {
+        filters,
+        dataSlice: { offset: 0, length: 0 },
+      }),
+      this.connection.getSlot(),
+    ]);
 
     for (const batch of chunks(
       obligationPubkeys.map((x) => x.pubkey),
