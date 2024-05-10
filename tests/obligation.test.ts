@@ -1,4 +1,11 @@
-import { DefaultConfigParams, createMarketWithLoan, makeReserveConfig } from './setup_utils';
+import {
+  DefaultConfigParams,
+  createMarketWithLoan,
+  makeReserveConfig,
+  createMarketWithTwoReservesToppedUp,
+  newUser,
+  deposit,
+} from './setup_utils';
 import { assert, expect } from 'chai';
 import { BN } from '@coral-xyz/anchor';
 import {
@@ -14,6 +21,8 @@ import { PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { sleep } from '@hubbleprotocol/farms-sdk';
 import { updateReserve } from './setup_operations';
+import Decimal from 'decimal.js';
+import { waitUntilMatches } from './assert';
 
 describe('obligation', function () {
   it('retrieve_a_fresh_obligation', async function () {
@@ -62,6 +71,27 @@ describe('obligation', function () {
     expect(fetchedObligation.state.owner.toBase58()).eq(env.admin.publicKey.toBase58());
     expect(fetchedObligation.loanToValue().toString()).eq('0');
     expect(fetchedObligation.getNumberOfPositions()).eq(0);
+  });
+
+  it('get_all_obligations_for_lending_market', async function () {
+    const [usdh, usdc] = ['USDH', 'USDC'];
+
+    const { env, kaminoMarket } = await createMarketWithTwoReservesToppedUp(
+      [usdh, new Decimal(5000.05)],
+      [usdc, new Decimal(5000.05)]
+    );
+
+    const user1 = await newUser(env, kaminoMarket, [[usdc, new Decimal(2000)]]);
+    await deposit(env, kaminoMarket, user1, usdc, new Decimal(2000));
+    const user2 = await newUser(env, kaminoMarket, [[usdc, new Decimal(2000)]]);
+    await deposit(env, kaminoMarket, user2, usdc, new Decimal(2000));
+    const user3 = await newUser(env, kaminoMarket, [[usdc, new Decimal(2000)]]);
+    await deposit(env, kaminoMarket, user3, usdc, new Decimal(2000));
+
+    await waitUntilMatches(async () => {
+      const obligations = await kaminoMarket.getAllObligationsForMarket();
+      expect(obligations.length).eq(4); // 3 users + initial obligation
+    });
   });
 
   it('retrieve_an_active_obligation', async function () {
