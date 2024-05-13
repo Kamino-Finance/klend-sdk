@@ -9,7 +9,10 @@ import {
 } from '@solana/web3.js';
 import { Buffer } from 'buffer';
 import axios from 'axios';
-import { decompress } from '@mongodb-js/zstd';
+import { init, decompress } from '@bokuweb/zstd-wasm';
+(async () => {
+  await init();
+})();
 
 /**
  * Uses zstd compression when fetching all accounts owned by a program for a smaller response size
@@ -68,13 +71,13 @@ export async function getProgramAccounts(
 }
 
 async function deserializeAccountInfo(accountInfo: AccountInfo<string[]>): Promise<AccountInfo<Buffer>> {
-  const data = await decompress(Buffer.from(accountInfo.data[0], 'base64'));
+  const data = decompress(Buffer.from(accountInfo.data[0], 'base64'));
   return {
     owner: accountInfo.owner,
     lamports: accountInfo.lamports,
     executable: accountInfo.executable,
     rentEpoch: accountInfo.rentEpoch,
-    data,
+    data: Buffer.from(data),
   };
 }
 
