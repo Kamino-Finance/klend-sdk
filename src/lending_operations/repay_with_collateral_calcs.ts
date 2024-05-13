@@ -2,19 +2,17 @@ import Decimal from 'decimal.js';
 import { KaminoMarket, KaminoObligation } from '../classes';
 import { PublicKey } from '@solana/web3.js';
 
-export function estimateDebtRepaymentWithColl(
-  props: {
-    collAmount: Decimal; // in decimals
-    priceDebtToColl: Decimal;
-    slippagePct: Decimal;
-    flashBorrowReserveFlashLoanFeePercentage: Decimal;
-    kaminoMarket: KaminoMarket;
-    debtTokenMint: PublicKey;
-    obligation: KaminoObligation;
-    currentSlot: number;
-  }
-): Decimal {
-  const { 
+export function estimateDebtRepaymentWithColl(props: {
+  collAmount: Decimal; // in decimals
+  priceDebtToColl: Decimal;
+  slippagePct: Decimal;
+  flashBorrowReserveFlashLoanFeePercentage: Decimal;
+  kaminoMarket: KaminoMarket;
+  debtTokenMint: PublicKey;
+  obligation: KaminoObligation;
+  currentSlot: number;
+}): Decimal {
+  const {
     collAmount,
     priceDebtToColl,
     slippagePct,
@@ -50,14 +48,12 @@ export function estimateDebtRepaymentWithColl(
   return debtIrAdjusted;
 }
 
-export function estimateCollNeededForDebtRepayment(
-  props: {
-    debtAmount: Decimal; // in decimals
-    priceDebtToColl: Decimal;
-    slippagePct: Decimal;
-    flashBorrowReserveFlashLoanFeePercentage: Decimal;
-  }
-): Decimal {
+export function estimateCollNeededForDebtRepayment(props: {
+  debtAmount: Decimal; // in decimals
+  priceDebtToColl: Decimal;
+  slippagePct: Decimal;
+  flashBorrowReserveFlashLoanFeePercentage: Decimal;
+}): Decimal {
   const {
     debtAmount, // in decimals
     priceDebtToColl,
