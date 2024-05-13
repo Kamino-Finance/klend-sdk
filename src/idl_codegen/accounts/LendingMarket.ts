@@ -22,7 +22,6 @@ export interface LendingMarketFields {
   referralFeeBps: number
   emergencyMode: number
   autodeleverageEnabled: number
-  /** Padding used for alignment */
   borrowDisabled: number
   /**
    * Refresh price from oracle only if it's older than this percentage of the price max age.
@@ -72,7 +71,6 @@ export interface LendingMarketJSON {
   referralFeeBps: number
   emergencyMode: number
   autodeleverageEnabled: number
-  /** Padding used for alignment */
   borrowDisabled: number
   /**
    * Refresh price from oracle only if it's older than this percentage of the price max age.
@@ -122,7 +120,6 @@ export class LendingMarket {
   readonly referralFeeBps: number
   readonly emergencyMode: number
   readonly autodeleverageEnabled: number
-  /** Padding used for alignment */
   readonly borrowDisabled: number
   /**
    * Refresh price from oracle only if it's older than this percentage of the price max age.

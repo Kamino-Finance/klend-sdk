@@ -56,6 +56,19 @@ export interface ReserveConfigFields {
   elevationGroups: Array<number>
   disableUsageAsCollOutsideEmode: number
   reserved1: Array<number>
+  /**
+   * Maximum amount liquidity of this reserve borrowed outside all elevation groups
+   * - u64::MAX for inf
+   * - 0 to disable borrows outside elevation groups
+   */
+  borrowLimitOutsideElevationGroup: BN
+  /**
+   * Defines the maximum amount (in lamports of elevation group debt asset)
+   * that can be borrowed when this reserve is used as collateral.
+   * - u64::MAX for inf
+   * - 0 to disable borrows in this elevation group (expected value for the debt asset)
+   */
+  borrowLimitAgainstThisCollateralInElevationGroup: Array<BN>
 }
 
 export interface ReserveConfigJSON {
@@ -111,6 +124,19 @@ export interface ReserveConfigJSON {
   elevationGroups: Array<number>
   disableUsageAsCollOutsideEmode: number
   reserved1: Array<number>
+  /**
+   * Maximum amount liquidity of this reserve borrowed outside all elevation groups
+   * - u64::MAX for inf
+   * - 0 to disable borrows outside elevation groups
+   */
+  borrowLimitOutsideElevationGroup: string
+  /**
+   * Defines the maximum amount (in lamports of elevation group debt asset)
+   * that can be borrowed when this reserve is used as collateral.
+   * - u64::MAX for inf
+   * - 0 to disable borrows in this elevation group (expected value for the debt asset)
+   */
+  borrowLimitAgainstThisCollateralInElevationGroup: Array<string>
 }
 
 /** Reserve configuration values */
@@ -167,6 +193,19 @@ export class ReserveConfig {
   readonly elevationGroups: Array<number>
   readonly disableUsageAsCollOutsideEmode: number
   readonly reserved1: Array<number>
+  /**
+   * Maximum amount liquidity of this reserve borrowed outside all elevation groups
+   * - u64::MAX for inf
+   * - 0 to disable borrows outside elevation groups
+   */
+  readonly borrowLimitOutsideElevationGroup: BN
+  /**
+   * Defines the maximum amount (in lamports of elevation group debt asset)
+   * that can be borrowed when this reserve is used as collateral.
+   * - u64::MAX for inf
+   * - 0 to disable borrows in this elevation group (expected value for the debt asset)
+   */
+  readonly borrowLimitAgainstThisCollateralInElevationGroup: Array<BN>
 
   constructor(fields: ReserveConfigFields) {
     this.status = fields.status
@@ -202,6 +241,10 @@ export class ReserveConfig {
     this.elevationGroups = fields.elevationGroups
     this.disableUsageAsCollOutsideEmode = fields.disableUsageAsCollOutsideEmode
     this.reserved1 = fields.reserved1
+    this.borrowLimitOutsideElevationGroup =
+      fields.borrowLimitOutsideElevationGroup
+    this.borrowLimitAgainstThisCollateralInElevationGroup =
+      fields.borrowLimitAgainstThisCollateralInElevationGroup
   }
 
   static layout(property?: string) {
@@ -232,6 +275,12 @@ export class ReserveConfig {
         borsh.array(borsh.u8(), 20, "elevationGroups"),
         borsh.u8("disableUsageAsCollOutsideEmode"),
         borsh.array(borsh.u8(), 3, "reserved1"),
+        borsh.u64("borrowLimitOutsideElevationGroup"),
+        borsh.array(
+          borsh.u64(),
+          32,
+          "borrowLimitAgainstThisCollateralInElevationGroup"
+        ),
       ],
       property
     )
@@ -269,6 +318,9 @@ export class ReserveConfig {
       elevationGroups: obj.elevationGroups,
       disableUsageAsCollOutsideEmode: obj.disableUsageAsCollOutsideEmode,
       reserved1: obj.reserved1,
+      borrowLimitOutsideElevationGroup: obj.borrowLimitOutsideElevationGroup,
+      borrowLimitAgainstThisCollateralInElevationGroup:
+        obj.borrowLimitAgainstThisCollateralInElevationGroup,
     })
   }
 
@@ -305,6 +357,9 @@ export class ReserveConfig {
       elevationGroups: fields.elevationGroups,
       disableUsageAsCollOutsideEmode: fields.disableUsageAsCollOutsideEmode,
       reserved1: fields.reserved1,
+      borrowLimitOutsideElevationGroup: fields.borrowLimitOutsideElevationGroup,
+      borrowLimitAgainstThisCollateralInElevationGroup:
+        fields.borrowLimitAgainstThisCollateralInElevationGroup,
     }
   }
 
@@ -337,6 +392,12 @@ export class ReserveConfig {
       elevationGroups: this.elevationGroups,
       disableUsageAsCollOutsideEmode: this.disableUsageAsCollOutsideEmode,
       reserved1: this.reserved1,
+      borrowLimitOutsideElevationGroup:
+        this.borrowLimitOutsideElevationGroup.toString(),
+      borrowLimitAgainstThisCollateralInElevationGroup:
+        this.borrowLimitAgainstThisCollateralInElevationGroup.map((item) =>
+          item.toString()
+        ),
     }
   }
 
@@ -373,6 +434,13 @@ export class ReserveConfig {
       elevationGroups: obj.elevationGroups,
       disableUsageAsCollOutsideEmode: obj.disableUsageAsCollOutsideEmode,
       reserved1: obj.reserved1,
+      borrowLimitOutsideElevationGroup: new BN(
+        obj.borrowLimitOutsideElevationGroup
+      ),
+      borrowLimitAgainstThisCollateralInElevationGroup:
+        obj.borrowLimitAgainstThisCollateralInElevationGroup.map(
+          (item) => new BN(item)
+        ),
     })
   }
 

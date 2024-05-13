@@ -97,6 +97,13 @@ export type CustomError =
   | ReserveTokenBalanceMismatch
   | ReserveVaultBalanceMismatch
   | ReserveAccountingMismatch
+  | ElevationGroupBorrowLimitExceeded
+  | ElevationGroupWithoutDebtReserve
+  | ElevationGroupMaxCollateralReserveZero
+  | ElevationGroupHasAnotherDebtReserve
+  | ElevationGroupDebtReserveAsCollateral
+  | ObligationCollateralExceedsElevationGroupLimit
+  | ObligationElevationGroupMultipleDebtReserve
 
 export class InvalidMarketAuthority extends Error {
   static readonly code = 6000
@@ -1215,6 +1222,95 @@ export class ReserveAccountingMismatch extends Error {
   }
 }
 
+export class ElevationGroupBorrowLimitExceeded extends Error {
+  static readonly code = 6098
+  readonly code = 6098
+  readonly name = "ElevationGroupBorrowLimitExceeded"
+  readonly msg = "Elevation group borrow limit exceeded"
+
+  constructor(readonly logs?: string[]) {
+    super("6098: Elevation group borrow limit exceeded")
+  }
+}
+
+export class ElevationGroupWithoutDebtReserve extends Error {
+  static readonly code = 6099
+  readonly code = 6099
+  readonly name = "ElevationGroupWithoutDebtReserve"
+  readonly msg = "The elevation group does not have a debt reserve defined"
+
+  constructor(readonly logs?: string[]) {
+    super("6099: The elevation group does not have a debt reserve defined")
+  }
+}
+
+export class ElevationGroupMaxCollateralReserveZero extends Error {
+  static readonly code = 6100
+  readonly code = 6100
+  readonly name = "ElevationGroupMaxCollateralReserveZero"
+  readonly msg = "The elevation group does not allow any collateral reserves"
+
+  constructor(readonly logs?: string[]) {
+    super("6100: The elevation group does not allow any collateral reserves")
+  }
+}
+
+export class ElevationGroupHasAnotherDebtReserve extends Error {
+  static readonly code = 6101
+  readonly code = 6101
+  readonly name = "ElevationGroupHasAnotherDebtReserve"
+  readonly msg =
+    "In elevation group attempt to borrow from a reserve that is not the debt reserve"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6101: In elevation group attempt to borrow from a reserve that is not the debt reserve"
+    )
+  }
+}
+
+export class ElevationGroupDebtReserveAsCollateral extends Error {
+  static readonly code = 6102
+  readonly code = 6102
+  readonly name = "ElevationGroupDebtReserveAsCollateral"
+  readonly msg =
+    "The elevation group's debt reserve cannot be used as a collateral reserve"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6102: The elevation group's debt reserve cannot be used as a collateral reserve"
+    )
+  }
+}
+
+export class ObligationCollateralExceedsElevationGroupLimit extends Error {
+  static readonly code = 6103
+  readonly code = 6103
+  readonly name = "ObligationCollateralExceedsElevationGroupLimit"
+  readonly msg =
+    "Obligation have more collateral than the maximum allowed by the elevation group"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6103: Obligation have more collateral than the maximum allowed by the elevation group"
+    )
+  }
+}
+
+export class ObligationElevationGroupMultipleDebtReserve extends Error {
+  static readonly code = 6104
+  readonly code = 6104
+  readonly name = "ObligationElevationGroupMultipleDebtReserve"
+  readonly msg =
+    "Obligation is an elevation group but have more than one debt reserve"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6104: Obligation is an elevation group but have more than one debt reserve"
+    )
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 6000:
@@ -1413,6 +1509,20 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new ReserveVaultBalanceMismatch(logs)
     case 6097:
       return new ReserveAccountingMismatch(logs)
+    case 6098:
+      return new ElevationGroupBorrowLimitExceeded(logs)
+    case 6099:
+      return new ElevationGroupWithoutDebtReserve(logs)
+    case 6100:
+      return new ElevationGroupMaxCollateralReserveZero(logs)
+    case 6101:
+      return new ElevationGroupHasAnotherDebtReserve(logs)
+    case 6102:
+      return new ElevationGroupDebtReserveAsCollateral(logs)
+    case 6103:
+      return new ObligationCollateralExceedsElevationGroupLimit(logs)
+    case 6104:
+      return new ObligationElevationGroupMultipleDebtReserve(logs)
   }
 
   return null

@@ -17,16 +17,11 @@ export type {
   InitFarmsForReserveArgs,
   InitFarmsForReserveAccounts,
 } from "./initFarmsForReserve"
-export { updateSingleReserveConfig } from "./updateSingleReserveConfig"
+export { updateReserveConfig } from "./updateReserveConfig"
 export type {
-  UpdateSingleReserveConfigArgs,
-  UpdateSingleReserveConfigAccounts,
-} from "./updateSingleReserveConfig"
-export { updateEntireReserveConfig } from "./updateEntireReserveConfig"
-export type {
-  UpdateEntireReserveConfigArgs,
-  UpdateEntireReserveConfigAccounts,
-} from "./updateEntireReserveConfig"
+  UpdateReserveConfigArgs,
+  UpdateReserveConfigAccounts,
+} from "./updateReserveConfig"
 export { redeemFees } from "./redeemFees"
 export type { RedeemFeesAccounts } from "./redeemFees"
 export { socializeLoss } from "./socializeLoss"

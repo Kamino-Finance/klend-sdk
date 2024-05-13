@@ -51,6 +51,8 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateFarmCollateral
   | UpdateConfigMode.UpdateFarmDebt
   | UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode
+  | UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup
+  | UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve
 export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateLoanToValuePctJSON
   | UpdateConfigMode.UpdateMaxLiquidationBonusBpsJSON
@@ -94,6 +96,8 @@ export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateFarmCollateralJSON
   | UpdateConfigMode.UpdateFarmDebtJSON
   | UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmodeJSON
+  | UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroupJSON
+  | UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserveJSON
 
 export { UpdateLendingMarketConfigValue }
 
