@@ -10,6 +10,13 @@ export interface ObligationCollateralFields {
   depositedAmount: BN
   /** Collateral market value in quote currency (scaled fraction) */
   marketValueSf: BN
+  /**
+   * Debt amount (lamport) taken against this collateral.
+   * (only meaningful if this obligation is part of an elevation group, otherwise 0)
+   * This is only indicative of the debt computed on the last refresh obligation.
+   * If the obligation have multiple collateral this value is the same for all of them.
+   */
+  borrowedAmountAgainstThisCollateralInElevationGroup: BN
   padding: Array<BN>
 }
 
@@ -20,6 +27,13 @@ export interface ObligationCollateralJSON {
   depositedAmount: string
   /** Collateral market value in quote currency (scaled fraction) */
   marketValueSf: string
+  /**
+   * Debt amount (lamport) taken against this collateral.
+   * (only meaningful if this obligation is part of an elevation group, otherwise 0)
+   * This is only indicative of the debt computed on the last refresh obligation.
+   * If the obligation have multiple collateral this value is the same for all of them.
+   */
+  borrowedAmountAgainstThisCollateralInElevationGroup: string
   padding: Array<string>
 }
 
@@ -31,12 +45,21 @@ export class ObligationCollateral {
   readonly depositedAmount: BN
   /** Collateral market value in quote currency (scaled fraction) */
   readonly marketValueSf: BN
+  /**
+   * Debt amount (lamport) taken against this collateral.
+   * (only meaningful if this obligation is part of an elevation group, otherwise 0)
+   * This is only indicative of the debt computed on the last refresh obligation.
+   * If the obligation have multiple collateral this value is the same for all of them.
+   */
+  readonly borrowedAmountAgainstThisCollateralInElevationGroup: BN
   readonly padding: Array<BN>
 
   constructor(fields: ObligationCollateralFields) {
     this.depositReserve = fields.depositReserve
     this.depositedAmount = fields.depositedAmount
     this.marketValueSf = fields.marketValueSf
+    this.borrowedAmountAgainstThisCollateralInElevationGroup =
+      fields.borrowedAmountAgainstThisCollateralInElevationGroup
     this.padding = fields.padding
   }
 
@@ -46,7 +69,8 @@ export class ObligationCollateral {
         borsh.publicKey("depositReserve"),
         borsh.u64("depositedAmount"),
         borsh.u128("marketValueSf"),
-        borsh.array(borsh.u64(), 10, "padding"),
+        borsh.u64("borrowedAmountAgainstThisCollateralInElevationGroup"),
+        borsh.array(borsh.u64(), 9, "padding"),
       ],
       property
     )
@@ -58,6 +82,8 @@ export class ObligationCollateral {
       depositReserve: obj.depositReserve,
       depositedAmount: obj.depositedAmount,
       marketValueSf: obj.marketValueSf,
+      borrowedAmountAgainstThisCollateralInElevationGroup:
+        obj.borrowedAmountAgainstThisCollateralInElevationGroup,
       padding: obj.padding,
     })
   }
@@ -67,6 +93,8 @@ export class ObligationCollateral {
       depositReserve: fields.depositReserve,
       depositedAmount: fields.depositedAmount,
       marketValueSf: fields.marketValueSf,
+      borrowedAmountAgainstThisCollateralInElevationGroup:
+        fields.borrowedAmountAgainstThisCollateralInElevationGroup,
       padding: fields.padding,
     }
   }
@@ -76,6 +104,8 @@ export class ObligationCollateral {
       depositReserve: this.depositReserve.toString(),
       depositedAmount: this.depositedAmount.toString(),
       marketValueSf: this.marketValueSf.toString(),
+      borrowedAmountAgainstThisCollateralInElevationGroup:
+        this.borrowedAmountAgainstThisCollateralInElevationGroup.toString(),
       padding: this.padding.map((item) => item.toString()),
     }
   }
@@ -85,6 +115,9 @@ export class ObligationCollateral {
       depositReserve: new PublicKey(obj.depositReserve),
       depositedAmount: new BN(obj.depositedAmount),
       marketValueSf: new BN(obj.marketValueSf),
+      borrowedAmountAgainstThisCollateralInElevationGroup: new BN(
+        obj.borrowedAmountAgainstThisCollateralInElevationGroup
+      ),
       padding: obj.padding.map((item) => new BN(item)),
     })
   }

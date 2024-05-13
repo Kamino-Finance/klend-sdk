@@ -969,6 +969,52 @@ export class UpdateDisableUsageAsCollateralOutsideEmode {
   }
 }
 
+export interface UpdateBorrowLimitOutsideElevationGroupJSON {
+  kind: "UpdateBorrowLimitOutsideElevationGroup"
+}
+
+export class UpdateBorrowLimitOutsideElevationGroup {
+  static readonly discriminator = 42
+  static readonly kind = "UpdateBorrowLimitOutsideElevationGroup"
+  readonly discriminator = 42
+  readonly kind = "UpdateBorrowLimitOutsideElevationGroup"
+
+  toJSON(): UpdateBorrowLimitOutsideElevationGroupJSON {
+    return {
+      kind: "UpdateBorrowLimitOutsideElevationGroup",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateBorrowLimitOutsideElevationGroup: {},
+    }
+  }
+}
+
+export interface UpdateBorrowLimitsInElevationGroupAgainstThisReserveJSON {
+  kind: "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"
+}
+
+export class UpdateBorrowLimitsInElevationGroupAgainstThisReserve {
+  static readonly discriminator = 43
+  static readonly kind = "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"
+  readonly discriminator = 43
+  readonly kind = "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"
+
+  toJSON(): UpdateBorrowLimitsInElevationGroupAgainstThisReserveJSON {
+    return {
+      kind: "UpdateBorrowLimitsInElevationGroupAgainstThisReserve",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateBorrowLimitsInElevationGroupAgainstThisReserve: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if (typeof obj !== "object") {
@@ -1100,6 +1146,12 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   }
   if ("UpdateDisableUsageAsCollateralOutsideEmode" in obj) {
     return new UpdateDisableUsageAsCollateralOutsideEmode()
+  }
+  if ("UpdateBorrowLimitOutsideElevationGroup" in obj) {
+    return new UpdateBorrowLimitOutsideElevationGroup()
+  }
+  if ("UpdateBorrowLimitsInElevationGroupAgainstThisReserve" in obj) {
+    return new UpdateBorrowLimitsInElevationGroupAgainstThisReserve()
   }
 
   throw new Error("Invalid enum object")
@@ -1235,6 +1287,12 @@ export function fromJSON(
     case "UpdateDisableUsageAsCollateralOutsideEmode": {
       return new UpdateDisableUsageAsCollateralOutsideEmode()
     }
+    case "UpdateBorrowLimitOutsideElevationGroup": {
+      return new UpdateBorrowLimitOutsideElevationGroup()
+    }
+    case "UpdateBorrowLimitsInElevationGroupAgainstThisReserve": {
+      return new UpdateBorrowLimitsInElevationGroupAgainstThisReserve()
+    }
   }
 }
 
@@ -1282,6 +1340,8 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateFarmCollateral"),
     borsh.struct([], "UpdateFarmDebt"),
     borsh.struct([], "UpdateDisableUsageAsCollateralOutsideEmode"),
+    borsh.struct([], "UpdateBorrowLimitOutsideElevationGroup"),
+    borsh.struct([], "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)
