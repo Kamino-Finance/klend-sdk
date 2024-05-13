@@ -27,6 +27,15 @@ export type {
   UpdateEntireReserveConfigArgs,
   UpdateEntireReserveConfigAccounts,
 } from "./updateEntireReserveConfig"
+export { redeemFees } from "./redeemFees"
+export type { RedeemFeesAccounts } from "./redeemFees"
+export { socializeLoss } from "./socializeLoss"
+export type { SocializeLossArgs, SocializeLossAccounts } from "./socializeLoss"
+export { withdrawProtocolFee } from "./withdrawProtocolFee"
+export type {
+  WithdrawProtocolFeeArgs,
+  WithdrawProtocolFeeAccounts,
+} from "./withdrawProtocolFee"
 export { refreshReserve } from "./refreshReserve"
 export type { RefreshReserveAccounts } from "./refreshReserve"
 export { depositReserveLiquidity } from "./depositReserveLiquidity"
@@ -91,8 +100,6 @@ export type {
   LiquidateObligationAndRedeemReserveCollateralArgs,
   LiquidateObligationAndRedeemReserveCollateralAccounts,
 } from "./liquidateObligationAndRedeemReserveCollateral"
-export { redeemFees } from "./redeemFees"
-export type { RedeemFeesAccounts } from "./redeemFees"
 export { flashRepayReserveLiquidity } from "./flashRepayReserveLiquidity"
 export type {
   FlashRepayReserveLiquidityArgs,
@@ -103,8 +110,6 @@ export type {
   FlashBorrowReserveLiquidityArgs,
   FlashBorrowReserveLiquidityAccounts,
 } from "./flashBorrowReserveLiquidity"
-export { socializeLoss } from "./socializeLoss"
-export type { SocializeLossArgs, SocializeLossAccounts } from "./socializeLoss"
 export { requestElevationGroup } from "./requestElevationGroup"
 export type {
   RequestElevationGroupArgs,
@@ -122,11 +127,6 @@ export type {
 } from "./initUserMetadata"
 export { withdrawReferrerFees } from "./withdrawReferrerFees"
 export type { WithdrawReferrerFeesAccounts } from "./withdrawReferrerFees"
-export { withdrawProtocolFee } from "./withdrawProtocolFee"
-export type {
-  WithdrawProtocolFeeArgs,
-  WithdrawProtocolFeeAccounts,
-} from "./withdrawProtocolFee"
 export { initReferrerStateAndShortUrl } from "./initReferrerStateAndShortUrl"
 export type {
   InitReferrerStateAndShortUrlArgs,

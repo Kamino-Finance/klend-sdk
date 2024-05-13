@@ -7,6 +7,7 @@ import { PROGRAM_ID } from "../programId"
 export interface UpdateSingleReserveConfigArgs {
   mode: BN
   value: Array<number>
+  skipValidation: boolean
 }
 
 export interface UpdateSingleReserveConfigAccounts {
@@ -18,6 +19,7 @@ export interface UpdateSingleReserveConfigAccounts {
 export const layout = borsh.struct([
   borsh.u64("mode"),
   borsh.array(borsh.u8(), 32, "value"),
+  borsh.bool("skipValidation"),
 ])
 
 export function updateSingleReserveConfig(
@@ -36,6 +38,7 @@ export function updateSingleReserveConfig(
     {
       mode: args.mode,
       value: args.value,
+      skipValidation: args.skipValidation,
     },
     buffer
   )

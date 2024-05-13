@@ -44,6 +44,9 @@ export interface ObligationFields {
   hasDebt: number
   /** Wallet address of the referrer */
   referrer: PublicKey
+  /** Marked = 1 if borrowing disabled, 0 = borrowing enabled */
+  borrowingDisabled: number
+  reserved: Array<number>
   padding3: Array<BN>
 }
 
@@ -87,6 +90,9 @@ export interface ObligationJSON {
   hasDebt: number
   /** Wallet address of the referrer */
   referrer: string
+  /** Marked = 1 if borrowing disabled, 0 = borrowing enabled */
+  borrowingDisabled: number
+  reserved: Array<number>
   padding3: Array<string>
 }
 
@@ -131,6 +137,9 @@ export class Obligation {
   readonly hasDebt: number
   /** Wallet address of the referrer */
   readonly referrer: PublicKey
+  /** Marked = 1 if borrowing disabled, 0 = borrowing enabled */
+  readonly borrowingDisabled: number
+  readonly reserved: Array<number>
   readonly padding3: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -156,7 +165,9 @@ export class Obligation {
     borsh.u8("numOfObsoleteReserves"),
     borsh.u8("hasDebt"),
     borsh.publicKey("referrer"),
-    borsh.array(borsh.u64(), 128, "padding3"),
+    borsh.u8("borrowingDisabled"),
+    borsh.array(borsh.u8(), 7, "reserved"),
+    borsh.array(borsh.u64(), 127, "padding3"),
   ])
 
   constructor(fields: ObligationFields) {
@@ -183,6 +194,8 @@ export class Obligation {
     this.numOfObsoleteReserves = fields.numOfObsoleteReserves
     this.hasDebt = fields.hasDebt
     this.referrer = fields.referrer
+    this.borrowingDisabled = fields.borrowingDisabled
+    this.reserved = fields.reserved
     this.padding3 = fields.padding3
   }
 
@@ -256,6 +269,8 @@ export class Obligation {
       numOfObsoleteReserves: dec.numOfObsoleteReserves,
       hasDebt: dec.hasDebt,
       referrer: dec.referrer,
+      borrowingDisabled: dec.borrowingDisabled,
+      reserved: dec.reserved,
       padding3: dec.padding3,
     })
   }
@@ -281,6 +296,8 @@ export class Obligation {
       numOfObsoleteReserves: this.numOfObsoleteReserves,
       hasDebt: this.hasDebt,
       referrer: this.referrer.toString(),
+      borrowingDisabled: this.borrowingDisabled,
+      reserved: this.reserved,
       padding3: this.padding3.map((item) => item.toString()),
     }
   }
@@ -311,6 +328,8 @@ export class Obligation {
       numOfObsoleteReserves: obj.numOfObsoleteReserves,
       hasDebt: obj.hasDebt,
       referrer: new PublicKey(obj.referrer),
+      borrowingDisabled: obj.borrowingDisabled,
+      reserved: obj.reserved,
       padding3: obj.padding3.map((item) => new BN(item)),
     })
   }

@@ -946,6 +946,29 @@ export class UpdateFarmDebt {
   }
 }
 
+export interface UpdateDisableUsageAsCollateralOutsideEmodeJSON {
+  kind: "UpdateDisableUsageAsCollateralOutsideEmode"
+}
+
+export class UpdateDisableUsageAsCollateralOutsideEmode {
+  static readonly discriminator = 41
+  static readonly kind = "UpdateDisableUsageAsCollateralOutsideEmode"
+  readonly discriminator = 41
+  readonly kind = "UpdateDisableUsageAsCollateralOutsideEmode"
+
+  toJSON(): UpdateDisableUsageAsCollateralOutsideEmodeJSON {
+    return {
+      kind: "UpdateDisableUsageAsCollateralOutsideEmode",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateDisableUsageAsCollateralOutsideEmode: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if (typeof obj !== "object") {
@@ -1074,6 +1097,9 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   }
   if ("UpdateFarmDebt" in obj) {
     return new UpdateFarmDebt()
+  }
+  if ("UpdateDisableUsageAsCollateralOutsideEmode" in obj) {
+    return new UpdateDisableUsageAsCollateralOutsideEmode()
   }
 
   throw new Error("Invalid enum object")
@@ -1206,6 +1232,9 @@ export function fromJSON(
     case "UpdateFarmDebt": {
       return new UpdateFarmDebt()
     }
+    case "UpdateDisableUsageAsCollateralOutsideEmode": {
+      return new UpdateDisableUsageAsCollateralOutsideEmode()
+    }
   }
 }
 
@@ -1252,6 +1281,7 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateReserveStatus"),
     borsh.struct([], "UpdateFarmCollateral"),
     borsh.struct([], "UpdateFarmDebt"),
+    borsh.struct([], "UpdateDisableUsageAsCollateralOutsideEmode"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

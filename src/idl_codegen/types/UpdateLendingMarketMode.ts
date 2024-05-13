@@ -348,6 +348,29 @@ export class UpdateBorrowingDisabled {
   }
 }
 
+export interface UpdateMinNetValueObligationPostActionJSON {
+  kind: "UpdateMinNetValueObligationPostAction"
+}
+
+export class UpdateMinNetValueObligationPostAction {
+  static readonly discriminator = 15
+  static readonly kind = "UpdateMinNetValueObligationPostAction"
+  readonly discriminator = 15
+  readonly kind = "UpdateMinNetValueObligationPostAction"
+
+  toJSON(): UpdateMinNetValueObligationPostActionJSON {
+    return {
+      kind: "UpdateMinNetValueObligationPostAction",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateMinNetValueObligationPostAction: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateLendingMarketModeKind {
   if (typeof obj !== "object") {
@@ -398,6 +421,9 @@ export function fromDecoded(obj: any): types.UpdateLendingMarketModeKind {
   }
   if ("UpdateBorrowingDisabled" in obj) {
     return new UpdateBorrowingDisabled()
+  }
+  if ("UpdateMinNetValueObligationPostAction" in obj) {
+    return new UpdateMinNetValueObligationPostAction()
   }
 
   throw new Error("Invalid enum object")
@@ -452,6 +478,9 @@ export function fromJSON(
     case "UpdateBorrowingDisabled": {
       return new UpdateBorrowingDisabled()
     }
+    case "UpdateMinNetValueObligationPostAction": {
+      return new UpdateMinNetValueObligationPostAction()
+    }
   }
 }
 
@@ -472,6 +501,7 @@ export function layout(property?: string) {
     borsh.struct([], "UpdatePriceRefreshTriggerToMaxAgePct"),
     borsh.struct([], "UpdateAutodeleverageEnabled"),
     borsh.struct([], "UpdateBorrowingDisabled"),
+    borsh.struct([], "UpdateMinNetValueObligationPostAction"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

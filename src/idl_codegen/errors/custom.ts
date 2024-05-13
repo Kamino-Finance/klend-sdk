@@ -90,6 +90,13 @@ export type CustomError =
   | BorrowingDisabled
   | BorrowLimitExceeded
   | DepositLimitExceeded
+  | BorrowingDisabledOutsideElevationGroup
+  | NetValueRemainingTooSmall
+  | WorseLTVBlocked
+  | LiabilitiesBiggerThanAssets
+  | ReserveTokenBalanceMismatch
+  | ReserveVaultBalanceMismatch
+  | ReserveAccountingMismatch
 
 export class InvalidMarketAuthority extends Error {
   static readonly code = 6000
@@ -1125,6 +1132,89 @@ export class DepositLimitExceeded extends Error {
   }
 }
 
+export class BorrowingDisabledOutsideElevationGroup extends Error {
+  static readonly code = 6091
+  readonly code = 6091
+  readonly name = "BorrowingDisabledOutsideElevationGroup"
+  readonly msg =
+    "Reserve does not accept any new borrows outside elevation group"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6091: Reserve does not accept any new borrows outside elevation group"
+    )
+  }
+}
+
+export class NetValueRemainingTooSmall extends Error {
+  static readonly code = 6092
+  readonly code = 6092
+  readonly name = "NetValueRemainingTooSmall"
+  readonly msg = "Net value remaining too small"
+
+  constructor(readonly logs?: string[]) {
+    super("6092: Net value remaining too small")
+  }
+}
+
+export class WorseLTVBlocked extends Error {
+  static readonly code = 6093
+  readonly code = 6093
+  readonly name = "WorseLTVBlocked"
+  readonly msg = "Cannot get the obligation in a worse position"
+
+  constructor(readonly logs?: string[]) {
+    super("6093: Cannot get the obligation in a worse position")
+  }
+}
+
+export class LiabilitiesBiggerThanAssets extends Error {
+  static readonly code = 6094
+  readonly code = 6094
+  readonly name = "LiabilitiesBiggerThanAssets"
+  readonly msg = "Cannot have more liabilities than assets in a position"
+
+  constructor(readonly logs?: string[]) {
+    super("6094: Cannot have more liabilities than assets in a position")
+  }
+}
+
+export class ReserveTokenBalanceMismatch extends Error {
+  static readonly code = 6095
+  readonly code = 6095
+  readonly name = "ReserveTokenBalanceMismatch"
+  readonly msg = "Reserve state and token account cannot drift"
+
+  constructor(readonly logs?: string[]) {
+    super("6095: Reserve state and token account cannot drift")
+  }
+}
+
+export class ReserveVaultBalanceMismatch extends Error {
+  static readonly code = 6096
+  readonly code = 6096
+  readonly name = "ReserveVaultBalanceMismatch"
+  readonly msg = "Reserve token account has been unexpectedly modified"
+
+  constructor(readonly logs?: string[]) {
+    super("6096: Reserve token account has been unexpectedly modified")
+  }
+}
+
+export class ReserveAccountingMismatch extends Error {
+  static readonly code = 6097
+  readonly code = 6097
+  readonly name = "ReserveAccountingMismatch"
+  readonly msg =
+    "Reserve internal state accounting has been unexpectedly modified"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6097: Reserve internal state accounting has been unexpectedly modified"
+    )
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 6000:
@@ -1309,6 +1399,20 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new BorrowLimitExceeded(logs)
     case 6090:
       return new DepositLimitExceeded(logs)
+    case 6091:
+      return new BorrowingDisabledOutsideElevationGroup(logs)
+    case 6092:
+      return new NetValueRemainingTooSmall(logs)
+    case 6093:
+      return new WorseLTVBlocked(logs)
+    case 6094:
+      return new LiabilitiesBiggerThanAssets(logs)
+    case 6095:
+      return new ReserveTokenBalanceMismatch(logs)
+    case 6096:
+      return new ReserveVaultBalanceMismatch(logs)
+    case 6097:
+      return new ReserveAccountingMismatch(logs)
   }
 
   return null
