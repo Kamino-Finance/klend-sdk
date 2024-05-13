@@ -68,7 +68,7 @@ export const getRepayWithCollSwapInputs = (props: {
       currentSlot
     )
     .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
-  // add 0.1% to irSlippageBpsForDebt because we don't want to estimate slightly less than SC and end up not reapying enough
+  // add 0.1% to irSlippageBpsForDebt because we don't want to estimate slightly less than SC and end up not repaying enough
   const repayAmountIrAdjusted = repayAmount
     .mul(irSlippageBpsForDebt.mul(new Decimal('1.001')))
     .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
@@ -146,8 +146,6 @@ export const getRepayWithCollIxns = async (props: {
   const repayAmount = amount
     .mul(irSlippageBpsForDebt.mul(new Decimal('1.001')))
     .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
-
-  console.log('irSlippageBpsForDebt', irSlippageBpsForDebt.toString());
 
   const calcs = repayWithCollCalcs({
     repayAmount,
