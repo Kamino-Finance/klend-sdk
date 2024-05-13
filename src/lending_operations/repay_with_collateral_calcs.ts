@@ -3,15 +3,27 @@ import { KaminoMarket, KaminoObligation } from '../classes';
 import { PublicKey } from '@solana/web3.js';
 
 export function estimateDebtRepaymentWithColl(
-  collAmount: Decimal, // in decimals
-  priceDebtToColl: Decimal,
-  slippagePct: Decimal,
-  flashBorrowReserveFlashLoanFeePercentage: Decimal,
-  kaminoMarket: KaminoMarket,
-  debtTokenMint: PublicKey,
-  obligation: KaminoObligation,
-  currentSlot: number
+  props: {
+    collAmount: Decimal; // in decimals
+    priceDebtToColl: Decimal;
+    slippagePct: Decimal;
+    flashBorrowReserveFlashLoanFeePercentage: Decimal;
+    kaminoMarket: KaminoMarket;
+    debtTokenMint: PublicKey;
+    obligation: KaminoObligation;
+    currentSlot: number;
+  }
 ): Decimal {
+  const { 
+    collAmount,
+    priceDebtToColl,
+    slippagePct,
+    flashBorrowReserveFlashLoanFeePercentage,
+    kaminoMarket,
+    debtTokenMint,
+    obligation,
+    currentSlot,
+  } = props;
   const slippage = slippagePct.div('100');
   const flashLoanFee = flashBorrowReserveFlashLoanFeePercentage.div('100');
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
@@ -39,11 +51,19 @@ export function estimateDebtRepaymentWithColl(
 }
 
 export function estimateCollNeededForDebtRepayment(
-  debtAmount: Decimal, // in decimals
-  priceDebtToColl: Decimal,
-  slippagePct: Decimal,
-  flashBorrowReserveFlashLoanFeePercentage: Decimal
+  props: {
+    debtAmount: Decimal; // in decimals
+    priceDebtToColl: Decimal;
+    slippagePct: Decimal;
+    flashBorrowReserveFlashLoanFeePercentage: Decimal;
+  }
 ): Decimal {
+  const {
+    debtAmount, // in decimals
+    priceDebtToColl,
+    slippagePct,
+    flashBorrowReserveFlashLoanFeePercentage,
+  } = props;
   const slippage = slippagePct.div('100');
   const flashLoanFee = flashBorrowReserveFlashLoanFeePercentage.div('100');
 
