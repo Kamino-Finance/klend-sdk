@@ -46,7 +46,10 @@ export class ObligationZP {
   readonly hasDebt: number
   /** Wallet address of the referrer */
   readonly referrer: PublicKey
-  readonly padding3: Array<BN> = new Array(0);
+  /** Marked = 1 if borrowing disabled, 0 = borrowing enabled */
+  borrowingDisabled: number
+  reserved: Array<BN> = new Array(0)
+  padding3: Array<BN> = new Array(0)
 
   static readonly layout = borsh.struct([
     borsh.u64("tag"),
@@ -67,6 +70,7 @@ export class ObligationZP {
     borsh.u8("numOfObsoleteReserves"),
     borsh.u8("hasDebt"),
     borsh.publicKey("referrer"),
+    borsh.u8("borrowingDisabled"),
   ])
 
   constructor(fields: ObligationFields) {
@@ -93,6 +97,8 @@ export class ObligationZP {
     this.numOfObsoleteReserves = fields.numOfObsoleteReserves
     this.hasDebt = fields.hasDebt
     this.referrer = fields.referrer
+    this.borrowingDisabled = fields.borrowingDisabled
+    this.reserved = new Array<BN>(0);
     this.padding3 = new Array<BN>(0);
   }
 
@@ -166,6 +172,8 @@ export class ObligationZP {
       numOfObsoleteReserves: dec.numOfObsoleteReserves,
       hasDebt: dec.hasDebt,
       referrer: dec.referrer,
+      borrowingDisabled: dec.borrowingDisabled,
+      reserved: [],
       padding3: [],
     })
   }

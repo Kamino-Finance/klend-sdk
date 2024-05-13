@@ -50,6 +50,7 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateReserveStatus
   | UpdateConfigMode.UpdateFarmCollateral
   | UpdateConfigMode.UpdateFarmDebt
+  | UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode
 export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateLoanToValuePctJSON
   | UpdateConfigMode.UpdateMaxLiquidationBonusBpsJSON
@@ -92,6 +93,7 @@ export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateReserveStatusJSON
   | UpdateConfigMode.UpdateFarmCollateralJSON
   | UpdateConfigMode.UpdateFarmDebtJSON
+  | UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmodeJSON
 
 export { UpdateLendingMarketConfigValue }
 
@@ -101,6 +103,7 @@ export type UpdateLendingMarketConfigValueKind =
   | UpdateLendingMarketConfigValue.U8Array
   | UpdateLendingMarketConfigValue.U16
   | UpdateLendingMarketConfigValue.U64
+  | UpdateLendingMarketConfigValue.U128
   | UpdateLendingMarketConfigValue.Pubkey
   | UpdateLendingMarketConfigValue.ElevationGroup
 export type UpdateLendingMarketConfigValueJSON =
@@ -109,6 +112,7 @@ export type UpdateLendingMarketConfigValueJSON =
   | UpdateLendingMarketConfigValue.U8ArrayJSON
   | UpdateLendingMarketConfigValue.U16JSON
   | UpdateLendingMarketConfigValue.U64JSON
+  | UpdateLendingMarketConfigValue.U128JSON
   | UpdateLendingMarketConfigValue.PubkeyJSON
   | UpdateLendingMarketConfigValue.ElevationGroupJSON
 
@@ -130,6 +134,7 @@ export type UpdateLendingMarketModeKind =
   | UpdateLendingMarketMode.UpdatePriceRefreshTriggerToMaxAgePct
   | UpdateLendingMarketMode.UpdateAutodeleverageEnabled
   | UpdateLendingMarketMode.UpdateBorrowingDisabled
+  | UpdateLendingMarketMode.UpdateMinNetValueObligationPostAction
 export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateOwnerJSON
   | UpdateLendingMarketMode.UpdateEmergencyModeJSON
@@ -146,6 +151,7 @@ export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdatePriceRefreshTriggerToMaxAgePctJSON
   | UpdateLendingMarketMode.UpdateAutodeleverageEnabledJSON
   | UpdateLendingMarketMode.UpdateBorrowingDisabledJSON
+  | UpdateLendingMarketMode.UpdateMinNetValueObligationPostActionJSON
 
 export { LastUpdate } from "./LastUpdate"
 export type { LastUpdateFields, LastUpdateJSON } from "./LastUpdate"
