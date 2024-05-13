@@ -15,22 +15,25 @@ export function estimateDebtRepaymentWithColl(
   const slippage = slippagePct.div('100');
   const flashLoanFee = flashBorrowReserveFlashLoanFeePercentage.div('100');
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
+  if (debtReserve === undefined) {
+    throw new Error('Debt reserve not found');
+  }
 
   const debtAfterSwap = collAmount.div(new Decimal(1.0).add(slippage)).div(priceDebtToColl);
   const debtAfterFlashLoanRepay = debtAfterSwap.div(new Decimal(1.0).add(flashLoanFee));
 
-  const irSlippageBpsForDebt = obligation!
+  const irSlippageBpsForDebt = obligation
     .estimateObligationInterestRate(
-      debtReserve!,
-      obligation?.state.borrows.find((borrow) => borrow.borrowReserve?.equals(debtReserve!.address))!,
+      debtReserve,
+      obligation?.state.borrows.find((borrow) => borrow.borrowReserve?.equals(debtReserve.address))!,
       currentSlot
     )
-    .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
+    .toDecimalPlaces(debtReserve.state.liquidity.mintDecimals.toNumber(), Decimal.ROUND_CEIL);
 
   // Estimate slightly more, by adding 1% to IR in order to avoid the case where UI users can repay the max we allow them
   const debtIrAdjusted = debtAfterFlashLoanRepay
     .div(irSlippageBpsForDebt.mul(new Decimal('1.01')))
-    .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
+    .toDecimalPlaces(debtReserve.state.liquidity.mintDecimals.toNumber(), Decimal.ROUND_CEIL);
 
   return debtIrAdjusted;
 }
