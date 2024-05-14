@@ -14,16 +14,17 @@ export const repayWithCollCalcs = (props: {
   repayAmount: Decimal;
   priceDebtToColl: Decimal;
   slippagePct: Decimal;
-  flashLoanFee: Decimal;
+  flashLoanFeePct: Decimal;
 }): {
   repayAmount: Decimal;
   collToSwapIn: Decimal;
   swapDebtExpectedOut: Decimal;
 } => {
   // Initialize local variables from the props object
-  const { repayAmount, priceDebtToColl, slippagePct, flashLoanFee } = props;
+  const { repayAmount, priceDebtToColl, slippagePct, flashLoanFeePct } = props;
 
   const slippage = slippagePct.div('100');
+  const flashLoanFee = flashLoanFeePct.div('100');
 
   const swapDebtExpectedOut = repayAmount.mul(new Decimal(1.0).add(flashLoanFee));
   const collToSwapIn = swapDebtExpectedOut.mul(new Decimal(1.0).add(slippage)).mul(priceDebtToColl);
@@ -59,7 +60,7 @@ export const getRepayWithCollSwapInputs = (props: {
   } = props;
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
-  const flashLoanFee = debtReserve?.getFlashLoanFee() || new Decimal(0);
+  const flashLoanFeePct = debtReserve?.getFlashLoanFee().ceil() || new Decimal(0);
 
   const irSlippageBpsForDebt = obligation!
     .estimateObligationInterestRate(
@@ -77,7 +78,7 @@ export const getRepayWithCollSwapInputs = (props: {
     repayAmount: repayAmountIrAdjusted,
     priceDebtToColl,
     slippagePct,
-    flashLoanFee,
+    flashLoanFeePct: flashLoanFeePct,
   });
 
   return {
@@ -133,7 +134,7 @@ export const getRepayWithCollIxns = async (props: {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
   // const solTokenReserve = kaminoMarket.getReserveByMint(WRAPPED_SOL_MINT);
-  const flashLoanFee = debtReserve?.getFlashLoanFee() || new Decimal(0);
+  const flashLoanFeePct = debtReserve?.getFlashLoanFee() || new Decimal(0);
 
   const irSlippageBpsForDebt = obligation!
     .estimateObligationInterestRate(
@@ -151,10 +152,8 @@ export const getRepayWithCollIxns = async (props: {
     repayAmount,
     priceDebtToColl,
     slippagePct,
-    flashLoanFee,
+    flashLoanFeePct,
   });
-
-  console.log('repayWithCollSwapInputs', repayAmount, priceDebtToColl, slippagePct, flashLoanFee);
 
   console.log('Ops Calcs', toJson(calcs));
 
