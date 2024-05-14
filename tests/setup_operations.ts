@@ -1,4 +1,11 @@
-import { Keypair, PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY, TransactionSignature } from '@solana/web3.js';
+import {
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  SYSVAR_RENT_PUBKEY,
+  TransactionInstruction,
+  TransactionSignature,
+} from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 
 import {
@@ -17,15 +24,16 @@ import {
   updateLendingMarket,
   UpdateLendingMarketAccounts,
   UpdateLendingMarketArgs,
-  updateEntireReserveConfig,
-  UpdateEntireReserveConfigAccounts,
-  UpdateEntireReserveConfigArgs,
+  updateReserveConfig,
+  UpdateReserveConfigAccounts,
+  UpdateReserveConfigArgs,
 } from '../src';
 import { buildAndSendTxnWithLogs, buildVersionedTransaction } from '../src/utils';
 import { Env } from './setup_utils';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { ElevationGroupFields, ReserveConfig } from '../src/idl_codegen/types';
 import { BN } from '@coral-xyz/anchor';
+import { createAddExtraComputeUnitsIx } from '@hubbleprotocol/kamino-sdk';
 
 export async function createMarket(env: Env): Promise<[TransactionSignature, Keypair]> {
   const args: InitLendingMarketArgs = {
@@ -114,19 +122,23 @@ export async function updateReserve(
   const data = Buffer.alloc(1000);
   const len = layout.encode(config.toEncodable(), data);
 
-  const args: UpdateEntireReserveConfigArgs = {
+  const args: UpdateReserveConfigArgs = {
     mode: new anchor.BN(25),
-    value: [...data.slice(0, len)],
+    value: new Uint8Array([...data.slice(0, len)]),
+    skipValidation: false,
   };
 
-  const accounts: UpdateEntireReserveConfigAccounts = {
+  const accounts: UpdateReserveConfigAccounts = {
     lendingMarketOwner: env.admin.publicKey,
     lendingMarket: reserveState.lendingMarket,
     reserve: reserve,
   };
 
-  const ix = updateEntireReserveConfig(args, accounts);
-  const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [ix]);
+  const ixs: TransactionInstruction[] = [];
+  const budgetIx = createAddExtraComputeUnitsIx(300_000);
+  ixs.push(budgetIx);
+  ixs.push(updateReserveConfig(args, accounts));
+  const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, ixs);
 
   const sig = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
   return sig;
@@ -145,8 +157,10 @@ export async function updateMarketElevationGroup(env: Env, market: PublicKey): P
     ltvPct: 90,
     liquidationThresholdPct: 95,
     allowNewLoans: 1,
-    reserved: [0, 0],
-    padding: new Array(20).fill(new BN(0)),
+    maxReservesAsCollateral: 255,
+    padding0: 0,
+    debtReserve: PublicKey.default,
+    padding1: new Array(4).fill(new BN(0)),
   };
 
   const buffer = Buffer.alloc(VALUE_BYTE_MAX_ARRAY_LEN_MARKET_UPDATE);
