@@ -34,7 +34,6 @@ import { chunks, KaminoPrices, MintToPriceMap } from '@hubbleprotocol/kamino-sdk
 import { parseTokenSymbol } from './utils';
 import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
 import { ObligationZP } from '../idl_codegen/zero_padding';
-import { getProgramAccounts } from '../utils/rpc';
 
 export interface ReserveRewardInfo {
   rewardsPerSecond: Decimal; // not lamport
@@ -481,6 +480,7 @@ export class KaminoMarket {
    * @param tag
    */
   async getAllObligationsForMarket(tag?: number): Promise<KaminoObligation[]> {
+    const { getProgramAccounts } = await import('../utils/rpc');
     const filters = [
       {
         dataSize: Obligation.layout.span + 8,
