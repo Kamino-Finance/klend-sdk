@@ -254,8 +254,11 @@ export const makeReserveConfig = (tokenName: string, params: ConfigParams = Defa
     elevationGroups: params.elevationGroups,
     deleveragingThresholdSlotsPerBps: new BN(7200), // 0.01% per hour
     multiplierTagBoost: Array(8).fill(1),
+    disableUsageAsCollOutsideEmode: 0,
+    borrowLimitOutsideElevationGroup: params.borrowLimit,
+    borrowLimitAgainstThisCollateralInElevationGroup: [...Array(32)].map(() => new BN(0)),
     reserved0: Array(2).fill(0),
-    reserved1: Array(4).fill(0),
+    reserved1: Array(3).fill(0),
   };
   return new ReserveConfig(reserveConfig);
 };
@@ -386,11 +389,14 @@ export const makeMockOracleConfig = (tokenName: string, params: ConfigParams = D
     }),
     deleveragingMarginCallPeriodSecs: new BN(259200), // 3 days
     borrowFactorPct: new BN(100),
-    elevationGroups: [0, 0, 0, 0, 0],
+    elevationGroups: [...Array(20)].map(() => 0),
     deleveragingThresholdSlotsPerBps: new BN(7200), // 0.01% per hour
     multiplierTagBoost: Array(8).fill(0),
     reserved0: Array(2).fill(0),
-    reserved1: Array(4).fill(0),
+    disableUsageAsCollOutsideEmode: 0,
+    borrowLimitOutsideElevationGroup: new BN(10_000_000_000_000),
+    borrowLimitAgainstThisCollateralInElevationGroup: [...Array(32)].map(() => new BN(0)),
+    reserved1: Array(3).fill(0),
   };
   return new ReserveConfig(reserveConfig);
 };
