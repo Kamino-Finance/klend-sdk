@@ -1,7 +1,7 @@
 /* eslint-disable max-classes-per-file */
 import { AccountInfo, Connection, PublicKey } from '@solana/web3.js';
 import Decimal from 'decimal.js';
-import { INITIAL_COLLATERAL_RATE, ONE_HUNDRED_PCT_IN_BPS, SLOTS_PER_YEAR, TokenOracleData } from '../utils';
+import { INITIAL_COLLATERAL_RATE, ONE_HUNDRED_PCT_IN_BPS, SLOTS_PER_YEAR, TokenOracleData, U64_MAX } from '../utils';
 import { ReserveDataType, ReserveStatus } from './shared';
 import { Reserve, ReserveFields } from '../idl_codegen/accounts';
 import { CurvePointFields } from '../idl_codegen/types';
@@ -108,6 +108,9 @@ export class KaminoReserve {
    * @returns the flash loan fee percentage of the reserve
    */
   getFlashLoanFee = (): Decimal => {
+    if (this.state.config.fees.flashLoanFeeSf.toString() === U64_MAX) {
+      return new Decimal('0');
+    }
     return new Fraction(this.state.config.fees.flashLoanFeeSf).toDecimal();
   };
 
