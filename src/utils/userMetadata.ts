@@ -239,6 +239,7 @@ const getUserLookupTableAddresses = async (
       repayWithCollObligation
     );
     addresses.push(...repayWithCollFarmUserStates);
+    addresses.push({ address: repayWithCollObligation.obligationAddress, log: 'repay with coll obligation' });
   }
 
   return addresses;
