@@ -36,6 +36,13 @@ export const repayWithCollCalcs = (props: {
   };
 };
 
+export type InitialInputs = {
+  repayAmount: Decimal;
+  priceDebtToColl: Decimal;
+  slippagePct: Decimal;
+  currentSlot: number;
+};
+
 export const getRepayWithCollSwapInputs = (props: {
   repayAmount: Decimal;
   priceDebtToColl: Decimal;
@@ -47,6 +54,7 @@ export const getRepayWithCollSwapInputs = (props: {
   currentSlot: number;
 }): {
   swapInputs: SwapInputs;
+  initialInputs: InitialInputs;
 } => {
   const {
     repayAmount,
@@ -89,6 +97,12 @@ export const getRepayWithCollSwapInputs = (props: {
       inputMint: collTokenMint,
       outputMint: debtTokenMint,
     },
+    initialInputs: {
+      repayAmount,
+      priceDebtToColl,
+      slippagePct,
+      currentSlot,
+    },
   };
 };
 
@@ -112,6 +126,7 @@ export const getRepayWithCollIxns = async (props: {
   lookupTablesAddresses: PublicKey[];
   swapInputs: SwapInputs;
   totalKlendAccounts: number;
+  initialInputs: InitialInputs;
 }> => {
   const {
     kaminoMarket,
@@ -229,6 +244,12 @@ export const getRepayWithCollIxns = async (props: {
       lookupTablesAddresses: [],
       swapInputs: { inputAmountLamports: 0, inputMint: PublicKey.default, outputMint: PublicKey.default },
       totalKlendAccounts: totalKlendAccounts,
+      initialInputs: {
+        repayAmount,
+        priceDebtToColl,
+        slippagePct,
+        currentSlot,
+      },
     };
   }
 
@@ -273,5 +294,11 @@ export const getRepayWithCollIxns = async (props: {
     lookupTablesAddresses,
     swapInputs,
     totalKlendAccounts,
+    initialInputs: {
+      repayAmount,
+      priceDebtToColl,
+      slippagePct,
+      currentSlot,
+    },
   };
 };
