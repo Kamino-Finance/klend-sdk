@@ -166,17 +166,17 @@ export class KaminoMarket {
   }
 
   getTotalDepositTVL(): Decimal {
-    const tvl = new Decimal(0);
+    let tvl = new Decimal(0);
     for (const reserve of this.reserves.values()) {
-      tvl.add(reserve.getDepositTvl());
+      tvl = tvl.add(reserve.getDepositTvl());
     }
     return tvl;
   }
 
   getTotalBorrowTVL(): Decimal {
-    const tvl = new Decimal(0);
+    let tvl = new Decimal(0);
     for (const reserve of this.reserves.values()) {
-      tvl.add(reserve.getBorrowTvl());
+      tvl = tvl.add(reserve.getBorrowTvl());
     }
     return tvl;
   }
