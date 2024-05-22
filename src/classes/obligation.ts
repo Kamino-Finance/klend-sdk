@@ -8,7 +8,7 @@ import BN from 'bn.js';
 import { Fraction } from './fraction';
 import { ObligationCollateral, ObligationLiquidity } from '../idl_codegen/types';
 import { positiveOrZero, valueOrZero } from './utils';
-import { isNotNullPubkey, PubkeyHashMap } from '../utils';
+import { isNotNullPubkey, PubkeyHashMap, U64_MAX } from '../utils';
 import { ActionType } from './action';
 
 export type Position = {
@@ -832,6 +832,64 @@ export class KaminoObligation {
       userTotalBorrowBorrowFactorAdjusted,
       positions,
     };
+  }
+
+  getMaxBorrowAmount(market: KaminoMarket, tokenMint: PublicKey): Decimal {
+    const reserve = market.getReserveByMint(tokenMint);
+
+    if (!reserve) {
+      throw new Error('Reserve not found');
+    }
+
+    const elevationGroupActivated = reserve.state.config.elevationGroups.includes(this.state.elevationGroup);
+
+    const reserveBorrowFactor = new Decimal(reserve.state.config.borrowFactorPct.toString()).div(100);
+    const borrowFactor = elevationGroupActivated ? new Decimal(1) : reserveBorrowFactor;
+
+    const maxObligationBorrowPower = this.refreshedStats.borrowLimit
+      .minus(this.refreshedStats.userTotalBorrowBorrowFactorAdjusted)
+      .div(borrowFactor)
+      .div(reserve.getOracleMarketPrice());
+    const reserveAvailableAmount = reserve.getLiquidityAvailableAmount();
+    let reserveBorrowCapRemained = reserve.stats.reserveBorrowLimit.sub(reserve.getBorrowedAmount());
+    const debtWithdrawalCap = reserve.getDebtWithdrawalCapCapacity().sub(reserve.getDebtWithdrawalCapCurrent());
+
+    reserveBorrowCapRemained =
+      reserve.state.config.disableUsageAsCollOutsideEmode === 1 ? new Decimal(0) : reserveBorrowCapRemained;
+
+    let maxBorrowAmount = Decimal.min(
+      maxObligationBorrowPower,
+      reserveAvailableAmount,
+      reserveBorrowCapRemained,
+      debtWithdrawalCap
+    );
+
+    let borrowLimitDependentOnElevationGroup = !elevationGroupActivated
+      ? reserve.getBorrowLimitOutsideElevationGroup().sub(reserve.getBorrowedAmountOutsideElevationGroup())
+      : new Decimal(U64_MAX);
+
+    let maxDebtTakenAgainstCollaterals = new Decimal(U64_MAX);
+    for (const [_, value] of this.deposits.entries()) {
+      const depositReserve = market.getReserveByAddress(value.reserveAddress);
+
+      if (!depositReserve) {
+        throw new Error('Reserve not found');
+      }
+
+      const maxDebtAllowedAgainstCollateral = reserve
+        .getBorrowLimitAgainstCollateralInElevationGroup(this.state.elevationGroup)
+        .sub(reserve.getBorrowedAmountAgainstCollateralInElevationGroup(this.state.elevationGroup));
+
+      maxDebtTakenAgainstCollaterals = Decimal.min(maxDebtAllowedAgainstCollateral, maxDebtTakenAgainstCollaterals);
+    }
+
+    if (borrowLimitDependentOnElevationGroup == new Decimal(U64_MAX)) {
+      borrowLimitDependentOnElevationGroup = maxDebtTakenAgainstCollaterals;
+    }
+
+    maxBorrowAmount = Decimal.min(maxBorrowAmount, borrowLimitDependentOnElevationGroup);
+
+    return maxBorrowAmount;
   }
 
   /**

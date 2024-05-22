@@ -217,15 +217,15 @@ describe('Main lending market instruction tests', function () {
     console.log(createMarketSig);
     await sleep(2000);
 
-    await updateMarketElevationGroup(env, lendingMarket.publicKey);
-    await sleep(2000);
-
     const usdh = await createMint(env.provider, env.admin.publicKey, 6);
     await sleep(2000);
     const [, usdhReserve] = await createReserve(env, lendingMarket.publicKey, usdh);
     await sleep(2000);
 
     const [, solReserve] = await createReserve(env, lendingMarket.publicKey, NATIVE_MINT);
+    await sleep(2000);
+
+    await updateMarketElevationGroup(env, lendingMarket.publicKey, usdhReserve.publicKey);
     await sleep(2000);
 
     await updateReserve(
@@ -368,8 +368,8 @@ describe('Main lending market instruction tests', function () {
   it('performs_a_repay_and_withdraw_same_tx', async function () {
     const borrowSymbol = 'USDH';
     const depositSymbol = 'SOL';
-    const depositAmount = new BN('100000');
-    const borrowAmount = new BN('10');
+    const depositAmount = new BN('100000000');
+    const borrowAmount = new BN('1000000');
 
     const env = await initEnv('localnet');
 
@@ -613,8 +613,8 @@ describe('Main lending market instruction tests', function () {
   it('performs_a_borrow_and_repay_usdh', async function () {
     const borrowSymbol = 'USDH';
     const depositSymbol = 'SOL';
-    const depositAmount = new BN('100000');
-    const borrowAmount = new BN('10');
+    const depositAmount = new BN('100000000');
+    const borrowAmount = new BN('100000');
 
     const env = await initEnv('localnet');
 
@@ -672,21 +672,21 @@ describe('Main lending market instruction tests', function () {
       kaminoMarket,
       depositAmount,
       NATIVE_MINT,
-      env.admin.publicKey,
+      depositor.publicKey,
       new VanillaObligation(PROGRAM_ID)
     );
 
     {
-      const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [
+      const tx = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, [
         ...depositAction.setupIxs,
         ...depositAction.lendingIxs,
         ...depositAction.cleanupIxs,
       ]);
-      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
+      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, depositor, []);
     }
 
     const borrowBefore = await kaminoMarket.getObligationBorrowByWallet(
-      env.admin.publicKey,
+      depositor.publicKey,
       usdh,
       new VanillaObligation(PROGRAM_ID)
     );
@@ -695,21 +695,21 @@ describe('Main lending market instruction tests', function () {
       kaminoMarket,
       borrowAmount,
       usdh,
-      env.admin.publicKey,
+      depositor.publicKey,
       new VanillaObligation(PROGRAM_ID)
     );
 
     {
-      const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [
+      const tx = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, [
         ...borrowAction.setupIxs,
         ...borrowAction.lendingIxs,
         ...borrowAction.cleanupIxs,
       ]);
-      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
+      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, depositor, []);
     }
 
     const borrowAfter = await kaminoMarket.getObligationBorrowByWallet(
-      env.admin.publicKey,
+      depositor.publicKey,
       usdh,
       new VanillaObligation(PROGRAM_ID)
     );
@@ -717,24 +717,24 @@ describe('Main lending market instruction tests', function () {
 
     const repayAction = await KaminoAction.buildRepayTxns(
       kaminoMarket,
-      borrowAmount,
+      borrowAmount.add(new BN(1)),
       usdh,
-      env.admin.publicKey,
+      depositor.publicKey,
       new VanillaObligation(PROGRAM_ID),
       await env.provider.connection.getSlot()
     );
 
     {
-      const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [
+      const tx = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, [
         ...repayAction.setupIxs,
         ...repayAction.lendingIxs,
         ...repayAction.cleanupIxs,
       ]);
-      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
+      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, depositor, []);
     }
 
     const borrowFinal = await kaminoMarket.getObligationBorrowByWallet(
-      env.admin.publicKey,
+      depositor.publicKey,
       usdh,
       new VanillaObligation(PROGRAM_ID)
     );
@@ -769,7 +769,12 @@ describe('Main lending market instruction tests', function () {
     await updateReserve(env, borrowReserve.publicKey, borrowReserveConfig);
     await sleep(2000);
 
-    const [, usdhAta] = await createAta(env, env.admin.publicKey, usdh);
+    const depositor = Keypair.generate();
+
+    await env.provider.connection.requestAirdrop(depositor.publicKey, 10 * LAMPORTS_PER_SOL);
+    await sleep(2000);
+
+    const [, usdhAta] = await createAta(env, depositor.publicKey, usdh);
     await sleep(2000);
     await mintTo(env.provider, usdh, usdhAta, 1000_000000);
 
@@ -781,22 +786,18 @@ describe('Main lending market instruction tests', function () {
       kaminoMarket,
       depositAmount,
       usdh,
-      env.admin.publicKey,
+      depositor.publicKey,
       new VanillaObligation(PROGRAM_ID)
     );
 
     {
-      const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [
+      const tx = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, [
         ...kaminoAction.setupIxs,
         ...kaminoAction.lendingIxs,
         ...kaminoAction.cleanupIxs,
       ]);
-      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
+      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, depositor, []);
     }
-
-    const depositor = Keypair.generate();
-    await env.provider.connection.requestAirdrop(depositor.publicKey, 10 * LAMPORTS_PER_SOL);
-    await sleep(2000);
 
     const kaminoDepositAction = await KaminoAction.buildDepositTxns(
       kaminoMarket,
@@ -816,7 +817,7 @@ describe('Main lending market instruction tests', function () {
     }
 
     const borrowBefore = await kaminoMarket.getObligationBorrowByWallet(
-      env.admin.publicKey,
+      depositor.publicKey,
       NATIVE_MINT,
       new VanillaObligation(PROGRAM_ID)
     );
@@ -825,21 +826,21 @@ describe('Main lending market instruction tests', function () {
       kaminoMarket,
       borrowAmount,
       NATIVE_MINT,
-      env.admin.publicKey,
+      depositor.publicKey,
       new VanillaObligation(PROGRAM_ID)
     );
 
     {
-      const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [
+      const tx = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, [
         ...borrowAction.setupIxs,
         ...borrowAction.lendingIxs,
         ...borrowAction.cleanupIxs,
       ]);
-      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
+      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, depositor, []);
     }
 
     const borrowAfter = await kaminoMarket.getObligationBorrowByWallet(
-      env.admin.publicKey,
+      depositor.publicKey,
       NATIVE_MINT,
       new VanillaObligation(PROGRAM_ID)
     );
@@ -847,24 +848,24 @@ describe('Main lending market instruction tests', function () {
 
     const repayAction = await KaminoAction.buildRepayTxns(
       kaminoMarket,
-      borrowAmount,
+      borrowAmount.add(new BN(1)),
       NATIVE_MINT,
-      env.admin.publicKey,
+      depositor.publicKey,
       new VanillaObligation(PROGRAM_ID),
       await env.provider.connection.getSlot()
     );
 
     {
-      const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [
+      const tx = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, [
         ...repayAction.setupIxs,
         ...repayAction.lendingIxs,
         ...repayAction.cleanupIxs,
       ]);
-      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
+      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, depositor, []);
     }
 
     const borrowFinal = await kaminoMarket.getObligationBorrowByWallet(
-      env.admin.publicKey,
+      depositor.publicKey,
       NATIVE_MINT,
       new VanillaObligation(PROGRAM_ID)
     );
