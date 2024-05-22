@@ -231,6 +231,30 @@ export class KaminoReserve {
     return this.getBorrowedAmount().gt(new Decimal(this.state.config.borrowLimit.toString()));
   }
 
+  getDebtWithdrawalCapCapacity(): Decimal {
+    return new Decimal(this.state.config.debtWithdrawalCap.configCapacity.toString());
+  }
+
+  getDebtWithdrawalCapCurrent(): Decimal {
+    return new Decimal(this.state.config.debtWithdrawalCap.currentTotal.toString());
+  }
+
+  getBorrowLimitOutsideElevationGroup(): Decimal {
+    return new Decimal(this.state.config.borrowLimitOutsideElevationGroup.toString());
+  }
+
+  getBorrowedAmountOutsideElevationGroup(): Decimal {
+    return new Decimal(this.state.borrowedAmountOutsideElevationGroup.toString());
+  }
+
+  getBorrowLimitAgainstCollateralInElevationGroup(elevationGroupIndex: number): Decimal {
+    return new Decimal(this.state.config.borrowLimitAgainstThisCollateralInElevationGroup[elevationGroupIndex].toString());
+  }
+
+  getBorrowedAmountAgainstCollateralInElevationGroup(elevationGroupIndex: number): Decimal {
+    return new Decimal(this.state.borrowedAmountsAgainstThisReserveInElevationGroups[elevationGroupIndex].toString());
+  }
+
   calculateSupplyAPR() {
     const currentUtilization = this.calculateUtilizationRatio();
 

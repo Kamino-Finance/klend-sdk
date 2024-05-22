@@ -147,7 +147,11 @@ export async function updateReserve(
 const VALUE_BYTE_MAX_ARRAY_LEN_MARKET_UPDATE = 72;
 
 // TODO: Make it more generic
-export async function updateMarketElevationGroup(env: Env, market: PublicKey): Promise<TransactionSignature> {
+export async function updateMarketElevationGroup(
+  env: Env,
+  market: PublicKey,
+  debtReserve: PublicKey
+): Promise<TransactionSignature> {
   await sleep(2000);
   const marketState: LendingMarket = (await LendingMarket.fetch(env.provider.connection, market))!;
 
@@ -159,7 +163,7 @@ export async function updateMarketElevationGroup(env: Env, market: PublicKey): P
     allowNewLoans: 1,
     maxReservesAsCollateral: 255,
     padding0: 0,
-    debtReserve: PublicKey.default,
+    debtReserve,
     padding1: new Array(4).fill(new BN(0)),
   };
 
@@ -169,6 +173,11 @@ export async function updateMarketElevationGroup(env: Env, market: PublicKey): P
   buffer.writeUInt8(elevationGroup.ltvPct, 3);
   buffer.writeUInt8(elevationGroup.liquidationThresholdPct, 4);
   buffer.writeUInt8(elevationGroup.allowNewLoans, 5);
+  buffer.writeUint8(elevationGroup.maxReservesAsCollateral, 6);
+  buffer.writeUint8(elevationGroup.padding0, 7);
+
+  const debtReserveBuffer = debtReserve.toBuffer();
+  debtReserveBuffer.copy(buffer, 8, 0, 32);
 
   const args: UpdateLendingMarketArgs = {
     mode: new anchor.BN(9), // Elevation group enum value

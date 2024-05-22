@@ -513,11 +513,6 @@ export const createMarketWithTwoReserves = async (
   const [createMarketSig, lendingMarket] = await createMarket(env);
   console.log(createMarketSig);
 
-  if (requestElevationGroup) {
-    await sleep(1000);
-    await updateMarketElevationGroup(env, lendingMarket.publicKey);
-  }
-
   await updateMarketMultiplierPoints(env, lendingMarket.publicKey, 1);
 
   const [firstMint, secondMint] = await Promise.all([
@@ -530,6 +525,11 @@ export const createMarketWithTwoReserves = async (
     createReserve(env, lendingMarket.publicKey, firstMint),
     createReserve(env, lendingMarket.publicKey, secondMint),
   ]);
+
+  if (requestElevationGroup) {
+    await sleep(1000);
+    await updateMarketElevationGroup(env, lendingMarket.publicKey, secondReserve.publicKey);
+  }
 
   const extraParams: ConfigParams = requestElevationGroup
     ? {
