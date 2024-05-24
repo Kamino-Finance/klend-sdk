@@ -248,7 +248,9 @@ export class KaminoReserve {
   }
 
   getBorrowLimitAgainstCollateralInElevationGroup(elevationGroupIndex: number): Decimal {
-    return new Decimal(this.state.config.borrowLimitAgainstThisCollateralInElevationGroup[elevationGroupIndex].toString());
+    return new Decimal(
+      this.state.config.borrowLimitAgainstThisCollateralInElevationGroup[elevationGroupIndex].toString()
+    );
   }
 
   getBorrowedAmountAgainstCollateralInElevationGroup(elevationGroupIndex: number): Decimal {

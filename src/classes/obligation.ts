@@ -864,26 +864,27 @@ export class KaminoObligation {
       debtWithdrawalCap
     );
 
-    let borrowLimitDependentOnElevationGroup = !elevationGroupActivated
-      ? reserve.getBorrowLimitOutsideElevationGroup().sub(reserve.getBorrowedAmountOutsideElevationGroup())
-      : new Decimal(U64_MAX);
+    let borrowLimitDependentOnElevationGroup = new Decimal(U64_MAX);
 
-    let maxDebtTakenAgainstCollaterals = new Decimal(U64_MAX);
-    for (const [_, value] of this.deposits.entries()) {
-      const depositReserve = market.getReserveByAddress(value.reserveAddress);
+    if (!elevationGroupActivated) {
+      borrowLimitDependentOnElevationGroup = reserve
+        .getBorrowLimitOutsideElevationGroup()
+        .sub(reserve.getBorrowedAmountOutsideElevationGroup());
+    } else {
+      let maxDebtTakenAgainstCollaterals = new Decimal(U64_MAX);
+      for (const [_, value] of this.deposits.entries()) {
+        const depositReserve = market.getReserveByAddress(value.reserveAddress);
 
-      if (!depositReserve) {
-        throw new Error('Reserve not found');
+        if (!depositReserve) {
+          throw new Error('Reserve not found');
+        }
+
+        const maxDebtAllowedAgainstCollateral = reserve
+          .getBorrowLimitAgainstCollateralInElevationGroup(this.state.elevationGroup)
+          .sub(reserve.getBorrowedAmountAgainstCollateralInElevationGroup(this.state.elevationGroup));
+
+        maxDebtTakenAgainstCollaterals = Decimal.min(maxDebtAllowedAgainstCollateral, maxDebtTakenAgainstCollaterals);
       }
-
-      const maxDebtAllowedAgainstCollateral = reserve
-        .getBorrowLimitAgainstCollateralInElevationGroup(this.state.elevationGroup)
-        .sub(reserve.getBorrowedAmountAgainstCollateralInElevationGroup(this.state.elevationGroup));
-
-      maxDebtTakenAgainstCollaterals = Decimal.min(maxDebtAllowedAgainstCollateral, maxDebtTakenAgainstCollaterals);
-    }
-
-    if (borrowLimitDependentOnElevationGroup == new Decimal(U64_MAX)) {
       borrowLimitDependentOnElevationGroup = maxDebtTakenAgainstCollaterals;
     }
 
