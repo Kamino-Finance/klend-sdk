@@ -16,6 +16,7 @@ import {
   InitReserveAccounts,
   KaminoAction,
   KaminoMarket,
+  KaminoReserve,
   LendingMarket,
   lendingMarketAuthPda,
   Reserve,
@@ -108,6 +109,36 @@ export async function createReserve(
 
   const sig = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, [reserveAccount]);
   return [sig, reserveAccount];
+}
+
+export async function updateReserveSingleValue(
+  env: Env,
+  reserve: KaminoReserve,
+  value: Uint8Array,
+  mode: number
+): Promise<TransactionSignature> {
+  await sleep(2000);
+
+  const args: UpdateReserveConfigArgs = {
+    mode: new anchor.BN(mode),
+    value: value,
+    skipValidation: false,
+  };
+
+  const accounts: UpdateReserveConfigAccounts = {
+    lendingMarketOwner: env.admin.publicKey,
+    lendingMarket: reserve.state.lendingMarket,
+    reserve: reserve.address,
+  };
+
+  const ixs: TransactionInstruction[] = [];
+  const budgetIx = createAddExtraComputeUnitsIx(300_000);
+  ixs.push(budgetIx);
+  ixs.push(updateReserveConfig(args, accounts));
+  const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, ixs);
+
+  const sig = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
+  return sig;
 }
 
 export async function updateReserve(

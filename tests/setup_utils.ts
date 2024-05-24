@@ -33,6 +33,7 @@ import {
   referrerTokenStatePda,
   sleep,
   toJson,
+  U64_MAX,
   VanillaObligation,
 } from '../src';
 import {
@@ -255,7 +256,7 @@ export const makeReserveConfig = (tokenName: string, params: ConfigParams = Defa
     deleveragingThresholdSlotsPerBps: new BN(7200), // 0.01% per hour
     multiplierTagBoost: Array(8).fill(1),
     disableUsageAsCollOutsideEmode: 0,
-    borrowLimitOutsideElevationGroup: params.borrowLimit,
+    borrowLimitOutsideElevationGroup: new BN(U64_MAX),
     borrowLimitAgainstThisCollateralInElevationGroup: [...Array(32)].map(() => new BN(0)),
     reserved0: Array(2).fill(0),
     reserved1: Array(3).fill(0),

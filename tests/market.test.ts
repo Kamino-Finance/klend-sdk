@@ -228,11 +228,15 @@ describe('Main lending market instruction tests', function () {
     await updateMarketElevationGroup(env, lendingMarket.publicKey, usdhReserve.publicKey);
     await sleep(2000);
 
+    const borrowLimitAgainstThisCollateralInElevationGroup = [...Array(32)].map(() => new BN(0));
+    borrowLimitAgainstThisCollateralInElevationGroup[0] = new BN(1000000000);
+
     await updateReserve(
       env,
       solReserve.publicKey,
       new ReserveConfig({
         ...makeReserveConfig(depositSymbol),
+        borrowLimitAgainstThisCollateralInElevationGroup,
         elevationGroups: [1, 0, 0, 0, 0],
       })
     );

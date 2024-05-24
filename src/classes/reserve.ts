@@ -231,6 +231,14 @@ export class KaminoReserve {
     return this.getBorrowedAmount().gt(new Decimal(this.state.config.borrowLimit.toString()));
   }
 
+  getDepositWithdrawalCapCapacity(): Decimal {
+    return new Decimal(this.state.config.depositWithdrawalCap.configCapacity.toString());
+  }
+
+  getDepositWithdrawalCapCurrent(): Decimal {
+    return new Decimal(this.state.config.depositWithdrawalCap.currentTotal.toString());
+  }
+
   getDebtWithdrawalCapCapacity(): Decimal {
     return new Decimal(this.state.config.debtWithdrawalCap.configCapacity.toString());
   }
