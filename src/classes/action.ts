@@ -1052,23 +1052,7 @@ export class KaminoAction {
   addBorrowIx() {
     this.lendingIxsLabels.push(`borrowObligationLiquidity`);
 
-    const depositReservesList = this.depositReserves;
-
-    // check if there's any member in the preloadedDepositReserves that is not in the depositReserves
-    // if so, add it to the depositReserves
-    for (let i = 0; i < this.preLoadedDepositReservesSameTx.length; i++) {
-      const preloadedDepositReserve = this.preLoadedDepositReservesSameTx[i];
-
-      // Check if the depositReserves array contains the current preloadedDepositReserve
-      const found = this.depositReserves.some((depositReserve) => {
-        return depositReserve.equals(preloadedDepositReserve);
-      });
-
-      // If not found, push the current preloadedDepositReserve to the depositReserves array
-      if (!found) {
-        depositReservesList.push(this.preLoadedDepositReservesSameTx[i]);
-      }
-    }
+    const depositReservesList = this.getAdditionalDepositReservesList();
 
     const depositReserveAccountMetas = depositReservesList.map((reserve) => {
       return { pubkey: reserve, isSigner: false, isWritable: true };
@@ -1135,24 +1119,10 @@ export class KaminoAction {
       throw new Error(`outflowAmount not set`);
     }
 
-    const depositReservesList = this.depositReserves;
-
-    // check if there's any member in the preloadedDepositReserves that is not in the depositReserves
-    // if so, add it to the depositReserves
-    for (let i = 0; i < this.preLoadedDepositReservesSameTx.length; i++) {
-      const preloadedDepositReserve = this.preLoadedDepositReservesSameTx[i];
-
-      // Check if the depositReserves array contains the current preloadedDepositReserve
-      const found = this.depositReserves.some((depositReserve) => {
-        return depositReserve.equals(preloadedDepositReserve);
-      });
-
-      // If not found, push the current preloadedDepositReserve to the depositReserves array
-      if (!found) {
-        depositReservesList.push(this.preLoadedDepositReservesSameTx[i]);
-      }
+    const depositReservesList = this.getAdditionalDepositReservesList();
+    if (depositReservesList.length === 0) {
+      depositReservesList.push(this.reserve.address);
     }
-
     const depositReserveAccountMetas = depositReservesList.map((reserve) => {
       return { pubkey: reserve, isSigner: false, isWritable: true };
     });
@@ -1293,23 +1263,7 @@ export class KaminoAction {
       `repayObligationLiquidity(reserve=${this.reserve.address})(obligation=${this.getObligationPda()})`
     );
 
-    const depositReservesList = this.depositReserves;
-
-    // check if there's any member in the preloadedDepositReserves that is not in the depositReserves
-    // if so, add it to the depositReserves
-    for (let i = 0; i < this.preLoadedDepositReservesSameTx.length; i++) {
-      const preloadedDepositReserve = this.preLoadedDepositReservesSameTx[i];
-
-      // Check if the depositReserves array contains the current preloadedDepositReserve
-      const found = this.depositReserves.some((depositReserve) => {
-        return depositReserve.equals(preloadedDepositReserve);
-      });
-
-      // If not found, push the current preloadedDepositReserve to the depositReserves array
-      if (!found) {
-        depositReservesList.push(this.preLoadedDepositReservesSameTx[i]);
-      }
-    }
+    const depositReservesList = this.getAdditionalDepositReservesList();
 
     const depositReserveAccountMetas = depositReservesList.map((reserve) => {
       return { pubkey: reserve, isSigner: false, isWritable: true };
@@ -1345,8 +1299,12 @@ export class KaminoAction {
       throw Error(`Liquidating token account address is not defined`);
     }
 
-    this.lendingIxs.push(
-      liquidateObligationAndRedeemReserveCollateral(
+    const depositReservesList = this.getAdditionalDepositReservesList();
+    const depositReserveAccountMetas = depositReservesList.map((reserve) => {
+      return { pubkey: reserve, isSigner: false, isWritable: true };
+    });
+
+    const liquidateIx = liquidateObligationAndRedeemReserveCollateral(
         {
           liquidityAmount: this.amount,
           // TODO: Configure this when updating liquidator with new interface
@@ -1373,8 +1331,9 @@ export class KaminoAction {
           instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
         },
         this.kaminoMarket.programId
-      )
     );
+    liquidateIx.keys = liquidateIx.keys.concat([...depositReserveAccountMetas]);
+    this.lendingIxs.push(liquidateIx);
   }
 
   async addInBetweenIxs(
@@ -1763,23 +1722,7 @@ export class KaminoAction {
       this.kaminoMarket.programId
     );
 
-    const depositReservesList = this.depositReserves;
-
-    // check if there's any member in the preloadedDepositReserves that is not in the depositReserves
-    // if so, add it to the depositReserves
-    for (let i = 0; i < this.preLoadedDepositReservesSameTx.length; i++) {
-      const preloadedDepositReserve = this.preLoadedDepositReservesSameTx[i];
-
-      // Check if the depositReserves array contains the current preloadedDepositReserve
-      const found = this.depositReserves.some((depositReserve) => {
-        return depositReserve.equals(preloadedDepositReserve);
-      });
-
-      // If not found, push the current preloadedDepositReserve to the depositReserves array
-      if (!found) {
-        depositReservesList.push(this.preLoadedDepositReservesSameTx[i]);
-      }
-    }
+    const depositReservesList = this.getAdditionalDepositReservesList();
 
     const depositReserveAccountMetas = depositReservesList.map((reserve) => {
       return { pubkey: reserve, isSigner: false, isWritable: true };
@@ -1831,23 +1774,7 @@ export class KaminoAction {
 
     const requestElevationGroupIx = requestElevationGroup(args, accounts, this.kaminoMarket.programId);
 
-    const depositReservesList = this.depositReserves;
-
-    // check if there's any member in the preloadedDepositReserves that is not in the depositReserves
-    // if so, add it to the depositReserves
-    for (let i = 0; i < this.preLoadedDepositReservesSameTx.length; i++) {
-      const preloadedDepositReserveString = this.preLoadedDepositReservesSameTx[i].toString();
-
-      // Check if the depositReserves array contains the current preloadedDepositReserve
-      const found = this.depositReserves.some((depositReserve) => {
-        return depositReserve.toString() === preloadedDepositReserveString;
-      });
-
-      // If not found, push the current preloadedDepositReserve to the depositReserves array
-      if (!found) {
-        depositReservesList.push(this.preLoadedDepositReservesSameTx[i]);
-      }
-    }
+    const depositReservesList = this.getAdditionalDepositReservesList();
 
     const depositReserveAccountMetas = depositReservesList.map((reserve) => {
       return { pubkey: reserve, isSigner: false, isWritable: true };
@@ -2589,5 +2516,27 @@ export class KaminoAction {
     return this.obligation
       ? this.obligation.obligationAddress
       : this.obligationType!.toPda(this.kaminoMarket.getAddress(), this.owner);
+  }
+
+  getAdditionalDepositReservesList(): PublicKey[] {
+    const depositReservesList = this.depositReserves;
+
+    // check if there's any member in the preloadedDepositReserves that is not in the depositReserves
+    // if so, add it to the depositReserves
+    for (let i = 0; i < this.preLoadedDepositReservesSameTx.length; i++) {
+      const preloadedDepositReserve = this.preLoadedDepositReservesSameTx[i];
+
+      // Check if the depositReserves array contains the current preloadedDepositReserve
+      const found = this.depositReserves.some((depositReserve) => {
+        return depositReserve.equals(preloadedDepositReserve);
+      });
+
+      // If not found, push the current preloadedDepositReserve to the depositReserves array
+      if (!found) {
+        depositReservesList.push(this.preLoadedDepositReservesSameTx[i]);
+      }
+    }
+
+    return depositReservesList;
   }
 }

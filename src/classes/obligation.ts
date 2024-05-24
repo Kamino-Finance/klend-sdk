@@ -846,7 +846,7 @@ export class KaminoObligation {
     const reserveBorrowFactor = new Decimal(reserve.state.config.borrowFactorPct.toString()).div(100);
     const borrowFactor = elevationGroupActivated ? new Decimal(1) : reserveBorrowFactor;
 
-    const maxObligationBorrowPower = this.refreshedStats.borrowLimit
+    const maxObligationBorrowPower = this.refreshedStats.borrowLimit // adjusted available amount
       .minus(this.refreshedStats.userTotalBorrowBorrowFactorAdjusted)
       .div(borrowFactor)
       .div(reserve.getOracleMarketPrice());
@@ -855,7 +855,9 @@ export class KaminoObligation {
     const debtWithdrawalCap = reserve.getDebtWithdrawalCapCapacity().sub(reserve.getDebtWithdrawalCapCurrent());
 
     reserveBorrowCapRemained =
-      reserve.state.config.disableUsageAsCollOutsideEmode === 1 ? new Decimal(0) : reserveBorrowCapRemained;
+      reserve.state.config.disableUsageAsCollOutsideEmode === 1 && elevationGroupActivated
+        ? new Decimal(0)
+        : reserveBorrowCapRemained;
 
     let maxBorrowAmount = Decimal.min(
       maxObligationBorrowPower,
@@ -891,6 +893,46 @@ export class KaminoObligation {
     maxBorrowAmount = Decimal.min(maxBorrowAmount, borrowLimitDependentOnElevationGroup);
 
     return maxBorrowAmount;
+  }
+
+  getMaxWithdrawAmount(market: KaminoMarket, tokenMint: PublicKey): Decimal {
+    const reserve = market.getReserveByMint(tokenMint);
+
+    if (!reserve) {
+      throw new Error('Reserve not found');
+    }
+
+    const userDepositPosition = this.getDepositByReserve(reserve.address);
+
+    if (!userDepositPosition) {
+      throw new Error('Deposit reserve not found');
+    }
+
+    if (reserve.stats.loanToValuePct === 0) {
+      return new Decimal(userDepositPosition?.amount);
+    }
+
+    const maxWithdrawValue = this.refreshedStats.borrowLimit
+      .sub(this.refreshedStats.userTotalBorrowBorrowFactorAdjusted)
+      .mul(100)
+      .div(reserve.stats.loanToValuePct);
+
+    // const minTotalDepositBeforeLiquidations = maxLtv === 0 ? new Decimal(0) : new Decimal(userTotalBorrow).div(maxLtv);
+    // const maxWithdrawAmount = new Decimal(this.refreshedStats.userTotalDeposit)
+    //   .minus(minTotalDepositBeforeLiquidation)
+    //   .div(reserve.getOracleMarketPrice());
+    const maxWithdrawAmount = maxWithdrawValue.div(reserve.getOracleMarketPrice());
+    const reserveAvailableLiquidity = reserve.getLiquidityAvailableAmount();
+
+    // bf adjusted debt value > allowed_borrow_value
+    if (this.refreshedStats.userTotalBorrowBorrowFactorAdjusted >= this.refreshedStats.borrowLimit) {
+      return new Decimal(0);
+    }
+
+    const withdrawalCapRemained = reserve
+      .getDepositWithdrawalCapCapacity()
+      .sub(reserve.getDepositWithdrawalCapCurrent());
+    return Decimal.max(0, Decimal.min(maxWithdrawAmount, reserveAvailableLiquidity, withdrawalCapRemained));
   }
 
   /**
