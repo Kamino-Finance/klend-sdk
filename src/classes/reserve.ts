@@ -61,6 +61,20 @@ export class KaminoReserve {
   }
 
   /**
+   * @returns the total borrowed limit of the reserve
+   */
+  getBorrowLimit(): Decimal {
+    return new Decimal(this.state.config.borrowLimit.toString());
+  }
+
+  /**
+   * @returns the total remaining borrow capacity of the reserve
+   */
+  getRemainingBorrowCapacity(): Decimal {
+    return this.getBorrowLimit().sub(this.getBorrowedAmount())
+  }
+
+  /**
    * @returns the available liquidity amount of the reserve
    */
   getLiquidityAvailableAmount(): Decimal {
