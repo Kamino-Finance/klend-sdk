@@ -194,6 +194,58 @@ export class KaminoMarket {
     return maxLeverage;
   }
 
+  // To be used for 1 coll 1 debt obligation, to calculate max withdrawable coll (for multiply/leverage management)
+  getMaxCollWithdrawableForPair(
+    obligation: KaminoObligation,
+    collTokenMint: PublicKey,
+    debtTokenMint: PublicKey
+  ): Decimal {
+    const { maxLtv: maxCollateralLtv, borrowFactor } = this.getMaxAndLiquidationLtvAndBorrowFactorForPair(
+      collTokenMint,
+      debtTokenMint
+    );
+
+    const debtMarketValue = obligation.borrows.get(debtTokenMint)?.marketValueRefreshed;
+    if (!debtMarketValue) {
+      throw Error('Debt value not found');
+    }
+    const maxCollWithdrawableValue = new Decimal(maxCollateralLtv).mul(debtMarketValue).mul(borrowFactor);
+
+    const collTokenPrice = this.getReserveByMint(collTokenMint)?.tokenOraclePrice.price;
+    if (!collTokenPrice) {
+      throw Error('Collateral token price not found');
+    }
+    const maxCollWithdrawable = maxCollWithdrawableValue.div(collTokenPrice);
+
+    return maxCollWithdrawable;
+  }
+
+  // To be used for 1 coll 1 debt obligation, to calculate max withdrawable coll (for multiply/leverage management)
+  getMaxDebtBorrowableForPair(
+    obligation: KaminoObligation,
+    collTokenMint: PublicKey,
+    debtTokenMint: PublicKey
+  ): Decimal {
+    const { maxLtv: maxCollateralLtv, borrowFactor } = this.getMaxAndLiquidationLtvAndBorrowFactorForPair(
+      collTokenMint,
+      debtTokenMint
+    );
+
+    const collMarketValue = obligation.deposits.get(collTokenMint)?.marketValueRefreshed;
+    if (!collMarketValue) {
+      throw Error('Debt value not found');
+    }
+    const maxDebtBorrowableValue = collMarketValue.div(new Decimal(maxCollateralLtv).mul(borrowFactor));
+
+    const debtTokenPrice = this.getReserveByMint(debtTokenMint)?.tokenOraclePrice.price;
+    if (!debtTokenPrice) {
+      throw Error('Collateral token price not found');
+    }
+    const maxDebtBorrowable = maxDebtBorrowableValue.div(debtTokenPrice);
+
+    return maxDebtBorrowable;
+  }
+
   getMaxAndLiquidationLtvAndBorrowFactorForPair(
     collTokenMint: PublicKey,
     debtTokenMint: PublicKey
