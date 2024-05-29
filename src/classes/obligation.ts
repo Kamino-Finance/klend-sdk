@@ -834,6 +834,106 @@ export class KaminoObligation {
     };
   }
 
+  getMaxBorrowAmount(market: KaminoMarket, tokenMint: PublicKey): Decimal {
+    const reserve = market.getReserveByMint(tokenMint);
+
+    if (!reserve) {
+      throw new Error('Reserve not found');
+    }
+
+    const elevationGroupActivated =
+      reserve.state.config.elevationGroups.includes(this.state.elevationGroup) && this.state.elevationGroup !== 0;
+
+    const reserveBorrowFactor = reserve.getBorrowFactor();
+    const borrowFactor = elevationGroupActivated ? new Decimal(1) : reserveBorrowFactor;
+
+    const maxObligationBorrowPower = this.refreshedStats.borrowLimit // adjusted available amount
+      .minus(this.refreshedStats.userTotalBorrowBorrowFactorAdjusted)
+      .div(borrowFactor)
+      .div(reserve.getOracleMarketPrice())
+      .mul(reserve.getMintFactor());
+    const reserveAvailableAmount = reserve.getLiquidityAvailableAmount();
+    let reserveBorrowCapRemained = reserve.stats.reserveBorrowLimit.sub(reserve.getBorrowedAmount());
+
+    reserveBorrowCapRemained =
+      reserve.state.config.disableUsageAsCollOutsideEmode === 1 && !elevationGroupActivated
+        ? new Decimal(0)
+        : reserveBorrowCapRemained;
+
+    let maxBorrowAmount = Decimal.min(maxObligationBorrowPower, reserveAvailableAmount, reserveBorrowCapRemained);
+
+    const debtWithdrawalCap = reserve.getDebtWithdrawalCapCapacity().sub(reserve.getDebtWithdrawalCapCurrent());
+    maxBorrowAmount = reserve.getDebtWithdrawalCapCapacity().gt(0)
+      ? Decimal.min(maxBorrowAmount, debtWithdrawalCap)
+      : maxBorrowAmount;
+
+    let originationFeeRate = reserve.getBorrowFee();
+
+    // Inclusive fee rate
+    originationFeeRate = originationFeeRate.div(originationFeeRate.add(new Decimal(1)));
+    const borrowFee = maxBorrowAmount.mul(originationFeeRate);
+
+    maxBorrowAmount = maxBorrowAmount.sub(borrowFee);
+
+    return Decimal.max(new Decimal(0), maxBorrowAmount);
+  }
+
+  getMaxWithdrawAmount(market: KaminoMarket, tokenMint: PublicKey): Decimal {
+    const reserve = market.getReserveByMint(tokenMint);
+
+    if (!reserve) {
+      throw new Error('Reserve not found');
+    }
+
+    const userDepositPosition = this.getDepositByReserve(reserve.address);
+
+    if (!userDepositPosition) {
+      throw new Error('Deposit reserve not found');
+    }
+
+    const userDepositPositionAmount = userDepositPosition.amount;
+
+    if (this.refreshedStats.userTotalBorrowBorrowFactorAdjusted.equals(new Decimal(0))) {
+      return new Decimal(userDepositPositionAmount);
+    }
+
+    const elevationGroupActivated =
+      reserve.state.config.elevationGroups.includes(this.state.elevationGroup) && this.state.elevationGroup !== 0;
+
+    const reserveMaxLtv = elevationGroupActivated
+      ? market.getElevationGroup(this.state.elevationGroup).ltvPct
+      : reserve.stats.loanToValuePct;
+
+    // bf adjusted debt value > allowed_borrow_value
+    if (this.refreshedStats.userTotalBorrowBorrowFactorAdjusted >= this.refreshedStats.borrowLimit) {
+      return new Decimal(0);
+    }
+
+    // borrowLimit / userTotalDeposit = maxLtv
+    // maxWithdrawValue = userTotalDeposit - userTotalBorrow / maxLtv
+
+    let maxWithdrawValue;
+    if (reserveMaxLtv === 0) {
+      maxWithdrawValue = new Decimal(userDepositPositionAmount);
+    } else {
+      maxWithdrawValue = this.refreshedStats.borrowLimit
+      .sub(this.refreshedStats.userTotalBorrowBorrowFactorAdjusted)
+      .mul(100)
+      .div(reserveMaxLtv);
+    }
+
+    const maxWithdrawAmount = maxWithdrawValue.div(reserve.getOracleMarketPrice());
+    const reserveAvailableLiquidity = reserve.getLiquidityAvailableAmount();
+
+    const withdrawalCapRemained = reserve
+      .getDepositWithdrawalCapCapacity()
+      .sub(reserve.getDepositWithdrawalCapCurrent());
+    return Decimal.max(
+      0,
+      Decimal.min(userDepositPositionAmount, maxWithdrawAmount, reserveAvailableLiquidity, withdrawalCapRemained)
+    );
+  }
+
   /**
    *
    * @returns Total borrowed amount for the specified obligation liquidity/borrow asset

@@ -254,6 +254,7 @@ export const makeReserveConfig = (tokenName: string, params: ConfigParams = Defa
     elevationGroups: params.elevationGroups,
     deleveragingThresholdSlotsPerBps: new BN(7200), // 0.01% per hour
     multiplierTagBoost: Array(8).fill(1),
+    disableUsageAsCollOutsideEmode: 0,
     reserved0: Array(2).fill(0),
     reserved1: Array(4).fill(0),
   };
@@ -389,6 +390,7 @@ export const makeMockOracleConfig = (tokenName: string, params: ConfigParams = D
     elevationGroups: [0, 0, 0, 0, 0],
     deleveragingThresholdSlotsPerBps: new BN(7200), // 0.01% per hour
     multiplierTagBoost: Array(8).fill(0),
+    disableUsageAsCollOutsideEmode: 0,
     reserved0: Array(2).fill(0),
     reserved1: Array(4).fill(0),
   };
@@ -1219,6 +1221,10 @@ export async function createMintAndReserve(
 
   return [mint, reserve.publicKey, config];
 }
+
+export const bufferToNumberArray = (buffer: Buffer): number[] => {
+  return Array.from(new Uint8Array(buffer));
+};
 
 export interface DepositAmountsForSwap {
   requiredAAmountToDeposit: Decimal;

@@ -234,6 +234,42 @@ export class KaminoReserve {
     return this.getBorrowedAmount().gt(new Decimal(this.state.config.borrowLimit.toString()));
   }
 
+  /**
+   *
+   * @returns the max capacity of the daily deposit withdrawal cap
+   */
+  getDepositWithdrawalCapCapacity(): Decimal {
+    return new Decimal(this.state.config.depositWithdrawalCap.configCapacity.toString());
+  }
+
+  /**
+   *
+   * @returns the current capacity of the daily deposit withdrawal cap
+   */
+  getDepositWithdrawalCapCurrent(): Decimal {
+    return new Decimal(this.state.config.depositWithdrawalCap.currentTotal.toString());
+  }
+
+  /**
+   *
+   * @returns the max capacity of the daily debt withdrawal cap
+   */
+  getDebtWithdrawalCapCapacity(): Decimal {
+    return new Decimal(this.state.config.debtWithdrawalCap.configCapacity.toString());
+  }
+
+  /**
+   *
+   * @returns the current capacity of the daily debt withdrawal cap
+   */
+  getDebtWithdrawalCapCurrent(): Decimal {
+    return new Decimal(this.state.config.debtWithdrawalCap.currentTotal.toString());
+  }
+
+  getBorrowFactor(): Decimal {
+    return new Decimal(this.state.config.borrowFactorPct.toString()).div(100);
+  }
+
   calculateSupplyAPR() {
     const currentUtilization = this.calculateUtilizationRatio();
 
