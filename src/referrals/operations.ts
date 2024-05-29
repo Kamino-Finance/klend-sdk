@@ -14,6 +14,8 @@ import {
 } from './instructions';
 import { PROGRAM_ID, UserMetadata, ReferrerState, ShortUrl } from '../lib';
 import Decimal from 'decimal.js';
+import { getProgramAccounts } from '../utils/rpc';
+import { UserMetadataZP } from '../idl_codegen/zero_padding/UserMetadataZP';
 
 /**
  * Initialize all referrer token states for a given referrer
@@ -168,7 +170,7 @@ export async function getUserMetadatasByReferrer(
   referrer: PublicKey,
   programId: PublicKey = PROGRAM_ID
 ): Promise<UserMetadata[]> {
-  const userMetadatas = await connection.getProgramAccounts(programId, {
+  const userMetadatas = await getProgramAccounts(connection, programId, {
     filters: [
       {
         dataSize: UserMetadata.layout.span + 8,
@@ -180,6 +182,7 @@ export async function getUserMetadatasByReferrer(
         },
       },
     ],
+    dataSlice: { offset: 0, length: UserMetadataZP.layout.span + 8 }, // truncate the padding
   });
 
   return userMetadatas.map((userMetadata) => {
@@ -190,7 +193,7 @@ export async function getUserMetadatasByReferrer(
       throw new Error("account doesn't belong to this program");
     }
 
-    const userMetadataAccount = UserMetadata.decode(userMetadata.account.data);
+    const userMetadataAccount = UserMetadataZP.decode(userMetadata.account.data);
 
     if (!userMetadataAccount) {
       throw Error('Could not parse obligation.');
@@ -210,12 +213,13 @@ export async function getAllUserMetadatas(
   connection: Connection,
   programId: PublicKey = PROGRAM_ID
 ): Promise<UserMetadata[]> {
-  const userMetadatas = await connection.getProgramAccounts(programId, {
+  const userMetadatas = await getProgramAccounts(connection, programId, {
     filters: [
       {
         dataSize: UserMetadata.layout.span + 8,
       },
     ],
+    dataSlice: { offset: 0, length: UserMetadataZP.layout.span + 8 }, // truncate the padding
   });
 
   return userMetadatas.map((userMetadata) => {
@@ -226,7 +230,7 @@ export async function getAllUserMetadatas(
       throw new Error("account doesn't belong to this program");
     }
 
-    const userMetadataAccount = UserMetadata.decode(userMetadata.account.data);
+    const userMetadataAccount = UserMetadataZP.decode(userMetadata.account.data);
 
     if (!userMetadataAccount) {
       throw Error('Could not parse obligation.');

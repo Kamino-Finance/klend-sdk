@@ -334,11 +334,6 @@
     toformat "^2.0.0"
     yargs "^17.0.1"
 
-"@bokuweb/zstd-wasm@^0.0.20":
-  version "0.0.20"
-  resolved "https://registry.yarnpkg.com/@bokuweb/zstd-wasm/-/zstd-wasm-0.0.20.tgz#fab3cc3854ebc2a6c4f1921d5bb518e28f674a0f"
-  integrity sha512-l/48EbQXz8FobRP6/rs5Voca+mrgtCldDF787sTekiHHP6yUW5kvjpDU7xSNI6pjrXjbDVyUZq5HN8kkevu3Og==
-
 "@coral-xyz/anchor@0.28.0", "@coral-xyz/anchor@^0.28.0":
   version "0.28.0"
   resolved "https://registry.yarnpkg.com/@coral-xyz/anchor/-/anchor-0.28.0.tgz#8345c3c9186a91f095f704d7b90cd256f7e8b2dc"
@@ -3946,6 +3941,11 @@ functions-have-names@^1.2.3:
   version "1.2.3"
   resolved "https://registry.yarnpkg.com/functions-have-names/-/functions-have-names-1.2.3.tgz#0404fe4ee2ba2f607f0e0ec3c80bae994133b834"
   integrity sha512-xckBUXyTIqT97tq2x2AMb+g163b5JFysYk0x4qxNFwbfQkmNZoiRHb6sPzI9/QV33WeuvVYBUIiD4NzNIyqaRQ==
+
+fzstd@^0.1.1:
+  version "0.1.1"
+  resolved "https://registry.yarnpkg.com/fzstd/-/fzstd-0.1.1.tgz#a3da29f2fff45070ca90073f866d97e0c56a4a52"
+  integrity sha512-dkuVSOKKwh3eas5VkJy1AW1vFpet8TA/fGmVA5krThl8YcOVE/8ZIoEA1+U1vEn5ckxxhLirSdY837azmbaNHA==
 
 fzstd@~0.0.4:
   version "0.0.4"
