@@ -200,9 +200,11 @@ export class KaminoMarket {
     collTokenMint: PublicKey,
     debtTokenMint: PublicKey
   ): Decimal {
+    obligation.state;
     const { maxLtv: maxCollateralLtv, borrowFactor } = this.getMaxAndLiquidationLtvAndBorrowFactorForPair(
       collTokenMint,
-      debtTokenMint
+      debtTokenMint,
+      obligation.state.elevationGroup
     );
 
     const debtMarketValue = obligation.borrows.get(debtTokenMint)?.marketValueRefreshed;
@@ -228,7 +230,8 @@ export class KaminoMarket {
   ): Decimal {
     const { maxLtv: maxCollateralLtv, borrowFactor } = this.getMaxAndLiquidationLtvAndBorrowFactorForPair(
       collTokenMint,
-      debtTokenMint
+      debtTokenMint,
+      obligation.state.elevationGroup
     );
 
     const collMarketValue = obligation.deposits.get(collTokenMint)?.marketValueRefreshed;
@@ -248,8 +251,18 @@ export class KaminoMarket {
 
   getMaxAndLiquidationLtvAndBorrowFactorForPair(
     collTokenMint: PublicKey,
-    debtTokenMint: PublicKey
+    debtTokenMint: PublicKey,
+    elevationGroupIdOverride?: number
   ): { maxLtv: number; liquidationLtv: number; borrowFactor: number } {
+    if (elevationGroupIdOverride) {
+      const elevationGroup = this.getElevationGroup(elevationGroupIdOverride);
+      return {
+        maxLtv: elevationGroup.ltvPct / 100,
+        liquidationLtv: elevationGroup.liquidationThresholdPct / 100,
+        borrowFactor: 1,
+      };
+    }
+
     const collReserve: KaminoReserve | undefined = this.getReserveByMint(collTokenMint);
     const debtReserve: KaminoReserve | undefined = this.getReserveByMint(debtTokenMint);
 
