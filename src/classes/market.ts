@@ -2,7 +2,6 @@ import { Connection, PublicKey } from '@solana/web3.js';
 import { KaminoObligation } from './obligation';
 import { KaminoReserve } from './reserve';
 import { LendingMarket, Obligation, UserMetadata, ReferrerTokenState, Reserve } from '../idl_codegen/accounts';
-import { MarketConfigType } from './shared';
 import {
   lendingMarketAuthPda,
   ObligationType,
@@ -34,6 +33,9 @@ import { chunks, KaminoPrices, MintToPriceMap } from '@hubbleprotocol/kamino-sdk
 import { parseTokenSymbol } from './utils';
 import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
 import { ObligationZP } from '../idl_codegen/zero_padding';
+import { getProgramAccounts } from '../utils/rpc';
+import { ReserveZP } from '../idl_codegen/zero_padding/ReserveZP';
+import { ReferrerTokenStateZP } from '../idl_codegen/zero_padding/ReferrerTokenStateZP';
 
 export interface ReserveRewardInfo {
   rewardsPerSecond: Decimal; // not lamport
@@ -82,6 +84,7 @@ export class KaminoMarket {
    * @param marketAddress
    * @param programId
    * @param setupLocalTest
+   * @param withReserves
    */
   static async load(
     connection: Connection,
@@ -90,7 +93,10 @@ export class KaminoMarket {
     setupLocalTest: boolean = false,
     withReserves: boolean = true
   ) {
-    const market = await LendingMarket.fetch(connection, marketAddress, programId);
+    const [market, reserves] = await Promise.all([
+      LendingMarket.fetch(connection, marketAddress, programId),
+      withReserves ? getReservesForMarket(marketAddress, connection, programId) : new Map<PublicKey, KaminoReserve>(),
+    ]);
 
     if (market === null) {
       return null;
@@ -102,21 +108,20 @@ export class KaminoMarket {
       scope = new Scope('localnet', connection);
     }
 
-    const reserves = withReserves
-      ? await getReservesForMarket(marketAddress, connection, programId)
-      : new Map<PublicKey, KaminoReserve>();
-
     return new KaminoMarket(connection, market, marketAddress.toString(), reserves, scope, programId);
   }
 
   async reload(): Promise<void> {
-    const market = await LendingMarket.fetch(this.connection, this.getAddress(), this.programId);
+    const [market, reserves] = await Promise.all([
+      LendingMarket.fetch(this.connection, this.getAddress(), this.programId),
+      getReservesForMarket(this.getAddress(), this.connection, this.programId),
+    ]);
     if (market === null) {
       return;
     }
 
     this.state = market;
-    this.reserves = await getReservesForMarket(this.getAddress(), this.connection, this.programId);
+    this.reserves = reserves;
     this.reservesActive = getReservesActive(this.reserves);
   }
 
@@ -480,7 +485,6 @@ export class KaminoMarket {
    * @param tag
    */
   async getAllObligationsForMarket(tag?: number): Promise<KaminoObligation[]> {
-    const { getProgramAccounts } = await import('../utils/rpc');
     const filters = [
       {
         dataSize: Obligation.layout.span + 8,
@@ -620,7 +624,7 @@ export class KaminoMarket {
   async getAllObligationsByTag(tag: number, market: PublicKey) {
     const [slot, obligations] = await Promise.all([
       this.connection.getSlot(),
-      this.connection.getProgramAccounts(this.programId, {
+      getProgramAccounts(this.connection, this.programId, {
         filters: [
           {
             dataSize: Obligation.layout.span + 8,
@@ -638,6 +642,7 @@ export class KaminoMarket {
             },
           },
         ],
+        dataSlice: { offset: 0, length: ObligationZP.layout.span + 8 }, // truncate the padding
       }),
     ]);
     const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
@@ -651,7 +656,7 @@ export class KaminoMarket {
         throw new Error("account doesn't belong to this program");
       }
 
-      const obligationAccount = Obligation.decode(obligation.account.data);
+      const obligationAccount = ObligationZP.decode(obligation.account.data);
 
       if (!obligationAccount) {
         throw Error('Could not parse obligation.');
@@ -678,7 +683,7 @@ export class KaminoMarket {
   async getAllUserObligations(user: PublicKey) {
     const [currentSlot, obligations] = await Promise.all([
       this.connection.getSlot(),
-      this.connection.getProgramAccounts(this.programId, {
+      getProgramAccounts(this.connection, this.programId, {
         filters: [
           {
             dataSize: Obligation.layout.span + 8,
@@ -702,6 +707,7 @@ export class KaminoMarket {
             },
           },
         ],
+        dataSlice: { offset: 0, length: ObligationZP.layout.span + 8 }, // truncate the padding
       }),
     ]);
 
@@ -715,7 +721,7 @@ export class KaminoMarket {
         throw new Error("account doesn't belong to this program");
       }
 
-      const obligationAccount = Obligation.decode(obligation.account.data);
+      const obligationAccount = ObligationZP.decode(obligation.account.data);
 
       if (!obligationAccount) {
         throw Error('Could not parse obligation.');
@@ -741,7 +747,7 @@ export class KaminoMarket {
   async getUserObligationsByTag(tag: number, user: PublicKey): Promise<KaminoObligation[]> {
     const [currentSlot, obligations] = await Promise.all([
       this.connection.getSlot(),
-      this.connection.getProgramAccounts(this.programId, {
+      getProgramAccounts(this.connection, this.programId, {
         filters: [
           {
             dataSize: Obligation.layout.span + 8,
@@ -765,6 +771,7 @@ export class KaminoMarket {
             },
           },
         ],
+        dataSlice: { offset: 0, length: ObligationZP.layout.span + 8 }, // truncate the padding
       }),
     ]);
     const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
@@ -777,7 +784,7 @@ export class KaminoMarket {
         throw new Error("account doesn't belong to this program");
       }
 
-      const obligationAccount = Obligation.decode(obligation.account.data);
+      const obligationAccount = ObligationZP.decode(obligation.account.data);
 
       if (!obligationAccount) {
         throw Error('Could not parse obligation.');
@@ -834,7 +841,7 @@ export class KaminoMarket {
   }
 
   async getAllReferrerTokenStates(referrer: PublicKey) {
-    const referrerTokenStates = await this.connection.getProgramAccounts(this.programId, {
+    const referrerTokenStates = await getProgramAccounts(this.connection, this.programId, {
       filters: [
         {
           dataSize: ReferrerTokenState.layout.span + 8,
@@ -846,6 +853,7 @@ export class KaminoMarket {
           },
         },
       ],
+      dataSlice: { offset: 0, length: ReferrerTokenStateZP.layout.span + 8 }, // truncate the padding
     });
 
     const referrerTokenStatesForMints = new PubkeyHashMap<PublicKey, ReferrerTokenState>();
@@ -858,7 +866,7 @@ export class KaminoMarket {
         throw new Error("account doesn't belong to this program");
       }
 
-      const referrerTokenStateDecoded = ReferrerTokenState.decode(referrerTokenState.account.data);
+      const referrerTokenStateDecoded = ReferrerTokenStateZP.decode(referrerTokenState.account.data);
 
       if (!referrerTokenStateDecoded) {
         throw Error('Could not parse obligation.');
@@ -1067,7 +1075,7 @@ export async function getReservesForMarket(
   connection: Connection,
   programId: PublicKey
 ): Promise<Map<PublicKey, KaminoReserve>> {
-  const reserves = await connection.getProgramAccounts(programId, {
+  const reserves = await getProgramAccounts(connection, programId, {
     filters: [
       {
         dataSize: Reserve.layout.span + 8,
@@ -1079,13 +1087,14 @@ export async function getReservesForMarket(
         },
       },
     ],
+    dataSlice: { offset: 0, length: ReserveZP.layout.span + 8 }, // truncate the padding
   });
   const deserializedReserves = reserves.map((reserve) => {
     if (reserve.account === null) {
       throw new Error(`Reserve account ${reserve.pubkey.toBase58()} does not exist`);
     }
 
-    const reserveAccount = Reserve.decode(reserve.account.data);
+    const reserveAccount = ReserveZP.decode(reserve.account.data);
 
     if (!reserveAccount) {
       throw Error(`Could not parse reserve ${reserve.pubkey.toBase58()}`);
@@ -1119,50 +1128,6 @@ export function getReservesActive(reserves: Map<PublicKey, KaminoReserve>): Map<
     }
   }
   return reservesActive;
-}
-
-export async function _getReserveFromMintAndMarket(
-  marketConfig: MarketConfigType,
-  mint: string,
-  connection: Connection,
-  programId: PublicKey
-): Promise<[PublicKey, Reserve]> {
-  const reserve = (
-    await connection.getProgramAccounts(programId, {
-      filters: [
-        {
-          dataSize: Reserve.layout.span + 8,
-        },
-        {
-          memcmp: {
-            offset: 32,
-            bytes: marketConfig.lendingMarket,
-          },
-        },
-        {
-          memcmp: {
-            offset: 64,
-            bytes: mint,
-          },
-        },
-      ],
-    })
-  )[0];
-
-  if (reserve.account === null) {
-    throw new Error('Invalid account');
-  }
-  if (!reserve.account.owner.equals(programId)) {
-    throw new Error("Account doesn't belong to this program");
-  }
-
-  const reserveAccount = Reserve.decode(reserve.account.data);
-
-  if (!reserveAccount) {
-    throw Error('Could not parse reserve.');
-  }
-
-  return [reserve.pubkey, reserveAccount];
 }
 
 const lamportsToNumberDecimal = (amount: Decimal.Value, decimals: number): Decimal => {
