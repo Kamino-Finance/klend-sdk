@@ -23,6 +23,8 @@ import {
 } from '../lib';
 import { farmsId } from '@hubbleprotocol/farms-sdk';
 import { KaminoReserve } from '../classes/reserve';
+import { getProgramAccounts } from './rpc';
+import { UserMetadataZP } from '../idl_codegen/zero_padding/UserMetadataZP';
 
 export type KaminoUserMetadata = {
   address: PublicKey;
@@ -378,8 +380,9 @@ export async function getAllUserMetadatasWithFilter(
     ...filter,
   ];
 
-  const userMetadatas = await connection.getProgramAccounts(programId, {
+  const userMetadatas = await getProgramAccounts(connection, programId, {
     filters,
+    dataSlice: { offset: 0, length: UserMetadataZP.layout.span + 8 }, // truncate the padding
   });
 
   return userMetadatas.map((userMetadata) => {
@@ -390,7 +393,7 @@ export async function getAllUserMetadatasWithFilter(
       throw new Error("account doesn't belong to this program");
     }
 
-    const userMetadataAccount = UserMetadata.decode(userMetadata.account.data);
+    const userMetadataAccount = UserMetadataZP.decode(userMetadata.account.data);
 
     if (!userMetadataAccount) {
       throw Error('Could not parse user metadata.');

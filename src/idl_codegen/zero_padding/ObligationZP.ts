@@ -5,7 +5,7 @@ import * as types from "../types" // eslint-disable-line @typescript-eslint/no-u
 import { PROGRAM_ID } from "../programId"
 import { Obligation, ObligationFields } from '../accounts';
 
-/** Lending market obligation state */
+/** Lending market obligation state with padding truncated */
 export class ObligationZP {
   /** Version of the struct */
   readonly tag: BN

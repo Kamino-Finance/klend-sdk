@@ -9,10 +9,27 @@ import {
 } from '@solana/web3.js';
 import { Buffer } from 'buffer';
 import axios from 'axios';
-import { init, decompress } from '@bokuweb/zstd-wasm';
-(async () => {
-  await init();
-})();
+import * as fzstd from 'fzstd';
+
+interface ZstdDecoder {
+  decompress: (data: Buffer) => Promise<Buffer>;
+}
+
+class JsZstdDecoder implements ZstdDecoder {
+  decompress(data: Buffer): Promise<Buffer> {
+    return Promise.resolve(Buffer.from(fzstd.decompress(data)));
+  }
+}
+
+let zstdDecoder: ZstdDecoder = new JsZstdDecoder();
+
+export function setZstdDecoder(decoder: ZstdDecoder) {
+  zstdDecoder = decoder;
+}
+
+const COMMON_HTTP_HEADERS: Record<string, string> = {
+  'solana-client': `@kamino-finance/klend-sdk-${process.env.npm_package_version ?? 'UNKNOWN'}`,
+};
 
 /**
  * Uses zstd compression when fetching all accounts owned by a program for a smaller response size
@@ -20,11 +37,13 @@ import { init, decompress } from '@bokuweb/zstd-wasm';
  * @param connection
  * @param programId
  * @param configOrCommitment
+ * @param additionalHeaders
  */
 export async function getProgramAccounts(
   connection: Connection,
   programId: PublicKey,
-  configOrCommitment?: GetProgramAccountsConfig | Commitment
+  configOrCommitment?: GetProgramAccountsConfig | Commitment,
+  additionalHeaders: Record<string, string> = {}
 ): Promise<GetProgramAccountsResponse> {
   const programIdStr = programId.toBase58();
   const { commitment, config } = extractCommitmentFromConfig(configOrCommitment);
@@ -50,8 +69,8 @@ export async function getProgramAccounts(
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
-        'Accept-Encoding': 'gzip, deflate',
-        'Cache-Control': 'no-cache',
+        ...COMMON_HTTP_HEADERS,
+        ...additionalHeaders,
       },
     }
   );
@@ -71,13 +90,13 @@ export async function getProgramAccounts(
 }
 
 async function deserializeAccountInfo(accountInfo: AccountInfo<string[]>): Promise<AccountInfo<Buffer>> {
-  const data = decompress(Buffer.from(accountInfo.data[0], 'base64'));
+  const data = await zstdDecoder.decompress(Buffer.from(accountInfo.data[0], 'base64'));
   return {
     owner: accountInfo.owner,
     lamports: accountInfo.lamports,
     executable: accountInfo.executable,
     rentEpoch: accountInfo.rentEpoch,
-    data: Buffer.from(data),
+    data: data,
   };
 }
 

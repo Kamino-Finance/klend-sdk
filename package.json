@@ -40,7 +40,6 @@
     "dump-programs": "./deps/dump-from-mainnet.sh"
   },
   "dependencies": {
-    "@bokuweb/zstd-wasm": "^0.0.20",
     "@coral-xyz/anchor": "^0.28.0",
     "@coral-xyz/borsh": "^0.28.0",
     "@hubbleprotocol/farms-sdk": "^0.3.7",
@@ -57,7 +56,8 @@
     "buffer-layout": "^1.2.2",
     "commander": "^9.3.0",
     "decimal.js": "^10.4.3",
-    "exponential-backoff": "^3.1.1"
+    "exponential-backoff": "^3.1.1",
+    "fzstd": "^0.1.1"
   },
   "devDependencies": {
     "@jup-ag/core": "=3.0.0-beta.18",
