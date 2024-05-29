@@ -4,11 +4,13 @@ import BN from 'bn.js';
 import * as anchor from '@coral-xyz/anchor';
 import {
   getBorrowRate,
+  getReserveFromMintAndMarket,
   KaminoAction,
   KaminoMarket,
   PROGRAM_ID,
   sleep,
   STAGING_PROGRAM_ID,
+  U64_MAX,
   WRAPPED_SOL_MINT,
 } from '../src';
 import * as assert from 'assert';
@@ -19,11 +21,31 @@ import {
   buildVersionedTransaction,
   sendAndConfirmVersionedTransaction,
 } from '../src';
-import { createLookupTable, endpointFromCluster, initEnv, makeReserveConfig } from './setup_utils';
-import { createMarket, createReserve, updateMarketElevationGroup, updateReserve } from './setup_operations';
+import {
+  ConfigParams,
+  DefaultConfigParams,
+  borrow,
+  bufferToNumberArray,
+  createLookupTable,
+  createMarketWithTwoReserves,
+  deposit,
+  endpointFromCluster,
+  initEnv,
+  makeReserveConfig,
+  newUser,
+  sendTransactionsFromAction,
+} from './setup_utils';
+import {
+  createMarket,
+  createReserve,
+  updateMarketElevationGroup,
+  updateReserve,
+  updateReserveSingleValue,
+} from './setup_operations';
 import { createAta } from './token_utils';
 import { NATIVE_MINT, TOKEN_PROGRAM_ID, Token } from '@solana/spl-token';
-import { ReserveConfig } from '../src/idl_codegen/types';
+import { ReserveConfig, UpdateConfigMode } from '../src/idl_codegen/types';
+import { Fraction } from '../src/classes/fraction';
 
 const assertAlmostEqual = (v1: number, v2: number, epsilon_pct = 1) => {
   const res = (Math.abs(v1 - v2) / v1) * 100 <= epsilon_pct;
@@ -368,8 +390,8 @@ describe('Main lending market instruction tests', function () {
   it('performs_a_repay_and_withdraw_same_tx', async function () {
     const borrowSymbol = 'USDH';
     const depositSymbol = 'SOL';
-    const depositAmount = new BN('100000');
-    const borrowAmount = new BN('10');
+    const depositAmount = new BN('100000000');
+    const borrowAmount = new BN('1000000');
 
     const env = await initEnv('localnet');
 
@@ -613,9 +635,8 @@ describe('Main lending market instruction tests', function () {
   it('performs_a_borrow_and_repay_usdh', async function () {
     const borrowSymbol = 'USDH';
     const depositSymbol = 'SOL';
-    const depositAmount = new BN('100000');
-    const borrowAmount = new BN('10');
-
+    const depositAmount = new BN('100000000');
+    const borrowAmount = new BN('100000');
     const env = await initEnv('localnet');
 
     await sleep(2000);
@@ -672,21 +693,21 @@ describe('Main lending market instruction tests', function () {
       kaminoMarket,
       depositAmount,
       NATIVE_MINT,
-      env.admin.publicKey,
+      depositor.publicKey,
       new VanillaObligation(PROGRAM_ID)
     );
 
     {
-      const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [
+      const tx = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, [
         ...depositAction.setupIxs,
         ...depositAction.lendingIxs,
         ...depositAction.cleanupIxs,
       ]);
-      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
+      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, depositor, []);
     }
 
     const borrowBefore = await kaminoMarket.getObligationBorrowByWallet(
-      env.admin.publicKey,
+      depositor.publicKey,
       usdh,
       new VanillaObligation(PROGRAM_ID)
     );
@@ -695,21 +716,21 @@ describe('Main lending market instruction tests', function () {
       kaminoMarket,
       borrowAmount,
       usdh,
-      env.admin.publicKey,
+      depositor.publicKey,
       new VanillaObligation(PROGRAM_ID)
     );
 
     {
-      const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [
+      const tx = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, [
         ...borrowAction.setupIxs,
         ...borrowAction.lendingIxs,
         ...borrowAction.cleanupIxs,
       ]);
-      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
+      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, depositor, []);
     }
 
     const borrowAfter = await kaminoMarket.getObligationBorrowByWallet(
-      env.admin.publicKey,
+      depositor.publicKey,
       usdh,
       new VanillaObligation(PROGRAM_ID)
     );
@@ -717,24 +738,24 @@ describe('Main lending market instruction tests', function () {
 
     const repayAction = await KaminoAction.buildRepayTxns(
       kaminoMarket,
-      borrowAmount,
+      borrowAmount.add(new BN(1)),
       usdh,
-      env.admin.publicKey,
+      depositor.publicKey,
       new VanillaObligation(PROGRAM_ID),
       await env.provider.connection.getSlot()
     );
 
     {
-      const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [
+      const tx = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, [
         ...repayAction.setupIxs,
         ...repayAction.lendingIxs,
         ...repayAction.cleanupIxs,
       ]);
-      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
+      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, depositor, []);
     }
 
     const borrowFinal = await kaminoMarket.getObligationBorrowByWallet(
-      env.admin.publicKey,
+      depositor.publicKey,
       usdh,
       new VanillaObligation(PROGRAM_ID)
     );
@@ -769,7 +790,12 @@ describe('Main lending market instruction tests', function () {
     await updateReserve(env, borrowReserve.publicKey, borrowReserveConfig);
     await sleep(2000);
 
-    const [, usdhAta] = await createAta(env, env.admin.publicKey, usdh);
+    const depositor = Keypair.generate();
+
+    await env.provider.connection.requestAirdrop(depositor.publicKey, 10 * LAMPORTS_PER_SOL);
+    await sleep(2000);
+
+    const [, usdhAta] = await createAta(env, depositor.publicKey, usdh);
     await sleep(2000);
     await mintTo(env.provider, usdh, usdhAta, 1000_000000);
 
@@ -781,22 +807,18 @@ describe('Main lending market instruction tests', function () {
       kaminoMarket,
       depositAmount,
       usdh,
-      env.admin.publicKey,
+      depositor.publicKey,
       new VanillaObligation(PROGRAM_ID)
     );
 
     {
-      const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [
+      const tx = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, [
         ...kaminoAction.setupIxs,
         ...kaminoAction.lendingIxs,
         ...kaminoAction.cleanupIxs,
       ]);
-      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
+      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, depositor, []);
     }
-
-    const depositor = Keypair.generate();
-    await env.provider.connection.requestAirdrop(depositor.publicKey, 10 * LAMPORTS_PER_SOL);
-    await sleep(2000);
 
     const kaminoDepositAction = await KaminoAction.buildDepositTxns(
       kaminoMarket,
@@ -816,7 +838,7 @@ describe('Main lending market instruction tests', function () {
     }
 
     const borrowBefore = await kaminoMarket.getObligationBorrowByWallet(
-      env.admin.publicKey,
+      depositor.publicKey,
       NATIVE_MINT,
       new VanillaObligation(PROGRAM_ID)
     );
@@ -825,21 +847,21 @@ describe('Main lending market instruction tests', function () {
       kaminoMarket,
       borrowAmount,
       NATIVE_MINT,
-      env.admin.publicKey,
+      depositor.publicKey,
       new VanillaObligation(PROGRAM_ID)
     );
 
     {
-      const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [
+      const tx = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, [
         ...borrowAction.setupIxs,
         ...borrowAction.lendingIxs,
         ...borrowAction.cleanupIxs,
       ]);
-      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
+      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, depositor, []);
     }
 
     const borrowAfter = await kaminoMarket.getObligationBorrowByWallet(
-      env.admin.publicKey,
+      depositor.publicKey,
       NATIVE_MINT,
       new VanillaObligation(PROGRAM_ID)
     );
@@ -847,24 +869,24 @@ describe('Main lending market instruction tests', function () {
 
     const repayAction = await KaminoAction.buildRepayTxns(
       kaminoMarket,
-      borrowAmount,
+      borrowAmount.add(new BN(1)),
       NATIVE_MINT,
-      env.admin.publicKey,
+      depositor.publicKey,
       new VanillaObligation(PROGRAM_ID),
       await env.provider.connection.getSlot()
     );
 
     {
-      const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [
+      const tx = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, [
         ...repayAction.setupIxs,
         ...repayAction.lendingIxs,
         ...repayAction.cleanupIxs,
       ]);
-      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
+      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, depositor, []);
     }
 
     const borrowFinal = await kaminoMarket.getObligationBorrowByWallet(
-      env.admin.publicKey,
+      depositor.publicKey,
       NATIVE_MINT,
       new VanillaObligation(PROGRAM_ID)
     );
@@ -872,6 +894,530 @@ describe('Main lending market instruction tests', function () {
     console.log('borrowAfter', borrowAfter);
     console.log('borrowFinal', borrowFinal);
     assert.ok(new Decimal(borrowFinal).lessThan(new Decimal(borrowAfter)));
+  });
+
+  it('borrow_max_sol', async function () {
+    const depositSymbol = 'USDH';
+    const borrowSymbol = 'SOL';
+
+    const {
+      env,
+      kaminoMarket,
+      firstMint: usdhMint,
+      secondMint: _,
+    } = await createMarketWithTwoReserves(depositSymbol, borrowSymbol, true);
+
+    const depositor = Keypair.generate();
+
+    await env.provider.connection.requestAirdrop(depositor.publicKey, 100 * LAMPORTS_PER_SOL);
+    await sleep(2000);
+
+    const [, usdhAta] = await createAta(env, depositor.publicKey, usdhMint);
+    await sleep(2000);
+    await mintTo(env.provider, usdhMint, usdhAta, 200000_000000);
+
+    const depositAmount = new BN('1000000000'); // 100 USDH
+
+    const kaminoDepositUsdhAction = await KaminoAction.buildDepositTxns(
+      kaminoMarket,
+      depositAmount,
+      usdhMint,
+      depositor.publicKey,
+      new VanillaObligation(PROGRAM_ID)
+    );
+
+    await sendTransactionsFromAction(env, kaminoDepositUsdhAction, [depositor], []);
+
+    const currentSlot = await kaminoMarket.getConnection().getSlot();
+
+    await sleep(2000);
+
+    let obligation = await kaminoMarket.getObligationByWallet(depositor.publicKey, new VanillaObligation(PROGRAM_ID));
+
+    {
+      // No liquidity in the reserve
+      const maxBorrow = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      assert.equal(maxBorrow.toNumber(), 0);
+    }
+
+    const borrowAmount = new BN(LAMPORTS_PER_SOL);
+
+    const newDepositor = await newUser(env, kaminoMarket, [[borrowSymbol, new Decimal(350)]]);
+    await deposit(env, kaminoMarket, newDepositor, borrowSymbol, new Decimal(1));
+
+    let solReserve = kaminoMarket.getReserveBySymbol('SOL');
+    await kaminoMarket.reloadSingleReserve(solReserve!.address);
+
+    {
+      // Little liquidity
+      const maxBorrow = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      assert.ok(maxBorrow.equals(new Decimal(LAMPORTS_PER_SOL)));
+    }
+
+    await deposit(env, kaminoMarket, newDepositor, borrowSymbol, new Decimal(300));
+
+    await kaminoMarket.reloadSingleReserve(solReserve!.address);
+    await sleep(2000);
+
+    const borrowBefore = await kaminoMarket.getObligationBorrowByWallet(
+      depositor.publicKey,
+      NATIVE_MINT,
+      new VanillaObligation(PROGRAM_ID)
+    );
+    assert.equal(borrowBefore.toNumber(), 0);
+
+    {
+      // Check maxBorrow is determined by allowedBorrowValue
+      const maxBorrow = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      assert.ok(
+        maxBorrow.equals(
+          obligation!.refreshedStats.borrowLimit
+            .div(solReserve!.getOracleMarketPrice())
+            .mul(solReserve!.getMintFactor())
+        )
+      );
+    }
+
+    {
+      // Update borrow factor
+      const buffer = Buffer.alloc(32);
+      buffer.writeBigUint64LE(BigInt(200), 0);
+
+      await updateReserveSingleValue(
+        env,
+        solReserve!,
+        bufferToNumberArray(buffer),
+        UpdateConfigMode.UpdateBorrowFactor.discriminator + 1
+      );
+
+      await kaminoMarket.reloadSingleReserve(solReserve!.address);
+      solReserve = kaminoMarket.getReserveBySymbol('SOL');
+
+      const borrowFactor = solReserve!.getBorrowFactor();
+
+      const maxBorrow = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      assert.ok(
+        maxBorrow.equals(
+          obligation!.refreshedStats.borrowLimit
+            .div(solReserve!.getOracleMarketPrice())
+            .div(borrowFactor)
+            .mul(solReserve!.getMintFactor())
+        )
+      );
+    }
+
+    {
+      // Update usage as coll outside emode
+      let buffer = Buffer.alloc(32);
+      buffer.writeUInt8(1, 0);
+
+      await updateReserveSingleValue(
+        env,
+        solReserve!,
+        bufferToNumberArray(buffer),
+        UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator + 1
+      );
+
+      await kaminoMarket.reloadSingleReserve(solReserve!.address);
+      solReserve = kaminoMarket.getReserveBySymbol('SOL');
+
+      const maxBorrow = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      assert.ok(maxBorrow.equals(new Decimal(0)));
+
+      buffer = Buffer.alloc(32);
+
+      // revert change
+      await updateReserveSingleValue(
+        env,
+        solReserve!,
+        bufferToNumberArray(buffer),
+        UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator + 1
+      );
+    }
+
+    {
+      // Borrow, see that the new amount is correct
+      const borrowAction = await KaminoAction.buildBorrowTxns(
+        kaminoMarket,
+        borrowAmount,
+        NATIVE_MINT,
+        depositor.publicKey,
+        new VanillaObligation(PROGRAM_ID)
+      );
+
+      await sendTransactionsFromAction(env, borrowAction, [depositor], []);
+
+      await kaminoMarket.reloadSingleReserve(solReserve!.address);
+      obligation = await kaminoMarket.getObligationByWallet(depositor.publicKey, new VanillaObligation(PROGRAM_ID));
+
+      const maxBorrowSol = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      solReserve = kaminoMarket.getReserveBySymbol('SOL');
+      const borrowFactor = solReserve!.getBorrowFactor();
+
+      assert.ok(
+        maxBorrowSol.equals(
+          obligation!.refreshedStats.borrowLimit
+            .minus(obligation!.refreshedStats.userTotalBorrowBorrowFactorAdjusted)
+            .div(solReserve!.getOracleMarketPrice())
+            .div(borrowFactor)
+            .mul(solReserve!.getMintFactor())
+        )
+      );
+
+      const usdhReserve = kaminoMarket.getReserveBySymbol('USDH');
+      await kaminoMarket.reloadSingleReserve(usdhReserve!.address);
+      const maxBorrowUsdh = obligation!.getMaxBorrowAmount(kaminoMarket, usdhMint, currentSlot);
+
+      assert.ok(
+        maxBorrowUsdh.equals(
+          obligation!.refreshedStats.borrowLimit
+            .minus(obligation!.refreshedStats.userTotalBorrowBorrowFactorAdjusted)
+            .div(usdhReserve!.getOracleMarketPrice())
+            .mul(usdhReserve!.getMintFactor())
+        )
+      );
+    }
+
+    {
+      {
+        // Update borrow limit
+        const buffer = Buffer.alloc(32);
+        buffer.writeBigUint64LE(BigInt(borrowAmount.sub(new BN(1)).toString()), 0);
+
+        await updateReserveSingleValue(
+          env,
+          solReserve!,
+          bufferToNumberArray(buffer),
+          UpdateConfigMode.UpdateBorrowLimit.discriminator + 1
+        );
+
+        await kaminoMarket.reloadSingleReserve(solReserve!.address);
+        solReserve = kaminoMarket.getReserveBySymbol('SOL');
+
+        const maxBorrow = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+        assert.ok(maxBorrow.equals(0));
+
+        // revert
+        buffer.writeBigUint64LE(BigInt(U64_MAX), 0);
+
+        await updateReserveSingleValue(
+          env,
+          solReserve!,
+          bufferToNumberArray(buffer),
+          UpdateConfigMode.UpdateBorrowLimit.discriminator + 1
+        );
+      }
+    }
+
+    {
+      // Interest rate accrues, affects borrow max
+      await kaminoMarket.reloadSingleReserve(solReserve!.address);
+      const maxBorrowBefore = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      await sleep(5000);
+      await kaminoMarket.reloadSingleReserve(solReserve!.address);
+      const obligationAfterRefresh = await kaminoMarket.getObligationByWallet(
+        depositor.publicKey,
+        new VanillaObligation(PROGRAM_ID)
+      );
+      const maxBorrowAfter = obligationAfterRefresh!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      assert.ok(maxBorrowAfter < maxBorrowBefore);
+    }
+
+    {
+      // elevation group increases borrow power
+      obligation = await kaminoMarket.getObligationByWallet(depositor.publicKey, new VanillaObligation(PROGRAM_ID));
+      const maxBorrowBefore = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      // Set elevation group
+      const kaminoRequestElevationAction = await KaminoAction.buildRequestElevationGroupTxns(
+        kaminoMarket,
+        depositor.publicKey,
+        obligation!,
+        1
+      );
+
+      await sendTransactionsFromAction(env, kaminoRequestElevationAction, [depositor], []);
+
+      obligation = await kaminoMarket.getObligationByWallet(depositor.publicKey, new VanillaObligation(PROGRAM_ID));
+      const maxBorrowAfter = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      assert.ok(maxBorrowAfter > maxBorrowBefore);
+
+      assert.ok(
+        maxBorrowAfter.equals(
+          obligation!.refreshedStats.borrowLimit
+            .minus(obligation!.refreshedStats.userTotalBorrowBorrowFactorAdjusted)
+            .div(solReserve!.getOracleMarketPrice())
+            .mul(solReserve!.getMintFactor())
+        )
+      );
+    }
+
+    {
+      // Set origination fee
+      const maxBorrowBefore = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      const extraParams: ConfigParams = {
+        ...DefaultConfigParams,
+        borrowFeeSf: Fraction.fromDecimal(new Decimal(0.1)),
+      };
+      const reserveConfig = makeReserveConfig('SOL', extraParams);
+      await updateReserve(env, solReserve!.address, reserveConfig);
+
+      await kaminoMarket.reloadSingleReserve(solReserve!.address);
+
+      const maxBorrowAfter = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      assert.ok(maxBorrowAfter < maxBorrowBefore);
+    }
+
+    {
+      // Update debt capacity
+      const buffer = Buffer.alloc(32);
+      buffer.writeBigUint64LE(BigInt(LAMPORTS_PER_SOL), 0);
+      buffer.writeBigInt64LE(BigInt(90), 8);
+
+      await updateReserveSingleValue(
+        env,
+        solReserve!,
+        bufferToNumberArray(buffer),
+        UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator + 1
+      );
+
+      await kaminoMarket.reloadSingleReserve(solReserve!.address);
+      solReserve = kaminoMarket.getReserveBySymbol('SOL');
+
+      const newBorrower = await newUser(env, kaminoMarket, [
+        [depositSymbol, new Decimal(100)],
+        [borrowSymbol, new Decimal(0)],
+      ]);
+      await deposit(env, kaminoMarket, newBorrower, depositSymbol, new Decimal(100));
+      const newBorrowerObligation = await kaminoMarket.getObligationByWallet(
+        newBorrower.publicKey,
+        new VanillaObligation(PROGRAM_ID)
+      );
+
+      const currentSlot = await kaminoMarket.getConnection().getSlot();
+
+      const maxBorrow = newBorrowerObligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+
+      await borrow(env, kaminoMarket, newBorrower, borrowSymbol, maxBorrow.div(solReserve!.getMintFactor()));
+
+      await kaminoMarket.reloadSingleReserve(solReserve!.address);
+      solReserve = kaminoMarket.getReserveBySymbol('SOL');
+
+      const maxBorrowAfterDebt = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      assert.ok(maxBorrowAfterDebt.toNumber() == 0);
+    }
+  });
+
+  it('withdraw_max_sol', async function () {
+    const depositSymbol = 'USDH';
+    const borrowSymbol = 'SOL';
+
+    const {
+      env,
+      kaminoMarket,
+      firstMint: usdhMint,
+      secondMint: _,
+    } = await createMarketWithTwoReserves(depositSymbol, borrowSymbol, true);
+
+    const depositUsdhAmount = new Decimal(4000);
+    const borrowSolAmount = new Decimal(100);
+
+    const depositor = await newUser(env, kaminoMarket, [
+      [depositSymbol, depositUsdhAmount.mul(2)],
+      [borrowSymbol, new Decimal(10)],
+    ]);
+
+    await deposit(env, kaminoMarket, depositor, depositSymbol, depositUsdhAmount);
+    await deposit(env, kaminoMarket, depositor, borrowSymbol, new Decimal(1));
+
+    const depositReserve = kaminoMarket.getReserveBySymbol(depositSymbol)!;
+
+    let obligation = await kaminoMarket.getObligationByWallet(depositor.publicKey, new VanillaObligation(PROGRAM_ID));
+
+    const currentSlot = await kaminoMarket.getConnection().getSlot();
+
+    {
+      // No borrow, can withdraw everything
+      const maxWithdraw = obligation!.getMaxWithdrawAmount(kaminoMarket, usdhMint, currentSlot);
+      assert.equal(maxWithdraw.toNumber(), depositUsdhAmount.mul(depositReserve.getMintFactor()));
+    }
+
+    const newDepositor = await newUser(env, kaminoMarket, [
+      [borrowSymbol, borrowSolAmount.mul(2)],
+      [depositSymbol, new Decimal(0)],
+    ]);
+
+    await deposit(env, kaminoMarket, newDepositor, borrowSymbol, borrowSolAmount);
+
+    await borrow(env, kaminoMarket, depositor, borrowSymbol, borrowSolAmount.add(new Decimal(1)));
+
+    obligation = await kaminoMarket.getObligationByWallet(depositor.publicKey, new VanillaObligation(PROGRAM_ID));
+
+    {
+      // no liquidity
+      const borrowReserve = kaminoMarket.getReserveBySymbol(borrowSymbol)!;
+      await kaminoMarket.reloadSingleReserve(borrowReserve.address);
+
+      const maxWithdraw = obligation!.getMaxWithdrawAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      assert.equal(maxWithdraw.toNumber(), 0);
+
+      obligation = await kaminoMarket.getObligationByWallet(depositor.publicKey, new VanillaObligation(PROGRAM_ID));
+
+      const maxUsdhWithdraw = obligation!.getMaxWithdrawAmount(kaminoMarket, usdhMint, currentSlot);
+
+      assert.ok(maxUsdhWithdraw.lt(depositUsdhAmount.mul(depositReserve.getMintFactor())));
+    }
+
+    await deposit(env, kaminoMarket, depositor, borrowSymbol, new Decimal(4));
+
+    {
+      // Ltv 0 for USDH, still can't withdraw SOL / USDH, unhealthy position
+      const buffer = Buffer.alloc(32);
+
+      await updateReserveSingleValue(
+        env,
+        depositReserve!,
+        bufferToNumberArray(buffer),
+        UpdateConfigMode.UpdateLoanToValuePct.discriminator + 1
+      );
+
+      await kaminoMarket.reload();
+      obligation = await kaminoMarket.getObligationByWallet(depositor.publicKey, new VanillaObligation(PROGRAM_ID));
+
+      const maxWithdraw = obligation!.getMaxWithdrawAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      assert.equal(maxWithdraw.toNumber(), 0);
+
+      const maxUsdhWithdraw = obligation!.getMaxWithdrawAmount(kaminoMarket, usdhMint, currentSlot);
+      assert.equal(maxUsdhWithdraw.toNumber(), 0);
+
+      buffer.writeUint8(69, 0);
+
+      await updateReserveSingleValue(
+        env,
+        depositReserve!,
+        bufferToNumberArray(buffer),
+        UpdateConfigMode.UpdateLoanToValuePct.discriminator + 1
+      );
+
+      await kaminoMarket.reload();
+    }
+
+    {
+      // Withdraw max sol
+      await deposit(env, kaminoMarket, newDepositor, borrowSymbol, borrowSolAmount); // add more liquidity
+
+      await kaminoMarket.reload();
+      obligation = await kaminoMarket.getObligationByWallet(depositor.publicKey, new VanillaObligation(PROGRAM_ID));
+      const solPosition = obligation!.getDepositByMint(NATIVE_MINT)!.amount;
+
+      const maxSolWithdraw = obligation!.getMaxWithdrawAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      assert.ok(solPosition.gt(maxSolWithdraw));
+
+      const kaminoWithdrawAction = await KaminoAction.buildWithdrawTxns(
+        kaminoMarket,
+        new BN(maxSolWithdraw.toDecimalPlaces(0).toString()),
+        NATIVE_MINT,
+        depositor.publicKey,
+        new VanillaObligation(PROGRAM_ID)
+      );
+
+      await sendTransactionsFromAction(env, kaminoWithdrawAction, [depositor], []);
+    }
+
+    {
+      // elevation group
+      const kaminoRequestElevationAction = await KaminoAction.buildRequestElevationGroupTxns(
+        kaminoMarket,
+        depositor.publicKey,
+        obligation!,
+        1
+      );
+
+      await sendTransactionsFromAction(env, kaminoRequestElevationAction, [depositor], []);
+
+      await kaminoMarket.reload();
+      obligation = await kaminoMarket.getObligationByWallet(depositor.publicKey, new VanillaObligation(PROGRAM_ID));
+
+      const maxWithdraw = obligation!.getMaxWithdrawAmount(kaminoMarket, usdhMint, currentSlot);
+
+      const kaminoWithdrawAction = await KaminoAction.buildWithdrawTxns(
+        kaminoMarket,
+        new BN(maxWithdraw.toDecimalPlaces(0).toString()),
+        usdhMint,
+        depositor.publicKey,
+        new VanillaObligation(PROGRAM_ID)
+      );
+
+      await sendTransactionsFromAction(env, kaminoWithdrawAction, [depositor], []);
+    }
+  });
+
+  it('deposit_single_reserve_without_loading_all', async function () {
+    const usdhSymbol = 'USDH';
+    const solSymbol = 'SOL';
+    const msolSymbol = 'MSOL';
+    const depositAmount = new BN('100000');
+
+    const env = await initEnv('localnet');
+
+    await sleep(2000);
+
+    const [, lendingMarket] = await createMarket(env);
+    await sleep(2000);
+
+    const usdhMint = await createMint(env.provider, env.admin.publicKey, 6);
+    const msolMint = await createMint(env.provider, env.admin.publicKey, 6);
+    await sleep(2000);
+    const [, usdhReserve] = await createReserve(env, lendingMarket.publicKey, usdhMint);
+    await sleep(2000);
+    const [, msolReserve] = await createReserve(env, lendingMarket.publicKey, msolMint);
+
+    const [, solReserve] = await createReserve(env, lendingMarket.publicKey, NATIVE_MINT);
+    await sleep(2000);
+
+    const usdhReserveConfig = makeReserveConfig(usdhSymbol);
+    await updateReserve(env, usdhReserve.publicKey, usdhReserveConfig);
+    await sleep(2000);
+    const msolReserveConfig = makeReserveConfig(msolSymbol);
+    await updateReserve(env, msolReserve.publicKey, msolReserveConfig);
+
+    const solReserveConfig = makeReserveConfig(solSymbol);
+    await updateReserve(env, solReserve.publicKey, solReserveConfig);
+    await sleep(2000);
+
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      PROGRAM_ID,
+      true,
+      false
+    ))!;
+
+    const depositor = Keypair.generate();
+
+    await env.provider.connection.requestAirdrop(depositor.publicKey, 100 * LAMPORTS_PER_SOL);
+    await sleep(2000);
+
+    const [, usdhAta] = await createAta(env, depositor.publicKey, usdhMint);
+    await sleep(2000);
+    await mintTo(env.provider, usdhMint, usdhAta, 200000_000000);
+
+    const [usdhReserveAddress, reserveAccount] = await getReserveFromMintAndMarket(
+      env.provider.connection,
+      kaminoMarket,
+      usdhMint.toString()
+    );
+
+    await kaminoMarket.reloadSingleReserve(usdhReserveAddress, reserveAccount);
+
+    const kaminoDepositUsdhAction = await KaminoAction.buildDepositTxns(
+      kaminoMarket,
+      depositAmount,
+      usdhMint,
+      depositor.publicKey,
+      new VanillaObligation(PROGRAM_ID)
+    );
+
+    await sendTransactionsFromAction(env, kaminoDepositUsdhAction, [depositor], []);
   });
 
   it.skip('fetches_all_obligations_from_the_lending_market', async function () {
