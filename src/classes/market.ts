@@ -220,7 +220,7 @@ export class KaminoMarket {
     return maxCollWithdrawable;
   }
 
-  // To be used for 1 coll 1 debt obligation, to calculate max withdrawable coll (for multiply/leverage management)
+  // To be used for 1 coll 1 debt obligation, to calculate max borrowable debt (for multiply/leverage management)
   getMaxDebtBorrowableForPair(
     obligation: KaminoObligation,
     collTokenMint: PublicKey,
