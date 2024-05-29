@@ -252,10 +252,10 @@ export class KaminoMarket {
   getMaxAndLiquidationLtvAndBorrowFactorForPair(
     collTokenMint: PublicKey,
     debtTokenMint: PublicKey,
-    elevationGroupIdOverride?: number
+    elevationGroupId?: number
   ): { maxLtv: number; liquidationLtv: number; borrowFactor: number } {
-    if (elevationGroupIdOverride) {
-      const elevationGroup = this.getElevationGroup(elevationGroupIdOverride);
+    if (elevationGroupId) {
+      const elevationGroup = this.getElevationGroup(elevationGroupId);
       return {
         maxLtv: elevationGroup.ltvPct / 100,
         liquidationLtv: elevationGroup.liquidationThresholdPct / 100,
