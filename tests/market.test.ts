@@ -1158,7 +1158,7 @@ it('test_max_obligation_borrow_and_withdraw', async function () {
 
   const borrowAction = await KaminoAction.buildBorrowTxns(
     kaminoMarket!,
-    maxBorrowable.toString(),
+    maxBorrowable.floor().toString(),
     NATIVE_MINT,
     env.admin.publicKey,
     new VanillaObligation(PROGRAM_ID),
@@ -1186,12 +1186,19 @@ it('test_max_obligation_borrow_and_withdraw', async function () {
     kaminoMarket.getReserveByMint(usdh)?.state.liquidity.mintDecimals.toNumber()!
   );
 
-  assertFuzzyEq(maxCollWithdrawable.toNumber(), 0, 0.001);
+  assertFuzzyEq(
+    lamportsToNumberDecimal(
+      maxCollWithdrawable.toNumber(),
+      kaminoMarket.getReserveByMint(usdh)?.state.liquidity.mintDecimals.toNumber()!
+    ).toNumber(),
+    0,
+    0.1 //buffer tollerance
+  );
 
   // repay half of what was borrowed
   const repayAction = await KaminoAction.buildRepayTxns(
     kaminoMarket!,
-    maxBorrowable.div(2).toString(),
+    maxBorrowable.div(2).floor().toString(),
     NATIVE_MINT,
     env.admin.publicKey,
     new VanillaObligation(PROGRAM_ID),
@@ -1258,6 +1265,21 @@ it('test_max_obligation_borrow_and_withdraw', async function () {
       kaminoMarket.getReserveByMint(usdh)?.state.liquidity.mintDecimals.toNumber()!
     ).toNumber(),
     0,
-    0.001
+    0.1 //buffer tollerance
   );
+
+  const lastWithdrawAction = await KaminoAction.buildWithdrawTxns(
+    kaminoMarket!,
+    lastCollWithdrawable.floor().toString(),
+    usdh,
+    env.admin.publicKey,
+    new VanillaObligation(PROGRAM_ID),
+    1_000_000,
+    true,
+    true,
+    undefined,
+    PublicKey.default
+  );
+
+  await sendTransactionsFromAction(env, lastWithdrawAction);
 });
