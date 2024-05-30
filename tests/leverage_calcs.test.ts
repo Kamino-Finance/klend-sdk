@@ -41,8 +41,8 @@ describe('Leverage calculation tests', function () {
     const [deposited, borrowed] = [new Decimal(0), new Decimal(0)];
     const [depositAmount, withdrawAmount] = [new Decimal(1.0), new Decimal(0)];
     const targetLeverage = new Decimal(3);
-    const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint);
-    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
+    const priceCollToDebt = await getJupiterPrice(collTokenMint, debtTokenMint);
+    const priceDebtToColl = await getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceByTokenMintDecimal, {
       depositAmount,
@@ -229,8 +229,8 @@ describe('Leverage calculation tests', function () {
     const [deposited, borrowed] = [new Decimal(0), new Decimal(0)];
     const [depositAmount, withdrawAmount] = [new Decimal('0.8333333333333334'), new Decimal(0)];
     const targetLeverage = new Decimal(3);
-    const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint);
-    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
+    const priceCollToDebt = await getJupiterPrice(collTokenMint, debtTokenMint);
+    const priceDebtToColl = await getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceByTokenMintDecimal, {
       depositAmount,
@@ -271,8 +271,8 @@ describe('Leverage calculation tests', function () {
     const [deposited, borrowed] = [new Decimal('25.0'), new Decimal('20.0')];
     const [depositAmount, withdrawAmount] = [new Decimal('1.0'), new Decimal('0')];
     const targetLeverage = new Decimal('3');
-    const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint);
-    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
+    const priceCollToDebt = await getJupiterPrice(collTokenMint, debtTokenMint);
+    const priceDebtToColl = await getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceByTokenMintDecimal, {
       depositAmount,
@@ -313,8 +313,8 @@ describe('Leverage calculation tests', function () {
     const [deposited, borrowed] = [new Decimal('25.0'), new Decimal('20.0')];
     const [depositAmount, withdrawAmount] = [new Decimal('0.8333333333333334'), new Decimal(0)];
     const targetLeverage = new Decimal('3');
-    const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint);
-    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
+    const priceCollToDebt = await getJupiterPrice(collTokenMint, debtTokenMint);
+    const priceDebtToColl = await getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceByTokenMintDecimal, {
       depositAmount,
@@ -357,8 +357,8 @@ describe('Leverage calculation tests', function () {
     const [deposited, borrowed] = [new Decimal('41.66666666666667'), new Decimal('40')];
     const [depositAmount, withdrawAmount] = [new Decimal('0'), new Decimal('1')];
     const targetLeverage = new Decimal('5');
-    const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint);
-    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
+    const priceCollToDebt = await getJupiterPrice(collTokenMint, debtTokenMint);
+    const priceDebtToColl = await getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceByTokenMintDecimal, {
       depositAmount,
@@ -401,8 +401,8 @@ describe('Leverage calculation tests', function () {
     const [deposited, borrowed] = [new Decimal('41.66666666666667'), new Decimal('40')];
     const [depositAmount, withdrawAmount] = [new Decimal('0'), new Decimal('0.8333333333333334')];
     const targetLeverage = new Decimal('5');
-    const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint);
-    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
+    const priceCollToDebt = await getJupiterPrice(collTokenMint, debtTokenMint);
+    const priceDebtToColl = await getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceByTokenMintDecimal, {
       depositAmount,
@@ -446,8 +446,8 @@ describe('Leverage calculation tests', function () {
     const [deposited, borrowed] = [new Decimal('41.66666666666667'), new Decimal('40')];
     const [depositAmount, withdrawAmount] = [new Decimal('0'), new Decimal('0.0')];
     const targetLeverage = new Decimal('3');
-    const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint);
-    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
+    const priceCollToDebt = await getJupiterPrice(collTokenMint, debtTokenMint);
+    const priceDebtToColl = await getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceByTokenMintDecimal, {
       depositAmount,
@@ -478,8 +478,8 @@ describe('Leverage calculation tests', function () {
     const [deposited, borrowed] = [new Decimal('0.00005008'), new Decimal('0.02')];
     const [depositAmount, withdrawAmount] = [new Decimal('0'), new Decimal('0.0')];
     const targetLeverage = new Decimal('3');
-    const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint);
-    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
+    const priceCollToDebt = await getJupiterPrice(collTokenMint, debtTokenMint);
+    const priceDebtToColl = await getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceByTokenMintDecimal, {
       depositAmount,
@@ -521,18 +521,18 @@ describe('Leverage calculation tests', function () {
     // Adjustments: 8.11 - 3.88 = 4.23 SOL gone (repay)
     // Rate: 4.23 / 3.78 = 1.1190476190476193
 
-    const getPriceToUsd = (tokenMint: PublicKey | string): Decimal => {
+    const getPriceToUsd = async (tokenMint: PublicKey | string): Promise<Decimal> => {
       if (tokenMint.toString() === SOL_MINT.toString()) {
-        return new Decimal(25.26);
+        return Promise.resolve(new Decimal(25.26));
       }
       if (tokenMint.toString() === WSOL_MINT.toString()) {
-        return new Decimal(25.26);
+        return Promise.resolve(new Decimal(25.26));
       }
       if (tokenMint.toString() === MSOL_MINT.toString()) {
-        return new Decimal(28.41);
+        return Promise.resolve(new Decimal(28.41));
       }
       if (tokenMint.toString() === USDC_MINT.toString()) {
-        return new Decimal(1.0);
+        return Promise.resolve(new Decimal(1.0));
       }
 
       throw new Error('Invalid token mint');
@@ -545,8 +545,8 @@ describe('Leverage calculation tests', function () {
     const [deposited, borrowed] = [new Decimal('10.68'), new Decimal('8.12')];
     const [depositAmount, withdrawAmount] = [new Decimal('0'), new Decimal('0.0')];
     const targetLeverage = new Decimal('2');
-    const priceCollToDebt = getJupiterPrice(collTokenMint, debtTokenMint, getPriceToUsd);
-    const priceDebtToColl = getJupiterPrice(debtTokenMint, collTokenMint);
+    const priceCollToDebt = await getJupiterPrice(collTokenMint, debtTokenMint, getPriceToUsd);
+    const priceDebtToColl = await getJupiterPrice(debtTokenMint, collTokenMint);
 
     const res = await calculateMultiplyEffects(getPriceToUsd, {
       depositAmount,

@@ -26,37 +26,37 @@ export const MSOL_MINT = pk();
 export const TBTC_MINT = pk();
 export const DECIMALS = 6;
 
-export const getPriceByTokenMintDecimal = (tokenMint: PublicKey | string): Decimal => {
+export const getPriceByTokenMintDecimal = (tokenMint: PublicKey | string): Promise<Decimal> => {
   if (tokenMint.toString() === SOL_MINT.toString()) {
-    return new Decimal(25.0);
+    return Promise.resolve(new Decimal(25.0));
   }
   if (tokenMint.toString() === WSOL_MINT.toString()) {
-    return new Decimal(25.0);
+    return Promise.resolve(new Decimal(25.0));
   }
   if (tokenMint.toString() === MSOL_MINT.toString()) {
-    return new Decimal(30.0);
+    return Promise.resolve(new Decimal(30.0));
   }
   if (tokenMint.toString() === USDC_MINT.toString()) {
-    return new Decimal(1.0);
+    return Promise.resolve(new Decimal(1.0));
   }
   if (tokenMint.toString() === TBTC_MINT.toString()) {
-    return new Decimal(30000.0);
+    return Promise.resolve(new Decimal(30000.0));
   }
 
   throw new Error('Invalid token mint');
 };
 
-export const getJupiterPrice = (
+export const getJupiterPrice = async (
   inputMint: PublicKey,
   outputMint: PublicKey,
-  getUsdPrice: (tokenMint: PublicKey | string) => Decimal = getPriceByTokenMintDecimal
+  getUsdPrice: (tokenMint: PublicKey | string) => Promise<Decimal> = getPriceByTokenMintDecimal
 ) => {
   // a to b
   // a_to_usd
   // b_to_usd
   // a_to_usd / b_to_usd
-  const inputToUsdPrice = getUsdPrice(inputMint);
-  const outputToUsdPrice = getUsdPrice(outputMint);
+  const inputToUsdPrice = await getUsdPrice(inputMint);
+  const outputToUsdPrice = await getUsdPrice(outputMint);
   return inputToUsdPrice.dividedBy(outputToUsdPrice);
 };
 
