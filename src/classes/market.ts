@@ -195,69 +195,113 @@ export class KaminoMarket {
   }
 
   // To be used for 1 coll 1 debt obligation, to calculate max withdrawable coll (for multiply/leverage management)
-  getMaxCollWithdrawableLamportsForPair(
+  getMaxCollWithdrawableForPair(
     obligation: KaminoObligation,
     collTokenMint: PublicKey,
-    debtTokenMint: PublicKey
+    debtTokenMint: PublicKey,
+    currentSlot: number
   ): Decimal {
-    const collReserve = this.getReserveByMint(debtTokenMint);
+    const collReserve = this.getReserveByMint(collTokenMint);
+    const debtReserve = this.getReserveByMint(debtTokenMint);
+    const collMarketValue = obligation.getDepositByMint(collTokenMint)?.marketValueRefreshed;
+    const debtMarketValue = obligation.getBorrowByMint(debtTokenMint)?.marketValueRefreshed;
     if (!collReserve) {
-      throw Error('Collateral token price not found');
+      throw Error('Collateral reserve not found');
+    }
+    if (!debtReserve) {
+      throw Error('Debt reserve not found');
+    }
+    if (!collMarketValue) {
+      throw Error('Coll market value not found');
+    }
+    if (!debtMarketValue) {
+      throw Error('Debt market value not found');
     }
 
-    const { maxLtv: maxCollateralLtv } = this.getMaxAndLiquidationLtvAndBorrowFactorForPair(
+    const { maxLtv: maxCollateralLtv, borrowFactor } = this.getMaxAndLiquidationLtvAndBorrowFactorForPair(
       collTokenMint,
       debtTokenMint,
       obligation.state.elevationGroup
     );
 
-    const obligationAllowedBorrowValue = obligation.getAllowedBorrowValue();
-    const obligationBorrowFactorAdjustedDebtValue = obligation.getBorrowedMarketValueBFAdjusted();
+    const allowedObligationBorrowValue = Decimal.min(
+      new Decimal(this.state.globalAllowedBorrowValue.toString()),
+      collMarketValue.mul(maxCollateralLtv)
+    );
+    const irDebt = obligation
+      .estimateObligationInterestRate(
+        debtReserve,
+        obligation?.state.borrows.find((borrow) => borrow.borrowReserve?.equals(debtReserve.address))!,
+        currentSlot
+      )
+      .toDecimalPlaces(debtReserve.state.liquidity.mintDecimals.toNumber(), Decimal.ROUND_CEIL);
+    const obligationBorrowFactorAdjustedDebtValue = debtMarketValue
+      ?.mul(borrowFactor)
+      .mul(irDebt.isZero() ? new Decimal(1) : irDebt);
 
-    if (obligationAllowedBorrowValue < obligationBorrowFactorAdjustedDebtValue) {
+    if (allowedObligationBorrowValue < obligationBorrowFactorAdjustedDebtValue) {
       return new Decimal(0);
     }
 
-    const maxCollWithdrawableValue = (obligationAllowedBorrowValue.sub(obligationBorrowFactorAdjustedDebtValue)).mul(100).div(maxCollateralLtv);
+    const maxCollWithdrawableValue = allowedObligationBorrowValue
+      .sub(obligationBorrowFactorAdjustedDebtValue)
+      .div(maxCollateralLtv);
 
-    const maxCollWithdrawable = maxCollWithdrawableValue.div(collReserve.tokenOraclePrice.price).mul(10 ** collReserve.state.liquidity.mintDecimals.toNumber());
+    const maxCollWithdrawable = maxCollWithdrawableValue
+      .div(collReserve.tokenOraclePrice.price)
+      .mul(10 ** collReserve.state.liquidity.mintDecimals.toNumber());
 
-    const maxCollWithdrawableForObligation = Decimal.min(maxCollWithdrawable, collReserve.getLiquidityAvailableAmount(), obligation.getDepositByMint(collTokenMint)?.amount!);
+    const maxCollWithdrawableForObligation = Decimal.min(
+      maxCollWithdrawable,
+      collReserve.getLiquidityAvailableAmount(),
+      obligation.getDepositByMint(collTokenMint)?.amount!
+    );
 
-    return lamportsToNumberDecimal(maxCollWithdrawableForObligation, collReserve.state.liquidity.mintDecimals.toNumber());
+    return lamportsToNumberDecimal(
+      maxCollWithdrawableForObligation,
+      collReserve.state.liquidity.mintDecimals.toNumber()
+    );
   }
 
   // To be used for 1 coll 1 debt obligation, to calculate max borrowable debt (for multiply/leverage management)
-  getMaxDebtBorrowableLamportsForPair(
+  getMaxDebtBorrowableForPair(
     obligation: KaminoObligation,
     collTokenMint: PublicKey,
     debtTokenMint: PublicKey
-  ): Decimal {    
-    const collMarketValue = obligation.deposits.get(collTokenMint)?.marketValueRefreshed;
+  ): Decimal {
+    const collMarketValue = obligation.getDepositByMint(collTokenMint)?.marketValueRefreshed;
     const debtReserve = this.getReserveByMint(debtTokenMint);
     if (!debtReserve) {
       throw Error('Debt reserve not found');
     }
     if (!collMarketValue) {
-      throw Error('Debt value not found');
+      throw Error('Coll market value not found');
     }
 
-    const { borrowFactor } = this.getMaxAndLiquidationLtvAndBorrowFactorForPair(
+    const { maxLtv: maxCollateralLtv, borrowFactor } = this.getMaxAndLiquidationLtvAndBorrowFactorForPair(
       collTokenMint,
       debtTokenMint,
-      obligation.state.elevationGroup
+      obligation.state.elevationGroup ? obligation.state.elevationGroup : 0
     );
 
-    const allowedBorrowValue = Decimal.min(obligation.getAllowedBorrowValue(), new Decimal(this.state.globalAllowedBorrowValue.toString()));
+    const allowedObligationBorrowValue = collMarketValue.mul(maxCollateralLtv);
+
+    const allowedBorrowValue = Decimal.min(
+      allowedObligationBorrowValue,
+      new Decimal(this.state.globalAllowedBorrowValue.toString())
+    );
     const remainingBorrowValue = allowedBorrowValue.sub(obligation.getBorrowedMarketValueBFAdjusted());
 
     const maxDebtBorrowableValueLamports = Decimal.min(
-      remainingBorrowValue.mul(10 ** debtReserve.state.liquidity.mintDecimals.toNumber()).div(debtReserve.tokenOraclePrice.price).div(borrowFactor),
+      remainingBorrowValue
+        .mul(10 ** debtReserve.state.liquidity.mintDecimals.toNumber())
+        .div(debtReserve.tokenOraclePrice.price)
+        .div(borrowFactor),
       debtReserve.getRemainingBorrowCapacity()!,
       debtReserve.getLiquidityAvailableAmount()
     ).floor();
 
-    return lamportsToNumberDecimal(maxDebtBorrowableValueLamports, 10 ** debtReserve.state.liquidity.mintDecimals.toNumber());
+    return lamportsToNumberDecimal(maxDebtBorrowableValueLamports, debtReserve.state.liquidity.mintDecimals.toNumber());
   }
 
   getMaxAndLiquidationLtvAndBorrowFactorForPair(
@@ -265,7 +309,17 @@ export class KaminoMarket {
     debtTokenMint: PublicKey,
     elevationGroupId?: number
   ): { maxLtv: number; liquidationLtv: number; borrowFactor: number } {
-    if (elevationGroupId) {
+    const collReserve: KaminoReserve | undefined = this.getReserveByMint(collTokenMint);
+    const debtReserve: KaminoReserve | undefined = this.getReserveByMint(debtTokenMint);
+
+    if (elevationGroupId !== undefined) {
+      if (elevationGroupId === 0) {
+        return {
+          maxLtv: collReserve!.state.config.loanToValuePct / 100,
+          liquidationLtv: collReserve!.state.config.liquidationThresholdPct / 100,
+          borrowFactor: debtReserve!.state.config.borrowFactorPct.toNumber() / 100,
+        };
+      }
       const elevationGroup = this.getElevationGroup(elevationGroupId);
       return {
         maxLtv: elevationGroup.ltvPct / 100,
@@ -273,9 +327,6 @@ export class KaminoMarket {
         borrowFactor: 1,
       };
     }
-
-    const collReserve: KaminoReserve | undefined = this.getReserveByMint(collTokenMint);
-    const debtReserve: KaminoReserve | undefined = this.getReserveByMint(debtTokenMint);
 
     if (!collReserve || !debtReserve) {
       throw Error('Could not find one of the reserves.');

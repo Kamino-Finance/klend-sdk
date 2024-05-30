@@ -19,11 +19,20 @@ import {
   buildVersionedTransaction,
   sendAndConfirmVersionedTransaction,
 } from '../src';
-import { createLookupTable, endpointFromCluster, initEnv, makeReserveConfig } from './setup_utils';
+import {
+  createLookupTable,
+  createMarketWithTwoReserves,
+  endpointFromCluster,
+  initEnv,
+  makeReserveConfig,
+  sendTransactionsFromAction,
+} from './setup_utils';
 import { createMarket, createReserve, updateMarketElevationGroup, updateReserve } from './setup_operations';
 import { createAta } from './token_utils';
 import { NATIVE_MINT, TOKEN_PROGRAM_ID, Token } from '@solana/spl-token';
 import { ReserveConfig } from '../src/idl_codegen/types';
+import { assertFuzzyEq } from './assert';
+import { numberToLamportsDecimal, lamportsToNumberDecimal } from '../src/classes/utils';
 
 const assertAlmostEqual = (v1: number, v2: number, epsilon_pct = 1) => {
   const res = (Math.abs(v1 - v2) / v1) * 100 <= epsilon_pct;
@@ -1086,3 +1095,169 @@ async function createMintInstructions(
     Token.createInitMintInstruction(TOKEN_PROGRAM_ID, mint, decimals, authority, null),
   ];
 }
+
+it('test_max_obligation_borrow_and_withdraw', async function () {
+  const depositSymbol = 'USDH';
+  const borrowSymbol = 'SOL';
+
+  const {
+    env,
+    kaminoMarket,
+    firstMint: usdh,
+    secondMint: _,
+  } = await createMarketWithTwoReserves(depositSymbol, borrowSymbol, true);
+
+  const [, usdhAta] = await createAta(env, env.admin.publicKey, usdh);
+  await sleep(2000);
+
+  await mintTo(env.provider, usdh, usdhAta, 100000000000);
+  await sleep(2000);
+
+  const depositAction = await KaminoAction.buildDepositTxns(
+    kaminoMarket!,
+    '100000000',
+    usdh,
+    env.admin.publicKey,
+    new VanillaObligation(PROGRAM_ID),
+    1_000_000,
+    true,
+    true
+  );
+
+  await sendTransactionsFromAction(env, depositAction);
+  await sleep(2000);
+
+  const depositor = Keypair.generate();
+  await env.provider.connection.requestAirdrop(depositor.publicKey, 10000000000);
+  await sleep(2000);
+
+  const kaminoDepositAction = await KaminoAction.buildDepositTxns(
+    kaminoMarket!,
+    '5000000000',
+    NATIVE_MINT,
+    depositor.publicKey,
+    new VanillaObligation(PROGRAM_ID),
+    1_000_000,
+    true,
+    true
+  );
+
+  await sendTransactionsFromAction(env, kaminoDepositAction, [depositor]);
+
+  await sleep(2000);
+
+  await kaminoMarket.reload();
+
+  let obligation = await kaminoMarket.getObligationByWallet(env.admin.publicKey, new VanillaObligation(PROGRAM_ID));
+  console.log('obligation', obligation?.state.elevationGroup?.toString());
+
+  const maxBorrowable = numberToLamportsDecimal(
+    kaminoMarket!.getMaxDebtBorrowableForPair(obligation!, usdh, NATIVE_MINT),
+    kaminoMarket.getReserveByMint(NATIVE_MINT)?.state.liquidity.mintDecimals.toNumber()!
+  );
+
+  const borrowAction = await KaminoAction.buildBorrowTxns(
+    kaminoMarket!,
+    maxBorrowable.toString(),
+    NATIVE_MINT,
+    env.admin.publicKey,
+    new VanillaObligation(PROGRAM_ID),
+    1_000_000,
+    true,
+    true,
+    true,
+    PublicKey.default
+  );
+
+  await sendTransactionsFromAction(env, borrowAction);
+  await sleep(2000);
+
+  await kaminoMarket.reload();
+
+  obligation = await kaminoMarket.getObligationByWallet(env.admin.publicKey, new VanillaObligation(PROGRAM_ID));
+
+  const maxCollWithdrawable = numberToLamportsDecimal(
+    kaminoMarket!.getMaxCollWithdrawableForPair(
+      obligation!,
+      usdh,
+      NATIVE_MINT,
+      await env.provider.connection.getSlot()
+    ),
+    kaminoMarket.getReserveByMint(usdh)?.state.liquidity.mintDecimals.toNumber()!
+  );
+
+  assertFuzzyEq(maxCollWithdrawable.toNumber(), 0, 0.001);
+
+  // repay half of what was borrowed
+  const repayAction = await KaminoAction.buildRepayTxns(
+    kaminoMarket!,
+    maxBorrowable.div(2).toString(),
+    NATIVE_MINT,
+    env.admin.publicKey,
+    new VanillaObligation(PROGRAM_ID),
+    await env.provider.connection.getSlot(),
+    undefined,
+    1_000_000,
+    true,
+    true,
+    undefined,
+    PublicKey.default
+  );
+
+  await sendTransactionsFromAction(env, repayAction);
+  await sleep(2000);
+
+  await kaminoMarket.reload();
+
+  obligation = await kaminoMarket.getObligationByWallet(env.admin.publicKey, new VanillaObligation(PROGRAM_ID));
+
+  const maxCollWithdrawableNonZero = numberToLamportsDecimal(
+    kaminoMarket!.getMaxCollWithdrawableForPair(
+      obligation!,
+      usdh,
+      NATIVE_MINT,
+      await env.provider.connection.getSlot()
+    ),
+    kaminoMarket.getReserveByMint(usdh)?.state.liquidity.mintDecimals.toNumber()!
+  );
+
+  console.log(maxCollWithdrawableNonZero);
+
+  const withdrawAction = await KaminoAction.buildWithdrawTxns(
+    kaminoMarket!,
+    maxCollWithdrawableNonZero.floor().toString(),
+    usdh,
+    env.admin.publicKey,
+    new VanillaObligation(PROGRAM_ID),
+    1_000_000,
+    true,
+    true,
+    undefined,
+    PublicKey.default
+  );
+
+  await sendTransactionsFromAction(env, withdrawAction);
+
+  await kaminoMarket.reload();
+
+  obligation = await kaminoMarket.getObligationByWallet(env.admin.publicKey, new VanillaObligation(PROGRAM_ID));
+
+  const lastCollWithdrawable = numberToLamportsDecimal(
+    kaminoMarket!.getMaxCollWithdrawableForPair(
+      obligation!,
+      usdh,
+      NATIVE_MINT,
+      await env.provider.connection.getSlot()
+    ),
+    kaminoMarket.getReserveByMint(usdh)?.state.liquidity.mintDecimals.toNumber()!
+  );
+
+  assertFuzzyEq(
+    lamportsToNumberDecimal(
+      lastCollWithdrawable,
+      kaminoMarket.getReserveByMint(usdh)?.state.liquidity.mintDecimals.toNumber()!
+    ).toNumber(),
+    0,
+    0.001
+  );
+});
