@@ -1,4 +1,11 @@
-import { Keypair, PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY, TransactionSignature } from '@solana/web3.js';
+import {
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  SYSVAR_RENT_PUBKEY,
+  TransactionInstruction,
+  TransactionSignature,
+} from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 
 import {
@@ -20,12 +27,17 @@ import {
   updateEntireReserveConfig,
   UpdateEntireReserveConfigAccounts,
   UpdateEntireReserveConfigArgs,
+  KaminoReserve,
+  UpdateSingleReserveConfigArgs,
+  UpdateSingleReserveConfigAccounts,
+  updateSingleReserveConfig,
 } from '../src';
 import { buildAndSendTxnWithLogs, buildVersionedTransaction } from '../src/utils';
 import { Env } from './setup_utils';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { ElevationGroupFields, ReserveConfig } from '../src/idl_codegen/types';
 import { BN } from '@coral-xyz/anchor';
+import { createAddExtraComputeUnitsIx } from '@hubbleprotocol/kamino-sdk';
 
 export async function createMarket(env: Env): Promise<[TransactionSignature, Keypair]> {
   const args: InitLendingMarketArgs = {
@@ -102,6 +114,36 @@ export async function createReserve(
   return [sig, reserveAccount];
 }
 
+export async function updateReserveSingleValue(
+  env: Env,
+  reserve: KaminoReserve,
+  value: number[],
+  mode: number
+): Promise<TransactionSignature> {
+  await sleep(2000);
+
+  const args: UpdateSingleReserveConfigArgs = {
+    mode: new anchor.BN(mode),
+    value: value,
+    skipValidation: false,
+  };
+
+  const accounts: UpdateSingleReserveConfigAccounts = {
+    lendingMarketOwner: env.admin.publicKey,
+    lendingMarket: reserve.state.lendingMarket,
+    reserve: reserve.address,
+  };
+
+  const ixs: TransactionInstruction[] = [];
+  const budgetIx = createAddExtraComputeUnitsIx(300_000);
+  ixs.push(budgetIx);
+  ixs.push(updateSingleReserveConfig(args, accounts));
+  const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, ixs);
+
+  const sig = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
+  return sig;
+}
+
 export async function updateReserve(
   env: Env,
   reserve: PublicKey,
@@ -132,9 +174,31 @@ export async function updateReserve(
   return sig;
 }
 
-const VALUE_BYTE_MAX_ARRAY_LEN_MARKET_UPDATE = 72;
+export const VALUE_BYTE_MAX_ARRAY_LEN_MARKET_UPDATE = 72;
 
-// TODO: Make it more generic
+export async function updateLendingMarketConfig(
+  env: Env,
+  market: KaminoMarket,
+  mode: number,
+  value: number[]
+): Promise<TransactionSignature> {
+  const args: UpdateLendingMarketArgs = {
+    mode: new anchor.BN(mode),
+    value: value,
+  };
+
+  const accounts: UpdateLendingMarketAccounts = {
+    lendingMarketOwner: market.state.lendingMarketOwner,
+    lendingMarket: new PublicKey(market.address),
+  };
+
+  const ix = updateLendingMarket(args, accounts);
+  const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [ix]);
+
+  const sig = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, [], false, 'updateLendingMarket');
+  return sig;
+}
+
 export async function updateMarketElevationGroup(env: Env, market: PublicKey): Promise<TransactionSignature> {
   await sleep(2000);
   const marketState: LendingMarket = (await LendingMarket.fetch(env.provider.connection, market))!;

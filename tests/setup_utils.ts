@@ -1222,6 +1222,10 @@ export async function createMintAndReserve(
   return [mint, reserve.publicKey, config];
 }
 
+export const bufferToNumberArray = (buffer: Buffer): number[] => {
+  return Array.from(new Uint8Array(buffer));
+};
+
 export interface DepositAmountsForSwap {
   requiredAAmountToDeposit: Decimal;
   requiredBAmountToDeposit: Decimal;
