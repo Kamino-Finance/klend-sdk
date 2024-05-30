@@ -834,6 +834,105 @@ export class KaminoObligation {
     };
   }
 
+  getMaxBorrowAmount(market: KaminoMarket, tokenMint: PublicKey, slot: number): Decimal {
+    const reserve = market.getReserveByMint(tokenMint);
+
+    if (!reserve) {
+      throw new Error('Reserve not found');
+    }
+
+    const elevationGroupActivated =
+      reserve.state.config.elevationGroups.includes(this.state.elevationGroup) && this.state.elevationGroup !== 0;
+
+    const reserveBorrowFactor = reserve.getBorrowFactor();
+    const borrowFactor = elevationGroupActivated ? new Decimal(1) : reserveBorrowFactor;
+
+    const maxObligationBorrowPower = this.refreshedStats.borrowLimit // adjusted available amount
+      .minus(this.refreshedStats.userTotalBorrowBorrowFactorAdjusted)
+      .div(borrowFactor)
+      .div(reserve.getOracleMarketPrice())
+      .mul(reserve.getMintFactor());
+    const reserveAvailableAmount = reserve.getLiquidityAvailableAmount();
+    let reserveBorrowCapRemained = reserve.stats.reserveBorrowLimit.sub(reserve.getBorrowedAmount());
+
+    reserveBorrowCapRemained =
+      reserve.state.config.disableUsageAsCollOutsideEmode === 1 && !elevationGroupActivated
+        ? new Decimal(0)
+        : reserveBorrowCapRemained;
+
+    let maxBorrowAmount = Decimal.min(maxObligationBorrowPower, reserveAvailableAmount, reserveBorrowCapRemained);
+
+    const debtWithdrawalCap = reserve.getDebtWithdrawalCapCapacity().sub(reserve.getDebtWithdrawalCapCurrent(slot));
+    maxBorrowAmount = reserve.getDebtWithdrawalCapCapacity().gt(0)
+      ? Decimal.min(maxBorrowAmount, debtWithdrawalCap)
+      : maxBorrowAmount;
+
+    let originationFeeRate = reserve.getBorrowFee();
+
+    // Inclusive fee rate
+    originationFeeRate = originationFeeRate.div(originationFeeRate.add(new Decimal(1)));
+    const borrowFee = maxBorrowAmount.mul(originationFeeRate);
+
+    maxBorrowAmount = maxBorrowAmount.sub(borrowFee);
+
+    return Decimal.max(new Decimal(0), maxBorrowAmount);
+  }
+
+  getMaxWithdrawAmount(market: KaminoMarket, tokenMint: PublicKey, slot: number): Decimal {
+    const reserve = market.getReserveByMint(tokenMint);
+
+    if (!reserve) {
+      throw new Error('Reserve not found');
+    }
+
+    const userDepositPosition = this.getDepositByReserve(reserve.address);
+
+    if (!userDepositPosition) {
+      throw new Error('Deposit reserve not found');
+    }
+
+    const userDepositPositionAmount = userDepositPosition.amount;
+
+    if (this.refreshedStats.userTotalBorrowBorrowFactorAdjusted.equals(new Decimal(0))) {
+      return new Decimal(userDepositPositionAmount);
+    }
+
+    const elevationGroupActivated =
+      reserve.state.config.elevationGroups.includes(this.state.elevationGroup) && this.state.elevationGroup !== 0;
+
+    const reserveMaxLtv = elevationGroupActivated
+      ? market.getElevationGroup(this.state.elevationGroup).ltvPct / 100
+      : reserve.stats.loanToValuePct;
+
+    // bf adjusted debt value > allowed_borrow_value
+    if (this.refreshedStats.userTotalBorrowBorrowFactorAdjusted >= this.refreshedStats.borrowLimit) {
+      return new Decimal(0);
+    }
+
+    let maxWithdrawValue;
+    if (reserveMaxLtv === 0) {
+      maxWithdrawValue = userDepositPositionAmount;
+    } else {
+      // borrowLimit / userTotalDeposit = maxLtv
+      // maxWithdrawValue = userTotalDeposit - userTotalBorrow / maxLtv
+      maxWithdrawValue = this.refreshedStats.borrowLimit
+        .sub(this.refreshedStats.userTotalBorrowBorrowFactorAdjusted)
+        .div(reserveMaxLtv)
+        .mul(0.995); // remove 0.5% to prevent going over max ltv
+    }
+
+    const maxWithdrawAmount = maxWithdrawValue.div(reserve.getOracleMarketPrice()).mul(reserve.getMintFactor());
+    const reserveAvailableLiquidity = reserve.getLiquidityAvailableAmount();
+
+    const withdrawalCapRemained = reserve
+      .getDepositWithdrawalCapCapacity()
+      .sub(reserve.getDepositWithdrawalCapCurrent(slot));
+    return Decimal.max(
+      0,
+      Decimal.min(userDepositPositionAmount, maxWithdrawAmount, reserveAvailableLiquidity, withdrawalCapRemained)
+    );
+  }
+
   /**
    *
    * @returns Total borrowed amount for the specified obligation liquidity/borrow asset
