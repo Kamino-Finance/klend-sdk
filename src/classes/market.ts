@@ -258,7 +258,7 @@ export class KaminoMarket {
     );
 
     return lamportsToNumberDecimal(
-      maxCollWithdrawableForObligation,
+      maxCollWithdrawableForObligation.mul(0.999), // 0.1% buffer
       collReserve.state.liquidity.mintDecimals.toNumber()
     );
   }
@@ -301,7 +301,10 @@ export class KaminoMarket {
       debtReserve.getLiquidityAvailableAmount()
     ).floor();
 
-    return lamportsToNumberDecimal(maxDebtBorrowableValueLamports, debtReserve.state.liquidity.mintDecimals.toNumber());
+    return lamportsToNumberDecimal(
+      maxDebtBorrowableValueLamports.mul(0.999), // 0.1% buffer
+      debtReserve.state.liquidity.mintDecimals.toNumber()
+    );
   }
 
   getMaxAndLiquidationLtvAndBorrowFactorForPair(
