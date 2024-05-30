@@ -71,7 +71,7 @@ export class KaminoReserve {
    * @returns the total remaining borrow capacity of the reserve
    */
   getRemainingBorrowCapacity(): Decimal {
-    return this.getBorrowLimit().sub(this.getBorrowedAmount())
+    return this.getBorrowLimit().sub(this.getBorrowedAmount());
   }
 
   /**
