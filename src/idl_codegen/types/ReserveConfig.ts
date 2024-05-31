@@ -55,6 +55,7 @@ export interface ReserveConfigFields {
   debtWithdrawalCap: types.WithdrawalCapsFields
   elevationGroups: Array<number>
   disableUsageAsCollOutsideEmode: number
+  utilizationLimitBlockBorrowingAbove: number
   reserved1: Array<number>
 }
 
@@ -110,6 +111,7 @@ export interface ReserveConfigJSON {
   debtWithdrawalCap: types.WithdrawalCapsJSON
   elevationGroups: Array<number>
   disableUsageAsCollOutsideEmode: number
+  utilizationLimitBlockBorrowingAbove: number
   reserved1: Array<number>
 }
 
@@ -166,6 +168,7 @@ export class ReserveConfig {
   readonly debtWithdrawalCap: types.WithdrawalCaps
   readonly elevationGroups: Array<number>
   readonly disableUsageAsCollOutsideEmode: number
+  readonly utilizationLimitBlockBorrowingAbove: number
   readonly reserved1: Array<number>
 
   constructor(fields: ReserveConfigFields) {
@@ -201,6 +204,8 @@ export class ReserveConfig {
     })
     this.elevationGroups = fields.elevationGroups
     this.disableUsageAsCollOutsideEmode = fields.disableUsageAsCollOutsideEmode
+    this.utilizationLimitBlockBorrowingAbove =
+      fields.utilizationLimitBlockBorrowingAbove
     this.reserved1 = fields.reserved1
   }
 
@@ -231,7 +236,8 @@ export class ReserveConfig {
         types.WithdrawalCaps.layout("debtWithdrawalCap"),
         borsh.array(borsh.u8(), 20, "elevationGroups"),
         borsh.u8("disableUsageAsCollOutsideEmode"),
-        borsh.array(borsh.u8(), 3, "reserved1"),
+        borsh.u8("utilizationLimitBlockBorrowingAbove"),
+        borsh.array(borsh.u8(), 2, "reserved1"),
       ],
       property
     )
@@ -268,6 +274,8 @@ export class ReserveConfig {
       ),
       elevationGroups: obj.elevationGroups,
       disableUsageAsCollOutsideEmode: obj.disableUsageAsCollOutsideEmode,
+      utilizationLimitBlockBorrowingAbove:
+        obj.utilizationLimitBlockBorrowingAbove,
       reserved1: obj.reserved1,
     })
   }
@@ -304,6 +312,8 @@ export class ReserveConfig {
       ),
       elevationGroups: fields.elevationGroups,
       disableUsageAsCollOutsideEmode: fields.disableUsageAsCollOutsideEmode,
+      utilizationLimitBlockBorrowingAbove:
+        fields.utilizationLimitBlockBorrowingAbove,
       reserved1: fields.reserved1,
     }
   }
@@ -336,6 +346,8 @@ export class ReserveConfig {
       debtWithdrawalCap: this.debtWithdrawalCap.toJSON(),
       elevationGroups: this.elevationGroups,
       disableUsageAsCollOutsideEmode: this.disableUsageAsCollOutsideEmode,
+      utilizationLimitBlockBorrowingAbove:
+        this.utilizationLimitBlockBorrowingAbove,
       reserved1: this.reserved1,
     }
   }
@@ -372,6 +384,8 @@ export class ReserveConfig {
       debtWithdrawalCap: types.WithdrawalCaps.fromJSON(obj.debtWithdrawalCap),
       elevationGroups: obj.elevationGroups,
       disableUsageAsCollOutsideEmode: obj.disableUsageAsCollOutsideEmode,
+      utilizationLimitBlockBorrowingAbove:
+        obj.utilizationLimitBlockBorrowingAbove,
       reserved1: obj.reserved1,
     })
   }

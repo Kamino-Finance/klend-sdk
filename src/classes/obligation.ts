@@ -875,6 +875,18 @@ export class KaminoObligation {
 
     maxBorrowAmount = maxBorrowAmount.sub(borrowFee);
 
+    const utilizationRatioLimit = reserve.state.config.utilizationLimitBlockBorrowingAbove;
+    const currentUtilizationRatio = reserve.calculateUtilizationRatio();
+
+    if (utilizationRatioLimit > 0 && currentUtilizationRatio > utilizationRatioLimit) {
+      return new Decimal(0);
+    } else if (utilizationRatioLimit > 0 && currentUtilizationRatio < utilizationRatioLimit) {
+      const maxBorrowBasedOnUtilization = new Decimal(utilizationRatioLimit - currentUtilizationRatio).mul(
+        reserve.getTotalSupply()
+      );
+      maxBorrowAmount = Decimal.min(maxBorrowAmount, maxBorrowBasedOnUtilization);
+    }
+
     return Decimal.max(new Decimal(0), maxBorrowAmount);
   }
 

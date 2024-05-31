@@ -97,6 +97,7 @@ export type CustomError =
   | ReserveTokenBalanceMismatch
   | ReserveVaultBalanceMismatch
   | ReserveAccountingMismatch
+  | BorrowingAboveUtilizationRateDisabled
 
 export class InvalidMarketAuthority extends Error {
   static readonly code = 6000
@@ -1215,6 +1216,17 @@ export class ReserveAccountingMismatch extends Error {
   }
 }
 
+export class BorrowingAboveUtilizationRateDisabled extends Error {
+  static readonly code = 6098
+  readonly code = 6098
+  readonly name = "BorrowingAboveUtilizationRateDisabled"
+  readonly msg = "Borrowing above set utilization rate is disabled"
+
+  constructor(readonly logs?: string[]) {
+    super("6098: Borrowing above set utilization rate is disabled")
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 6000:
@@ -1413,6 +1425,8 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new ReserveVaultBalanceMismatch(logs)
     case 6097:
       return new ReserveAccountingMismatch(logs)
+    case 6098:
+      return new BorrowingAboveUtilizationRateDisabled(logs)
   }
 
   return null

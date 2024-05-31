@@ -969,6 +969,52 @@ export class UpdateDisableUsageAsCollateralOutsideEmode {
   }
 }
 
+export interface UpdateBlockBorrowingAboveUtilizationJSON {
+  kind: "UpdateBlockBorrowingAboveUtilization"
+}
+
+export class UpdateBlockBorrowingAboveUtilization {
+  static readonly discriminator = 42
+  static readonly kind = "UpdateBlockBorrowingAboveUtilization"
+  readonly discriminator = 42
+  readonly kind = "UpdateBlockBorrowingAboveUtilization"
+
+  toJSON(): UpdateBlockBorrowingAboveUtilizationJSON {
+    return {
+      kind: "UpdateBlockBorrowingAboveUtilization",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateBlockBorrowingAboveUtilization: {},
+    }
+  }
+}
+
+export interface UpdateBlockPriceUsageJSON {
+  kind: "UpdateBlockPriceUsage"
+}
+
+export class UpdateBlockPriceUsage {
+  static readonly discriminator = 43
+  static readonly kind = "UpdateBlockPriceUsage"
+  readonly discriminator = 43
+  readonly kind = "UpdateBlockPriceUsage"
+
+  toJSON(): UpdateBlockPriceUsageJSON {
+    return {
+      kind: "UpdateBlockPriceUsage",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateBlockPriceUsage: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if (typeof obj !== "object") {
@@ -1100,6 +1146,12 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   }
   if ("UpdateDisableUsageAsCollateralOutsideEmode" in obj) {
     return new UpdateDisableUsageAsCollateralOutsideEmode()
+  }
+  if ("UpdateBlockBorrowingAboveUtilization" in obj) {
+    return new UpdateBlockBorrowingAboveUtilization()
+  }
+  if ("UpdateBlockPriceUsage" in obj) {
+    return new UpdateBlockPriceUsage()
   }
 
   throw new Error("Invalid enum object")
@@ -1235,6 +1287,12 @@ export function fromJSON(
     case "UpdateDisableUsageAsCollateralOutsideEmode": {
       return new UpdateDisableUsageAsCollateralOutsideEmode()
     }
+    case "UpdateBlockBorrowingAboveUtilization": {
+      return new UpdateBlockBorrowingAboveUtilization()
+    }
+    case "UpdateBlockPriceUsage": {
+      return new UpdateBlockPriceUsage()
+    }
   }
 }
 
@@ -1282,6 +1340,8 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateFarmCollateral"),
     borsh.struct([], "UpdateFarmDebt"),
     borsh.struct([], "UpdateDisableUsageAsCollateralOutsideEmode"),
+    borsh.struct([], "UpdateBlockBorrowingAboveUtilization"),
+    borsh.struct([], "UpdateBlockPriceUsage"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)
