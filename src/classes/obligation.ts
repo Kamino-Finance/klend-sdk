@@ -841,9 +841,10 @@ export class KaminoObligation {
       throw new Error('Reserve not found');
     }
 
-    const elevationGroupActivated = reserve.state.config.elevationGroups.includes(this.state.elevationGroup);
+    const elevationGroupActivated =
+      reserve.state.config.elevationGroups.includes(this.state.elevationGroup) && this.state.elevationGroup !== 0;
 
-    const reserveBorrowFactor = new Decimal(reserve.state.config.borrowFactorPct.toString()).div(100);
+    const reserveBorrowFactor = reserve.getBorrowFactor();
     const borrowFactor = elevationGroupActivated ? new Decimal(1) : reserveBorrowFactor;
 
     const maxObligationBorrowPower = this.refreshedStats.borrowLimit // adjusted available amount
@@ -940,16 +941,33 @@ export class KaminoObligation {
     const reserveMaxLtv = elevationGroupActivated
       ? market.getElevationGroup(this.state.elevationGroup).ltvPct / 100
       : reserve.stats.loanToValuePct;
-
     // bf adjusted debt value > allowed_borrow_value
     if (this.refreshedStats.userTotalBorrowBorrowFactorAdjusted >= this.refreshedStats.borrowLimit) {
       return new Decimal(0);
     }
 
+    let maxWithdrawValue;
+    if (reserveMaxLtv === 0) {
+      maxWithdrawValue = userDepositPositionAmount;
+    } else {
+      // borrowLimit / userTotalDeposit = maxLtv
+      // maxWithdrawValue = userTotalDeposit - userTotalBorrow / maxLtv
+      maxWithdrawValue = this.refreshedStats.borrowLimit
+        .sub(this.refreshedStats.userTotalBorrowBorrowFactorAdjusted)
+        .div(reserveMaxLtv)
+        .mul(0.999); // remove 0.1% to prevent going over max ltv
+    }
+
+    const maxWithdrawAmount = maxWithdrawValue.div(reserve.getOracleMarketPrice()).mul(reserve.getMintFactor());
+    const reserveAvailableLiquidity = reserve.getLiquidityAvailableAmount();
+
     const withdrawalCapRemained = reserve
       .getDepositWithdrawalCapCapacity()
-      .sub(reserve.getDepositWithdrawalCapCurrent());
-    return Decimal.max(0, Decimal.min(maxWithdrawAmount, reserveAvailableLiquidity, withdrawalCapRemained));
+      .sub(reserve.getDepositWithdrawalCapCurrent(slot));
+    return Decimal.max(
+      0,
+      Decimal.min(userDepositPositionAmount, maxWithdrawAmount, reserveAvailableLiquidity, withdrawalCapRemained)
+    );
   }
 
   /**
