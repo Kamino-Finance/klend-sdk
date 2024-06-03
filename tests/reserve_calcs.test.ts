@@ -143,6 +143,7 @@ function getDefaultReserveFields(): ReserveFields {
         flashLoanFeeSf: new BN(0),
         padding: [],
       },
+      disableUsageAsCollOutsideEmode: 0,
       liquidationThresholdPct: 0,
       loanToValuePct: 0,
       maxLiquidationBonusBps: 0,

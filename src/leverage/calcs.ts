@@ -41,7 +41,7 @@ export interface FormsCalcsResult {
 }
 
 export async function calculateMultiplyEffects(
-  getPriceByTokenMintDecimal: (mint: PublicKey | string) => Decimal,
+  getPriceByTokenMintDecimal: (mint: PublicKey | string) => Promise<Decimal>,
   {
     depositAmount,
     withdrawAmount,
@@ -143,8 +143,8 @@ export async function calculateMultiplyEffects(
     }
   }
 
-  const borrowTokenPrice = getPriceByTokenMintDecimal(debtTokenMint);
-  const depositTokenPrice = getPriceByTokenMintDecimal(collTokenMint);
+  const borrowTokenPrice = await getPriceByTokenMintDecimal(debtTokenMint);
+  const depositTokenPrice = await getPriceByTokenMintDecimal(collTokenMint);
 
   const totalDepositedUsd = depositTokenPrice.mul(totalDeposited);
   const totalBorrowedUsd = borrowTokenPrice.mul(totalBorrowed);

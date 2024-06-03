@@ -339,7 +339,7 @@ export class KaminoObligation {
     let borrowPosition: Position | undefined = undefined;
     for (const oldBorrow of oldBorrows.values()) {
       if (oldBorrow.mintAddress.equals(mint)) {
-        borrowPosition = oldBorrow;
+        borrowPosition = { ...oldBorrow };
       }
     }
     let reserve: KaminoReserve | undefined = undefined;
@@ -408,7 +408,7 @@ export class KaminoObligation {
     let depositPosition: Position | undefined = undefined;
     for (const oldDeposit of oldDeposits.values()) {
       if (oldDeposit.mintAddress.equals(mint)) {
-        depositPosition = oldDeposit;
+        depositPosition = { ...oldDeposit };
       }
     }
     let reserve: KaminoReserve | undefined = undefined;
@@ -834,7 +834,7 @@ export class KaminoObligation {
     };
   }
 
-  getMaxBorrowAmount(market: KaminoMarket, tokenMint: PublicKey): Decimal {
+  getMaxBorrowAmount(market: KaminoMarket, tokenMint: PublicKey, slot: number): Decimal {
     const reserve = market.getReserveByMint(tokenMint);
 
     if (!reserve) {
@@ -849,22 +849,42 @@ export class KaminoObligation {
     const maxObligationBorrowPower = this.refreshedStats.borrowLimit // adjusted available amount
       .minus(this.refreshedStats.userTotalBorrowBorrowFactorAdjusted)
       .div(borrowFactor)
-      .div(reserve.getOracleMarketPrice());
+      .div(reserve.getOracleMarketPrice())
+      .mul(reserve.getMintFactor());
     const reserveAvailableAmount = reserve.getLiquidityAvailableAmount();
     let reserveBorrowCapRemained = reserve.stats.reserveBorrowLimit.sub(reserve.getBorrowedAmount());
-    const debtWithdrawalCap = reserve.getDebtWithdrawalCapCapacity().sub(reserve.getDebtWithdrawalCapCurrent());
 
     reserveBorrowCapRemained =
-      reserve.state.config.disableUsageAsCollOutsideEmode === 1 && elevationGroupActivated
+      reserve.state.config.disableUsageAsCollOutsideEmode === 1 && !elevationGroupActivated
         ? new Decimal(0)
         : reserveBorrowCapRemained;
 
-    let maxBorrowAmount = Decimal.min(
-      maxObligationBorrowPower,
-      reserveAvailableAmount,
-      reserveBorrowCapRemained,
-      debtWithdrawalCap
-    );
+    let maxBorrowAmount = Decimal.min(maxObligationBorrowPower, reserveAvailableAmount, reserveBorrowCapRemained);
+
+    const debtWithdrawalCap = reserve.getDebtWithdrawalCapCapacity().sub(reserve.getDebtWithdrawalCapCurrent(slot));
+    maxBorrowAmount = reserve.getDebtWithdrawalCapCapacity().gt(0)
+      ? Decimal.min(maxBorrowAmount, debtWithdrawalCap)
+      : maxBorrowAmount;
+
+    let originationFeeRate = reserve.getBorrowFee();
+
+    // Inclusive fee rate
+    originationFeeRate = originationFeeRate.div(originationFeeRate.add(new Decimal(1)));
+    const borrowFee = maxBorrowAmount.mul(originationFeeRate);
+
+    maxBorrowAmount = maxBorrowAmount.sub(borrowFee);
+
+    const utilizationRatioLimit = reserve.state.config.utilizationLimitBlockBorrowingAbove / 100;
+    const currentUtilizationRatio = reserve.calculateUtilizationRatio();
+
+    if (utilizationRatioLimit > 0 && currentUtilizationRatio > utilizationRatioLimit) {
+      return new Decimal(0);
+    } else if (utilizationRatioLimit > 0 && currentUtilizationRatio < utilizationRatioLimit) {
+      const maxBorrowBasedOnUtilization = new Decimal(utilizationRatioLimit - currentUtilizationRatio).mul(
+        reserve.getTotalSupply()
+      );
+      maxBorrowAmount = Decimal.min(maxBorrowAmount, maxBorrowBasedOnUtilization);
+    }
 
     let borrowLimitDependentOnElevationGroup = new Decimal(U64_MAX);
 
@@ -892,10 +912,10 @@ export class KaminoObligation {
 
     maxBorrowAmount = Decimal.min(maxBorrowAmount, borrowLimitDependentOnElevationGroup);
 
-    return maxBorrowAmount;
+    return Decimal.max(new Decimal(0), maxBorrowAmount);
   }
 
-  getMaxWithdrawAmount(market: KaminoMarket, tokenMint: PublicKey): Decimal {
+  getMaxWithdrawAmount(market: KaminoMarket, tokenMint: PublicKey, slot: number): Decimal {
     const reserve = market.getReserveByMint(tokenMint);
 
     if (!reserve) {
@@ -908,21 +928,18 @@ export class KaminoObligation {
       throw new Error('Deposit reserve not found');
     }
 
-    if (reserve.stats.loanToValuePct === 0) {
-      return new Decimal(userDepositPosition?.amount);
+    const userDepositPositionAmount = userDepositPosition.amount;
+
+    if (this.refreshedStats.userTotalBorrowBorrowFactorAdjusted.equals(new Decimal(0))) {
+      return new Decimal(userDepositPositionAmount);
     }
 
-    const maxWithdrawValue = this.refreshedStats.borrowLimit
-      .sub(this.refreshedStats.userTotalBorrowBorrowFactorAdjusted)
-      .mul(100)
-      .div(reserve.stats.loanToValuePct);
+    const elevationGroupActivated =
+      reserve.state.config.elevationGroups.includes(this.state.elevationGroup) && this.state.elevationGroup !== 0;
 
-    // const minTotalDepositBeforeLiquidations = maxLtv === 0 ? new Decimal(0) : new Decimal(userTotalBorrow).div(maxLtv);
-    // const maxWithdrawAmount = new Decimal(this.refreshedStats.userTotalDeposit)
-    //   .minus(minTotalDepositBeforeLiquidation)
-    //   .div(reserve.getOracleMarketPrice());
-    const maxWithdrawAmount = maxWithdrawValue.div(reserve.getOracleMarketPrice());
-    const reserveAvailableLiquidity = reserve.getLiquidityAvailableAmount();
+    const reserveMaxLtv = elevationGroupActivated
+      ? market.getElevationGroup(this.state.elevationGroup).ltvPct / 100
+      : reserve.stats.loanToValuePct;
 
     // bf adjusted debt value > allowed_borrow_value
     if (this.refreshedStats.userTotalBorrowBorrowFactorAdjusted >= this.refreshedStats.borrowLimit) {

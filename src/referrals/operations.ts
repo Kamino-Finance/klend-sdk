@@ -285,7 +285,7 @@ export async function getReferralsRanking(connection: Connection, kaminoMarket: 
     // calculating earnings for each referrer
     for (const reserve of kaminoMarket.reserves.values()) {
       totalEarningsUsd = totalEarningsUsd.add(
-        referrerTokenStates.get(reserve.getLiquidityMint())!.mul(reserve.getReserveMarketPrice())
+        referrerTokenStates.get(reserve.getLiquidityMint())!.mul(reserve.getOracleMarketPrice())
       );
     }
 
