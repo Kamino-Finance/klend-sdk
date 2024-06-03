@@ -18,6 +18,8 @@ export interface TokenInfoFields {
   switchboardConfiguration: types.SwitchboardConfigurationFields
   /** Pyth configuration */
   pythConfiguration: types.PythConfigurationFields
+  blockPriceUsage: number
+  reserved: Array<number>
   padding: Array<BN>
 }
 
@@ -36,6 +38,8 @@ export interface TokenInfoJSON {
   switchboardConfiguration: types.SwitchboardConfigurationJSON
   /** Pyth configuration */
   pythConfiguration: types.PythConfigurationJSON
+  blockPriceUsage: number
+  reserved: Array<number>
   padding: Array<string>
 }
 
@@ -54,6 +58,8 @@ export class TokenInfo {
   readonly switchboardConfiguration: types.SwitchboardConfiguration
   /** Pyth configuration */
   readonly pythConfiguration: types.PythConfiguration
+  readonly blockPriceUsage: number
+  readonly reserved: Array<number>
   readonly padding: Array<BN>
 
   constructor(fields: TokenInfoFields) {
@@ -71,6 +77,8 @@ export class TokenInfo {
     this.pythConfiguration = new types.PythConfiguration({
       ...fields.pythConfiguration,
     })
+    this.blockPriceUsage = fields.blockPriceUsage
+    this.reserved = fields.reserved
     this.padding = fields.padding
   }
 
@@ -85,7 +93,9 @@ export class TokenInfo {
         types.ScopeConfiguration.layout("scopeConfiguration"),
         types.SwitchboardConfiguration.layout("switchboardConfiguration"),
         types.PythConfiguration.layout("pythConfiguration"),
-        borsh.array(borsh.u64(), 20, "padding"),
+        borsh.u8("blockPriceUsage"),
+        borsh.array(borsh.u8(), 7, "reserved"),
+        borsh.array(borsh.u64(), 19, "padding"),
       ],
       property
     )
@@ -108,6 +118,8 @@ export class TokenInfo {
       pythConfiguration: types.PythConfiguration.fromDecoded(
         obj.pythConfiguration
       ),
+      blockPriceUsage: obj.blockPriceUsage,
+      reserved: obj.reserved,
       padding: obj.padding,
     })
   }
@@ -128,6 +140,8 @@ export class TokenInfo {
       pythConfiguration: types.PythConfiguration.toEncodable(
         fields.pythConfiguration
       ),
+      blockPriceUsage: fields.blockPriceUsage,
+      reserved: fields.reserved,
       padding: fields.padding,
     }
   }
@@ -142,6 +156,8 @@ export class TokenInfo {
       scopeConfiguration: this.scopeConfiguration.toJSON(),
       switchboardConfiguration: this.switchboardConfiguration.toJSON(),
       pythConfiguration: this.pythConfiguration.toJSON(),
+      blockPriceUsage: this.blockPriceUsage,
+      reserved: this.reserved,
       padding: this.padding.map((item) => item.toString()),
     }
   }
@@ -162,6 +178,8 @@ export class TokenInfo {
       pythConfiguration: types.PythConfiguration.fromJSON(
         obj.pythConfiguration
       ),
+      blockPriceUsage: obj.blockPriceUsage,
+      reserved: obj.reserved,
       padding: obj.padding.map((item) => new BN(item)),
     })
   }

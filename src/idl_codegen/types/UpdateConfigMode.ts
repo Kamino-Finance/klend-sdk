@@ -969,14 +969,60 @@ export class UpdateDisableUsageAsCollateralOutsideEmode {
   }
 }
 
+export interface UpdateBlockBorrowingAboveUtilizationJSON {
+  kind: "UpdateBlockBorrowingAboveUtilization"
+}
+
+export class UpdateBlockBorrowingAboveUtilization {
+  static readonly discriminator = 42
+  static readonly kind = "UpdateBlockBorrowingAboveUtilization"
+  readonly discriminator = 42
+  readonly kind = "UpdateBlockBorrowingAboveUtilization"
+
+  toJSON(): UpdateBlockBorrowingAboveUtilizationJSON {
+    return {
+      kind: "UpdateBlockBorrowingAboveUtilization",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateBlockBorrowingAboveUtilization: {},
+    }
+  }
+}
+
+export interface UpdateBlockPriceUsageJSON {
+  kind: "UpdateBlockPriceUsage"
+}
+
+export class UpdateBlockPriceUsage {
+  static readonly discriminator = 43
+  static readonly kind = "UpdateBlockPriceUsage"
+  readonly discriminator = 43
+  readonly kind = "UpdateBlockPriceUsage"
+
+  toJSON(): UpdateBlockPriceUsageJSON {
+    return {
+      kind: "UpdateBlockPriceUsage",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateBlockPriceUsage: {},
+    }
+  }
+}
+
 export interface UpdateBorrowLimitOutsideElevationGroupJSON {
   kind: "UpdateBorrowLimitOutsideElevationGroup"
 }
 
 export class UpdateBorrowLimitOutsideElevationGroup {
-  static readonly discriminator = 42
+  static readonly discriminator = 44
   static readonly kind = "UpdateBorrowLimitOutsideElevationGroup"
-  readonly discriminator = 42
+  readonly discriminator = 44
   readonly kind = "UpdateBorrowLimitOutsideElevationGroup"
 
   toJSON(): UpdateBorrowLimitOutsideElevationGroupJSON {
@@ -997,9 +1043,9 @@ export interface UpdateBorrowLimitsInElevationGroupAgainstThisReserveJSON {
 }
 
 export class UpdateBorrowLimitsInElevationGroupAgainstThisReserve {
-  static readonly discriminator = 43
+  static readonly discriminator = 45
   static readonly kind = "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"
-  readonly discriminator = 43
+  readonly discriminator = 45
   readonly kind = "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"
 
   toJSON(): UpdateBorrowLimitsInElevationGroupAgainstThisReserveJSON {
@@ -1147,6 +1193,12 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if ("UpdateDisableUsageAsCollateralOutsideEmode" in obj) {
     return new UpdateDisableUsageAsCollateralOutsideEmode()
   }
+  if ("UpdateBlockBorrowingAboveUtilization" in obj) {
+    return new UpdateBlockBorrowingAboveUtilization()
+  }
+  if ("UpdateBlockPriceUsage" in obj) {
+    return new UpdateBlockPriceUsage()
+  }
   if ("UpdateBorrowLimitOutsideElevationGroup" in obj) {
     return new UpdateBorrowLimitOutsideElevationGroup()
   }
@@ -1287,6 +1339,12 @@ export function fromJSON(
     case "UpdateDisableUsageAsCollateralOutsideEmode": {
       return new UpdateDisableUsageAsCollateralOutsideEmode()
     }
+    case "UpdateBlockBorrowingAboveUtilization": {
+      return new UpdateBlockBorrowingAboveUtilization()
+    }
+    case "UpdateBlockPriceUsage": {
+      return new UpdateBlockPriceUsage()
+    }
     case "UpdateBorrowLimitOutsideElevationGroup": {
       return new UpdateBorrowLimitOutsideElevationGroup()
     }
@@ -1340,6 +1398,8 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateFarmCollateral"),
     borsh.struct([], "UpdateFarmDebt"),
     borsh.struct([], "UpdateDisableUsageAsCollateralOutsideEmode"),
+    borsh.struct([], "UpdateBlockBorrowingAboveUtilization"),
+    borsh.struct([], "UpdateBlockPriceUsage"),
     borsh.struct([], "UpdateBorrowLimitOutsideElevationGroup"),
     borsh.struct([], "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"),
   ])
