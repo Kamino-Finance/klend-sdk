@@ -1168,6 +1168,25 @@ describe('Main lending market instruction tests', function () {
     }
 
     {
+      // Update utilization ratio limit
+      const maxBorrowBefore = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      const buffer = Buffer.alloc(32);
+      buffer.writeUint8(2, 0);
+
+      await updateReserveSingleValue(
+        env,
+        solReserve!,
+        bufferToNumberArray(buffer),
+        UpdateConfigMode.UpdateBlockBorrowingAboveUtilization.discriminator + 1
+      );
+
+      await kaminoMarket.reloadSingleReserve(solReserve!.address);
+
+      const maxBorrowAfter = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
+      assert.ok(maxBorrowAfter.lt(maxBorrowBefore));
+    }
+
+    {
       // Update debt capacity
       const buffer = Buffer.alloc(32);
       buffer.writeBigUint64LE(BigInt(LAMPORTS_PER_SOL), 0);

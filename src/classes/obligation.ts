@@ -875,7 +875,7 @@ export class KaminoObligation {
 
     maxBorrowAmount = maxBorrowAmount.sub(borrowFee);
 
-    const utilizationRatioLimit = reserve.state.config.utilizationLimitBlockBorrowingAbove;
+    const utilizationRatioLimit = reserve.state.config.utilizationLimitBlockBorrowingAbove / 100;
     const currentUtilizationRatio = reserve.calculateUtilizationRatio();
 
     if (utilizationRatioLimit > 0 && currentUtilizationRatio > utilizationRatioLimit) {
@@ -930,7 +930,7 @@ export class KaminoObligation {
       maxWithdrawValue = this.refreshedStats.borrowLimit
         .sub(this.refreshedStats.userTotalBorrowBorrowFactorAdjusted)
         .div(reserveMaxLtv)
-        .mul(0.995); // remove 0.5% to prevent going over max ltv
+        .mul(0.999); // remove 0.1% to prevent going over max ltv
     }
 
     const maxWithdrawAmount = maxWithdrawValue.div(reserve.getOracleMarketPrice()).mul(reserve.getMintFactor());
