@@ -80,6 +80,7 @@ export type ActionType =
   | 'depositAndBorrow'
   | 'repayAndWithdraw'
   | 'refreshObligation'
+  | 'requestElevationGroup'
   | 'withdrawReferrerFees';
 
 export class KaminoAction {
@@ -368,6 +369,40 @@ export class KaminoAction {
     }
 
     axn.addRefreshObligation(payer);
+
+    return axn;
+  }
+
+  static async buildRequestElevationGroupTxns(
+    kaminoMarket: KaminoMarket,
+    payer: PublicKey,
+    obligation: KaminoObligation,
+    elevationGroup: number,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
+    currentSlot: number = 0
+  ) {
+    const firstReserve = obligation.state.deposits[0].depositReserve;
+    const firstKaminoReserve = kaminoMarket.getReserveByAddress(firstReserve);
+    if (!firstKaminoReserve) {
+      throw new Error(`Reserve ${firstReserve.toBase58()} not found`);
+    }
+    const axn = await KaminoAction.initialize(
+      'requestElevationGroup',
+      '0',
+      firstKaminoReserve?.getLiquidityMint(),
+      obligation.state.owner,
+      kaminoMarket,
+      obligation,
+      kaminoMarket.programId,
+      currentSlot
+    );
+
+    if (extraComputeBudget > 0) {
+      axn.addComputeBudgetIxn(extraComputeBudget);
+    }
+
+    axn.addRefreshObligation(payer);
+    axn.addRequestElevationIx(elevationGroup, true);
 
     return axn;
   }

@@ -258,6 +258,7 @@ export const makeReserveConfig = (tokenName: string, params: ConfigParams = Defa
     disableUsageAsCollOutsideEmode: 0,
     borrowLimitOutsideElevationGroup: new BN(U64_MAX),
     borrowLimitAgainstThisCollateralInElevationGroup: [...Array(32)].map(() => new BN(0)),
+    utilizationLimitBlockBorrowingAbove: 0,
     reserved0: Array(2).fill(0),
     reserved1: Array(3).fill(0),
   };
@@ -393,10 +394,11 @@ export const makeMockOracleConfig = (tokenName: string, params: ConfigParams = D
     elevationGroups: [...Array(20)].map(() => 0),
     deleveragingThresholdSlotsPerBps: new BN(7200), // 0.01% per hour
     multiplierTagBoost: Array(8).fill(0),
-    reserved0: Array(2).fill(0),
     disableUsageAsCollOutsideEmode: 0,
+    reserved0: Array(2).fill(0),
     borrowLimitOutsideElevationGroup: new BN(10_000_000_000_000),
     borrowLimitAgainstThisCollateralInElevationGroup: [...Array(32)].map(() => new BN(0)),
+    utilizationLimitBlockBorrowingAbove: 0,
     reserved1: Array(3).fill(0),
   };
   return new ReserveConfig(reserveConfig);
@@ -1226,6 +1228,10 @@ export async function createMintAndReserve(
 
   return [mint, reserve.publicKey, config];
 }
+
+export const bufferToNumberArray = (buffer: Buffer): number[] => {
+  return Array.from(new Uint8Array(buffer));
+};
 
 export interface DepositAmountsForSwap {
   requiredAAmountToDeposit: Decimal;

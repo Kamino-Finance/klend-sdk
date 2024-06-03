@@ -1,8 +1,7 @@
-import { Connection, PublicKey } from '@solana/web3.js';
+import { AccountInfo, Connection, PublicKey } from '@solana/web3.js';
 import { KaminoObligation } from './obligation';
 import { KaminoReserve } from './reserve';
 import { LendingMarket, Obligation, UserMetadata, ReferrerTokenState, Reserve } from '../idl_codegen/accounts';
-import { MarketConfigType } from './shared';
 import {
   lendingMarketAuthPda,
   ObligationType,
@@ -34,7 +33,6 @@ import { chunks, KaminoPrices, MintToPriceMap } from '@hubbleprotocol/kamino-sdk
 import { parseTokenSymbol } from './utils';
 import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
 import { ObligationZP } from '../idl_codegen/zero_padding';
-import { getProgramAccounts } from '../utils/rpc';
 
 export interface ReserveRewardInfo {
   rewardsPerSecond: Decimal; // not lamport
@@ -121,6 +119,12 @@ export class KaminoMarket {
     this.reservesActive = getReservesActive(this.reserves);
   }
 
+  async reloadSingleReserve(reservePk: PublicKey, accountData?: AccountInfo<Buffer>): Promise<void> {
+    const reserve = await getSingleReserve(reservePk, this.connection, accountData);
+    this.reserves.set(reservePk, reserve);
+    this.reservesActive.set(reservePk, reserve);
+  }
+
   /**
    * Get the address of this market
    * @return market address public key
@@ -167,17 +171,17 @@ export class KaminoMarket {
   }
 
   getTotalDepositTVL(): Decimal {
-    const tvl = new Decimal(0);
+    let tvl = new Decimal(0);
     for (const reserve of this.reserves.values()) {
-      tvl.add(reserve.getDepositTvl());
+      tvl = tvl.add(reserve.getDepositTvl());
     }
     return tvl;
   }
 
   getTotalBorrowTVL(): Decimal {
-    const tvl = new Decimal(0);
+    let tvl = new Decimal(0);
     for (const reserve of this.reserves.values()) {
-      tvl.add(reserve.getBorrowTvl());
+      tvl = tvl.add(reserve.getBorrowTvl());
     }
     return tvl;
   }
@@ -481,6 +485,7 @@ export class KaminoMarket {
    * @param tag
    */
   async getAllObligationsForMarket(tag?: number): Promise<KaminoObligation[]> {
+    const { getProgramAccounts } = await import('../utils/rpc');
     const filters = [
       {
         dataSize: Obligation.layout.span + 8,
@@ -1111,6 +1116,34 @@ export async function getReservesForMarket(
   return reservesByAddress;
 }
 
+export async function getSingleReserve(
+  reservePk: PublicKey,
+  connection: Connection,
+  accountData?: AccountInfo<Buffer>
+): Promise<KaminoReserve> {
+  const reserve = accountData ? accountData : await connection.getAccountInfo(reservePk);
+
+  if (reserve === null) {
+    throw new Error(`Reserve account ${reservePk.toBase58()} does not exist`);
+  }
+
+  const reserveAccount = Reserve.decode(reserve.data);
+
+  if (!reserveAccount) {
+    throw Error(`Could not parse reserve ${reservePk.toBase58()}`);
+  }
+
+  const reservesAndOracles = await getTokenOracleData(connection, [reserveAccount]);
+  const [reserveState, oracle] = reservesAndOracles[0];
+
+  if (!oracle) {
+    throw Error(`Could not find oracle for ${parseTokenSymbol(reserveState.config.tokenInfo.name)} reserve`);
+  }
+  const kaminoReserve = KaminoReserve.initialize(reserve, reservePk, reserveState, oracle, connection);
+
+  return kaminoReserve;
+}
+
 export function getReservesActive(reserves: Map<PublicKey, KaminoReserve>): Map<PublicKey, KaminoReserve> {
   const reservesActive = new PubkeyHashMap<PublicKey, KaminoReserve>();
   for (const [key, reserve] of reserves) {
@@ -1121,12 +1154,12 @@ export function getReservesActive(reserves: Map<PublicKey, KaminoReserve>): Map<
   return reservesActive;
 }
 
-export async function _getReserveFromMintAndMarket(
-  marketConfig: MarketConfigType,
-  mint: string,
+export async function getReserveFromMintAndMarket(
   connection: Connection,
-  programId: PublicKey
-): Promise<[PublicKey, Reserve]> {
+  market: KaminoMarket,
+  mint: string,
+  programId: PublicKey = PROGRAM_ID
+): Promise<[PublicKey, AccountInfo<Buffer>]> {
   const reserve = (
     await connection.getProgramAccounts(programId, {
       filters: [
@@ -1136,12 +1169,12 @@ export async function _getReserveFromMintAndMarket(
         {
           memcmp: {
             offset: 32,
-            bytes: marketConfig.lendingMarket,
+            bytes: market.address,
           },
         },
         {
           memcmp: {
-            offset: 64,
+            offset: 128,
             bytes: mint,
           },
         },
@@ -1156,13 +1189,7 @@ export async function _getReserveFromMintAndMarket(
     throw new Error("Account doesn't belong to this program");
   }
 
-  const reserveAccount = Reserve.decode(reserve.account.data);
-
-  if (!reserveAccount) {
-    throw Error('Could not parse reserve.');
-  }
-
-  return [reserve.pubkey, reserveAccount];
+  return [reserve.pubkey, reserve.account];
 }
 
 const lamportsToNumberDecimal = (amount: Decimal.Value, decimals: number): Decimal => {

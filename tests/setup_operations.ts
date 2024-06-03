@@ -175,9 +175,31 @@ export async function updateReserve(
   return sig;
 }
 
-const VALUE_BYTE_MAX_ARRAY_LEN_MARKET_UPDATE = 72;
+export const VALUE_BYTE_MAX_ARRAY_LEN_MARKET_UPDATE = 72;
 
-// TODO: Make it more generic
+export async function updateLendingMarketConfig(
+  env: Env,
+  market: KaminoMarket,
+  mode: number,
+  value: number[]
+): Promise<TransactionSignature> {
+  const args: UpdateLendingMarketArgs = {
+    mode: new anchor.BN(mode),
+    value: value,
+  };
+
+  const accounts: UpdateLendingMarketAccounts = {
+    lendingMarketOwner: market.state.lendingMarketOwner,
+    lendingMarket: new PublicKey(market.address),
+  };
+
+  const ix = updateLendingMarket(args, accounts);
+  const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [ix]);
+
+  const sig = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, [], false, 'updateLendingMarket');
+  return sig;
+}
+
 export async function updateMarketElevationGroup(
   env: Env,
   market: PublicKey,

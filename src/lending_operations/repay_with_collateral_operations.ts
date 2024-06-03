@@ -14,16 +14,17 @@ export const repayWithCollCalcs = (props: {
   repayAmount: Decimal;
   priceDebtToColl: Decimal;
   slippagePct: Decimal;
-  flashLoanFee: Decimal;
+  flashLoanFeePct: Decimal;
 }): {
   repayAmount: Decimal;
   collToSwapIn: Decimal;
   swapDebtExpectedOut: Decimal;
 } => {
   // Initialize local variables from the props object
-  const { repayAmount, priceDebtToColl, slippagePct, flashLoanFee } = props;
+  const { repayAmount, priceDebtToColl, slippagePct, flashLoanFeePct } = props;
 
   const slippage = slippagePct.div('100');
+  const flashLoanFee = flashLoanFeePct.div('100');
 
   const swapDebtExpectedOut = repayAmount.mul(new Decimal(1.0).add(flashLoanFee));
   const collToSwapIn = swapDebtExpectedOut.mul(new Decimal(1.0).add(slippage)).mul(priceDebtToColl);
@@ -33,6 +34,13 @@ export const repayWithCollCalcs = (props: {
     collToSwapIn,
     swapDebtExpectedOut,
   };
+};
+
+export type InitialInputs = {
+  repayAmount: Decimal;
+  priceDebtToColl: Decimal;
+  slippagePct: Decimal;
+  currentSlot: number;
 };
 
 export const getRepayWithCollSwapInputs = (props: {
@@ -46,6 +54,7 @@ export const getRepayWithCollSwapInputs = (props: {
   currentSlot: number;
 }): {
   swapInputs: SwapInputs;
+  initialInputs: InitialInputs;
 } => {
   const {
     repayAmount,
@@ -59,7 +68,7 @@ export const getRepayWithCollSwapInputs = (props: {
   } = props;
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
-  const flashLoanFee = debtReserve?.getFlashLoanFee() || new Decimal(0);
+  const flashLoanFeePct = debtReserve?.getFlashLoanFee().ceil() || new Decimal(0);
 
   const irSlippageBpsForDebt = obligation!
     .estimateObligationInterestRate(
@@ -68,16 +77,16 @@ export const getRepayWithCollSwapInputs = (props: {
       currentSlot
     )
     .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
-  // add 0.1 to irSlippageBpsForDebt because we don't want to estimate slightly less than SC and end up not reapying enough
+  // add 0.1% to irSlippageBpsForDebt because we don't want to estimate slightly less than SC and end up not repaying enough
   const repayAmountIrAdjusted = repayAmount
-    .mul(irSlippageBpsForDebt.add('0.1').div('10_000').add('1'))
+    .mul(irSlippageBpsForDebt.mul(new Decimal('1.001')))
     .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
 
   const repayCalcs = repayWithCollCalcs({
     repayAmount: repayAmountIrAdjusted,
     priceDebtToColl,
     slippagePct,
-    flashLoanFee,
+    flashLoanFeePct: flashLoanFeePct,
   });
 
   return {
@@ -87,6 +96,12 @@ export const getRepayWithCollSwapInputs = (props: {
         .toNumber(),
       inputMint: collTokenMint,
       outputMint: debtTokenMint,
+    },
+    initialInputs: {
+      repayAmount,
+      priceDebtToColl,
+      slippagePct,
+      currentSlot,
     },
   };
 };
@@ -111,6 +126,7 @@ export const getRepayWithCollIxns = async (props: {
   lookupTablesAddresses: PublicKey[];
   swapInputs: SwapInputs;
   totalKlendAccounts: number;
+  initialInputs: InitialInputs;
 }> => {
   const {
     kaminoMarket,
@@ -133,7 +149,7 @@ export const getRepayWithCollIxns = async (props: {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
   // const solTokenReserve = kaminoMarket.getReserveByMint(WRAPPED_SOL_MINT);
-  const flashLoanFee = debtReserve?.getFlashLoanFee() || new Decimal(0);
+  const flashLoanFeePct = debtReserve?.getFlashLoanFee() || new Decimal(0);
 
   const irSlippageBpsForDebt = obligation!
     .estimateObligationInterestRate(
@@ -142,19 +158,17 @@ export const getRepayWithCollIxns = async (props: {
       currentSlot
     )
     .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
-  // add 0.1 to irSlippageBpsForDebt because we don't want to estimate slightly less than SC and end up not reapying enough
+  // add 0.1% to irSlippageBpsForDebt because we don't want to estimate slightly less than SC and end up not reapying enough
   const repayAmount = amount
-    .mul(irSlippageBpsForDebt.add('0.1').div('10_000').add('1'))
+    .mul(irSlippageBpsForDebt.mul(new Decimal('1.001')))
     .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
 
   const calcs = repayWithCollCalcs({
     repayAmount,
     priceDebtToColl,
     slippagePct,
-    flashLoanFee,
+    flashLoanFeePct,
   });
-
-  console.log('repayWithCollSwapInputs', repayAmount, priceDebtToColl, slippagePct, flashLoanFee);
 
   console.log('Ops Calcs', toJson(calcs));
 
@@ -230,6 +244,12 @@ export const getRepayWithCollIxns = async (props: {
       lookupTablesAddresses: [],
       swapInputs: { inputAmountLamports: 0, inputMint: PublicKey.default, outputMint: PublicKey.default },
       totalKlendAccounts: totalKlendAccounts,
+      initialInputs: {
+        repayAmount,
+        priceDebtToColl,
+        slippagePct,
+        currentSlot,
+      },
     };
   }
 
@@ -274,5 +294,11 @@ export const getRepayWithCollIxns = async (props: {
     lookupTablesAddresses,
     swapInputs,
     totalKlendAccounts,
+    initialInputs: {
+      repayAmount,
+      priceDebtToColl,
+      slippagePct,
+      currentSlot,
+    },
   };
 };

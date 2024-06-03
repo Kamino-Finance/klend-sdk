@@ -1,7 +1,14 @@
 /* eslint-disable max-classes-per-file */
 import { AccountInfo, Connection, PublicKey } from '@solana/web3.js';
 import Decimal from 'decimal.js';
-import { INITIAL_COLLATERAL_RATE, ONE_HUNDRED_PCT_IN_BPS, SLOTS_PER_YEAR, TokenOracleData } from '../utils';
+import {
+  INITIAL_COLLATERAL_RATE,
+  ONE_HUNDRED_PCT_IN_BPS,
+  SLOTS_PER_DAY,
+  SLOTS_PER_YEAR,
+  TokenOracleData,
+  U64_MAX,
+} from '../utils';
 import { ReserveDataType, ReserveStatus } from './shared';
 import { Reserve, ReserveFields } from '../idl_codegen/accounts';
 import { CurvePointFields } from '../idl_codegen/types';
@@ -108,6 +115,9 @@ export class KaminoReserve {
    * @returns the flash loan fee percentage of the reserve
    */
   getFlashLoanFee = (): Decimal => {
+    if (this.state.config.fees.flashLoanFeeSf.toString() === U64_MAX) {
+      return new Decimal('0');
+    }
     return new Fraction(this.state.config.fees.flashLoanFeeSf).toDecimal();
   };
 
@@ -231,20 +241,33 @@ export class KaminoReserve {
     return this.getBorrowedAmount().gt(new Decimal(this.state.config.borrowLimit.toString()));
   }
 
+  /**
+   *
+   * @returns the max capacity of the daily deposit withdrawal cap
+   */
   getDepositWithdrawalCapCapacity(): Decimal {
     return new Decimal(this.state.config.depositWithdrawalCap.configCapacity.toString());
   }
 
-  getDepositWithdrawalCapCurrent(): Decimal {
-    return new Decimal(this.state.config.depositWithdrawalCap.currentTotal.toString());
+  /**
+   *
+   * @returns the current capacity of the daily deposit withdrawal cap
+   */
+  getDepositWithdrawalCapCurrent(slot: number): Decimal {
+    const slotsElapsed = Math.max(slot - this.state.lastUpdate.slot.toNumber(), 0);
+    if (slotsElapsed > SLOTS_PER_DAY) {
+      return new Decimal(0);
+    } else {
+      return new Decimal(this.state.config.depositWithdrawalCap.currentTotal.toString());
+    }
   }
 
+  /**
+   *
+   * @returns the max capacity of the daily debt withdrawal cap
+   */
   getDebtWithdrawalCapCapacity(): Decimal {
     return new Decimal(this.state.config.debtWithdrawalCap.configCapacity.toString());
-  }
-
-  getDebtWithdrawalCapCurrent(): Decimal {
-    return new Decimal(this.state.config.debtWithdrawalCap.currentTotal.toString());
   }
 
   getBorrowLimitOutsideElevationGroup(): Decimal {
@@ -263,6 +286,23 @@ export class KaminoReserve {
 
   getBorrowedAmountAgainstCollateralInElevationGroup(elevationGroupIndex: number): Decimal {
     return new Decimal(this.state.borrowedAmountsAgainstThisReserveInElevationGroups[elevationGroupIndex].toString());
+  }
+
+  /**
+   *
+   * @returns the current capacity of the daily debt withdrawal cap
+   */
+  getDebtWithdrawalCapCurrent(slot: number): Decimal {
+    const slotsElapsed = Math.max(slot - this.state.lastUpdate.slot.toNumber(), 0);
+    if (slotsElapsed > SLOTS_PER_DAY) {
+      return new Decimal(0);
+    } else {
+      return new Decimal(this.state.config.debtWithdrawalCap.currentTotal.toString());
+    }
+  }
+
+  getBorrowFactor(): Decimal {
+    return new Decimal(this.state.config.borrowFactorPct.toString()).div(100);
   }
 
   calculateSupplyAPR() {
