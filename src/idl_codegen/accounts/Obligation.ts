@@ -19,7 +19,7 @@ export interface ObligationFields {
    */
   deposits: Array<types.ObligationCollateralFields>
   /** Worst LTV for the collaterals backing the loan, represented as a percentage */
-  lowestReserveDepositLtv: BN
+  lowestReserveDepositLiquidationLtv: BN
   /** Market value of deposits (scaled fraction) */
   depositedValueSf: BN
   /** Borrowed liquidity for the obligation, unique by borrow reserve address */
@@ -47,6 +47,7 @@ export interface ObligationFields {
   /** Marked = 1 if borrowing disabled, 0 = borrowing enabled */
   borrowingDisabled: number
   reserved: Array<number>
+  highestBorrowFactorPct: BN
   padding3: Array<BN>
 }
 
@@ -65,7 +66,7 @@ export interface ObligationJSON {
    */
   deposits: Array<types.ObligationCollateralJSON>
   /** Worst LTV for the collaterals backing the loan, represented as a percentage */
-  lowestReserveDepositLtv: string
+  lowestReserveDepositLiquidationLtv: string
   /** Market value of deposits (scaled fraction) */
   depositedValueSf: string
   /** Borrowed liquidity for the obligation, unique by borrow reserve address */
@@ -93,6 +94,7 @@ export interface ObligationJSON {
   /** Marked = 1 if borrowing disabled, 0 = borrowing enabled */
   borrowingDisabled: number
   reserved: Array<number>
+  highestBorrowFactorPct: string
   padding3: Array<string>
 }
 
@@ -112,7 +114,7 @@ export class Obligation {
    */
   readonly deposits: Array<types.ObligationCollateral>
   /** Worst LTV for the collaterals backing the loan, represented as a percentage */
-  readonly lowestReserveDepositLtv: BN
+  readonly lowestReserveDepositLiquidationLtv: BN
   /** Market value of deposits (scaled fraction) */
   readonly depositedValueSf: BN
   /** Borrowed liquidity for the obligation, unique by borrow reserve address */
@@ -140,6 +142,7 @@ export class Obligation {
   /** Marked = 1 if borrowing disabled, 0 = borrowing enabled */
   readonly borrowingDisabled: number
   readonly reserved: Array<number>
+  readonly highestBorrowFactorPct: BN
   readonly padding3: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -152,7 +155,7 @@ export class Obligation {
     borsh.publicKey("lendingMarket"),
     borsh.publicKey("owner"),
     borsh.array(types.ObligationCollateral.layout(), 8, "deposits"),
-    borsh.u64("lowestReserveDepositLtv"),
+    borsh.u64("lowestReserveDepositLiquidationLtv"),
     borsh.u128("depositedValueSf"),
     borsh.array(types.ObligationLiquidity.layout(), 5, "borrows"),
     borsh.u128("borrowFactorAdjustedDebtValueSf"),
@@ -167,7 +170,8 @@ export class Obligation {
     borsh.publicKey("referrer"),
     borsh.u8("borrowingDisabled"),
     borsh.array(borsh.u8(), 7, "reserved"),
-    borsh.array(borsh.u64(), 127, "padding3"),
+    borsh.u64("highestBorrowFactorPct"),
+    borsh.array(borsh.u64(), 126, "padding3"),
   ])
 
   constructor(fields: ObligationFields) {
@@ -178,7 +182,8 @@ export class Obligation {
     this.deposits = fields.deposits.map(
       (item) => new types.ObligationCollateral({ ...item })
     )
-    this.lowestReserveDepositLtv = fields.lowestReserveDepositLtv
+    this.lowestReserveDepositLiquidationLtv =
+      fields.lowestReserveDepositLiquidationLtv
     this.depositedValueSf = fields.depositedValueSf
     this.borrows = fields.borrows.map(
       (item) => new types.ObligationLiquidity({ ...item })
@@ -196,6 +201,7 @@ export class Obligation {
     this.referrer = fields.referrer
     this.borrowingDisabled = fields.borrowingDisabled
     this.reserved = fields.reserved
+    this.highestBorrowFactorPct = fields.highestBorrowFactorPct
     this.padding3 = fields.padding3
   }
 
@@ -252,7 +258,8 @@ export class Obligation {
           item: any /* eslint-disable-line @typescript-eslint/no-explicit-any */
         ) => types.ObligationCollateral.fromDecoded(item)
       ),
-      lowestReserveDepositLtv: dec.lowestReserveDepositLtv,
+      lowestReserveDepositLiquidationLtv:
+        dec.lowestReserveDepositLiquidationLtv,
       depositedValueSf: dec.depositedValueSf,
       borrows: dec.borrows.map(
         (
@@ -271,6 +278,7 @@ export class Obligation {
       referrer: dec.referrer,
       borrowingDisabled: dec.borrowingDisabled,
       reserved: dec.reserved,
+      highestBorrowFactorPct: dec.highestBorrowFactorPct,
       padding3: dec.padding3,
     })
   }
@@ -282,7 +290,8 @@ export class Obligation {
       lendingMarket: this.lendingMarket.toString(),
       owner: this.owner.toString(),
       deposits: this.deposits.map((item) => item.toJSON()),
-      lowestReserveDepositLtv: this.lowestReserveDepositLtv.toString(),
+      lowestReserveDepositLiquidationLtv:
+        this.lowestReserveDepositLiquidationLtv.toString(),
       depositedValueSf: this.depositedValueSf.toString(),
       borrows: this.borrows.map((item) => item.toJSON()),
       borrowFactorAdjustedDebtValueSf:
@@ -298,6 +307,7 @@ export class Obligation {
       referrer: this.referrer.toString(),
       borrowingDisabled: this.borrowingDisabled,
       reserved: this.reserved,
+      highestBorrowFactorPct: this.highestBorrowFactorPct.toString(),
       padding3: this.padding3.map((item) => item.toString()),
     }
   }
@@ -311,7 +321,9 @@ export class Obligation {
       deposits: obj.deposits.map((item) =>
         types.ObligationCollateral.fromJSON(item)
       ),
-      lowestReserveDepositLtv: new BN(obj.lowestReserveDepositLtv),
+      lowestReserveDepositLiquidationLtv: new BN(
+        obj.lowestReserveDepositLiquidationLtv
+      ),
       depositedValueSf: new BN(obj.depositedValueSf),
       borrows: obj.borrows.map((item) =>
         types.ObligationLiquidity.fromJSON(item)
@@ -330,6 +342,7 @@ export class Obligation {
       referrer: new PublicKey(obj.referrer),
       borrowingDisabled: obj.borrowingDisabled,
       reserved: obj.reserved,
+      highestBorrowFactorPct: new BN(obj.highestBorrowFactorPct),
       padding3: obj.padding3.map((item) => new BN(item)),
     })
   }
