@@ -16,6 +16,8 @@ export type Position = {
   mintAddress: PublicKey;
   amount: Decimal;
   marketValueRefreshed: Decimal;
+  ltv: number;
+  borrowFactor: Decimal;
 };
 
 export type ObligationStats = {
@@ -359,6 +361,8 @@ export class KaminoObligation {
         mintAddress: mint,
         amount: new Decimal(0),
         marketValueRefreshed: new Decimal(0),
+        borrowFactor: new Decimal(1),
+        ltv: 0,
       };
     }
 
@@ -383,7 +387,8 @@ export class KaminoObligation {
     borrowPosition.amount = positiveOrZero(borrowPosition.amount.plus(borrowAmount));
     borrowPosition.mintAddress = mint;
     borrowPosition.marketValueRefreshed = positiveOrZero(borrowPosition.marketValueRefreshed.plus(borrowValueUSD));
-
+    borrowPosition.borrowFactor = borrowFactor;
+    borrowPosition.ltv = reserve.stats.loanToValuePct;
     newBorrows.set(borrowPosition.reserveAddress, borrowPosition);
     return {
       borrows: newBorrows,
@@ -427,6 +432,8 @@ export class KaminoObligation {
         mintAddress: mint,
         amount: new Decimal(0),
         marketValueRefreshed: new Decimal(0),
+        borrowFactor: new Decimal(1),
+        ltv: 0,
       };
     }
 
@@ -463,6 +470,8 @@ export class KaminoObligation {
         supplyAmount.mul(reserve.getOracleMarketPrice()).dividedBy(reserve.getMintFactor())
       )
     );
+    depositPosition.borrowFactor = reserve.getBorrowFactor();
+    depositPosition.ltv = loanToValue;
 
     newDeposits.set(depositPosition.reserveAddress, depositPosition);
 
@@ -752,6 +761,8 @@ export class KaminoObligation {
         mintAddress: reserve.getLiquidityMint(),
         amount: supplyAmount,
         marketValueRefreshed: depositValueUsd,
+        ltv: loanToValue,
+        borrowFactor: reserve.getBorrowFactor(),
       };
       deposits.set(reserve.address, position);
     }
@@ -822,6 +833,8 @@ export class KaminoObligation {
         mintAddress: reserve.getLiquidityMint(),
         amount: borrowAmount,
         marketValueRefreshed: borrowValueUsd,
+        ltv: reserve.stats.loanToValuePct,
+        borrowFactor: borrowFactor,
       };
       borrows.set(reserve.address, position);
     }
