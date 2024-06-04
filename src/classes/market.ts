@@ -144,6 +144,10 @@ export class KaminoMarket {
     return this.state.elevationGroups[elevationGroup - 1];
   }
 
+  getMinNetValueObligation(): Decimal {
+    return new Fraction(this.state.minNetValueInObligationSf).toDecimal();
+  }
+
   /**
    * Get the authority PDA of this market
    * @return market authority public key
