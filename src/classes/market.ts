@@ -1,6 +1,6 @@
 import { AccountInfo, Connection, PublicKey } from '@solana/web3.js';
 import { KaminoObligation } from './obligation';
-import { KaminoReserve } from './reserve';
+import { DEFAULT_RECENT_SLOT_DURATION_MS, KaminoReserve } from './reserve';
 import { LendingMarket, Obligation, UserMetadata, ReferrerTokenState, Reserve } from '../idl_codegen/accounts';
 import {
   lendingMarketAuthPda,
@@ -58,13 +58,16 @@ export class KaminoMarket {
 
   scope: Scope;
 
+  private readonly recentSlotDurationMs: number;
+
   private constructor(
     connection: Connection,
     state: LendingMarket,
     marketAddress: string,
     reserves: Map<PublicKey, KaminoReserve>,
     scope: Scope,
-    programId: PublicKey = PROGRAM_ID
+    programId: PublicKey = PROGRAM_ID,
+    recentSlotDurationMsOverride?: number
   ) {
     this.address = marketAddress;
     this.connection = connection;
@@ -73,6 +76,9 @@ export class KaminoMarket {
     this.reservesActive = getReservesActive(this.reserves);
     this.programId = programId;
     this.scope = scope;
+    this.recentSlotDurationMs = recentSlotDurationMsOverride
+      ? recentSlotDurationMsOverride
+      : DEFAULT_RECENT_SLOT_DURATION_MS;
   }
 
   /**
@@ -87,7 +93,8 @@ export class KaminoMarket {
     marketAddress: PublicKey,
     programId: PublicKey = PROGRAM_ID,
     setupLocalTest: boolean = false,
-    withReserves: boolean = true
+    withReserves: boolean = true,
+    recentSlotDurationMsOverride?: number
   ) {
     const market = await LendingMarket.fetch(connection, marketAddress, programId);
 
@@ -105,7 +112,15 @@ export class KaminoMarket {
       ? await getReservesForMarket(marketAddress, connection, programId)
       : new Map<PublicKey, KaminoReserve>();
 
-    return new KaminoMarket(connection, market, marketAddress.toString(), reserves, scope, programId);
+    return new KaminoMarket(
+      connection,
+      market,
+      marketAddress.toString(),
+      reserves,
+      scope,
+      programId,
+      recentSlotDurationMsOverride
+    );
   }
 
   async reload(): Promise<void> {
@@ -332,7 +347,8 @@ export class KaminoMarket {
         addresses[index],
         reserve,
         oracle,
-        this.connection
+        this.connection,
+        this.recentSlotDurationMs
       );
       kaminoReserves.set(kaminoReserve.address, kaminoReserve);
     });
@@ -1063,6 +1079,10 @@ export class KaminoMarket {
       prices.twap[mint] = { price: twap.price, name: tokenName };
     }
   }
+
+  getRecentSlotDurationMs(): number {
+    return this.recentSlotDurationMs;
+  }
 }
 
 export type KlendPrices = {
@@ -1074,7 +1094,8 @@ export type KlendPrices = {
 export async function getReservesForMarket(
   marketAddress: PublicKey,
   connection: Connection,
-  programId: PublicKey
+  programId: PublicKey,
+  recentSlotDurationMsOverride?: number
 ): Promise<Map<PublicKey, KaminoReserve>> {
   const reserves = await connection.getProgramAccounts(programId, {
     filters: [
@@ -1113,7 +1134,8 @@ export async function getReservesForMarket(
       reserves[index].pubkey,
       reserve,
       oracle,
-      connection
+      connection,
+      recentSlotDurationMsOverride
     );
     reservesByAddress.set(kaminoReserve.address, kaminoReserve);
   });
@@ -1123,7 +1145,8 @@ export async function getReservesForMarket(
 export async function getSingleReserve(
   reservePk: PublicKey,
   connection: Connection,
-  accountData?: AccountInfo<Buffer>
+  accountData?: AccountInfo<Buffer>,
+  recentSlotDurationMs?: number
 ): Promise<KaminoReserve> {
   const reserve = accountData ? accountData : await connection.getAccountInfo(reservePk);
 
@@ -1143,7 +1166,14 @@ export async function getSingleReserve(
   if (!oracle) {
     throw Error(`Could not find oracle for ${parseTokenSymbol(reserveState.config.tokenInfo.name)} reserve`);
   }
-  const kaminoReserve = KaminoReserve.initialize(reserve, reservePk, reserveState, oracle, connection);
+  const kaminoReserve = KaminoReserve.initialize(
+    reserve,
+    reservePk,
+    reserveState,
+    oracle,
+    connection,
+    recentSlotDurationMs
+  );
 
   return kaminoReserve;
 }
