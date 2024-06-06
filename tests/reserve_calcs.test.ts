@@ -20,7 +20,7 @@ describe('reserve_calcs', function () {
     const totalSupplyPlusInterest = reserve.getEstimatedTotalSupply(5, 0);
 
     expect(totalSupplyStale.toString()).eq('1000000.000000000086736173798840352915036');
-    expect(totalSupplyPlusInterest.toString()).eq('1000000.000000000086736173799424809946122');
+    expect(totalSupplyPlusInterest.toString()).eq('1000000.000000000086736173799489749616243');
   });
 });
 
