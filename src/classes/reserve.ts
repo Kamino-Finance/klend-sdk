@@ -5,6 +5,7 @@ import {
   INITIAL_COLLATERAL_RATE,
   ONE_HUNDRED_PCT_IN_BPS,
   SLOTS_PER_DAY,
+  SLOTS_PER_SECOND,
   SLOTS_PER_YEAR,
   TokenOracleData,
   U64_MAX,
@@ -17,6 +18,8 @@ import { Fraction } from './fraction';
 import BN from 'bn.js';
 import { ActionType } from './action';
 
+export const DEFAULT_RECENT_SLOT_DURATION_MS = 450;
+
 export class KaminoReserve {
   state: Reserve;
   address: PublicKey;
@@ -27,8 +30,15 @@ export class KaminoReserve {
 
   private buffer: AccountInfo<Buffer> | null;
   private connection: Connection;
+  private readonly recentSlotDurationMs: number;
 
-  constructor(state: Reserve, address: PublicKey, tokenOraclePrice: TokenOracleData, connection: Connection) {
+  constructor(
+    state: Reserve,
+    address: PublicKey,
+    tokenOraclePrice: TokenOracleData,
+    connection: Connection,
+    recentSlotDurationMsOverride?: number
+  ) {
     this.state = state;
     this.address = address;
     this.buffer = null;
@@ -36,6 +46,9 @@ export class KaminoReserve {
     this.stats = {} as ReserveDataType;
     this.connection = connection;
     this.symbol = parseTokenSymbol(state.config.tokenInfo.name);
+    this.recentSlotDurationMs = recentSlotDurationMsOverride
+      ? recentSlotDurationMsOverride
+      : DEFAULT_RECENT_SLOT_DURATION_MS;
   }
 
   static initialize(
@@ -43,9 +56,10 @@ export class KaminoReserve {
     address: PublicKey,
     state: Reserve,
     tokenOraclePrice: TokenOracleData,
-    connection: Connection
+    connection: Connection,
+    recentSlotDurationMsOverride?: number
   ) {
-    const reserve = new KaminoReserve(state, address, tokenOraclePrice, connection);
+    const reserve = new KaminoReserve(state, address, tokenOraclePrice, connection, recentSlotDurationMsOverride);
     reserve.setBuffer(accountData);
     reserve.stats = reserve.formatReserveData(state);
     return reserve;
@@ -390,9 +404,10 @@ export class KaminoReserve {
     referralFeeBps: number,
     outflowAmount?: Decimal
   ) {
+    const slotAdjustmentFactor = this.slotAdjustmentFactor();
     const newUtilization = this.calcSimulatedUtilizationRatio(amount, action, slot, referralFeeBps, outflowAmount);
     const curve = truncateBorrowCurve(this.state.config.borrowRateCurve.points);
-    return getBorrowRate(newUtilization, curve);
+    return getBorrowRate(newUtilization, curve) * slotAdjustmentFactor;
   }
 
   calcSimulatedSupplyAPR(
@@ -409,10 +424,15 @@ export class KaminoReserve {
     return newUtilization * simulatedBorrowAPR * protocolTakeRatePct;
   }
 
+  slotAdjustmentFactor(): number {
+    return 1000 / SLOTS_PER_SECOND / this.recentSlotDurationMs;
+  }
+
   calculateBorrowAPR() {
+    const slotAdjustmentFactor = this.slotAdjustmentFactor();
     const currentUtilization = this.calculateUtilizationRatio();
     const curve = truncateBorrowCurve(this.state.config.borrowRateCurve.points);
-    return getBorrowRate(currentUtilization, curve);
+    return getBorrowRate(currentUtilization, curve) * slotAdjustmentFactor;
   }
 
   /**

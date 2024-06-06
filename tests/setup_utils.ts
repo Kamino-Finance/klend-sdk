@@ -255,6 +255,7 @@ export const makeReserveConfig = (tokenName: string, params: ConfigParams = Defa
     deleveragingThresholdSlotsPerBps: new BN(7200), // 0.01% per hour
     multiplierTagBoost: Array(8).fill(1),
     disableUsageAsCollOutsideEmode: 0,
+    utilizationLimitBlockBorrowingAbove: 0,
     reserved0: Array(2).fill(0),
     reserved1: Array(4).fill(0),
   };
@@ -388,6 +389,7 @@ export const makeMockOracleConfig = (tokenName: string, params: ConfigParams = D
     deleveragingMarginCallPeriodSecs: new BN(259200), // 3 days
     borrowFactorPct: new BN(100),
     elevationGroups: [0, 0, 0, 0, 0],
+    utilizationLimitBlockBorrowingAbove: 0,
     deleveragingThresholdSlotsPerBps: new BN(7200), // 0.01% per hour
     multiplierTagBoost: Array(8).fill(0),
     disableUsageAsCollOutsideEmode: 0,
