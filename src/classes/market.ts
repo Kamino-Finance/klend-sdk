@@ -66,8 +66,8 @@ export class KaminoMarket {
     marketAddress: string,
     reserves: Map<PublicKey, KaminoReserve>,
     scope: Scope,
-    programId: PublicKey = PROGRAM_ID,
-    recentSlotDurationMsOverride?: number
+    recentSlotDurationMs: number,
+    programId: PublicKey = PROGRAM_ID
   ) {
     this.address = marketAddress;
     this.connection = connection;
@@ -76,9 +76,7 @@ export class KaminoMarket {
     this.reservesActive = getReservesActive(this.reserves);
     this.programId = programId;
     this.scope = scope;
-    this.recentSlotDurationMs = recentSlotDurationMsOverride
-      ? recentSlotDurationMsOverride
-      : DEFAULT_RECENT_SLOT_DURATION_MS;
+    this.recentSlotDurationMs = recentSlotDurationMs;
   }
 
   /**
@@ -91,10 +89,10 @@ export class KaminoMarket {
   static async load(
     connection: Connection,
     marketAddress: PublicKey,
+    recentSlotDurationMs: number,
     programId: PublicKey = PROGRAM_ID,
     setupLocalTest: boolean = false,
-    withReserves: boolean = true,
-    recentSlotDurationMsOverride?: number
+    withReserves: boolean = true
   ) {
     const market = await LendingMarket.fetch(connection, marketAddress, programId);
 
@@ -109,7 +107,7 @@ export class KaminoMarket {
     }
 
     const reserves = withReserves
-      ? await getReservesForMarket(marketAddress, connection, programId)
+      ? await getReservesForMarket(marketAddress, connection, programId, recentSlotDurationMs)
       : new Map<PublicKey, KaminoReserve>();
 
     return new KaminoMarket(
@@ -118,8 +116,8 @@ export class KaminoMarket {
       marketAddress.toString(),
       reserves,
       scope,
-      programId,
-      recentSlotDurationMsOverride
+      recentSlotDurationMs,
+      programId
     );
   }
 
@@ -130,12 +128,17 @@ export class KaminoMarket {
     }
 
     this.state = market;
-    this.reserves = await getReservesForMarket(this.getAddress(), this.connection, this.programId);
+    this.reserves = await getReservesForMarket(
+      this.getAddress(),
+      this.connection,
+      this.programId,
+      this.recentSlotDurationMs
+    );
     this.reservesActive = getReservesActive(this.reserves);
   }
 
   async reloadSingleReserve(reservePk: PublicKey, accountData?: AccountInfo<Buffer>): Promise<void> {
-    const reserve = await getSingleReserve(reservePk, this.connection, accountData);
+    const reserve = await getSingleReserve(reservePk, this.connection, this.recentSlotDurationMs, accountData);
     this.reserves.set(reservePk, reserve);
     this.reservesActive.set(reservePk, reserve);
   }
@@ -1095,7 +1098,7 @@ export async function getReservesForMarket(
   marketAddress: PublicKey,
   connection: Connection,
   programId: PublicKey,
-  recentSlotDurationMsOverride?: number
+  recentSlotDurationMs: number
 ): Promise<Map<PublicKey, KaminoReserve>> {
   const reserves = await connection.getProgramAccounts(programId, {
     filters: [
@@ -1135,7 +1138,7 @@ export async function getReservesForMarket(
       reserve,
       oracle,
       connection,
-      recentSlotDurationMsOverride
+      recentSlotDurationMs
     );
     reservesByAddress.set(kaminoReserve.address, kaminoReserve);
   });
@@ -1145,8 +1148,8 @@ export async function getReservesForMarket(
 export async function getSingleReserve(
   reservePk: PublicKey,
   connection: Connection,
-  accountData?: AccountInfo<Buffer>,
-  recentSlotDurationMs?: number
+  recentSlotDurationMs: number,
+  accountData?: AccountInfo<Buffer>
 ): Promise<KaminoReserve> {
   const reserve = accountData ? accountData : await connection.getAccountInfo(reservePk);
 

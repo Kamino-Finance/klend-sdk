@@ -37,7 +37,7 @@ export class KaminoReserve {
     address: PublicKey,
     tokenOraclePrice: TokenOracleData,
     connection: Connection,
-    recentSlotDurationMsOverride?: number
+    recentSlotDurationMs: number
   ) {
     this.state = state;
     this.address = address;
@@ -46,9 +46,7 @@ export class KaminoReserve {
     this.stats = {} as ReserveDataType;
     this.connection = connection;
     this.symbol = parseTokenSymbol(state.config.tokenInfo.name);
-    this.recentSlotDurationMs = recentSlotDurationMsOverride
-      ? recentSlotDurationMsOverride
-      : DEFAULT_RECENT_SLOT_DURATION_MS;
+    this.recentSlotDurationMs = recentSlotDurationMs;
   }
 
   static initialize(
@@ -57,9 +55,9 @@ export class KaminoReserve {
     state: Reserve,
     tokenOraclePrice: TokenOracleData,
     connection: Connection,
-    recentSlotDurationMsOverride?: number
+    recentSlotDurationMs: number
   ) {
-    const reserve = new KaminoReserve(state, address, tokenOraclePrice, connection, recentSlotDurationMsOverride);
+    const reserve = new KaminoReserve(state, address, tokenOraclePrice, connection, recentSlotDurationMs);
     reserve.setBuffer(accountData);
     reserve.stats = reserve.formatReserveData(state);
     return reserve;
