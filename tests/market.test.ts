@@ -3,6 +3,7 @@ import Decimal from 'decimal.js';
 import BN from 'bn.js';
 import * as anchor from '@coral-xyz/anchor';
 import {
+  DEFAULT_RECENT_SLOT_DURATION_MS,
   getBorrowRate,
   getReserveFromMintAndMarket,
   KaminoAction,
@@ -102,7 +103,12 @@ describe('Main lending market instruction tests', function () {
 
     const lendingMarketAddress = new PublicKey('6WVSwDQXrBZeQVnu6hpnsRZhodaJTZBUaC334SiiBKdb');
 
-    const market = (await KaminoMarket.load(connection, lendingMarketAddress, STAGING_PROGRAM_ID))!;
+    const market = (await KaminoMarket.load(
+      connection,
+      lendingMarketAddress,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      STAGING_PROGRAM_ID
+    ))!;
 
     const reserve = market.getReserveBySymbol('SOL');
     const optimalUtilizationRate = reserve!.stats!.borrowCurve[1][0];
@@ -128,7 +134,13 @@ describe('Main lending market instruction tests', function () {
     await updateReserve(env, reserve.publicKey, reserveConfig);
     await sleep(2000);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     const depositBefore = await kaminoMarket.getObligationDepositByWallet(
       env.admin.publicKey,
@@ -187,7 +199,13 @@ describe('Main lending market instruction tests', function () {
     await sleep(2000);
     await mintTo(env.provider, usdh, usdhAta, 1000_000000);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     const depositAmount = new BN('100');
 
@@ -270,7 +288,13 @@ describe('Main lending market instruction tests', function () {
 
     await sleep(2000);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     const depositor = Keypair.generate();
     await env.provider.connection.requestAirdrop(depositor.publicKey, 10 * LAMPORTS_PER_SOL);
@@ -417,7 +441,13 @@ describe('Main lending market instruction tests', function () {
     await updateReserve(env, usdhReserve.publicKey, borrowReserveConfig);
     await sleep(2000);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     const depositor = Keypair.generate();
     await env.provider.connection.requestAirdrop(depositor.publicKey, 10 * LAMPORTS_PER_SOL);
@@ -579,7 +609,13 @@ describe('Main lending market instruction tests', function () {
     await updateReserve(env, usdhReserve.publicKey, reserveConfig);
     await sleep(2000);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     await sleep(2000);
 
@@ -661,7 +697,13 @@ describe('Main lending market instruction tests', function () {
     await updateReserve(env, usdhReserve.publicKey, borrowReserveConfig);
     await sleep(2000);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     const depositor = Keypair.generate();
     await env.provider.connection.requestAirdrop(depositor.publicKey, 10 * LAMPORTS_PER_SOL);
@@ -799,7 +841,13 @@ describe('Main lending market instruction tests', function () {
     await sleep(2000);
     await mintTo(env.provider, usdh, usdhAta, 1000_000000);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     const depositAmount = new BN('100');
 

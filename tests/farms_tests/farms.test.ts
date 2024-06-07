@@ -130,7 +130,13 @@ const createRewardsScenario = async (env: Env, kind: string, deposit: number, bo
   console.log('Update rps', updateRpsSig);
   await sleep(2000);
 
-  const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+  const kaminoMarket = (await KaminoMarket.load(
+    env.provider.connection,
+    lendingMarket.publicKey,
+    DEFAULT_RECENT_SLOT_DURATION_MS,
+    PROGRAM_ID,
+    true
+  ))!;
 
   if (deposit > 0) {
     const depositAction = await KaminoAction.buildDepositTxns(

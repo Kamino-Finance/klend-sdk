@@ -1,6 +1,6 @@
 import { AccountInfo, Connection, PublicKey } from '@solana/web3.js';
 import { KaminoObligation } from './obligation';
-import { DEFAULT_RECENT_SLOT_DURATION_MS, KaminoReserve } from './reserve';
+import { KaminoReserve } from './reserve';
 import { LendingMarket, Obligation, UserMetadata, ReferrerTokenState, Reserve } from '../idl_codegen/accounts';
 import {
   lendingMarketAuthPda,

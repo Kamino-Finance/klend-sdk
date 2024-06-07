@@ -1,4 +1,4 @@
-import { KaminoReserve, Reserve, ReserveFields } from '../src';
+import { DEFAULT_RECENT_SLOT_DURATION_MS, KaminoReserve, Reserve, ReserveFields } from '../src';
 import { BN } from '@coral-xyz/anchor';
 import Decimal from 'decimal.js';
 import { Connection, PublicKey } from '@solana/web3.js';
@@ -36,7 +36,8 @@ function testKaminoReserve(args: TestReserveFields): KaminoReserve {
       mintAddress: PublicKey.default,
       valid: true,
     },
-    new Connection(endpointFromCluster('localnet'))
+    new Connection(endpointFromCluster('localnet')),
+    DEFAULT_RECENT_SLOT_DURATION_MS
   );
 }
 

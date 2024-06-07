@@ -18,6 +18,7 @@ import {
   buildVersionedTransaction,
   checkIfAccountExists,
   createAssociatedTokenAccountIdempotentInstruction,
+  DEFAULT_RECENT_SLOT_DURATION_MS,
   getAssociatedTokenAddress,
   getDepositWsolIxns,
   getUserLutAddressAndSetupIxns,
@@ -467,7 +468,13 @@ export const createMarketWithLoan = async (deposit: BN, borrow: BN) => {
   await mintTo(env, usdh, usdhAta, 1000_000000);
   await sleep(2000);
 
-  const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+  const kaminoMarket = (await KaminoMarket.load(
+    env.provider.connection,
+    lendingMarket.publicKey,
+    DEFAULT_RECENT_SLOT_DURATION_MS,
+    PROGRAM_ID,
+    true
+  ))!;
 
   if (deposit.gt(new BN(0))) {
     const depositAction = await KaminoAction.buildDepositTxns(
@@ -546,7 +553,13 @@ export const createMarketWithTwoReserves = async (
   ]);
   await sleep(1000);
 
-  const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+  const kaminoMarket = (await KaminoMarket.load(
+    env.provider.connection,
+    lendingMarket.publicKey,
+    DEFAULT_RECENT_SLOT_DURATION_MS,
+    PROGRAM_ID,
+    true
+  ))!;
 
   return { env, firstMint, secondMint, kaminoMarket };
 };
@@ -1102,7 +1115,13 @@ export async function setupStrategyAndMarketWithInitialLiquidity({
   await setUpCollateralInfo(env, kamino);
 
   await sleep(2000);
-  const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+  const kaminoMarket = (await KaminoMarket.load(
+    env.provider.connection,
+    lendingMarket.publicKey,
+    DEFAULT_RECENT_SLOT_DURATION_MS,
+    PROGRAM_ID,
+    true
+  ))!;
 
   // 1. Create reserves with initial liquidity
   // eslint-disable-next-line no-restricted-syntax
