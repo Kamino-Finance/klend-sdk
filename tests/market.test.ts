@@ -64,7 +64,12 @@ describe('Main lending market instruction tests', function () {
 
     const lendingMarketAddress = new PublicKey('6WVSwDQXrBZeQVnu6hpnsRZhodaJTZBUaC334SiiBKdb');
 
-    const market = (await KaminoMarket.load(connection, lendingMarketAddress, STAGING_PROGRAM_ID))!;
+    const market = (await KaminoMarket.load(
+      connection,
+      lendingMarketAddress,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      STAGING_PROGRAM_ID
+    ))!;
     const reserve = market.getReserveBySymbol('SOL');
 
     assert.equal(reserve!.stats!.decimals, 9);
@@ -1454,6 +1459,7 @@ describe('Main lending market instruction tests', function () {
     const kaminoMarket = (await KaminoMarket.load(
       env.provider.connection,
       lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
       PROGRAM_ID,
       true,
       false
@@ -1493,7 +1499,12 @@ describe('Main lending market instruction tests', function () {
     });
     const lendingMarketAddress = new PublicKey('6WVSwDQXrBZeQVnu6hpnsRZhodaJTZBUaC334SiiBKdb');
 
-    const market = (await KaminoMarket.load(connection, lendingMarketAddress, STAGING_PROGRAM_ID))!;
+    const market = (await KaminoMarket.load(
+      connection,
+      lendingMarketAddress,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      STAGING_PROGRAM_ID
+    ))!;
 
     const obligations = await market.getAllObligationsForMarket();
     console.log('obligations', obligations);
@@ -1504,7 +1515,12 @@ describe('Main lending market instruction tests', function () {
       commitment: 'finalized',
     });
     const lendingMarketAddress = new PublicKey('6WVSwDQXrBZeQVnu6hpnsRZhodaJTZBUaC334SiiBKdb');
-    const market = (await KaminoMarket.load(connection, lendingMarketAddress, STAGING_PROGRAM_ID))!;
+    const market = (await KaminoMarket.load(
+      connection,
+      lendingMarketAddress,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      STAGING_PROGRAM_ID
+    ))!;
 
     const account = Keypair.fromSecretKey(Buffer.from(JSON.parse(require('fs').readFileSync('./tests/test.json'))));
 
@@ -1549,7 +1565,12 @@ it.skip('fetches_all_obligations_by_tag_from_given_market', async function () {
   });
   const lendingMarketAddress = new PublicKey('6WVSwDQXrBZeQVnu6hpnsRZhodaJTZBUaC334SiiBKdb');
 
-  const market = (await KaminoMarket.load(connection, lendingMarketAddress, STAGING_PROGRAM_ID))!;
+  const market = (await KaminoMarket.load(
+    connection,
+    lendingMarketAddress,
+    DEFAULT_RECENT_SLOT_DURATION_MS,
+    STAGING_PROGRAM_ID
+  ))!;
 
   const tag = VanillaObligation.tag;
 
@@ -1566,7 +1587,12 @@ it.skip('fetches_all_obligations_for_user', async function () {
 
   const account = Keypair.fromSecretKey(Buffer.from(JSON.parse(require('fs').readFileSync('./tests/test.json'))));
 
-  const market = (await KaminoMarket.load(connection, lendingMarketAddress, STAGING_PROGRAM_ID))!;
+  const market = (await KaminoMarket.load(
+    connection,
+    lendingMarketAddress,
+    DEFAULT_RECENT_SLOT_DURATION_MS,
+    STAGING_PROGRAM_ID
+  ))!;
 
   const obligations = await market.getAllUserObligations(account.publicKey);
   console.log('obligations', obligations);
@@ -1580,7 +1606,12 @@ it.skip('fetches_all_obligations_for_user_by_tag', async function () {
 
   const account = Keypair.fromSecretKey(Buffer.from(JSON.parse(require('fs').readFileSync('./tests/test.json'))));
 
-  const market = (await KaminoMarket.load(connection, lendingMarketAddress, STAGING_PROGRAM_ID))!;
+  const market = (await KaminoMarket.load(
+    connection,
+    lendingMarketAddress,
+    DEFAULT_RECENT_SLOT_DURATION_MS,
+    STAGING_PROGRAM_ID
+  ))!;
 
   const obligations = await market.getUserObligationsByTag(0, account.publicKey);
   console.log('obligations', obligations);
@@ -1591,7 +1622,12 @@ it.skip('fetches_all_market_reserves_prices', async function () {
     commitment: 'finalized',
   });
   const lendingMarketAddress = new PublicKey('7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF');
-  const market = (await KaminoMarket.load(connection, lendingMarketAddress, PROGRAM_ID))!;
+  const market = (await KaminoMarket.load(
+    connection,
+    lendingMarketAddress,
+    DEFAULT_RECENT_SLOT_DURATION_MS,
+    PROGRAM_ID
+  ))!;
   const prices = await market.getAllScopePrices();
   console.log('prices', prices);
 });
@@ -1604,7 +1640,12 @@ it.skip('get_obligation_by_address', async function () {
 
   const account = Keypair.fromSecretKey(Buffer.from(JSON.parse(require('fs').readFileSync('./tests/test.json'))));
 
-  const market = (await KaminoMarket.load(connection, lendingMarketAddress, PROGRAM_ID))!;
+  const market = (await KaminoMarket.load(
+    connection,
+    lendingMarketAddress,
+    DEFAULT_RECENT_SLOT_DURATION_MS,
+    PROGRAM_ID
+  ))!;
 
   const allObligations = await market.getAllUserObligations(account.publicKey);
   const obligation = await market.getObligationByAddress(allObligations[0].obligationAddress);
@@ -1621,7 +1662,12 @@ it.skip('get_multiple_obligation_by_address', async function () {
 
   const account = Keypair.fromSecretKey(Buffer.from(JSON.parse(require('fs').readFileSync('./tests/test.json'))));
 
-  const market = (await KaminoMarket.load(connection, lendingMarketAddress, STAGING_PROGRAM_ID))!;
+  const market = (await KaminoMarket.load(
+    connection,
+    lendingMarketAddress,
+    DEFAULT_RECENT_SLOT_DURATION_MS,
+    STAGING_PROGRAM_ID
+  ))!;
 
   const allObligations = await market.getAllUserObligations(account.publicKey);
   const obligations = await market.getMultipleObligationsByAddress(
