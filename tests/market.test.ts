@@ -262,15 +262,15 @@ describe('Main lending market instruction tests', function () {
     console.log(createMarketSig);
     await sleep(2000);
 
-    await updateMarketElevationGroup(env, lendingMarket.publicKey);
-    await sleep(2000);
-
     const usdh = await createMint(env.provider, env.admin.publicKey, 6);
     await sleep(2000);
     const [, usdhReserve] = await createReserve(env, lendingMarket.publicKey, usdh);
     await sleep(2000);
 
     const [, solReserve] = await createReserve(env, lendingMarket.publicKey, NATIVE_MINT);
+    await sleep(2000);
+
+    await updateMarketElevationGroup(env, lendingMarket.publicKey, usdhReserve.publicKey);
     await sleep(2000);
 
     await updateReserve(
