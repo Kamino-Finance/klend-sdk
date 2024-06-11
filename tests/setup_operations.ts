@@ -166,7 +166,8 @@ export async function updateReserve(
   };
 
   const ix = updateReserveConfig(args, accounts);
-  const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [ix]);
+  const budgetIx = createAddExtraComputeUnitsIx(300_000);
+  const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [budgetIx, ix]);
 
   const sig = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
   return sig;
