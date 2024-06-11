@@ -18,6 +18,7 @@ import { VanillaObligation } from './utils/ObligationType';
 import { parseTokenSymbol } from './classes/utils';
 import { Env, initEnv } from '../tests/setup_utils';
 import { initializeFarmsForReserve } from '../tests/farms_operations';
+import { DEFAULT_RECENT_SLOT_DURATION_MS } from './classes/reserve';
 
 const STAGING_LENDING_MARKET = new PublicKey('6WVSwDQXrBZeQVnu6hpnsRZhodaJTZBUaC334SiiBKdb');
 const MAINNET_LENDING_MARKET = new PublicKey('7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF');
@@ -351,7 +352,7 @@ async function getMarket(connection: Connection, programId: PublicKey) {
   } else {
     throw new Error(`Unknown program id: ${programId.toString()}`);
   }
-  const kaminoMarket = await KaminoMarket.load(connection, marketAddress, programId);
+  const kaminoMarket = await KaminoMarket.load(connection, marketAddress, DEFAULT_RECENT_SLOT_DURATION_MS, programId);
   if (kaminoMarket === null) {
     throw new Error(`${programId.toString()} Kamino market ${marketAddress.toBase58()} not found`);
   }

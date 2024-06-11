@@ -53,6 +53,8 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode
   | UpdateConfigMode.UpdateBlockBorrowingAboveUtilization
   | UpdateConfigMode.UpdateBlockPriceUsage
+  | UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup
+  | UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve
 export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateLoanToValuePctJSON
   | UpdateConfigMode.UpdateMaxLiquidationBonusBpsJSON
@@ -98,6 +100,8 @@ export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmodeJSON
   | UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationJSON
   | UpdateConfigMode.UpdateBlockPriceUsageJSON
+  | UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroupJSON
+  | UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserveJSON
 
 export { UpdateLendingMarketConfigValue }
 
@@ -139,6 +143,7 @@ export type UpdateLendingMarketModeKind =
   | UpdateLendingMarketMode.UpdateAutodeleverageEnabled
   | UpdateLendingMarketMode.UpdateBorrowingDisabled
   | UpdateLendingMarketMode.UpdateMinNetValueObligationPostAction
+  | UpdateLendingMarketMode.UpdateMinValueSkipPriorityLiqCheck
 export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateOwnerJSON
   | UpdateLendingMarketMode.UpdateEmergencyModeJSON
@@ -156,6 +161,7 @@ export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateAutodeleverageEnabledJSON
   | UpdateLendingMarketMode.UpdateBorrowingDisabledJSON
   | UpdateLendingMarketMode.UpdateMinNetValueObligationPostActionJSON
+  | UpdateLendingMarketMode.UpdateMinValueSkipPriorityLiqCheckJSON
 
 export { LastUpdate } from "./LastUpdate"
 export type { LastUpdateFields, LastUpdateJSON } from "./LastUpdate"

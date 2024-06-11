@@ -57,6 +57,19 @@ export interface ReserveConfigFields {
   disableUsageAsCollOutsideEmode: number
   utilizationLimitBlockBorrowingAbove: number
   reserved1: Array<number>
+  /**
+   * Maximum amount liquidity of this reserve borrowed outside all elevation groups
+   * - u64::MAX for inf
+   * - 0 to disable borrows outside elevation groups
+   */
+  borrowLimitOutsideElevationGroup: BN
+  /**
+   * Defines the maximum amount (in lamports of elevation group debt asset)
+   * that can be borrowed when this reserve is used as collateral.
+   * - u64::MAX for inf
+   * - 0 to disable borrows in this elevation group (expected value for the debt asset)
+   */
+  borrowLimitAgainstThisCollateralInElevationGroup: Array<BN>
 }
 
 export interface ReserveConfigJSON {
@@ -113,6 +126,19 @@ export interface ReserveConfigJSON {
   disableUsageAsCollOutsideEmode: number
   utilizationLimitBlockBorrowingAbove: number
   reserved1: Array<number>
+  /**
+   * Maximum amount liquidity of this reserve borrowed outside all elevation groups
+   * - u64::MAX for inf
+   * - 0 to disable borrows outside elevation groups
+   */
+  borrowLimitOutsideElevationGroup: string
+  /**
+   * Defines the maximum amount (in lamports of elevation group debt asset)
+   * that can be borrowed when this reserve is used as collateral.
+   * - u64::MAX for inf
+   * - 0 to disable borrows in this elevation group (expected value for the debt asset)
+   */
+  borrowLimitAgainstThisCollateralInElevationGroup: Array<string>
 }
 
 /** Reserve configuration values */
@@ -170,6 +196,19 @@ export class ReserveConfig {
   readonly disableUsageAsCollOutsideEmode: number
   readonly utilizationLimitBlockBorrowingAbove: number
   readonly reserved1: Array<number>
+  /**
+   * Maximum amount liquidity of this reserve borrowed outside all elevation groups
+   * - u64::MAX for inf
+   * - 0 to disable borrows outside elevation groups
+   */
+  readonly borrowLimitOutsideElevationGroup: BN
+  /**
+   * Defines the maximum amount (in lamports of elevation group debt asset)
+   * that can be borrowed when this reserve is used as collateral.
+   * - u64::MAX for inf
+   * - 0 to disable borrows in this elevation group (expected value for the debt asset)
+   */
+  readonly borrowLimitAgainstThisCollateralInElevationGroup: Array<BN>
 
   constructor(fields: ReserveConfigFields) {
     this.status = fields.status
@@ -207,6 +246,10 @@ export class ReserveConfig {
     this.utilizationLimitBlockBorrowingAbove =
       fields.utilizationLimitBlockBorrowingAbove
     this.reserved1 = fields.reserved1
+    this.borrowLimitOutsideElevationGroup =
+      fields.borrowLimitOutsideElevationGroup
+    this.borrowLimitAgainstThisCollateralInElevationGroup =
+      fields.borrowLimitAgainstThisCollateralInElevationGroup
   }
 
   static layout(property?: string) {
@@ -238,6 +281,12 @@ export class ReserveConfig {
         borsh.u8("disableUsageAsCollOutsideEmode"),
         borsh.u8("utilizationLimitBlockBorrowingAbove"),
         borsh.array(borsh.u8(), 2, "reserved1"),
+        borsh.u64("borrowLimitOutsideElevationGroup"),
+        borsh.array(
+          borsh.u64(),
+          32,
+          "borrowLimitAgainstThisCollateralInElevationGroup"
+        ),
       ],
       property
     )
@@ -277,6 +326,9 @@ export class ReserveConfig {
       utilizationLimitBlockBorrowingAbove:
         obj.utilizationLimitBlockBorrowingAbove,
       reserved1: obj.reserved1,
+      borrowLimitOutsideElevationGroup: obj.borrowLimitOutsideElevationGroup,
+      borrowLimitAgainstThisCollateralInElevationGroup:
+        obj.borrowLimitAgainstThisCollateralInElevationGroup,
     })
   }
 
@@ -315,6 +367,9 @@ export class ReserveConfig {
       utilizationLimitBlockBorrowingAbove:
         fields.utilizationLimitBlockBorrowingAbove,
       reserved1: fields.reserved1,
+      borrowLimitOutsideElevationGroup: fields.borrowLimitOutsideElevationGroup,
+      borrowLimitAgainstThisCollateralInElevationGroup:
+        fields.borrowLimitAgainstThisCollateralInElevationGroup,
     }
   }
 
@@ -349,6 +404,12 @@ export class ReserveConfig {
       utilizationLimitBlockBorrowingAbove:
         this.utilizationLimitBlockBorrowingAbove,
       reserved1: this.reserved1,
+      borrowLimitOutsideElevationGroup:
+        this.borrowLimitOutsideElevationGroup.toString(),
+      borrowLimitAgainstThisCollateralInElevationGroup:
+        this.borrowLimitAgainstThisCollateralInElevationGroup.map((item) =>
+          item.toString()
+        ),
     }
   }
 
@@ -387,6 +448,13 @@ export class ReserveConfig {
       utilizationLimitBlockBorrowingAbove:
         obj.utilizationLimitBlockBorrowingAbove,
       reserved1: obj.reserved1,
+      borrowLimitOutsideElevationGroup: new BN(
+        obj.borrowLimitOutsideElevationGroup
+      ),
+      borrowLimitAgainstThisCollateralInElevationGroup:
+        obj.borrowLimitAgainstThisCollateralInElevationGroup.map(
+          (item) => new BN(item)
+        ),
     })
   }
 

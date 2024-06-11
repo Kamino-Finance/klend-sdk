@@ -9,8 +9,11 @@ export interface ElevationGroupFields {
   ltvPct: number
   liquidationThresholdPct: number
   allowNewLoans: number
-  reserved: Array<number>
-  padding: Array<BN>
+  maxReservesAsCollateral: number
+  padding0: number
+  /** Mandatory debt reserve for this elevation group */
+  debtReserve: PublicKey
+  padding1: Array<BN>
 }
 
 export interface ElevationGroupJSON {
@@ -19,8 +22,11 @@ export interface ElevationGroupJSON {
   ltvPct: number
   liquidationThresholdPct: number
   allowNewLoans: number
-  reserved: Array<number>
-  padding: Array<string>
+  maxReservesAsCollateral: number
+  padding0: number
+  /** Mandatory debt reserve for this elevation group */
+  debtReserve: string
+  padding1: Array<string>
 }
 
 export class ElevationGroup {
@@ -29,8 +35,11 @@ export class ElevationGroup {
   readonly ltvPct: number
   readonly liquidationThresholdPct: number
   readonly allowNewLoans: number
-  readonly reserved: Array<number>
-  readonly padding: Array<BN>
+  readonly maxReservesAsCollateral: number
+  readonly padding0: number
+  /** Mandatory debt reserve for this elevation group */
+  readonly debtReserve: PublicKey
+  readonly padding1: Array<BN>
 
   constructor(fields: ElevationGroupFields) {
     this.maxLiquidationBonusBps = fields.maxLiquidationBonusBps
@@ -38,8 +47,10 @@ export class ElevationGroup {
     this.ltvPct = fields.ltvPct
     this.liquidationThresholdPct = fields.liquidationThresholdPct
     this.allowNewLoans = fields.allowNewLoans
-    this.reserved = fields.reserved
-    this.padding = fields.padding
+    this.maxReservesAsCollateral = fields.maxReservesAsCollateral
+    this.padding0 = fields.padding0
+    this.debtReserve = fields.debtReserve
+    this.padding1 = fields.padding1
   }
 
   static layout(property?: string) {
@@ -50,8 +61,10 @@ export class ElevationGroup {
         borsh.u8("ltvPct"),
         borsh.u8("liquidationThresholdPct"),
         borsh.u8("allowNewLoans"),
-        borsh.array(borsh.u8(), 2, "reserved"),
-        borsh.array(borsh.u64(), 8, "padding"),
+        borsh.u8("maxReservesAsCollateral"),
+        borsh.u8("padding0"),
+        borsh.publicKey("debtReserve"),
+        borsh.array(borsh.u64(), 4, "padding1"),
       ],
       property
     )
@@ -65,8 +78,10 @@ export class ElevationGroup {
       ltvPct: obj.ltvPct,
       liquidationThresholdPct: obj.liquidationThresholdPct,
       allowNewLoans: obj.allowNewLoans,
-      reserved: obj.reserved,
-      padding: obj.padding,
+      maxReservesAsCollateral: obj.maxReservesAsCollateral,
+      padding0: obj.padding0,
+      debtReserve: obj.debtReserve,
+      padding1: obj.padding1,
     })
   }
 
@@ -77,8 +92,10 @@ export class ElevationGroup {
       ltvPct: fields.ltvPct,
       liquidationThresholdPct: fields.liquidationThresholdPct,
       allowNewLoans: fields.allowNewLoans,
-      reserved: fields.reserved,
-      padding: fields.padding,
+      maxReservesAsCollateral: fields.maxReservesAsCollateral,
+      padding0: fields.padding0,
+      debtReserve: fields.debtReserve,
+      padding1: fields.padding1,
     }
   }
 
@@ -89,8 +106,10 @@ export class ElevationGroup {
       ltvPct: this.ltvPct,
       liquidationThresholdPct: this.liquidationThresholdPct,
       allowNewLoans: this.allowNewLoans,
-      reserved: this.reserved,
-      padding: this.padding.map((item) => item.toString()),
+      maxReservesAsCollateral: this.maxReservesAsCollateral,
+      padding0: this.padding0,
+      debtReserve: this.debtReserve.toString(),
+      padding1: this.padding1.map((item) => item.toString()),
     }
   }
 
@@ -101,8 +120,10 @@ export class ElevationGroup {
       ltvPct: obj.ltvPct,
       liquidationThresholdPct: obj.liquidationThresholdPct,
       allowNewLoans: obj.allowNewLoans,
-      reserved: obj.reserved,
-      padding: obj.padding.map((item) => new BN(item)),
+      maxReservesAsCollateral: obj.maxReservesAsCollateral,
+      padding0: obj.padding0,
+      debtReserve: new PublicKey(obj.debtReserve),
+      padding1: obj.padding1.map((item) => new BN(item)),
     })
   }
 

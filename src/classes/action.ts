@@ -1318,7 +1318,7 @@ export class KaminoAction {
         {
           liquidityAmount: this.amount,
           // TODO: Configure this when updating liquidator with new interface
-          minAcceptableReceivedCollateralAmount: this.outflowAmount || new BN(0),
+          minAcceptableReceivedLiquidityAmount: this.outflowAmount || new BN(0),
           // TODO: remove this before going live
           maxAllowedLtvOverridePercent: new BN(maxAllowedLtvOverridePercent),
         },
