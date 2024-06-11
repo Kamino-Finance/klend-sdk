@@ -1,4 +1,4 @@
-import { DEFAULT_RECENT_SLOT_DURATION_MS, KaminoReserve, Reserve, ReserveFields } from '../src';
+import { DEFAULT_RECENT_SLOT_DURATION_MS, KaminoReserve, Reserve, ReserveFields, U64_MAX } from '../src';
 import { BN } from '@coral-xyz/anchor';
 import Decimal from 'decimal.js';
 import { Connection, PublicKey } from '@solana/web3.js';
@@ -179,7 +179,12 @@ function getDefaultReserveFields(): ReserveFields {
           priceAggregator: PublicKey.default,
           twapAggregator: PublicKey.default,
         },
+        blockPriceUsage: 0,
+        reserved: Array(7).fill(0),
       },
+      utilizationLimitBlockBorrowingAbove: 0,
+      borrowLimitOutsideElevationGroup: new BN(U64_MAX),
+      borrowLimitAgainstThisCollateralInElevationGroup: Array(32).fill(new BN(0)),
     },
     configPadding: [],
     farmCollateral: PublicKey.default,
@@ -213,6 +218,8 @@ function getDefaultReserveFields(): ReserveFields {
       pendingReferrerFeesSf: new BN(0),
       supplyVault: PublicKey.default,
     },
+    borrowedAmountOutsideElevationGroup: new BN(0),
+    borrowedAmountsAgainstThisReserveInElevationGroups: Array(32).fill(new BN(0)),
     padding: [],
     reserveCollateralPadding: [],
     reserveLiquidityPadding: [],

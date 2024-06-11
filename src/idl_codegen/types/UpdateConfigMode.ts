@@ -1015,6 +1015,52 @@ export class UpdateBlockPriceUsage {
   }
 }
 
+export interface UpdateBorrowLimitOutsideElevationGroupJSON {
+  kind: "UpdateBorrowLimitOutsideElevationGroup"
+}
+
+export class UpdateBorrowLimitOutsideElevationGroup {
+  static readonly discriminator = 44
+  static readonly kind = "UpdateBorrowLimitOutsideElevationGroup"
+  readonly discriminator = 44
+  readonly kind = "UpdateBorrowLimitOutsideElevationGroup"
+
+  toJSON(): UpdateBorrowLimitOutsideElevationGroupJSON {
+    return {
+      kind: "UpdateBorrowLimitOutsideElevationGroup",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateBorrowLimitOutsideElevationGroup: {},
+    }
+  }
+}
+
+export interface UpdateBorrowLimitsInElevationGroupAgainstThisReserveJSON {
+  kind: "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"
+}
+
+export class UpdateBorrowLimitsInElevationGroupAgainstThisReserve {
+  static readonly discriminator = 45
+  static readonly kind = "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"
+  readonly discriminator = 45
+  readonly kind = "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"
+
+  toJSON(): UpdateBorrowLimitsInElevationGroupAgainstThisReserveJSON {
+    return {
+      kind: "UpdateBorrowLimitsInElevationGroupAgainstThisReserve",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateBorrowLimitsInElevationGroupAgainstThisReserve: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if (typeof obj !== "object") {
@@ -1152,6 +1198,12 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   }
   if ("UpdateBlockPriceUsage" in obj) {
     return new UpdateBlockPriceUsage()
+  }
+  if ("UpdateBorrowLimitOutsideElevationGroup" in obj) {
+    return new UpdateBorrowLimitOutsideElevationGroup()
+  }
+  if ("UpdateBorrowLimitsInElevationGroupAgainstThisReserve" in obj) {
+    return new UpdateBorrowLimitsInElevationGroupAgainstThisReserve()
   }
 
   throw new Error("Invalid enum object")
@@ -1293,6 +1345,12 @@ export function fromJSON(
     case "UpdateBlockPriceUsage": {
       return new UpdateBlockPriceUsage()
     }
+    case "UpdateBorrowLimitOutsideElevationGroup": {
+      return new UpdateBorrowLimitOutsideElevationGroup()
+    }
+    case "UpdateBorrowLimitsInElevationGroupAgainstThisReserve": {
+      return new UpdateBorrowLimitsInElevationGroupAgainstThisReserve()
+    }
   }
 }
 
@@ -1342,6 +1400,8 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateDisableUsageAsCollateralOutsideEmode"),
     borsh.struct([], "UpdateBlockBorrowingAboveUtilization"),
     borsh.struct([], "UpdateBlockPriceUsage"),
+    borsh.struct([], "UpdateBorrowLimitOutsideElevationGroup"),
+    borsh.struct([], "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

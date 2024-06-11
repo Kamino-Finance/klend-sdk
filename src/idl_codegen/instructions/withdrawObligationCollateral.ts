@@ -36,7 +36,7 @@ export function withdrawObligationCollateral(
       isSigner: false,
       isWritable: false,
     },
-    { pubkey: accounts.withdrawReserve, isSigner: false, isWritable: false },
+    { pubkey: accounts.withdrawReserve, isSigner: false, isWritable: true },
     {
       pubkey: accounts.reserveSourceCollateral,
       isSigner: false,

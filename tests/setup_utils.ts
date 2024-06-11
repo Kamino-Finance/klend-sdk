@@ -34,6 +34,7 @@ import {
   referrerTokenStatePda,
   sleep,
   toJson,
+  U64_MAX,
   VanillaObligation,
 } from '../src';
 import {
@@ -259,6 +260,8 @@ export const makeReserveConfig = (tokenName: string, params: ConfigParams = Defa
     utilizationLimitBlockBorrowingAbove: 0,
     reserved0: Array(2).fill(0),
     reserved1: Array(4).fill(0),
+    borrowLimitOutsideElevationGroup: new BN(U64_MAX),
+    borrowLimitAgainstThisCollateralInElevationGroup: Array(32).fill(new BN(0)),
   };
   return new ReserveConfig(reserveConfig);
 };
@@ -396,6 +399,8 @@ export const makeMockOracleConfig = (tokenName: string, params: ConfigParams = D
     disableUsageAsCollOutsideEmode: 0,
     reserved0: Array(2).fill(0),
     reserved1: Array(4).fill(0),
+    borrowLimitOutsideElevationGroup: new BN(U64_MAX),
+    borrowLimitAgainstThisCollateralInElevationGroup: Array(32).fill(new BN(0)),
   };
   return new ReserveConfig(reserveConfig);
 };
@@ -1243,8 +1248,8 @@ export async function createMintAndReserve(
   return [mint, reserve.publicKey, config];
 }
 
-export const bufferToNumberArray = (buffer: Buffer): number[] => {
-  return Array.from(new Uint8Array(buffer));
+export const bufferToUint8Array = (buffer: Buffer): Uint8Array => {
+  return new Uint8Array(buffer);
 };
 
 export interface DepositAmountsForSwap {

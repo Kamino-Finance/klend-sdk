@@ -26,7 +26,7 @@ import {
   ConfigParams,
   DefaultConfigParams,
   borrow,
-  bufferToNumberArray,
+  bufferToUint8Array,
   createLookupTable,
   createMarketWithTwoReserves,
   deposit,
@@ -1039,7 +1039,7 @@ describe('Main lending market instruction tests', function () {
       await updateReserveSingleValue(
         env,
         solReserve!,
-        bufferToNumberArray(buffer),
+        bufferToUint8Array(buffer),
         UpdateConfigMode.UpdateBorrowFactor.discriminator + 1
       );
 
@@ -1067,7 +1067,7 @@ describe('Main lending market instruction tests', function () {
       await updateReserveSingleValue(
         env,
         solReserve!,
-        bufferToNumberArray(buffer),
+        bufferToUint8Array(buffer),
         UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator + 1
       );
 
@@ -1083,7 +1083,7 @@ describe('Main lending market instruction tests', function () {
       await updateReserveSingleValue(
         env,
         solReserve!,
-        bufferToNumberArray(buffer),
+        bufferToUint8Array(buffer),
         UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator + 1
       );
     }
@@ -1140,7 +1140,7 @@ describe('Main lending market instruction tests', function () {
         await updateReserveSingleValue(
           env,
           solReserve!,
-          bufferToNumberArray(buffer),
+          bufferToUint8Array(buffer),
           UpdateConfigMode.UpdateBorrowLimit.discriminator + 1
         );
 
@@ -1156,7 +1156,7 @@ describe('Main lending market instruction tests', function () {
         await updateReserveSingleValue(
           env,
           solReserve!,
-          bufferToNumberArray(buffer),
+          bufferToUint8Array(buffer),
           UpdateConfigMode.UpdateBorrowLimit.discriminator + 1
         );
       }
@@ -1229,7 +1229,7 @@ describe('Main lending market instruction tests', function () {
       await updateReserveSingleValue(
         env,
         solReserve!,
-        bufferToNumberArray(buffer),
+        bufferToUint8Array(buffer),
         UpdateConfigMode.UpdateBlockBorrowingAboveUtilization.discriminator + 1
       );
 
@@ -1248,7 +1248,7 @@ describe('Main lending market instruction tests', function () {
       await updateReserveSingleValue(
         env,
         solReserve!,
-        bufferToNumberArray(buffer),
+        bufferToUint8Array(buffer),
         UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator + 1
       );
 
@@ -1348,7 +1348,7 @@ describe('Main lending market instruction tests', function () {
       await updateReserveSingleValue(
         env,
         depositReserve!,
-        bufferToNumberArray(buffer),
+        bufferToUint8Array(buffer),
         UpdateConfigMode.UpdateLoanToValuePct.discriminator + 1
       );
 
@@ -1366,7 +1366,7 @@ describe('Main lending market instruction tests', function () {
       await updateReserveSingleValue(
         env,
         depositReserve!,
-        bufferToNumberArray(buffer),
+        bufferToUint8Array(buffer),
         UpdateConfigMode.UpdateLoanToValuePct.discriminator + 1
       );
 

@@ -6,7 +6,7 @@ import { PROGRAM_ID } from "../programId"
 
 export interface LiquidateObligationAndRedeemReserveCollateralArgs {
   liquidityAmount: BN
-  minAcceptableReceivedCollateralAmount: BN
+  minAcceptableReceivedLiquidityAmount: BN
   maxAllowedLtvOverridePercent: BN
 }
 
@@ -31,7 +31,7 @@ export interface LiquidateObligationAndRedeemReserveCollateralAccounts {
 
 export const layout = borsh.struct([
   borsh.u64("liquidityAmount"),
-  borsh.u64("minAcceptableReceivedCollateralAmount"),
+  borsh.u64("minAcceptableReceivedLiquidityAmount"),
   borsh.u64("maxAllowedLtvOverridePercent"),
 ])
 
@@ -99,8 +99,8 @@ export function liquidateObligationAndRedeemReserveCollateral(
   const len = layout.encode(
     {
       liquidityAmount: args.liquidityAmount,
-      minAcceptableReceivedCollateralAmount:
-        args.minAcceptableReceivedCollateralAmount,
+      minAcceptableReceivedLiquidityAmount:
+        args.minAcceptableReceivedLiquidityAmount,
       maxAllowedLtvOverridePercent: args.maxAllowedLtvOverridePercent,
     },
     buffer
