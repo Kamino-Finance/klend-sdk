@@ -18,6 +18,7 @@ import {
   sendAndConfirmVersionedTransaction,
   sleep,
   KaminoObligation,
+  DEFAULT_RECENT_SLOT_DURATION_MS,
 } from '../../src';
 import { getObligationFarmState, initializeFarmsForReserve } from '../farms_operations';
 import { assert } from 'chai';
