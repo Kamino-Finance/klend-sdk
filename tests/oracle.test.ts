@@ -32,7 +32,44 @@ describe('scope_oracle_tests', function () {
 
     const kaminoAction = await KaminoAction.buildDepositTxns(
       kaminoMarket,
-      new BN(1),
+      new BN(1_000000),
+      jlp,
+      env.admin.publicKey,
+      new VanillaObligation(PROGRAM_ID)
+    );
+    try {
+      await sendTransactionsFromAction(env, kaminoAction, env.admin);
+    } catch (e) {
+      console.log('error', e);
+    }
+  });
+  it('JLP_compute', async function () {
+    const env = await initEnv('localnet');
+    const [, lendingMarket] = await createMarket(env);
+    const jlp = await createMint(env, env.admin.publicKey, 6);
+    const [, jlpReserve] = await createReserve(env, lendingMarket.publicKey, jlp);
+
+    const scope = new Scope('localnet', env.provider.connection);
+    const [, configAccount] = await scope.getFeedConfiguration({ feed: 'hubble' });
+    const reserveConfig = makeReserveConfig('JLP', {
+      ...DefaultConfigParams,
+      priceFeed: {
+        type: new OracleType.JupiterLpScope(),
+        price: configAccount.oraclePrices,
+        chain: [136].concat(Array(3).fill(65535)),
+      },
+    });
+    await updateReserve(env, jlpReserve.publicKey, reserveConfig);
+
+    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+
+    const [, jlpAta] = await createAta(env, env.admin.publicKey, jlp);
+    await sleep(2000);
+    await mintTo(env, jlp, jlpAta, 1000_000000);
+
+    const kaminoAction = await KaminoAction.buildDepositTxns(
+      kaminoMarket,
+      new BN(1_000000),
       jlp,
       env.admin.publicKey,
       new VanillaObligation(PROGRAM_ID)

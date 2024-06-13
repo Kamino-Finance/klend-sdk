@@ -30,6 +30,9 @@ function print_args {
   echo "--account 1111111QLbz7JHiBTspS962RLKV8GndWFwiEaqKM deps/prices/sol-1usd.json"
   echo "--account 111111193m4hAxmCcGXMfnjVPfNhWSjb69sDgffKu deps/prices/stsol-20usd.json"
   echo "--account EFzHrtRNoeLiAwd6rRWfeMuEup19UC9UB4rcky8kXsgV deps/prices/usdc-1usd.json"
+  echo "--account JBu1AL4obBcCMqKBBxhpWCNUt136ijcuMZLFvTP7iWdB deps/prices/eth_usd.json"
+  echo "--account GVXRSBjFk6e6J3NbVPXohDJetcTjaeeuykUpbQF8UoMU deps/prices/btc_usd.json"
+  echo "--account 3vxLXJqLqF3JG5TCbYycbKWRBbCJQLxQmBGCkyqEEefL deps/prices/usdt_usd.json"
 
   # farms
   echo "--account 6UodrBjL2ZreDy7QdR4YV1oxqMBjVYSEyrFpctqqwGwL deps/farms/6UodrBjL2ZreDy7QdR4YV1oxqMBjVYSEyrFpctqqwGwL.json"
