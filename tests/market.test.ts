@@ -987,12 +987,7 @@ describe('Main lending market instruction tests', function () {
       const buffer = Buffer.alloc(32);
       buffer.writeBigUint64LE(BigInt(200), 0);
 
-      await updateReserveSingleValue(
-        env,
-        solReserve!,
-        bufferToNumberArray(buffer),
-        UpdateConfigMode.UpdateBorrowFactor.discriminator + 1
-      );
+      await updateReserveSingleValue(env, solReserve!, buffer, UpdateConfigMode.UpdateBorrowFactor.discriminator + 1);
 
       await kaminoMarket.reloadSingleReserve(solReserve!.address);
       solReserve = kaminoMarket.getReserveBySymbol('SOL');
@@ -1018,7 +1013,7 @@ describe('Main lending market instruction tests', function () {
       await updateReserveSingleValue(
         env,
         solReserve!,
-        bufferToNumberArray(buffer),
+        buffer,
         UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator + 1
       );
 
@@ -1034,7 +1029,7 @@ describe('Main lending market instruction tests', function () {
       await updateReserveSingleValue(
         env,
         solReserve!,
-        bufferToNumberArray(buffer),
+        buffer,
         UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator + 1
       );
     }
@@ -1088,12 +1083,7 @@ describe('Main lending market instruction tests', function () {
         const buffer = Buffer.alloc(32);
         buffer.writeBigUint64LE(BigInt(borrowAmount.sub(new BN(1)).toString()), 0);
 
-        await updateReserveSingleValue(
-          env,
-          solReserve!,
-          bufferToNumberArray(buffer),
-          UpdateConfigMode.UpdateBorrowLimit.discriminator + 1
-        );
+        await updateReserveSingleValue(env, solReserve!, buffer, UpdateConfigMode.UpdateBorrowLimit.discriminator + 1);
 
         await kaminoMarket.reloadSingleReserve(solReserve!.address);
         solReserve = kaminoMarket.getReserveBySymbol('SOL');
@@ -1104,12 +1094,7 @@ describe('Main lending market instruction tests', function () {
         // revert
         buffer.writeBigUint64LE(BigInt(U64_MAX), 0);
 
-        await updateReserveSingleValue(
-          env,
-          solReserve!,
-          bufferToNumberArray(buffer),
-          UpdateConfigMode.UpdateBorrowLimit.discriminator + 1
-        );
+        await updateReserveSingleValue(env, solReserve!, buffer, UpdateConfigMode.UpdateBorrowLimit.discriminator + 1);
       }
     }
 
@@ -1180,7 +1165,7 @@ describe('Main lending market instruction tests', function () {
       await updateReserveSingleValue(
         env,
         solReserve!,
-        bufferToNumberArray(buffer),
+        buffer,
         UpdateConfigMode.UpdateBlockBorrowingAboveUtilization.discriminator + 1
       );
 
@@ -1199,7 +1184,7 @@ describe('Main lending market instruction tests', function () {
       await updateReserveSingleValue(
         env,
         solReserve!,
-        bufferToNumberArray(buffer),
+        buffer,
         UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator + 1
       );
 
@@ -1299,7 +1284,7 @@ describe('Main lending market instruction tests', function () {
       await updateReserveSingleValue(
         env,
         depositReserve!,
-        bufferToNumberArray(buffer),
+        buffer,
         UpdateConfigMode.UpdateLoanToValuePct.discriminator + 1
       );
 
@@ -1317,7 +1302,7 @@ describe('Main lending market instruction tests', function () {
       await updateReserveSingleValue(
         env,
         depositReserve!,
-        bufferToNumberArray(buffer),
+        buffer,
         UpdateConfigMode.UpdateLoanToValuePct.discriminator + 1
       );
 
