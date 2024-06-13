@@ -65,7 +65,7 @@ export type CustomError =
   | ObligationEmpty
   | WithdrawalCapReached
   | LastTimestampGreaterThanCurrent
-  | LiquidationSlippageError
+  | LiquidationRewardTooSmall
   | IsolatedAssetTierViolation
   | InconsistentElevationGroup
   | InvalidElevationGroup
@@ -849,16 +849,16 @@ export class LastTimestampGreaterThanCurrent extends Error {
   }
 }
 
-export class LiquidationSlippageError extends Error {
+export class LiquidationRewardTooSmall extends Error {
   static readonly code = 6066
   readonly code = 6066
-  readonly name = "LiquidationSlippageError"
+  readonly name = "LiquidationRewardTooSmall"
   readonly msg =
-    "The reward amount is less than the minimum acceptable received collateral"
+    "The reward amount is less than the minimum acceptable received liquidity"
 
   constructor(readonly logs?: string[]) {
     super(
-      "6066: The reward amount is less than the minimum acceptable received collateral"
+      "6066: The reward amount is less than the minimum acceptable received liquidity"
     )
   }
 }
@@ -1488,7 +1488,7 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
     case 6065:
       return new LastTimestampGreaterThanCurrent(logs)
     case 6066:
-      return new LiquidationSlippageError(logs)
+      return new LiquidationRewardTooSmall(logs)
     case 6067:
       return new IsolatedAssetTierViolation(logs)
     case 6068:
