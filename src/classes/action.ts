@@ -61,6 +61,7 @@ import { farmsId } from '@hubbleprotocol/farms-sdk';
 import { Reserve } from '../idl_codegen/accounts';
 import { VanillaObligation } from '../utils/ObligationType';
 import { PROGRAM_ID } from '../lib';
+import { U16_MAX } from '@hubbleprotocol/scope-sdk';
 
 export const POSITION_LIMIT = 10;
 export const BORROWS_LIMIT = 5;
@@ -117,8 +118,6 @@ export class KaminoAction {
   amount: BN;
   outflowAmount?: BN;
 
-  hostAta?: PublicKey;
-
   setupIxs: Array<TransactionInstruction>;
   setupIxsLabels: Array<string>;
 
@@ -161,7 +160,6 @@ export class KaminoAction {
     borrowReserves: Array<PublicKey>,
     reserveState: KaminoReserve,
     currentSlot: number,
-    hostAta?: PublicKey,
     secondaryMint?: PublicKey,
     additionalTokenAccountAddress?: PublicKey,
     outflowReserveState?: KaminoReserve,
@@ -181,7 +179,6 @@ export class KaminoAction {
     this.amount = new BN(amount);
     this.mint = mint;
     this.positions = positions;
-    this.hostAta = hostAta;
     this.userTokenAccountAddress = userTokenAccountAddress;
     this.userCollateralAccountAddress = userCollateralAccountAddress;
     this.setupIxs = [];
@@ -220,7 +217,6 @@ export class KaminoAction {
     obligation: KaminoObligation | ObligationType,
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
-    hostAta?: PublicKey,
     payer?: PublicKey
   ) {
     const reserve = kaminoMarket.getReserveByMint(mint);
@@ -256,7 +252,6 @@ export class KaminoAction {
       borrowReserves,
       reserve,
       currentSlot,
-      hostAta,
       undefined,
       undefined,
       undefined,
@@ -418,7 +413,8 @@ export class KaminoAction {
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
     referrer: PublicKey = PublicKey.default,
-    currentSlot: number = 0
+    currentSlot: number = 0,
+    scopeFeed: string = 'hubble'
   ) {
     const axn = await KaminoAction.initialize(
       'deposit',
@@ -435,6 +431,13 @@ export class KaminoAction {
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
+
+    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, mint);
+
+    if (tokenIds.length > 0) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    }
+    console.log('AAAAAA');
     await axn.addSupportIxs(
       'deposit',
       includeAtaIxns,
@@ -446,6 +449,41 @@ export class KaminoAction {
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
 
     return axn;
+  }
+
+  getTokenIdsForScopeRefresh(kaminoMarket: KaminoMarket, mint: PublicKey): number[] {
+    const tokenIds: number[] = [];
+    const reserve = kaminoMarket.getReserveByMint(mint);
+    if (!reserve) {
+      throw new Error(`Reserve not found for mint ${mint.toBase58()}`);
+    }
+
+    if (!reserve.state.config.tokenInfo.scopeConfiguration.priceFeed.equals(PublicKey.default)) {
+      reserve.state.config.tokenInfo.scopeConfiguration.priceChain.map((x) => {
+        if (x !== U16_MAX) {
+          tokenIds.push(x);
+        }
+      });
+      reserve.state.config.tokenInfo.scopeConfiguration.twapChain.map((x) => {
+        if (x !== U16_MAX) {
+          tokenIds.push(x);
+        }
+      });
+    }
+
+    return tokenIds;
+  }
+
+  async addScopeRefreshIxs(tokens: number[], feed: string = 'hubble') {
+    this.preTxnIxsLabels.unshift(`refreshScopePrices`);
+    this.preTxnIxs.unshift(
+      await this.kaminoMarket.scope.refreshPriceListIx(
+        {
+          feed: feed,
+        },
+        tokens
+      )
+    );
   }
 
   static async buildBorrowTxns(
@@ -460,7 +498,7 @@ export class KaminoAction {
     includeUserMetadata: boolean = true, // if true it includes user metadata
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
-    hostAta?: PublicKey
+    scopeFeed: string = 'hubble'
   ) {
     const axn = await KaminoAction.initialize(
       'borrow',
@@ -470,13 +508,19 @@ export class KaminoAction {
       kaminoMarket,
       obligation,
       referrer,
-      currentSlot,
-      hostAta
+      currentSlot
     );
     const addInitObligationForFarm = true;
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
+
+    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, mint);
+
+    if (tokenIds.length > 0) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    }
+
     await axn.addSupportIxs(
       'borrow',
       includeAtaIxns,
@@ -501,7 +545,8 @@ export class KaminoAction {
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
     referrer: PublicKey = PublicKey.default,
-    currentSlot: number = 0
+    currentSlot: number = 0,
+    scopeFeed: string = 'hubble'
   ) {
     const axn = await KaminoAction.initialize(
       'mint',
@@ -518,6 +563,13 @@ export class KaminoAction {
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
+
+    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, mint);
+
+    if (tokenIds.length > 0) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    }
+
     await axn.addSupportIxs(
       'mint',
       includeAtaIxns,
@@ -541,7 +593,8 @@ export class KaminoAction {
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata,
     referrer: PublicKey = PublicKey.default,
-    currentSlot: number = 0
+    currentSlot: number = 0,
+    scopeFeed: string = 'hubble'
   ) {
     const axn = await KaminoAction.initialize(
       'redeem',
@@ -558,6 +611,13 @@ export class KaminoAction {
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
+
+    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, mint);
+
+    if (tokenIds.length > 0) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    }
+
     await axn.addSupportIxs(
       'redeem',
       includeAtaIxns,
@@ -581,7 +641,8 @@ export class KaminoAction {
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
     referrer: PublicKey = PublicKey.default,
-    currentSlot: number = 0
+    currentSlot: number = 0,
+    scopeFeed: string = 'hubble'
   ) {
     const axn = await KaminoAction.initialize(
       'depositCollateral',
@@ -598,6 +659,13 @@ export class KaminoAction {
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
+
+    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, mint);
+
+    if (tokenIds.length > 0) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    }
+
     await axn.addSupportIxs(
       'depositCollateral',
       includeAtaIxns,
@@ -623,7 +691,8 @@ export class KaminoAction {
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata,
     referrer: PublicKey = PublicKey.default,
-    currentSlot: number = 0
+    currentSlot: number = 0,
+    scopeFeed: string = 'hubble'
   ) {
     const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
@@ -644,6 +713,14 @@ export class KaminoAction {
 
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
+    }
+
+    const tokenIdsDeposit = axn.getTokenIdsForScopeRefresh(kaminoMarket, depositMint);
+    const tokenIdsBorrow = axn.getTokenIdsForScopeRefresh(kaminoMarket, borrowMint);
+    const tokenIds = new Array(...new Set([...tokenIdsDeposit, ...tokenIdsBorrow]));
+
+    if (tokenIds.length > 0) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
     }
 
     await axn.addSupportIxs(
@@ -679,7 +756,8 @@ export class KaminoAction {
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata,
     isClosingPosition: boolean = false,
-    referrer: PublicKey = PublicKey.default
+    referrer: PublicKey = PublicKey.default,
+    scopeFeed: string = 'hubble'
   ) {
     const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
@@ -700,6 +778,15 @@ export class KaminoAction {
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
+
+    const tokenIdsRepay = axn.getTokenIdsForScopeRefresh(kaminoMarket, repayMint);
+    const tokenIdsWithdraw = axn.getTokenIdsForScopeRefresh(kaminoMarket, withdrawMint);
+    const tokenIds = new Array(...new Set([...tokenIdsRepay, ...tokenIdsWithdraw]));
+
+    if (tokenIds.length > 0) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    }
+
     await axn.addSupportIxs(
       'repay',
       includeAtaIxns,
@@ -731,7 +818,8 @@ export class KaminoAction {
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
     referrer: PublicKey = PublicKey.default,
-    currentSlot: number = 0
+    currentSlot: number = 0,
+    scopeFeed: string = 'hubble'
   ) {
     const axn = await KaminoAction.initialize(
       'withdraw',
@@ -748,6 +836,13 @@ export class KaminoAction {
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
+
+    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, mint);
+
+    if (tokenIds.length > 0) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    }
+
     await axn.addSupportIxs(
       'withdraw',
       includeAtaIxns,
@@ -788,7 +883,8 @@ export class KaminoAction {
     includeAtaIxns: boolean = true,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true,
-    referrer: PublicKey = PublicKey.default
+    referrer: PublicKey = PublicKey.default,
+    scopeFeed: string = 'hubble'
   ) {
     const axn = await KaminoAction.initialize(
       'repay',
@@ -799,7 +895,6 @@ export class KaminoAction {
       obligation,
       referrer,
       currentSlot,
-      undefined,
       payer
     );
     const addInitObligationForFarm = true;
@@ -807,6 +902,13 @@ export class KaminoAction {
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
+
+    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, mint);
+
+    if (tokenIds.length > 0) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    }
+
     await axn.addSupportIxs(
       'repay',
       includeAtaIxns,
@@ -835,7 +937,8 @@ export class KaminoAction {
     includeUserMetadata: boolean = true, // if true it includes user metadata
     referrer: PublicKey = PublicKey.default,
     maxAllowedLtvOverridePercent: number = 0,
-    currentSlot: number = 0
+    currentSlot: number = 0,
+    scopeFeed: string = 'hubble'
   ) {
     const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
@@ -855,6 +958,15 @@ export class KaminoAction {
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
+
+    const tokenIdsRepay = axn.getTokenIdsForScopeRefresh(kaminoMarket, repayTokenMint);
+    const tokenIdsWithdraw = axn.getTokenIdsForScopeRefresh(kaminoMarket, withdrawTokenMint);
+    const tokenIds = new Array(...new Set([...tokenIdsRepay, ...tokenIdsWithdraw]));
+
+    if (tokenIds.length > 0) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    }
+
     await axn.addSupportIxs(
       'liquidate',
       includeAtaIxns,
@@ -2178,7 +2290,7 @@ export class KaminoAction {
           this.userTokenAccountAddress
         );
 
-        if (this.positions === POSITION_LIMIT && this.hostAta) {
+        if (this.positions === POSITION_LIMIT) {
           this.preTxnIxs.push(createUserTokenAccountIx);
           this.preTxnIxsLabels.push(`CreateLiquidityUserAta[${this.owner}]`);
         } else {
@@ -2501,7 +2613,6 @@ export class KaminoAction {
       borrowReserves,
       inflowReserve,
       currentSlot,
-      undefined,
       secondaryMint,
       additionalUserTokenAccountAddress,
       outflowReserve,
@@ -2514,8 +2625,7 @@ export class KaminoAction {
     mint: PublicKey,
     owner: PublicKey,
     kaminoMarket: KaminoMarket,
-    currentSlot: number = 0,
-    hostAta?: PublicKey
+    currentSlot: number = 0
   ) {
     const reserve = kaminoMarket.getReserveByMint(mint);
     if (reserve === undefined) {
@@ -2542,7 +2652,6 @@ export class KaminoAction {
         [],
         reserve,
         currentSlot,
-        hostAta,
         undefined,
         undefined,
         undefined,

@@ -76,6 +76,7 @@ jobs:
           npx ts-mocha tests/obligation.test.ts --exit
           npx ts-mocha tests/referrals.test.ts --exit
           npx ts-mocha tests/reserve.test.ts --exit
+          npx ts-mocha tests/oracle.test.ts --exit
 
   tests-leverage:
     name: Tests Leverage

@@ -80,7 +80,7 @@ describe('liquidation_farms', function () {
       undefined,
       PublicKey.default
     );
-    await sendTransactionsFromAction(env, liquidateAction, [liquidator], [liquidatorLut]);
+    await sendTransactionsFromAction(env, liquidateAction, liquidator, [liquidator], [liquidatorLut]);
     await waitUntilMatches(async () => {
       const obligationState = (await kaminoMarket.getObligationByAddress(obligation.obligationAddress))!;
       // assert we liquidated some of the collateral
@@ -142,7 +142,7 @@ describe('liquidation_farms', function () {
       undefined,
       PublicKey.default
     );
-    await sendTransactionsFromAction(env, liquidateAction, [liquidator], [liquidatorLut]);
+    await sendTransactionsFromAction(env, liquidateAction, liquidator, [liquidator], [liquidatorLut]);
     await waitUntilMatches(async () => {
       const obligationState = (await kaminoMarket.getObligationByAddress(obligation.obligationAddress))!;
       // assert we liquidated some of the collateral
@@ -204,7 +204,7 @@ describe('liquidation_farms', function () {
       undefined,
       PublicKey.default
     );
-    await sendTransactionsFromAction(env, liquidateAction, [liquidator], [liquidatorLut]);
+    await sendTransactionsFromAction(env, liquidateAction, liquidator, [liquidator], [liquidatorLut]);
     await waitUntilMatches(async () => {
       const obligationState = (await kaminoMarket.getObligationByAddress(obligation.obligationAddress))!;
       // assert we liquidated some of the collateral
@@ -266,7 +266,7 @@ describe('liquidation_farms', function () {
       undefined,
       PublicKey.default
     );
-    await sendTransactionsFromAction(env, liquidateAction, [liquidator], [liquidatorLut]);
+    await sendTransactionsFromAction(env, liquidateAction, liquidator, [liquidator], [liquidatorLut]);
     await waitUntilMatches(async () => {
       const obligationState = (await kaminoMarket.getObligationByAddress(obligation.obligationAddress))!;
       // assert we liquidated some of the collateral
@@ -329,7 +329,7 @@ describe('liquidation_farms', function () {
       undefined,
       PublicKey.default
     );
-    await sendTransactionsFromAction(env, liquidateAction, [liquidator], [liquidatorLut]);
+    await sendTransactionsFromAction(env, liquidateAction, liquidator, [liquidator], [liquidatorLut]);
     await waitUntilMatches(async () => {
       const obligationState = (await kaminoMarket.getObligationByAddress(obligation.obligationAddress))!;
       // assert we liquidated some of the collateral
@@ -392,7 +392,7 @@ describe('liquidation_farms', function () {
       undefined,
       PublicKey.default
     );
-    await sendTransactionsFromAction(env, liquidateAction, [liquidator], [liquidatorLut]);
+    await sendTransactionsFromAction(env, liquidateAction, liquidator, [liquidator], [liquidatorLut]);
     await waitUntilMatches(async () => {
       const obligationState = (await kaminoMarket.getObligationByAddress(obligation.obligationAddress))!;
       // assert we liquidated some of the collateral
@@ -465,7 +465,7 @@ describe('liquidation_farms', function () {
     );
     await sleep(2000);
 
-    await sendTransactionsFromAction(env, liquidateAction, [liquidator], [liquidatorLut, lookupTable]);
+    await sendTransactionsFromAction(env, liquidateAction, liquidator, [liquidator], [liquidatorLut, lookupTable]);
     await waitUntilMatches(async () => {
       const obligationState = (await kaminoMarket.getObligationByAddress(obligation.obligationAddress))!;
       // assert we liquidated some of the collateral
@@ -538,7 +538,7 @@ describe('liquidation_farms', function () {
     );
     await sleep(2000);
 
-    await sendTransactionsFromAction(env, liquidateAction, [liquidator], [liquidatorLut, lookupTable]);
+    await sendTransactionsFromAction(env, liquidateAction, liquidator, [liquidator], [liquidatorLut, lookupTable]);
     await waitUntilMatches(async () => {
       const obligationState = (await kaminoMarket.getObligationByAddress(obligation.obligationAddress))!;
       // assert we liquidated some of the collateral
@@ -611,7 +611,7 @@ describe('liquidation_farms', function () {
     );
     await sleep(2000);
 
-    await sendTransactionsFromAction(env, liquidateAction, [liquidator], [liquidatorLut, lookupTable]);
+    await sendTransactionsFromAction(env, liquidateAction, liquidator, [liquidator], [liquidatorLut, lookupTable]);
     await waitUntilMatches(async () => {
       const obligationState = (await kaminoMarket.getObligationByAddress(obligation.obligationAddress))!;
       // assert we liquidated some of the collateral
@@ -684,7 +684,7 @@ describe('liquidation_farms', function () {
     );
     await sleep(2000);
 
-    await sendTransactionsFromAction(env, liquidateAction, [liquidator], [liquidatorLut, lookupTable]);
+    await sendTransactionsFromAction(env, liquidateAction, liquidator, [liquidator], [liquidatorLut, lookupTable]);
     await waitUntilMatches(async () => {
       const obligationState = (await kaminoMarket.getObligationByAddress(obligation.obligationAddress))!;
       // assert we liquidated some of the collateral
@@ -759,7 +759,7 @@ describe('liquidation_farms', function () {
     );
     await sleep(2000);
 
-    await sendTransactionsFromAction(env, liquidateAction, [liquidator], [liquidatorLut, lookupTable]);
+    await sendTransactionsFromAction(env, liquidateAction, liquidator, [liquidator], [liquidatorLut, lookupTable]);
     await waitUntilMatches(async () => {
       const obligationState = (await kaminoMarket.getObligationByAddress(obligation.obligationAddress))!;
       // assert we liquidated some of the collateral
@@ -834,7 +834,7 @@ describe('liquidation_farms', function () {
     );
     await sleep(2000);
 
-    await sendTransactionsFromAction(env, liquidateAction, [liquidator], [liquidatorLut, lookupTable]);
+    await sendTransactionsFromAction(env, liquidateAction, liquidator, [liquidator], [liquidatorLut, lookupTable]);
     await waitUntilMatches(async () => {
       const obligationState = (await kaminoMarket.getObligationByAddress(obligation.obligationAddress))!;
       // assert we liquidated some of the collateral

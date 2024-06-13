@@ -45,7 +45,7 @@ describe('init_and_refresh_farm_repay_tests', function () {
       await env.provider.connection.getSlot()
     );
 
-    await sendTransactionsFromAction(env, repayAction, [borrower]);
+    await sendTransactionsFromAction(env, repayAction, borrower, [borrower]);
 
     const obligation = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))![0];
     const obligationFarmState = await getObligationFarmState(
@@ -88,7 +88,7 @@ describe('init_and_refresh_farm_repay_tests', function () {
       await env.provider.connection.getSlot()
     );
 
-    await sendTransactionsFromAction(env, repayAction, [borrower]);
+    await sendTransactionsFromAction(env, repayAction, borrower, [borrower]);
     await sleep(2000);
 
     const obligation = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))![0];
@@ -144,7 +144,7 @@ describe('init_and_refresh_farm_repay_tests', function () {
       await env.provider.connection.getSlot()
     );
 
-    await sendTransactionsFromAction(env, repayAction, [borrower]);
+    await sendTransactionsFromAction(env, repayAction, borrower, [borrower]);
     await sleep(2000);
 
     const obligation = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))![0];
@@ -200,7 +200,7 @@ describe('init_and_refresh_farm_repay_tests', function () {
       await env.provider.connection.getSlot()
     );
 
-    await sendTransactionsFromAction(env, repayAction, [borrower]);
+    await sendTransactionsFromAction(env, repayAction, borrower, [borrower]);
     await sleep(2000);
 
     const obligation = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))![0];
@@ -256,7 +256,7 @@ describe('init_and_refresh_farm_repay_tests', function () {
       await env.provider.connection.getSlot()
     );
 
-    await sendTransactionsFromAction(env, repayAction, [borrower]);
+    await sendTransactionsFromAction(env, repayAction, borrower, [borrower]);
     await sleep(2000);
 
     const obligation = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))![0];

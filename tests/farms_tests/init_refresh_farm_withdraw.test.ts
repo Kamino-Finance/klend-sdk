@@ -44,7 +44,7 @@ describe('init_and_refresh_farm_withdraw_tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, withdrawAction, [borrower]);
+    await sendTransactionsFromAction(env, withdrawAction, borrower, [borrower]);
 
     const obligation = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))![0];
     const obligationFarmState = await getObligationFarmState(
@@ -87,7 +87,7 @@ describe('init_and_refresh_farm_withdraw_tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, withdrawAction, [borrower]);
+    await sendTransactionsFromAction(env, withdrawAction, borrower, [borrower]);
 
     const obligation = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))![0];
     const obligationFarmState = await getObligationFarmState(
@@ -132,7 +132,7 @@ describe('init_and_refresh_farm_withdraw_tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, withdrawAction, [borrower]);
+    await sendTransactionsFromAction(env, withdrawAction, borrower, [borrower]);
 
     const obligation = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))![0];
     const obligationFarmState = await getObligationFarmState(
@@ -186,7 +186,7 @@ describe('init_and_refresh_farm_withdraw_tests', function () {
     );
     await sleep(2000);
 
-    await sendTransactionsFromAction(env, withdrawAction, [borrower], [withdrawLookupTable]);
+    await sendTransactionsFromAction(env, withdrawAction, borrower, [borrower], [withdrawLookupTable]);
 
     const obligation = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))![0];
     const obligationFarmState = await getObligationFarmState(
@@ -240,7 +240,7 @@ describe('init_and_refresh_farm_withdraw_tests', function () {
     );
     await sleep(2000);
 
-    await sendTransactionsFromAction(env, withdrawAction, [borrower], [withdrawLookupTable]);
+    await sendTransactionsFromAction(env, withdrawAction, borrower, [borrower], [withdrawLookupTable]);
 
     const obligation = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))![0];
     const obligationFarmState = await getObligationFarmState(

@@ -93,7 +93,7 @@ describe('Referrals Tests', function () {
       referrer.publicKey
     );
 
-    await sendTransactionsFromAction(env, depositAction);
+    await sendTransactionsFromAction(env, depositAction, env.admin);
     await sleep(2000);
 
     const borrowAction = await KaminoAction.buildBorrowTxns(
@@ -109,7 +109,7 @@ describe('Referrals Tests', function () {
       referrer.publicKey
     );
 
-    await sendTransactionsFromAction(env, borrowAction);
+    await sendTransactionsFromAction(env, borrowAction, env.admin);
 
     const [, userMetadata] = await kaminoMarket!.getUserMetadata(env.admin.publicKey)!;
     console.log('ref link', userMetadata!.referrer.toString());
@@ -134,7 +134,7 @@ describe('Referrals Tests', function () {
       kaminoMarket!
     );
 
-    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, [referrer]);
+    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer, [referrer]);
 
     await sleep(2000);
 
@@ -198,7 +198,7 @@ describe('Referrals Tests', function () {
       referrer.publicKey
     );
 
-    await sendTransactionsFromAction(env, depositAction);
+    await sendTransactionsFromAction(env, depositAction, env.admin);
     await sleep(2000);
 
     const borrowAction = await KaminoAction.buildBorrowTxns(
@@ -214,7 +214,7 @@ describe('Referrals Tests', function () {
       referrer.publicKey
     );
 
-    await sendTransactionsFromAction(env, borrowAction);
+    await sendTransactionsFromAction(env, borrowAction, env.admin);
 
     const [, userMetadata] = await kaminoMarket!.getUserMetadata(env.admin.publicKey)!;
     console.log('ref link', userMetadata!.referrer.toString());
@@ -236,11 +236,11 @@ describe('Referrals Tests', function () {
       obligation!
     );
 
-    await sendTransactionsFromAction(env, refreshOligationAction, [env.admin]);
+    await sendTransactionsFromAction(env, refreshOligationAction, env.admin, [env.admin]);
 
     await sleep(5000);
 
-    await sendTransactionsFromAction(env, refreshOligationAction, [env.admin]);
+    await sendTransactionsFromAction(env, refreshOligationAction, env.admin, [env.admin]);
 
     await sleep(2000);
 
@@ -274,7 +274,7 @@ describe('Referrals Tests', function () {
       kaminoMarket!
     );
 
-    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, [referrer]);
+    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer, [referrer]);
   });
 
   it('borrow_and_withdraw_referrer_fees_sol', async function () {
@@ -334,7 +334,7 @@ describe('Referrals Tests', function () {
       referrer.publicKey
     );
 
-    await sendTransactionsFromAction(env, depositAction);
+    await sendTransactionsFromAction(env, depositAction, env.admin);
     await sleep(2000);
 
     const depositor = Keypair.generate();
@@ -349,7 +349,7 @@ describe('Referrals Tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, kaminoDepositAction, [depositor]);
+    await sendTransactionsFromAction(env, kaminoDepositAction, depositor, [depositor]);
 
     await sleep(2000);
 
@@ -366,7 +366,7 @@ describe('Referrals Tests', function () {
       referrer.publicKey
     );
 
-    await sendTransactionsFromAction(env, borrowAction);
+    await sendTransactionsFromAction(env, borrowAction, env.admin);
 
     const [, userMetadata] = await kaminoMarket!.getUserMetadata(env.admin.publicKey)!;
     console.log('ref link', userMetadata!.referrer.toString());
@@ -392,7 +392,7 @@ describe('Referrals Tests', function () {
       kaminoMarket!
     );
 
-    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, [referrer]);
+    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer, [referrer]);
 
     await sleep(2000);
 
@@ -466,7 +466,7 @@ describe('Referrals Tests', function () {
       referrer.publicKey
     );
 
-    await sendTransactionsFromAction(env, depositAction);
+    await sendTransactionsFromAction(env, depositAction, env.admin);
     await sleep(2000);
 
     const depositor = Keypair.generate();
@@ -481,7 +481,7 @@ describe('Referrals Tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, kaminoDepositAction, [depositor]);
+    await sendTransactionsFromAction(env, kaminoDepositAction, depositor, [depositor]);
 
     await sleep(2000);
 
@@ -498,7 +498,7 @@ describe('Referrals Tests', function () {
       referrer.publicKey
     );
 
-    await sendTransactionsFromAction(env, borrowAction);
+    await sendTransactionsFromAction(env, borrowAction, depositor);
 
     const [, userMetadata] = await kaminoMarket!.getUserMetadata(env.admin.publicKey)!;
     console.log('ref link', userMetadata!.referrer.toString());
@@ -522,11 +522,11 @@ describe('Referrals Tests', function () {
       obligation!
     );
 
-    await sendTransactionsFromAction(env, refreshOligationAction, [env.admin]);
+    await sendTransactionsFromAction(env, refreshOligationAction, env.admin);
 
     await sleep(5000);
 
-    await sendTransactionsFromAction(env, refreshOligationAction, [env.admin]);
+    await sendTransactionsFromAction(env, refreshOligationAction, env.admin);
 
     await sleep(2000);
 
@@ -564,7 +564,7 @@ describe('Referrals Tests', function () {
       kaminoMarket!
     );
 
-    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, [referrer]);
+    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer);
   });
 
   // In this test, all actions are built without a referrer, the only source of
@@ -624,7 +624,7 @@ describe('Referrals Tests', function () {
       true
     );
 
-    await sendTransactionsFromAction(env, depositAction);
+    await sendTransactionsFromAction(env, depositAction, env.admin);
     await sleep(2000);
 
     const borrowAction = await KaminoAction.buildBorrowTxns(
@@ -639,7 +639,7 @@ describe('Referrals Tests', function () {
       true
     );
 
-    await sendTransactionsFromAction(env, borrowAction);
+    await sendTransactionsFromAction(env, borrowAction, env.admin);
 
     await sleep(2000);
     const obligation = (await kaminoMarket!.getObligationByWallet(
@@ -659,11 +659,11 @@ describe('Referrals Tests', function () {
       obligation!
     );
 
-    await sendTransactionsFromAction(env, refreshOligationAction, [env.admin]);
+    await sendTransactionsFromAction(env, refreshOligationAction, env.admin);
 
     await sleep(5000);
 
-    await sendTransactionsFromAction(env, refreshOligationAction, [env.admin]);
+    await sendTransactionsFromAction(env, refreshOligationAction, env.admin);
 
     await sleep(2000);
 
@@ -698,7 +698,7 @@ describe('Referrals Tests', function () {
       kaminoMarket!
     );
 
-    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, [referrer]);
+    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer);
   });
 
   it('deposit_and_borrow_compound_withdraw_init_user_metadata', async function () {
@@ -786,11 +786,11 @@ describe('Referrals Tests', function () {
       obligation!
     );
 
-    await sendTransactionsFromAction(env, refreshOligationAction, [env.admin]);
+    await sendTransactionsFromAction(env, refreshOligationAction, env.admin);
 
     await sleep(5000);
 
-    await sendTransactionsFromAction(env, refreshOligationAction, [env.admin]);
+    await sendTransactionsFromAction(env, refreshOligationAction, env.admin);
 
     await sleep(2000);
 
@@ -825,7 +825,7 @@ describe('Referrals Tests', function () {
       kaminoMarket!
     );
 
-    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, [referrer]);
+    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer);
   });
 
   it('borrow_compound_withdraw_2_deposits_2_borrows_init_user_metadata', async function () {
@@ -887,7 +887,7 @@ describe('Referrals Tests', function () {
       true
     );
 
-    await sendTransactionsFromAction(env, depositAction);
+    await sendTransactionsFromAction(env, depositAction, env.admin);
     await sleep(2000);
 
     await env.provider.connection.requestAirdrop(env.admin.publicKey, 10000000000);
@@ -901,7 +901,7 @@ describe('Referrals Tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, kaminoDepositAction);
+    await sendTransactionsFromAction(env, kaminoDepositAction, env.admin);
 
     await sleep(2000);
 
@@ -917,7 +917,7 @@ describe('Referrals Tests', function () {
       true
     );
 
-    await sendTransactionsFromAction(env, borrowActionSol);
+    await sendTransactionsFromAction(env, borrowActionSol, env.admin);
 
     await sleep(2000);
 
@@ -940,7 +940,7 @@ describe('Referrals Tests', function () {
       true
     );
 
-    await sendTransactionsFromAction(env, borrowActionUsdh);
+    await sendTransactionsFromAction(env, borrowActionUsdh, env.admin);
 
     await sleep(2000);
 
@@ -961,11 +961,11 @@ describe('Referrals Tests', function () {
       obligation!
     );
 
-    await sendTransactionsFromAction(env, refreshOligationAction, [env.admin]);
+    await sendTransactionsFromAction(env, refreshOligationAction, env.admin);
 
     await sleep(5000);
 
-    await sendTransactionsFromAction(env, refreshOligationAction, [env.admin]);
+    await sendTransactionsFromAction(env, refreshOligationAction, env.admin);
 
     await sleep(2000);
 
@@ -1031,7 +1031,7 @@ describe('Referrals Tests', function () {
       kaminoMarket!
     );
 
-    await sendTransactionsFromAction(env, withdrawReferrerFeesActionSol, [referrer]);
+    await sendTransactionsFromAction(env, withdrawReferrerFeesActionSol, referrer);
 
     await sleep(2000);
 
@@ -1040,7 +1040,7 @@ describe('Referrals Tests', function () {
       usdh,
       kaminoMarket!
     );
-    await sendTransactionsFromAction(env, withdrawReferrerFeesActionUsdh, [referrer]);
+    await sendTransactionsFromAction(env, withdrawReferrerFeesActionUsdh, referrer);
 
     await sleep(2000);
 
@@ -1177,7 +1177,7 @@ describe('Referrals Tests', function () {
         new VanillaObligation(PROGRAM_ID)
       );
 
-      await sendTransactionsFromAction(env, depositAction);
+      await sendTransactionsFromAction(env, depositAction, env.admin);
       await sleep(2000);
     }
 
@@ -1200,7 +1200,7 @@ describe('Referrals Tests', function () {
         new VanillaObligation(PROGRAM_ID)
       );
 
-      await sendTransactionsFromAction(env, depositAction, [depositor]);
+      await sendTransactionsFromAction(env, depositAction, depositor);
       await sleep(2000);
     }
 
@@ -1260,11 +1260,11 @@ describe('Referrals Tests', function () {
       obligation!
     );
 
-    await sendTransactionsFromAction(env, refreshOligationAction, [env.admin]);
+    await sendTransactionsFromAction(env, refreshOligationAction, env.admin);
 
     await sleep(5000);
 
-    await sendTransactionsFromAction(env, refreshOligationAction, [env.admin]);
+    await sendTransactionsFromAction(env, refreshOligationAction, env.admin);
 
     await sleep(2000);
 
@@ -1307,7 +1307,7 @@ describe('Referrals Tests', function () {
         kaminoMarket!
       );
 
-      await sendTransactionsFromAction(env, withdrawReferrerFeesAction, [referrer]);
+      await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer);
 
       await sleep(2000);
 
@@ -1411,7 +1411,7 @@ describe('Referrals Tests', function () {
         obligation!
       );
 
-      await sendTransactionsFromAction(env, refreshOligationAction);
+      await sendTransactionsFromAction(env, refreshOligationAction, env.admin);
     }
 
     await sleep(2000);
@@ -1433,7 +1433,7 @@ describe('Referrals Tests', function () {
       kaminoMarket!
     );
 
-    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, [referrer]);
+    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer);
 
     await sleep(2000);
 
@@ -1534,7 +1534,7 @@ describe('Referrals Tests', function () {
       true
     );
 
-    await sendTransactionsFromAction(env, depositAction, [depositorOnly]);
+    await sendTransactionsFromAction(env, depositAction, depositorOnly);
     await sleep(2000);
 
     for (let i = 0; i < 3; i++) {
@@ -1558,7 +1558,7 @@ describe('Referrals Tests', function () {
         referrer.publicKey
       );
 
-      await sendTransactionsFromAction(env, depositAction, [borrower]);
+      await sendTransactionsFromAction(env, depositAction, borrower);
       await sleep(2000);
 
       const borrowAction = await KaminoAction.buildBorrowTxns(
@@ -1574,7 +1574,7 @@ describe('Referrals Tests', function () {
         referrer.publicKey
       );
 
-      await sendTransactionsFromAction(env, borrowAction, [borrower]);
+      await sendTransactionsFromAction(env, borrowAction, borrower);
       await sleep(2000);
 
       const amountUsersReferred = await getTotalUsersReferred(env.provider.connection, referrer.publicKey);
