@@ -554,6 +554,11 @@
   resolved "https://registry.yarnpkg.com/@hubbleprotocol/hubble-config/-/hubble-config-3.0.0.tgz#5cd71fcd68fe557052f7b6057311b724f2685514"
   integrity sha512-FOG9/0D8nQ+xeTQTWi49dZ/rPKaFBrSHNizd3XZGzRszkwxK0uew9nahrUw94kcEEDbzkRttTjkBvTeiP/GANg==
 
+"@hubbleprotocol/hubble-config@^5.0.0":
+  version "5.0.0"
+  resolved "https://registry.yarnpkg.com/@hubbleprotocol/hubble-config/-/hubble-config-5.0.0.tgz#cf95bae0165b853cdb9ebd053ea2d749b23993ca"
+  integrity sha512-oLdS2SwdYN8sggZhIesN+Kk8KQXGrbYn0kvnvTnk5Wh4pck1kR458ze5gh0XrMDpRVTdgwItf4mXhqiLXvQCKQ==
+
 "@hubbleprotocol/hubble-idl@^3.0.10":
   version "3.0.10"
   resolved "https://registry.yarnpkg.com/@hubbleprotocol/hubble-idl/-/hubble-idl-3.0.10.tgz#bd32bad80029cab5cf5aefbdf2b1056413a527a4"
@@ -587,6 +592,17 @@
   integrity sha512-hq/fPFgXvdYrdDgnUAPY5Nwog68wtWPR7XBRIN1TsIMLeYgxFxPhDD+THT9ucsPmZX3hQoR5DiqITHeD0s7vCg==
   dependencies:
     "@hubbleprotocol/hubble-config" "^3.0.0"
+    "@project-serum/anchor" "^0.21.0"
+    "@project-serum/serum" "^0.13.65"
+    "@solana/buffer-layout" "^4.0.1"
+    bn.js "^5.2.1"
+
+"@hubbleprotocol/scope-sdk@^5.0.20":
+  version "5.0.20"
+  resolved "https://registry.yarnpkg.com/@hubbleprotocol/scope-sdk/-/scope-sdk-5.0.20.tgz#4229d9da613d82c883cd36cf7d830d47802381b7"
+  integrity sha512-l1EMtSEaYE4f8j2h6/386OCsYvN8Kx+3IPsfYl301pIcdSTynK3jVP/NjRyCb3RXeonmly4GsxiOHa5HLyVmZw==
+  dependencies:
+    "@hubbleprotocol/hubble-config" "^5.0.0"
     "@project-serum/anchor" "^0.21.0"
     "@project-serum/serum" "^0.13.65"
     "@solana/buffer-layout" "^4.0.1"
