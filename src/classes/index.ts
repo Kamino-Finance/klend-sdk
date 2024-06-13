@@ -6,3 +6,5 @@ export * from './reserve';
 export * from './shared';
 export * from './utils';
 export * from './jupiterPerps';
+export * from './manager';
+export * from './vault';

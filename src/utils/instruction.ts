@@ -58,6 +58,19 @@ export async function buildAndSendTxnWithLogs(
   }
 }
 
+export async function buildAndSendTxn(
+  c: Connection,
+  owner: Keypair,
+  ixns: TransactionInstruction[],
+  signers: Signer[],
+  lutAddresses: PublicKey[] = [],
+  description: string = ''
+): Promise<TransactionSignature> {
+  const tx = await buildVersionedTransaction(c, owner.publicKey, ixns, lutAddresses);
+
+  return await buildAndSendTxnWithLogs(c, tx, owner, signers, true, description);
+}
+
 export async function sendAndConfirmVersionedTransaction(
   c: Connection,
   tx: VersionedTransaction,
