@@ -1340,32 +1340,31 @@ export class KaminoAction {
     });
 
     const liquidateIx = liquidateObligationAndRedeemReserveCollateral(
-        {
-          liquidityAmount: this.amount,
-          // TODO: Configure this when updating liquidator with new interface
-          minAcceptableReceivedCollateralAmount: this.outflowAmount || new BN(0),
-          // TODO: remove this before going live
-          maxAllowedLtvOverridePercent: new BN(maxAllowedLtvOverridePercent),
-        },
-        {
-          liquidator: this.owner,
-          obligation: this.getObligationPda(),
-          lendingMarket: this.kaminoMarket.getAddress(),
-          lendingMarketAuthority: this.kaminoMarket.getLendingMarketAuthority(),
-          repayReserve: this.reserve.address,
-          repayReserveLiquiditySupply: this.reserve.state.liquidity.supplyVault,
-          withdrawReserve: this.outflowReserve.address,
-          withdrawReserveCollateralMint: this.outflowReserve.getCTokenMint(),
-          withdrawReserveCollateralSupply: this.outflowReserve.state.collateral.supplyVault,
-          withdrawReserveLiquiditySupply: this.outflowReserve.state.liquidity.supplyVault,
-          userSourceLiquidity: this.additionalTokenAccountAddress,
-          userDestinationCollateral: this.userCollateralAccountAddress,
-          userDestinationLiquidity: this.userTokenAccountAddress,
-          withdrawReserveLiquidityFeeReceiver: this.outflowReserve.state.liquidity.feeVault,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
-        },
-        this.kaminoMarket.programId
+      {
+        liquidityAmount: this.amount,
+        // TODO: Configure this when updating liquidator with new interface
+        minAcceptableReceivedLiquidityAmount: this.outflowAmount || new BN(0),
+        maxAllowedLtvOverridePercent: new BN(maxAllowedLtvOverridePercent),
+      },
+      {
+        liquidator: this.owner,
+        obligation: this.getObligationPda(),
+        lendingMarket: this.kaminoMarket.getAddress(),
+        lendingMarketAuthority: this.kaminoMarket.getLendingMarketAuthority(),
+        repayReserve: this.reserve.address,
+        repayReserveLiquiditySupply: this.reserve.state.liquidity.supplyVault,
+        withdrawReserve: this.outflowReserve.address,
+        withdrawReserveCollateralMint: this.outflowReserve.getCTokenMint(),
+        withdrawReserveCollateralSupply: this.outflowReserve.state.collateral.supplyVault,
+        withdrawReserveLiquiditySupply: this.outflowReserve.state.liquidity.supplyVault,
+        userSourceLiquidity: this.additionalTokenAccountAddress,
+        userDestinationCollateral: this.userCollateralAccountAddress,
+        userDestinationLiquidity: this.userTokenAccountAddress,
+        withdrawReserveLiquidityFeeReceiver: this.outflowReserve.state.liquidity.feeVault,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
+      },
+      this.kaminoMarket.programId
     );
     liquidateIx.keys = liquidateIx.keys.concat([...depositReserveAccountMetas]);
     this.lendingIxs.push(liquidateIx);
