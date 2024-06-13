@@ -2,7 +2,14 @@ import { OracleType, Scope } from '@hubbleprotocol/scope-sdk';
 import { createMarket, createReserve, updateReserve } from './setup_operations';
 import { DefaultConfigParams, initEnv, makeReserveConfig, sendTransactionsFromAction } from './setup_utils';
 import { createAta, createMint, mintTo } from './token_utils';
-import { KaminoAction, KaminoMarket, PROGRAM_ID, VanillaObligation, sleep } from '../src';
+import {
+  DEFAULT_RECENT_SLOT_DURATION_MS,
+  KaminoAction,
+  KaminoMarket,
+  PROGRAM_ID,
+  VanillaObligation,
+  sleep,
+} from '../src';
 import BN from 'bn.js';
 
 describe('scope_oracle_tests', function () {
@@ -24,7 +31,13 @@ describe('scope_oracle_tests', function () {
     });
     await updateReserve(env, jlpReserve.publicKey, reserveConfig);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     const [, jlpAta] = await createAta(env, env.admin.publicKey, jlp);
     await sleep(2000);
@@ -61,7 +74,13 @@ describe('scope_oracle_tests', function () {
     });
     await updateReserve(env, jlpReserve.publicKey, reserveConfig);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     const [, jlpAta] = await createAta(env, env.admin.publicKey, jlp);
     await sleep(2000);
@@ -99,7 +118,13 @@ describe('scope_oracle_tests', function () {
     });
     await updateReserve(env, jlpReserve.publicKey, reserveConfig);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     const [, jlpAta] = await createAta(env, env.admin.publicKey, jlp);
     await sleep(2000);
@@ -137,7 +162,13 @@ describe('scope_oracle_tests', function () {
     });
     await updateReserve(env, jitosolReserve.publicKey, reserveConfig);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     const [, jitosolAta] = await createAta(env, env.admin.publicKey, jitosol);
     await sleep(2000);
