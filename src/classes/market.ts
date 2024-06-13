@@ -58,12 +58,15 @@ export class KaminoMarket {
 
   scope: Scope;
 
+  private readonly recentSlotDurationMs: number;
+
   private constructor(
     connection: Connection,
     state: LendingMarket,
     marketAddress: string,
     reserves: Map<PublicKey, KaminoReserve>,
     scope: Scope,
+    recentSlotDurationMs: number,
     programId: PublicKey = PROGRAM_ID
   ) {
     this.address = marketAddress;
@@ -73,6 +76,7 @@ export class KaminoMarket {
     this.reservesActive = getReservesActive(this.reserves);
     this.programId = programId;
     this.scope = scope;
+    this.recentSlotDurationMs = recentSlotDurationMs;
   }
 
   /**
@@ -85,6 +89,7 @@ export class KaminoMarket {
   static async load(
     connection: Connection,
     marketAddress: PublicKey,
+    recentSlotDurationMs: number,
     programId: PublicKey = PROGRAM_ID,
     setupLocalTest: boolean = false,
     withReserves: boolean = true
@@ -102,10 +107,18 @@ export class KaminoMarket {
     }
 
     const reserves = withReserves
-      ? await getReservesForMarket(marketAddress, connection, programId)
+      ? await getReservesForMarket(marketAddress, connection, programId, recentSlotDurationMs)
       : new Map<PublicKey, KaminoReserve>();
 
-    return new KaminoMarket(connection, market, marketAddress.toString(), reserves, scope, programId);
+    return new KaminoMarket(
+      connection,
+      market,
+      marketAddress.toString(),
+      reserves,
+      scope,
+      recentSlotDurationMs,
+      programId
+    );
   }
 
   async reload(): Promise<void> {
@@ -115,12 +128,17 @@ export class KaminoMarket {
     }
 
     this.state = market;
-    this.reserves = await getReservesForMarket(this.getAddress(), this.connection, this.programId);
+    this.reserves = await getReservesForMarket(
+      this.getAddress(),
+      this.connection,
+      this.programId,
+      this.recentSlotDurationMs
+    );
     this.reservesActive = getReservesActive(this.reserves);
   }
 
   async reloadSingleReserve(reservePk: PublicKey, accountData?: AccountInfo<Buffer>): Promise<void> {
-    const reserve = await getSingleReserve(reservePk, this.connection, accountData);
+    const reserve = await getSingleReserve(reservePk, this.connection, this.recentSlotDurationMs, accountData);
     this.reserves.set(reservePk, reserve);
     this.reservesActive.set(reservePk, reserve);
   }
@@ -142,6 +160,10 @@ export class KaminoMarket {
 
   getElevationGroup(elevationGroup: number) {
     return this.state.elevationGroups[elevationGroup - 1];
+  }
+
+  getMinNetValueObligation(): Decimal {
+    return new Fraction(this.state.minNetValueInObligationSf).toDecimal();
   }
 
   /**
@@ -328,7 +350,8 @@ export class KaminoMarket {
         addresses[index],
         reserve,
         oracle,
-        this.connection
+        this.connection,
+        this.recentSlotDurationMs
       );
       kaminoReserves.set(kaminoReserve.address, kaminoReserve);
     });
@@ -1059,6 +1082,10 @@ export class KaminoMarket {
       prices.twap[mint] = { price: twap.price, name: tokenName };
     }
   }
+
+  getRecentSlotDurationMs(): number {
+    return this.recentSlotDurationMs;
+  }
 }
 
 export type KlendPrices = {
@@ -1070,7 +1097,8 @@ export type KlendPrices = {
 export async function getReservesForMarket(
   marketAddress: PublicKey,
   connection: Connection,
-  programId: PublicKey
+  programId: PublicKey,
+  recentSlotDurationMs: number
 ): Promise<Map<PublicKey, KaminoReserve>> {
   const reserves = await connection.getProgramAccounts(programId, {
     filters: [
@@ -1109,7 +1137,8 @@ export async function getReservesForMarket(
       reserves[index].pubkey,
       reserve,
       oracle,
-      connection
+      connection,
+      recentSlotDurationMs
     );
     reservesByAddress.set(kaminoReserve.address, kaminoReserve);
   });
@@ -1119,6 +1148,7 @@ export async function getReservesForMarket(
 export async function getSingleReserve(
   reservePk: PublicKey,
   connection: Connection,
+  recentSlotDurationMs: number,
   accountData?: AccountInfo<Buffer>
 ): Promise<KaminoReserve> {
   const reserve = accountData ? accountData : await connection.getAccountInfo(reservePk);
@@ -1139,7 +1169,14 @@ export async function getSingleReserve(
   if (!oracle) {
     throw Error(`Could not find oracle for ${parseTokenSymbol(reserveState.config.tokenInfo.name)} reserve`);
   }
-  const kaminoReserve = KaminoReserve.initialize(reserve, reservePk, reserveState, oracle, connection);
+  const kaminoReserve = KaminoReserve.initialize(
+    reserve,
+    reservePk,
+    reserveState,
+    oracle,
+    connection,
+    recentSlotDurationMs
+  );
 
   return kaminoReserve;
 }
