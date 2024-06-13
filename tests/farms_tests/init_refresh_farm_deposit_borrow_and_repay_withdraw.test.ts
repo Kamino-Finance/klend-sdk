@@ -991,7 +991,7 @@ describe('init_and_refresh_farm_deposit_borrow_and_repay_withdraw_tests', functi
         new VanillaObligation(PROGRAM_ID)
       );
 
-      await sendTransactionsFromAction(env, depositAction);
+      await sendTransactionsFromAction(env, depositAction, env.admin);
       await sleep(2000);
     }
 
@@ -1014,7 +1014,7 @@ describe('init_and_refresh_farm_deposit_borrow_and_repay_withdraw_tests', functi
         new VanillaObligation(PROGRAM_ID)
       );
 
-      await sendTransactionsFromAction(env, depositAction, [depositor]);
+      await sendTransactionsFromAction(env, depositAction, depositor, [depositor]);
       await sleep(2000);
     }
 
@@ -1300,7 +1300,7 @@ describe('init_and_refresh_farm_deposit_borrow_and_repay_withdraw_tests', functi
         new VanillaObligation(PROGRAM_ID)
       );
 
-      await sendTransactionsFromAction(env, depositAction);
+      await sendTransactionsFromAction(env, depositAction, env.admin);
       await sleep(2000);
     }
 
@@ -1323,7 +1323,7 @@ describe('init_and_refresh_farm_deposit_borrow_and_repay_withdraw_tests', functi
         new VanillaObligation(PROGRAM_ID)
       );
 
-      await sendTransactionsFromAction(env, depositAction, [depositor]);
+      await sendTransactionsFromAction(env, depositAction, depositor, [depositor]);
       await sleep(2000);
     }
 

@@ -134,6 +134,7 @@ export const depositLeverageTestAdapter = async (
     obligation,
     currentSlot,
     getTotalKlendAccountsOnly: false,
+    scopeFeed: env.testCase,
   });
 
   // Create lookup table
@@ -250,6 +251,7 @@ export const withdrawLeverageTestAdapter = async (
     obligation,
     currentSlot,
     getTotalKlendAccountsOnly: false,
+    scopeFeed: env.testCase,
   });
 
   // Create lookup table
@@ -355,6 +357,7 @@ export const adjustLeverageTestAdapter = async (
     obligation,
     currentSlot,
     getTotalKlendAccountsOnly: false,
+    scopeFeed: env.testCase,
   });
 
   // Create lookup table
