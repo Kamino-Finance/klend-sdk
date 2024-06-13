@@ -1,4 +1,4 @@
-import { KaminoReserve, Reserve, ReserveFields } from '../src';
+import { DEFAULT_RECENT_SLOT_DURATION_MS, KaminoReserve, Reserve, ReserveFields } from '../src';
 import { BN } from '@coral-xyz/anchor';
 import Decimal from 'decimal.js';
 import { Connection, PublicKey } from '@solana/web3.js';
@@ -20,7 +20,7 @@ describe('reserve_calcs', function () {
     const totalSupplyPlusInterest = reserve.getEstimatedTotalSupply(5, 0);
 
     expect(totalSupplyStale.toString()).eq('1000000.000000000086736173798840352915036');
-    expect(totalSupplyPlusInterest.toString()).eq('1000000.000000000086736173799424809946122');
+    expect(totalSupplyPlusInterest.toString()).eq('1000000.000000000086736173799489749616243');
   });
 });
 
@@ -36,7 +36,8 @@ function testKaminoReserve(args: TestReserveFields): KaminoReserve {
       mintAddress: PublicKey.default,
       valid: true,
     },
-    new Connection(endpointFromCluster('localnet'))
+    new Connection(endpointFromCluster('localnet')),
+    DEFAULT_RECENT_SLOT_DURATION_MS
   );
 }
 

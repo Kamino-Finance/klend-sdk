@@ -18,6 +18,7 @@ import {
   getInitAllReferrerTokenStateIxns,
   sleep,
   KaminoObligation,
+  DEFAULT_RECENT_SLOT_DURATION_MS,
 } from '../src';
 import {
   MultiplyObligation,
@@ -75,7 +76,13 @@ describe('Referrals Tests', function () {
     await updateReserve(env, usdhReserve.publicKey, config);
     await sleep(2000);
 
-    const kaminoMarket = await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true);
+    const kaminoMarket = await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    );
 
     await executeInitUserMetadataTx(kaminoMarket!, referrer);
     await sleep(2000);
@@ -180,7 +187,13 @@ describe('Referrals Tests', function () {
     await updateReserve(env, usdhReserve.publicKey, config);
     await sleep(2000);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     await executeInitUserMetadataTx(kaminoMarket!, referrer);
     await sleep(2000);
@@ -316,7 +329,13 @@ describe('Referrals Tests', function () {
     await updateReserve(env, borrowReserve.publicKey, borrowReserveConfig);
     await sleep(2000);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     await executeInitUserMetadataTx(kaminoMarket!, referrer);
     await sleep(2000);
@@ -448,7 +467,13 @@ describe('Referrals Tests', function () {
     await updateReserve(env, borrowReserve.publicKey, borrowReserveConfig);
     await sleep(2000);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     await executeInitUserMetadataTx(kaminoMarket!, referrer);
     await sleep(2000);
@@ -600,7 +625,13 @@ describe('Referrals Tests', function () {
     await updateReserve(env, usdhReserve.publicKey, config);
     await sleep(2000);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     await executeInitUserMetadataTx(kaminoMarket!, referrer);
     await sleep(2000);
@@ -730,7 +761,13 @@ describe('Referrals Tests', function () {
     await updateReserve(env, usdhReserve.publicKey, config);
     await sleep(2000);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     await executeInitUserMetadataTx(kaminoMarket!, referrer);
     await sleep(2000);
@@ -867,7 +904,13 @@ describe('Referrals Tests', function () {
     await updateReserve(env, usdhReserve.publicKey, usdhReserveConfig);
     await sleep(2000);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     await executeInitUserMetadataTx(kaminoMarket!, referrer);
     await sleep(2000);
@@ -1131,7 +1174,13 @@ describe('Referrals Tests', function () {
       await sleep(1000);
     }
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     await executeInitUserMetadataTx(kaminoMarket!, referrer);
     await sleep(2000);
@@ -1462,7 +1511,13 @@ describe('Referrals Tests', function () {
 
     const [, lendingMarket] = await createMarket(env);
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
 
     await executeInitUserMetadataTx(kaminoMarket!, referrer);
     await sleep(2000);
