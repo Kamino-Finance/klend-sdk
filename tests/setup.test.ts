@@ -1,6 +1,6 @@
 import { initEnv, makeReserveConfig, newUser, sendTransactionsFromAction } from './setup_utils';
 import { createMarket, createReserve, updateReserve } from './setup_operations';
-import { KaminoAction, KaminoMarket, PROGRAM_ID, sleep } from '../src';
+import { DEFAULT_RECENT_SLOT_DURATION_MS, KaminoAction, KaminoMarket, PROGRAM_ID, sleep } from '../src';
 import { lendingMarketAuthPda, VanillaObligation } from '../src/utils';
 import { createAta, createMint, mintTo } from './token_utils';
 import { expect } from 'chai';
@@ -19,7 +19,13 @@ describe('setup_lending_market', function () {
     await sleep(2000);
     console.log(sig);
 
-    const market = await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true);
+    const market = await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    );
     expect(market).not.eq(null);
     expect(market!.getAddress().toBase58()).eq(lendingMarket.publicKey.toBase58());
     expect(market!.getLendingMarketAuthority().toBase58()).eq(
@@ -83,7 +89,13 @@ describe('setup_lending_market', function () {
     console.log(updateReserveSig);
     await sleep(2000);
 
-    const kaminoMarket = await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true);
+    const kaminoMarket = await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    );
 
     const depositAction = await KaminoAction.buildDepositTxns(
       kaminoMarket!,
@@ -120,7 +132,13 @@ describe('setup_lending_market', function () {
     const _updateReserveSig = await updateReserve(env, usdhReserve.publicKey, config);
     await sleep(2000);
 
-    const kaminoMarket = await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true);
+    const kaminoMarket = await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    );
 
     const depositAction = await KaminoAction.buildDepositTxns(
       kaminoMarket!,
@@ -168,7 +186,13 @@ describe('setup_lending_market', function () {
     const _updateReserveSig = await updateReserve(env, usdhReserve.publicKey, config);
     await sleep(2000);
 
-    const kaminoMarket = await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true);
+    const kaminoMarket = await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    );
 
     const depositAction = await KaminoAction.buildDepositTxns(
       kaminoMarket!,
@@ -216,7 +240,13 @@ describe('setup_lending_market', function () {
     await updateReserve(env, usdhReserve.publicKey, config);
     await sleep(2000);
 
-    const kaminoMarket = await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true);
+    const kaminoMarket = await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    );
 
     const depositAction = await KaminoAction.buildDepositTxns(
       kaminoMarket!,
@@ -285,7 +315,13 @@ describe('setup_lending_market', function () {
     await updateReserve(env, usdhReserve.publicKey, config);
     await sleep(2000);
 
-    const kaminoMarket = await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true);
+    const kaminoMarket = await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    );
 
     const depositAction = await KaminoAction.buildDepositTxns(
       kaminoMarket!,

@@ -3,7 +3,7 @@ import { createMarket, createReserve, updateReserve } from '../setup_operations'
 import { addRewardToFarm, initializeFarmsForReserve, topUpRewardToFarm, updateRps } from '../farms_operations';
 import { createAta, createMint, mintTo } from '../token_utils';
 import Decimal from 'decimal.js';
-import { KaminoAction, KaminoMarket, PROGRAM_ID, Reserve } from '../../src';
+import { DEFAULT_RECENT_SLOT_DURATION_MS, KaminoAction, KaminoMarket, PROGRAM_ID, Reserve } from '../../src';
 import { sleep, VanillaObligation } from '../../src';
 import { PublicKey } from '@solana/web3.js';
 import { FarmState } from '@hubbleprotocol/farms-sdk';
@@ -130,7 +130,13 @@ const createRewardsScenario = async (env: Env, kind: string, deposit: number, bo
   console.log('Update rps', updateRpsSig);
   await sleep(2000);
 
-  const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+  const kaminoMarket = (await KaminoMarket.load(
+    env.provider.connection,
+    lendingMarket.publicKey,
+    DEFAULT_RECENT_SLOT_DURATION_MS,
+    PROGRAM_ID,
+    true
+  ))!;
 
   if (deposit > 0) {
     const depositAction = await KaminoAction.buildDepositTxns(

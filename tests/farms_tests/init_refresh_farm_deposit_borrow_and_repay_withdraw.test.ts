@@ -978,7 +978,13 @@ describe('init_and_refresh_farm_deposit_borrow_and_repay_withdraw_tests', functi
       await sleep(1000);
     }
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
     await sleep(2000);
 
     // deposit from user to deposit reserves
@@ -1287,7 +1293,13 @@ describe('init_and_refresh_farm_deposit_borrow_and_repay_withdraw_tests', functi
       await sleep(1000);
     }
 
-    const kaminoMarket = (await KaminoMarket.load(env.provider.connection, lendingMarket.publicKey, PROGRAM_ID, true))!;
+    const kaminoMarket = (await KaminoMarket.load(
+      env.provider.connection,
+      lendingMarket.publicKey,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      PROGRAM_ID,
+      true
+    ))!;
     await sleep(2000);
 
     // deposit from user to deposit reserves
