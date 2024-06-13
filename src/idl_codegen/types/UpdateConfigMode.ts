@@ -1061,6 +1061,29 @@ export class UpdateBorrowLimitsInElevationGroupAgainstThisReserve {
   }
 }
 
+export interface UpdateHostFixedInterestRateBpsJSON {
+  kind: "UpdateHostFixedInterestRateBps"
+}
+
+export class UpdateHostFixedInterestRateBps {
+  static readonly discriminator = 46
+  static readonly kind = "UpdateHostFixedInterestRateBps"
+  readonly discriminator = 46
+  readonly kind = "UpdateHostFixedInterestRateBps"
+
+  toJSON(): UpdateHostFixedInterestRateBpsJSON {
+    return {
+      kind: "UpdateHostFixedInterestRateBps",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateHostFixedInterestRateBps: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if (typeof obj !== "object") {
@@ -1204,6 +1227,9 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   }
   if ("UpdateBorrowLimitsInElevationGroupAgainstThisReserve" in obj) {
     return new UpdateBorrowLimitsInElevationGroupAgainstThisReserve()
+  }
+  if ("UpdateHostFixedInterestRateBps" in obj) {
+    return new UpdateHostFixedInterestRateBps()
   }
 
   throw new Error("Invalid enum object")
@@ -1351,6 +1377,9 @@ export function fromJSON(
     case "UpdateBorrowLimitsInElevationGroupAgainstThisReserve": {
       return new UpdateBorrowLimitsInElevationGroupAgainstThisReserve()
     }
+    case "UpdateHostFixedInterestRateBps": {
+      return new UpdateHostFixedInterestRateBps()
+    }
   }
 }
 
@@ -1402,6 +1431,7 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateBlockPriceUsage"),
     borsh.struct([], "UpdateBorrowLimitOutsideElevationGroup"),
     borsh.struct([], "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"),
+    borsh.struct([], "UpdateHostFixedInterestRateBps"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

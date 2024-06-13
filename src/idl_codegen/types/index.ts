@@ -55,6 +55,7 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateBlockPriceUsage
   | UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup
   | UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve
+  | UpdateConfigMode.UpdateHostFixedInterestRateBps
 export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateLoanToValuePctJSON
   | UpdateConfigMode.UpdateMaxLiquidationBonusBpsJSON
@@ -102,6 +103,7 @@ export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateBlockPriceUsageJSON
   | UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroupJSON
   | UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserveJSON
+  | UpdateConfigMode.UpdateHostFixedInterestRateBpsJSON
 
 export { UpdateLendingMarketConfigValue }
 

@@ -8,7 +8,8 @@ export interface ReserveConfigFields {
   status: number
   /** Asset tier -> 0 - regular (collateral & debt), 1 - isolated collateral, 2 - isolated debt */
   assetTier: number
-  reserved0: Array<number>
+  /** Flat rate that goes to the host */
+  hostFixedInterestRateBps: number
   /** Boost for side (debt or collateral) */
   multiplierSideBoost: Array<number>
   /** Reward points multiplier per obligation type */
@@ -77,7 +78,8 @@ export interface ReserveConfigJSON {
   status: number
   /** Asset tier -> 0 - regular (collateral & debt), 1 - isolated collateral, 2 - isolated debt */
   assetTier: number
-  reserved0: Array<number>
+  /** Flat rate that goes to the host */
+  hostFixedInterestRateBps: number
   /** Boost for side (debt or collateral) */
   multiplierSideBoost: Array<number>
   /** Reward points multiplier per obligation type */
@@ -147,7 +149,8 @@ export class ReserveConfig {
   readonly status: number
   /** Asset tier -> 0 - regular (collateral & debt), 1 - isolated collateral, 2 - isolated debt */
   readonly assetTier: number
-  readonly reserved0: Array<number>
+  /** Flat rate that goes to the host */
+  readonly hostFixedInterestRateBps: number
   /** Boost for side (debt or collateral) */
   readonly multiplierSideBoost: Array<number>
   /** Reward points multiplier per obligation type */
@@ -213,7 +216,7 @@ export class ReserveConfig {
   constructor(fields: ReserveConfigFields) {
     this.status = fields.status
     this.assetTier = fields.assetTier
-    this.reserved0 = fields.reserved0
+    this.hostFixedInterestRateBps = fields.hostFixedInterestRateBps
     this.multiplierSideBoost = fields.multiplierSideBoost
     this.multiplierTagBoost = fields.multiplierTagBoost
     this.protocolTakeRatePct = fields.protocolTakeRatePct
@@ -257,7 +260,7 @@ export class ReserveConfig {
       [
         borsh.u8("status"),
         borsh.u8("assetTier"),
-        borsh.array(borsh.u8(), 2, "reserved0"),
+        borsh.u16("hostFixedInterestRateBps"),
         borsh.array(borsh.u8(), 2, "multiplierSideBoost"),
         borsh.array(borsh.u8(), 8, "multiplierTagBoost"),
         borsh.u8("protocolTakeRatePct"),
@@ -297,7 +300,7 @@ export class ReserveConfig {
     return new ReserveConfig({
       status: obj.status,
       assetTier: obj.assetTier,
-      reserved0: obj.reserved0,
+      hostFixedInterestRateBps: obj.hostFixedInterestRateBps,
       multiplierSideBoost: obj.multiplierSideBoost,
       multiplierTagBoost: obj.multiplierTagBoost,
       protocolTakeRatePct: obj.protocolTakeRatePct,
@@ -336,7 +339,7 @@ export class ReserveConfig {
     return {
       status: fields.status,
       assetTier: fields.assetTier,
-      reserved0: fields.reserved0,
+      hostFixedInterestRateBps: fields.hostFixedInterestRateBps,
       multiplierSideBoost: fields.multiplierSideBoost,
       multiplierTagBoost: fields.multiplierTagBoost,
       protocolTakeRatePct: fields.protocolTakeRatePct,
@@ -377,7 +380,7 @@ export class ReserveConfig {
     return {
       status: this.status,
       assetTier: this.assetTier,
-      reserved0: this.reserved0,
+      hostFixedInterestRateBps: this.hostFixedInterestRateBps,
       multiplierSideBoost: this.multiplierSideBoost,
       multiplierTagBoost: this.multiplierTagBoost,
       protocolTakeRatePct: this.protocolTakeRatePct,
@@ -417,7 +420,7 @@ export class ReserveConfig {
     return new ReserveConfig({
       status: obj.status,
       assetTier: obj.assetTier,
-      reserved0: obj.reserved0,
+      hostFixedInterestRateBps: obj.hostFixedInterestRateBps,
       multiplierSideBoost: obj.multiplierSideBoost,
       multiplierTagBoost: obj.multiplierTagBoost,
       protocolTakeRatePct: obj.protocolTakeRatePct,
