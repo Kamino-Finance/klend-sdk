@@ -30,6 +30,9 @@ import { MarketWithAddress } from './manager';
 import {
   initReserve,
   InitReserveAccounts,
+  updateEntireReserveConfig,
+  UpdateEntireReserveConfigAccounts,
+  UpdateEntireReserveConfigArgs,
   updateSingleReserveConfig,
   UpdateSingleReserveConfigAccounts,
   UpdateSingleReserveConfigArgs,
@@ -741,13 +744,20 @@ export function updateEntireReserveConfigIxn(
   const len = layout.encode(reserveConfig.toEncodable(), data);
   const value = [...data.subarray(0, len)];
 
-  return updateReserveConfigIxn(
-    marketWithAddress,
-    reserveAddress,
-    UpdateConfigMode.UpdateEntireReserveConfig.discriminator,
-    value,
-    programId
-  );
+  const args: UpdateEntireReserveConfigArgs = {
+    mode: new anchor.BN(25),
+    value: value,
+  };
+
+  const accounts: UpdateEntireReserveConfigAccounts = {
+    lendingMarketOwner: marketWithAddress.state.lendingMarketOwner,
+    lendingMarket: marketWithAddress.address,
+    reserve: reserveAddress,
+  };
+
+  const ix = updateEntireReserveConfig(args, accounts, programId);
+
+  return ix;
 }
 
 export function parseForChangesReserveConfigAndGetIxns(

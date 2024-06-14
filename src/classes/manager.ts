@@ -109,9 +109,13 @@ export class KaminoManager {
     return { market: marketAccount, ixns: createMarketIxns };
   }
 
+  /***
+   * @returns reserve - keypair used for creation -> to be signed with
+   * @returns txnIxns - A list of lists of ixns -> first list for reserve creation, second for updating it with correct params
+   */
   async addAssetToMarket(
     params: AddAssetToMarketParams
-  ): Promise<{ reserve: Keypair; ixns: TransactionInstruction[] }> {
+  ): Promise<{ reserve: Keypair; txnIxns: TransactionInstruction[][] }> {
     const market = await LendingMarket.fetch(this._connection, params.marketAddress);
     if (!market) {
       throw new Error('Market not found');
@@ -135,7 +139,11 @@ export class KaminoManager {
       params.assetConfig.getReserveConfig()
     );
 
-    return { reserve: reserveAccount, ixns: [...createReserveixns, ...updateReserveIxns] };
+    const txnIxns: TransactionInstruction[][] = [];
+    txnIxns.push(createReserveixns);
+    txnIxns.push(updateReserveIxns);
+
+    return { reserve: reserveAccount, txnIxns };
   }
 
   async createVault(vaultConfig: KaminoVaultConfig): Promise<[Keypair, TransactionInstruction[]]> {
@@ -173,7 +181,39 @@ export class KaminoManager {
 
     return ixns;
   }
-}
+
+  /**
+   * @param user - user to deposit
+   * @param vault - vault to deposit into
+   * @param tokenAmount - token amount to be deposited, in decimals (will be converted in lamports)
+   * @returns
+   */
+  async depositToVault(user: PublicKey, vault: KaminoVault, tokenAmount: Decimal): Promise<TransactionInstruction[]> {
+    return this._vaultClient.deposit(user, vault, tokenAmount);
+  }
+
+  async withdrawFromVault(
+    user: PublicKey,
+    vault: KaminoVault,
+    shareAmount: Decimal,
+    marketWithAddress: MarketWithAddress,
+    slot: number
+  ): Promise<TransactionInstruction[]> {
+    return this._vaultClient.withdraw(user, vault, shareAmount, marketWithAddress, slot);
+  }
+
+  async getVaultTokensPerShare(vault: KaminoVault, slot: number): Promise<Decimal> {
+    return this._vaultClient.getTokensPerShare(vault, slot);
+  }
+
+  async getUserVaultSharesBalance(user: PublicKey, vault: KaminoVault): Promise<Decimal> {
+    return this._vaultClient.getUserSharesBalance(user, vault);
+  }
+
+  getKaminoVaultClient(): KaminoVaultClient {
+    return this._vaultClient;
+  }
+} // KaminoManager
 
 export type CreateKaminoMarketParams = {
   admin: PublicKey;
@@ -193,6 +233,50 @@ export interface AssetConfig {
 
   setAssetConfigParams(assetReserveConfigParams: AssetReserveConfigParams): void;
   getReserveConfig(): ReserveConfig;
+}
+
+export class AssetReserveConfig implements AssetConfig {
+  readonly mint: PublicKey;
+  readonly tokenName: string;
+  readonly mintDecimals: number;
+  assetReserveConfigParams: AssetReserveConfigParams;
+
+  constructor(fields: {
+    mint: PublicKey;
+    tokenName: string;
+    mintDecimals: number;
+    priceFeed: PriceFeed;
+    loanToValuePct: number;
+    liquidationThresholdPct: number;
+    borrowRateCurve: BorrowRateCurve;
+    depositLimit: Decimal;
+    borrowLimit: Decimal;
+  }) {
+    this.mint = fields.mint;
+    this.tokenName = fields.tokenName;
+    this.mintDecimals = fields.mintDecimals;
+
+    // TODO: verify defaults and ensure opinionated
+    this.assetReserveConfigParams = DefaultConfigParams;
+    this.assetReserveConfigParams.priceFeed = fields.priceFeed;
+    this.assetReserveConfigParams.loanToValuePct = fields.loanToValuePct;
+    this.assetReserveConfigParams.liquidationThresholdPct = fields.liquidationThresholdPct;
+    this.assetReserveConfigParams.borrowRateCurve = fields.borrowRateCurve;
+    this.assetReserveConfigParams.depositLimit = fields.depositLimit;
+    this.assetReserveConfigParams.borrowLimit = fields.borrowLimit;
+  }
+
+  setAssetConfigParams(assetReserveConfigParams: AssetReserveConfigParams): void {
+    this.assetReserveConfigParams = assetReserveConfigParams;
+  }
+
+  getReserveConfig(): ReserveConfig {
+    return buildReserveConfig({
+      configParams: this.assetReserveConfigParams,
+      mintDecimals: this.mintDecimals,
+      tokenName: this.tokenName,
+    });
+  }
 }
 
 export class CollateralConfig implements AssetConfig {
@@ -218,6 +302,7 @@ export class CollateralConfig implements AssetConfig {
     this.assetReserveConfigParams.priceFeed = fields.priceFeed;
     this.assetReserveConfigParams.loanToValuePct = fields.loanToValuePct;
     this.assetReserveConfigParams.liquidationThresholdPct = fields.liquidationThresholdPct;
+    this.assetReserveConfigParams.borrowLimit = new Decimal(0);
   }
 
   setAssetConfigParams(assetReserveConfigParams: AssetReserveConfigParams): void {
@@ -310,7 +395,7 @@ export const DefaultConfigParams: AssetReserveConfigParams = {
     points: [
       new CurvePoint({ utilizationRateBps: 0, borrowRateBps: 1000 }),
       new CurvePoint({ utilizationRateBps: 10000, borrowRateBps: 1000 }),
-      ...Array(8).fill(new CurvePoint({ utilizationRateBps: 10000, borrowRateBps: 1000 })),
+      ...Array(9).fill(new CurvePoint({ utilizationRateBps: 10000, borrowRateBps: 1000 })),
     ],
   } as BorrowRateCurveFields),
   maxAgePriceSeconds: 180,
@@ -387,7 +472,7 @@ function buildReserveConfig(fields: {
     deleveragingMarginCallPeriodSecs: new BN(0),
     borrowFactorPct: new BN(100),
     elevationGroups: fields.configParams.elevationGroups,
-    deleveragingThresholdSlotsPerBps: new BN(0),
+    deleveragingThresholdSlotsPerBps: new BN(7200),
     multiplierTagBoost: Array(8).fill(1),
     disableUsageAsCollOutsideEmode: 0,
     utilizationLimitBlockBorrowingAbove: 0,

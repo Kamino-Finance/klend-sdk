@@ -4,6 +4,7 @@ import {
   Connection,
   Keypair,
   PublicKey,
+  SYSVAR_INSTRUCTIONS_PUBKEY,
   SYSVAR_RENT_PUBKEY,
   SystemProgram,
   TransactionInstruction,
@@ -12,10 +13,12 @@ import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import {
   getAssociatedTokenAddress,
   getAtasWithCreateIxnsIfMissing,
+  getDepositWsolIxns,
   getTokenOracleData,
   KaminoReserve,
   PubkeyHashMap,
   Reserve,
+  WRAPPED_SOL_MINT,
 } from '../lib';
 import {
   DepositAccounts,
@@ -159,9 +162,28 @@ export class KaminoVaultClient {
     const vaultState = await vault.getState(this._connection);
 
     const userTokenAta = await getAssociatedTokenAddress(vaultState.tokenMint, user);
-    const { atas, createAtasIxns } = await getAtasWithCreateIxnsIfMissing(this._connection, user, [
+    const createAtasIxns: TransactionInstruction[] = [];
+    const closeAtasIxns: TransactionInstruction[] = [];
+    if (vaultState.tokenMint.equals(WRAPPED_SOL_MINT)) {
+      const {
+        atas: wsolAta,
+        createAtasIxns: createWsolAtaIxns,
+        closeAtasIxns: closeWsolAtaIxns,
+      } = await getAtasWithCreateIxnsIfMissing(this._connection, user, [WRAPPED_SOL_MINT]);
+      createAtasIxns.push(...createWsolAtaIxns);
+      const depositWsolixn = getDepositWsolIxns(
+        user,
+        wsolAta[0],
+        numberToLamportsDecimal(tokenAmount, vaultState.tokenMintDecimals.toNumber()).ceil()
+      );
+      createAtasIxns.push(...depositWsolixn);
+      closeAtasIxns.push(...closeWsolAtaIxns);
+    }
+
+    const { atas, createAtasIxns: createSharesAtaIxns } = await getAtasWithCreateIxnsIfMissing(this._connection, user, [
       vaultState.sharesMint,
     ]);
+    createAtasIxns.push(...createSharesAtaIxns);
 
     const userSharesAta = atas[0];
 
@@ -175,7 +197,7 @@ export class KaminoVaultClient {
       tokenAta: userTokenAta,
       userSharesAta: userSharesAta,
       tokenProgram: TOKEN_PROGRAM_ID,
-      instructionSysvarAccount: SYSVAR_RENT_PUBKEY,
+      instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
     };
 
     const depositArgs: DepositArgs = {
@@ -189,9 +211,9 @@ export class KaminoVaultClient {
     const vaultReservesAccountMetas: AccountMeta[] = vaultReserves.map((reserve) => {
       return { pubkey: reserve, isSigner: false, isWritable: false };
     });
-    depositIx.keys.concat(vaultReservesAccountMetas);
+    depositIx.keys = depositIx.keys.concat(vaultReservesAccountMetas);
 
-    return [...createAtasIxns, depositIx];
+    return [...createAtasIxns, depositIx, ...closeAtasIxns];
   }
 
   async withdraw(
@@ -281,7 +303,7 @@ export class KaminoVaultClient {
       userSharesAta: userSharesAta,
       tokenAta: userTokenAta,
       tokenProgram: TOKEN_PROGRAM_ID,
-      instructionSysvarAccount: SYSVAR_RENT_PUBKEY,
+      instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
       reserve: reserve.address,
       ctokenVault: reserve.state.collateral.supplyVault,
       /** CPI accounts */
@@ -302,7 +324,7 @@ export class KaminoVaultClient {
     const vaultReservesAccountMetas: AccountMeta[] = vaultReserves.map((reserve) => {
       return { pubkey: reserve, isSigner: false, isWritable: false };
     });
-    withdrawIxn.keys.concat(vaultReservesAccountMetas);
+    withdrawIxn.keys = withdrawIxn.keys.concat(vaultReservesAccountMetas);
 
     return withdrawIxn;
   }
@@ -481,11 +503,11 @@ export class KaminoVaultConfig {
 }
 
 export class ReserveAllocationConfig {
-  readonly reserve: KaminoReserve;
+  readonly reserve: ReserveWithAddress;
   readonly targetAllocationWeight: number;
   readonly allocationCapDecimal: Decimal;
 
-  constructor(reserve: KaminoReserve, targetAllocationWeight: number, allocationCapDecimal: Decimal) {
+  constructor(reserve: ReserveWithAddress, targetAllocationWeight: number, allocationCapDecimal: Decimal) {
     this.reserve = reserve;
     this.targetAllocationWeight = targetAllocationWeight;
     this.allocationCapDecimal = allocationCapDecimal;
