@@ -432,12 +432,12 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, mint);
+    const allReserves = new Array(...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address]));
+    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
       await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
     }
-    console.log('AAAAAA');
     await axn.addSupportIxs(
       'deposit',
       includeAtaIxns,
@@ -451,24 +451,27 @@ export class KaminoAction {
     return axn;
   }
 
-  getTokenIdsForScopeRefresh(kaminoMarket: KaminoMarket, mint: PublicKey): number[] {
+  getTokenIdsForScopeRefresh(kaminoMarket: KaminoMarket, reserves: PublicKey[]): number[] {
     const tokenIds: number[] = [];
-    const reserve = kaminoMarket.getReserveByMint(mint);
-    if (!reserve) {
-      throw new Error(`Reserve not found for mint ${mint.toBase58()}`);
-    }
 
-    if (!reserve.state.config.tokenInfo.scopeConfiguration.priceFeed.equals(PublicKey.default)) {
-      reserve.state.config.tokenInfo.scopeConfiguration.priceChain.map((x) => {
-        if (x !== U16_MAX) {
-          tokenIds.push(x);
-        }
-      });
-      reserve.state.config.tokenInfo.scopeConfiguration.twapChain.map((x) => {
-        if (x !== U16_MAX) {
-          tokenIds.push(x);
-        }
-      });
+    for (const reserveAddress of reserves) {
+      const reserve = kaminoMarket.getReserveByAddress(reserveAddress);
+      if (!reserve) {
+        throw new Error(`Reserve not found for reserve ${reserveAddress.toBase58()}`);
+      }
+
+      if (!reserve.state.config.tokenInfo.scopeConfiguration.priceFeed.equals(PublicKey.default)) {
+        reserve.state.config.tokenInfo.scopeConfiguration.priceChain.map((x) => {
+          if (x !== U16_MAX) {
+            tokenIds.push(x);
+          }
+        });
+        reserve.state.config.tokenInfo.scopeConfiguration.twapChain.map((x) => {
+          if (x !== U16_MAX) {
+            tokenIds.push(x);
+          }
+        });
+      }
     }
 
     return tokenIds;
@@ -515,7 +518,8 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, mint);
+    const allReserves = new Array(...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address]));
+    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
       await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
@@ -564,7 +568,8 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, mint);
+    const allReserves = new Array(...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address]));
+    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
       await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
@@ -612,7 +617,8 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, mint);
+    const allReserves = new Array(...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address]));
+    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
       await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
@@ -660,7 +666,8 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, mint);
+    const allReserves = new Array(...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address]));
+    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
       await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
@@ -715,9 +722,10 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const tokenIdsDeposit = axn.getTokenIdsForScopeRefresh(kaminoMarket, depositMint);
-    const tokenIdsBorrow = axn.getTokenIdsForScopeRefresh(kaminoMarket, borrowMint);
-    const tokenIds = new Array(...new Set([...tokenIdsDeposit, ...tokenIdsBorrow]));
+    const allReserves = new Array(
+      ...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address, axn.outflowReserve!.address])
+    );
+    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
       await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
@@ -779,9 +787,10 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const tokenIdsRepay = axn.getTokenIdsForScopeRefresh(kaminoMarket, repayMint);
-    const tokenIdsWithdraw = axn.getTokenIdsForScopeRefresh(kaminoMarket, withdrawMint);
-    const tokenIds = new Array(...new Set([...tokenIdsRepay, ...tokenIdsWithdraw]));
+    const allReserves = new Array(
+      ...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address, axn.outflowReserve!.address])
+    );
+    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
       await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
@@ -837,7 +846,8 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, mint);
+    const allReserves = new Array(...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address]));
+    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
       await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
@@ -903,7 +913,8 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, mint);
+    const allReserves = new Array(...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address]));
+    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
       await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
@@ -959,9 +970,10 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const tokenIdsRepay = axn.getTokenIdsForScopeRefresh(kaminoMarket, repayTokenMint);
-    const tokenIdsWithdraw = axn.getTokenIdsForScopeRefresh(kaminoMarket, withdrawTokenMint);
-    const tokenIds = new Array(...new Set([...tokenIdsRepay, ...tokenIdsWithdraw]));
+    const allReserves = new Array(
+      ...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address, axn.outflowReserve!.address])
+    );
+    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
       await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
