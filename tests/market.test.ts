@@ -26,7 +26,6 @@ import {
   ConfigParams,
   DefaultConfigParams,
   borrow,
-  bufferToNumberArray,
   createLookupTable,
   createMarketWithTwoReserves,
   deposit,

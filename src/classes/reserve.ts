@@ -141,6 +141,10 @@ export class KaminoReserve {
     return new Fraction(this.state.config.fees.borrowFeeSf).toDecimal();
   };
 
+  getFixedHostInterestRate = (): Decimal => {
+    return new Decimal(this.state.config.hostFixedInterestRateBps).div(10_000);
+  };
+
   /**
    * Use getEstimatedTotalSupply() for the most accurate value
    * @returns the stale total liquidity supply of the reserve from the last refresh
@@ -574,7 +578,8 @@ export class KaminoReserve {
   ): {
     newDebt: Decimal;
     netNewDebt: Decimal;
-    totalProtocolFee: Decimal;
+    variableProtocolFee: Decimal;
+    fixedHostFee: Decimal;
     absoluteReferralFee: Decimal;
     maxReferralFees: Decimal;
     newAccProtocolFees: Decimal;
@@ -583,25 +588,33 @@ export class KaminoReserve {
     const currentBorrowRate = this.calculateBorrowAPR();
     const protocolTakeRate = new Decimal(this.state.config.protocolTakeRatePct).div(100);
     const referralRate = new Decimal(referralFeeBps).div(10_000);
+    const fixedHostInterestRate = this.getFixedHostInterestRate();
 
-    const compoundInterestRate = this.approximateCompoundedInterest(new Decimal(currentBorrowRate), slotsElapsed);
+    const compoundedInterestRate = this.approximateCompoundedInterest(new Decimal(currentBorrowRate), slotsElapsed);
+    const compoundedFixedRate = this.approximateCompoundedInterest(fixedHostInterestRate, slotsElapsed);
 
     const previousDebt = this.getBorrowedAmount();
-    const newDebt = previousDebt.mul(compoundInterestRate);
-    const netNewDebt = newDebt.sub(previousDebt);
+    const newDebt = previousDebt.mul(compoundedInterestRate);
+    const fixedHostFee = previousDebt.mul(compoundedFixedRate).sub(previousDebt);
 
-    const totalProtocolFee = netNewDebt.mul(protocolTakeRate);
+    const netNewDebt = newDebt.sub(previousDebt).sub(fixedHostFee);
+
+    const variableProtocolFee = netNewDebt.mul(protocolTakeRate);
     const absoluteReferralFee = protocolTakeRate.mul(referralRate);
     const maxReferralFees = netNewDebt.mul(absoluteReferralFee);
 
-    const newAccProtocolFees = totalProtocolFee.sub(maxReferralFees).add(this.getAccumulatedProtocolFees());
+    const newAccProtocolFees = variableProtocolFee
+      .add(fixedHostFee)
+      .sub(maxReferralFees)
+      .add(this.getAccumulatedProtocolFees());
 
     const pendingReferralFees = this.getPendingReferrerFees().add(maxReferralFees);
 
     return {
       newDebt,
       netNewDebt,
-      totalProtocolFee,
+      variableProtocolFee,
+      fixedHostFee,
       absoluteReferralFee,
       maxReferralFees,
       newAccProtocolFees,
