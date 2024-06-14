@@ -589,7 +589,7 @@ describe('Referrals Tests', function () {
       kaminoMarket!
     );
 
-    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer);
+    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer, [referrer]);
   });
 
   // In this test, all actions are built without a referrer, the only source of
@@ -729,7 +729,7 @@ describe('Referrals Tests', function () {
       kaminoMarket!
     );
 
-    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer);
+    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer, [referrer]);
   });
 
   it('deposit_and_borrow_compound_withdraw_init_user_metadata', async function () {
@@ -862,7 +862,7 @@ describe('Referrals Tests', function () {
       kaminoMarket!
     );
 
-    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer);
+    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer, [referrer]);
   });
 
   it('borrow_compound_withdraw_2_deposits_2_borrows_init_user_metadata', async function () {
@@ -1074,7 +1074,7 @@ describe('Referrals Tests', function () {
       kaminoMarket!
     );
 
-    await sendTransactionsFromAction(env, withdrawReferrerFeesActionSol, referrer);
+    await sendTransactionsFromAction(env, withdrawReferrerFeesActionSol, referrer, [referrer]);
 
     await sleep(2000);
 
@@ -1083,7 +1083,7 @@ describe('Referrals Tests', function () {
       usdh,
       kaminoMarket!
     );
-    await sendTransactionsFromAction(env, withdrawReferrerFeesActionUsdh, referrer);
+    await sendTransactionsFromAction(env, withdrawReferrerFeesActionUsdh, referrer, [referrer]);
 
     await sleep(2000);
 
@@ -1356,7 +1356,7 @@ describe('Referrals Tests', function () {
         kaminoMarket!
       );
 
-      await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer);
+      await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer, [referrer]);
 
       await sleep(2000);
 
@@ -1482,7 +1482,7 @@ describe('Referrals Tests', function () {
       kaminoMarket!
     );
 
-    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer);
+    await sendTransactionsFromAction(env, withdrawReferrerFeesAction, referrer, [referrer]);
 
     await sleep(2000);
 
