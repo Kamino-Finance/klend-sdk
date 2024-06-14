@@ -512,6 +512,12 @@
                 10
               ]
             }
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": ["u128", 256]
+            }
           }
         ]
       }
@@ -1163,6 +1169,17 @@
             "type": "u64"
           },
           {
+            "name": "tokenAllocationCap",
+            "docs": ["Maximum token invested in this reserve"],
+            "type": "u64"
+          },
+          {
+            "name": "configPadding",
+            "type": {
+              "array": ["u128", 64]
+            }
+          },
+          {
             "name": "cTokenAllocation",
             "type": "u64"
           },
@@ -1171,9 +1188,10 @@
             "type": "u64"
           },
           {
-            "name": "tokenAllocationCap",
-            "docs": ["Maximum token invested in this reserve"],
-            "type": "u64"
+            "name": "statePadding",
+            "type": {
+              "array": ["u128", 64]
+            }
           }
         ]
       }

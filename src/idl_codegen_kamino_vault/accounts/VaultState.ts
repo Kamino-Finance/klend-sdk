@@ -21,6 +21,7 @@ export interface VaultStateFields {
   lastFeeChargeSlot: BN;
   prevAum: BN;
   vaultAllocationStrategy: Array<types.VaultAllocationFields>;
+  padding: Array<BN>;
 }
 
 export interface VaultStateJSON {
@@ -40,6 +41,7 @@ export interface VaultStateJSON {
   lastFeeChargeSlot: string;
   prevAum: string;
   vaultAllocationStrategy: Array<types.VaultAllocationJSON>;
+  padding: Array<string>;
 }
 
 export class VaultState {
@@ -59,6 +61,7 @@ export class VaultState {
   readonly lastFeeChargeSlot: BN;
   readonly prevAum: BN;
   readonly vaultAllocationStrategy: Array<types.VaultAllocation>;
+  readonly padding: Array<BN>;
 
   static readonly discriminator = Buffer.from([228, 196, 82, 165, 98, 210, 235, 152]);
 
@@ -79,6 +82,7 @@ export class VaultState {
     borsh.u64('lastFeeChargeSlot'),
     borsh.u64('prevAum'),
     borsh.array(types.VaultAllocation.layout(), 10, 'vaultAllocationStrategy'),
+    borsh.array(borsh.u128(), 256, 'padding'),
   ]);
 
   constructor(fields: VaultStateFields) {
@@ -98,6 +102,7 @@ export class VaultState {
     this.lastFeeChargeSlot = fields.lastFeeChargeSlot;
     this.prevAum = fields.prevAum;
     this.vaultAllocationStrategy = fields.vaultAllocationStrategy.map((item) => new types.VaultAllocation({ ...item }));
+    this.padding = fields.padding;
   }
 
   static async fetch(c: Connection, address: PublicKey, programId: PublicKey = PROGRAM_ID): Promise<VaultState | null> {
@@ -159,6 +164,7 @@ export class VaultState {
         (item: any /* eslint-disable-line @typescript-eslint/no-explicit-any */) =>
           types.VaultAllocation.fromDecoded(item)
       ),
+      padding: dec.padding,
     });
   }
 
@@ -180,6 +186,7 @@ export class VaultState {
       lastFeeChargeSlot: this.lastFeeChargeSlot.toString(),
       prevAum: this.prevAum.toString(),
       vaultAllocationStrategy: this.vaultAllocationStrategy.map((item) => item.toJSON()),
+      padding: this.padding.map((item) => item.toString()),
     };
   }
 
@@ -201,6 +208,7 @@ export class VaultState {
       lastFeeChargeSlot: new BN(obj.lastFeeChargeSlot),
       prevAum: new BN(obj.prevAum),
       vaultAllocationStrategy: obj.vaultAllocationStrategy.map((item) => types.VaultAllocation.fromJSON(item)),
+      padding: obj.padding.map((item) => new BN(item)),
     });
   }
 }

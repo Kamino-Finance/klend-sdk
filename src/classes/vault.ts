@@ -16,6 +16,7 @@ import {
   getDepositWsolIxns,
   getTokenOracleData,
   KaminoReserve,
+  LendingMarket,
   PubkeyHashMap,
   Reserve,
   WRAPPED_SOL_MINT,
@@ -129,10 +130,7 @@ export class KaminoVaultClient {
     const vaultState: VaultState = await vault.getState(this.getConnection());
     const reserveState: Reserve = reserveAllocationConfig.getReserveState();
 
-    const cTokenVault = PublicKey.findProgramAddressSync(
-      [Buffer.from(CTOKEN_VAULT_SEED), reserveAllocationConfig.getReserveAddress().toBytes()],
-      this._kaminoVaultProgramId
-    )[0];
+    const cTokenVault = getCTokenVaultPda(reserveAllocationConfig.getReserveAddress(), this._kaminoVaultProgramId);
 
     const updateReserveAllocationAccounts: UpdateReserveAllocationAccounts = {
       adminAuthority: vaultState.adminAuthority,
@@ -220,7 +218,6 @@ export class KaminoVaultClient {
     user: PublicKey,
     vault: KaminoVault,
     shareAmount: Decimal,
-    marketWithAddress: MarketWithAddress,
     slot: number
   ): Promise<TransactionInstruction[]> {
     const vaultState = await vault.getState(this._connection);
@@ -249,6 +246,7 @@ export class KaminoVaultClient {
         vault,
         slot
       );
+      // sort
       const reserveAllocationAvailableLiquidityToWithdrawSorted = new PubkeyHashMap(
         [...reserveAllocationAvailableLiquidityToWithdraw.entries()].sort((a, b) => b[1].sub(a[1]).toNumber())
       );
@@ -263,22 +261,37 @@ export class KaminoVaultClient {
     }
 
     const reserveStates = await Reserve.fetchMultiple(this._connection, reservesToWithdraw, this._kaminoLendProgramId);
-    const withdrawIxns: TransactionInstruction[] = reservesToWithdraw.map((reserve, index) => {
-      if (reserveStates[index] === null) {
-        throw new Error(`Reserve ${reserve.toBase58()} not found`);
-      }
+    const withdrawIxns: TransactionInstruction[] = await Promise.all(
+      reservesToWithdraw.map(async (reserve, index) => {
+        if (reserveStates[index] === null) {
+          throw new Error(`Reserve ${reserve.toBase58()} not found`);
+        }
 
-      return this.withdrawIxn(
-        user,
-        vault,
-        vaultState,
-        marketWithAddress,
-        { address: reserve, state: reserveStates[index] },
-        userSharesAta,
-        userTokenAta,
-        amountToWithdraw[index]
-      );
-    });
+        const reserveState = reserveStates[index]!;
+
+        const market = reserveState.lendingMarket;
+        const marketState = await LendingMarket.fetch(this._connection, market, this._kaminoLendProgramId);
+        if (marketState === null) {
+          throw new Error(`Market ${market.toBase58()} not found`);
+        }
+
+        const marketWithAddress = {
+          address: market,
+          state: marketState,
+        };
+
+        return this.withdrawIxn(
+          user,
+          vault,
+          vaultState,
+          marketWithAddress,
+          { address: reserve, state: reserveState },
+          userSharesAta,
+          userTokenAta,
+          amountToWithdraw[index]
+        );
+      })
+    );
 
     return [...createAtasIxns, ...withdrawIxns];
   }
@@ -305,7 +318,7 @@ export class KaminoVaultClient {
       tokenProgram: TOKEN_PROGRAM_ID,
       instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
       reserve: reserve.address,
-      ctokenVault: reserve.state.collateral.supplyVault,
+      ctokenVault: getCTokenVaultPda(reserve.address, this._kaminoVaultProgramId),
       /** CPI accounts */
       lendingMarket: marketWithAddress.address,
       lendingMarketAuthority: marketWithAddress.state.lendingMarketOwner,
@@ -347,22 +360,24 @@ export class KaminoVaultClient {
 
     const totalVaultLiquidityAmount = new Decimal(vaultState.tokenAvailable.toString());
     vaultState.vaultAllocationStrategy.forEach((allocationStrategy) => {
-      const reserve = reserves.get(allocationStrategy.reserve);
-      if (reserve === undefined) {
-        throw new Error(`Reserve ${allocationStrategy.reserve.toBase58()} not found`);
+      if (!allocationStrategy.reserve.equals(PublicKey.default)) {
+        const reserve = reserves.get(allocationStrategy.reserve);
+        if (reserve === undefined) {
+          throw new Error(`Reserve ${allocationStrategy.reserve.toBase58()} not found`);
+        }
+        const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(
+          slot,
+          new Fraction(reserve.state.liquidity.absoluteReferralRateSf)
+            .toDecimal()
+            .div(reserve.state.config.protocolTakeRatePct / 100)
+            .floor()
+            .toNumber()
+        );
+        const reserveAllocationLiquidityAmount = new Decimal(allocationStrategy.cTokenAllocation.toString()).div(
+          reserveCollExchangeRate
+        );
+        totalVaultLiquidityAmount.add(reserveAllocationLiquidityAmount);
       }
-      const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(
-        slot,
-        new Fraction(reserve.state.liquidity.absoluteReferralRateSf)
-          .toDecimal()
-          .div(reserve.state.config.protocolTakeRatePct / 100)
-          .floor()
-          .toNumber()
-      );
-      const reserveAllocationLiquidityAmount = new Decimal(allocationStrategy.cTokenAllocation.toString()).div(
-        reserveCollExchangeRate
-      );
-      totalVaultLiquidityAmount.add(reserveAllocationLiquidityAmount);
     });
 
     return new Decimal(vaultState.sharesIssued.toString()).div(totalVaultLiquidityAmount);
@@ -403,7 +418,9 @@ export class KaminoVaultClient {
   }
 
   private getVaultReserves(vault: VaultState): PublicKey[] {
-    return vault.vaultAllocationStrategy.map((reserve) => reserve.reserve);
+    return vault.vaultAllocationStrategy
+      .filter((vaultAllocation) => !vaultAllocation.reserve.equals(PublicKey.default))
+      .map((vaultAllocation) => vaultAllocation.reserve);
   }
 
   private async loadVaultReserves(vaultState: VaultState): Promise<PubkeyHashMap<PublicKey, KaminoReserve>> {
@@ -466,6 +483,10 @@ export class KaminoVault {
       return this.state;
     }
   }
+
+  async reload(connection: Connection): Promise<void> {
+    this.state = await VaultState.fetch(connection, this.address);
+  }
 }
 
 /**
@@ -524,4 +545,11 @@ export class ReserveAllocationConfig {
   getReserveAddress(): PublicKey {
     return this.reserve.address;
   }
+}
+
+export function getCTokenVaultPda(reserveAddress: PublicKey, kaminoVaultProgramId: PublicKey) {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(CTOKEN_VAULT_SEED), reserveAddress.toBytes()],
+    kaminoVaultProgramId
+  )[0];
 }

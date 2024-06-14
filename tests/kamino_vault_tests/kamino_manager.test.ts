@@ -59,7 +59,7 @@ describe('Kamino Manager Tests', function () {
     );
 
     // Create Asset Configs and add them to the market
-    const collConfig = new CollateralConfig({
+    const solConfig = new CollateralConfig({
       mint: NATIVE_MINT,
       tokenName: 'SOL',
       mintDecimals: 9,
@@ -71,7 +71,7 @@ describe('Kamino Manager Tests', function () {
       liquidationThresholdPct: 75,
     });
 
-    const debtConfig = new DebtConfig({
+    const usdcConfig = new DebtConfig({
       mint: mintUSDC,
       tokenName: 'USDC',
       mintDecimals: 6,
@@ -82,52 +82,52 @@ describe('Kamino Manager Tests', function () {
       borrowRateCurve: newFlat(100),
     });
 
-    const { reserve: collReserveKp, txnIxns: createCollReserveTxnIxns } = await kaminoManager.addAssetToMarket({
+    const { reserve: solReserveKp, txnIxns: createsolReserveTxnIxns } = await kaminoManager.addAssetToMarket({
       admin: env.admin.publicKey,
       marketAddress: marketKp.publicKey,
-      assetConfig: collConfig,
+      assetConfig: solConfig,
     });
 
-    const _createCollReserveSig = await buildAndSendTxn(
+    const _createsolReserveSig = await buildAndSendTxn(
       env.provider.connection,
       env.admin,
-      createCollReserveTxnIxns[0],
-      [collReserveKp],
+      createsolReserveTxnIxns[0],
+      [solReserveKp],
       [],
-      'KaminoManager_CreateCollReserve'
+      'KaminoManager_CreatesolReserve'
     );
 
-    const _updateCollReserveSig = await buildAndSendTxn(
+    const _updatesolReserveSig = await buildAndSendTxn(
       env.provider.connection,
       env.admin,
-      createCollReserveTxnIxns[1],
+      createsolReserveTxnIxns[1],
       [],
       [],
-      'KaminoManager_CreateCollReserve'
+      'KaminoManager_CreatesolReserve'
     );
 
-    const { reserve: debtReserveKp, txnIxns: createDebtReserveTxnIxns } = await kaminoManager.addAssetToMarket({
+    const { reserve: usdcReserveKp, txnIxns: createusdcReserveTxnIxns } = await kaminoManager.addAssetToMarket({
       admin: env.admin.publicKey,
       marketAddress: marketKp.publicKey,
-      assetConfig: debtConfig,
+      assetConfig: usdcConfig,
     });
 
-    const _createDebtReserveSig = await buildAndSendTxn(
+    const _createusdcReserveSig = await buildAndSendTxn(
       env.provider.connection,
       env.admin,
-      createDebtReserveTxnIxns[0],
-      [debtReserveKp],
+      createusdcReserveTxnIxns[0],
+      [usdcReserveKp],
       [],
-      'KaminoManager_CreateDebtReserve'
+      'KaminoManager_CreateusdcReserve'
     );
 
-    const _updateDebtReserveSig = await buildAndSendTxn(
+    const _updateusdcReserveSig = await buildAndSendTxn(
       env.provider.connection,
       env.admin,
-      createDebtReserveTxnIxns[1],
+      createusdcReserveTxnIxns[1],
       [],
       [],
-      'KaminoManager_CreateDebtReserve'
+      'KaminoManager_CreateusdcReserve'
     );
   });
 
@@ -140,7 +140,7 @@ describe('Kamino Manager Tests', function () {
     // Create kamino vault config and add to the market
     const kaminoVaultConfig = new KaminoVaultConfig({
       admin: env.admin.publicKey,
-      tokenMint: marketAccounts.debtReserveConfig.mint,
+      tokenMint: marketAccounts.usdcReserveConfig.mint,
       performanceFeeRate: new Decimal(0.0),
       managementFeeRate: new Decimal(0.0),
     });
@@ -158,7 +158,7 @@ describe('Kamino Manager Tests', function () {
     // Create kamino vault config and add to the market
     const kaminoVaultConfig = new KaminoVaultConfig({
       admin: env.admin.publicKey,
-      tokenMint: marketAccounts1.debtReserveConfig.mint,
+      tokenMint: marketAccounts1.usdcReserveConfig.mint,
       performanceFeeRate: new Decimal(0.0),
       managementFeeRate: new Decimal(0.0),
     });
@@ -169,22 +169,22 @@ describe('Kamino Manager Tests', function () {
     const vault = new KaminoVault(vaultKp.publicKey);
 
     const reserveStates = await Reserve.fetchMultiple(env.provider.connection, [
-      marketAccounts1.debtReserve,
-      marketAccounts2.debtReserve,
+      marketAccounts1.usdcReserve,
+      marketAccounts2.usdcReserve,
     ]);
 
-    const debtReserveWithAddress1: ReserveWithAddress = {
-      address: marketAccounts1.debtReserve,
+    const usdcReserveWithAddress1: ReserveWithAddress = {
+      address: marketAccounts1.usdcReserve,
       state: reserveStates[0]!,
     };
-    const debtReserveWithAddress2: ReserveWithAddress = {
-      address: marketAccounts2.debtReserve,
+    const usdcReserveWithAddress2: ReserveWithAddress = {
+      address: marketAccounts2.usdcReserve,
       state: reserveStates[1]!,
     };
 
     // Update Reserve Allocation
-    const firstReserveAllocationConfig = new ReserveAllocationConfig(debtReserveWithAddress1, 100, new Decimal(100));
-    const secondReserveAllocationConfig = new ReserveAllocationConfig(debtReserveWithAddress2, 200, new Decimal(50));
+    const firstReserveAllocationConfig = new ReserveAllocationConfig(usdcReserveWithAddress1, 100, new Decimal(100));
+    const secondReserveAllocationConfig = new ReserveAllocationConfig(usdcReserveWithAddress2, 200, new Decimal(50));
 
     const ix1 = await kaminoManager.updateVaultReserveAllocation(vault, firstReserveAllocationConfig);
     const ix2 = await kaminoManager.updateVaultReserveAllocation(vault, secondReserveAllocationConfig);
@@ -211,17 +211,65 @@ describe('Kamino Manager Tests', function () {
     const user = Keypair.generate();
     await env.provider.connection.requestAirdrop(user.publicKey, solAmount * LAMPORTS_PER_SOL);
 
-    const collVault = new KaminoVault(vaultMarketAccounts.collVaultAddress);
+    const solVault = new KaminoVault(vaultMarketAccounts.solVaultAddress);
 
-    const depositIx = await kaminoManager.depositToVault(user.publicKey, collVault, solAmountToDeposit);
+    const depositIx = await kaminoManager.depositToVault(user.publicKey, solVault, solAmountToDeposit);
 
-    const _updateTxSignature = await buildAndSendTxn(
+    const _despositTxSignature = await buildAndSendTxn(
       env.provider.connection,
       user,
       [...depositIx],
       [],
       [],
       'DepositToVault'
+    );
+  });
+
+  it('kamino_manager_withdraw_from_vault_uninvested', async function () {
+    const env = await initEnv('localnet');
+    const kaminoManager = new KaminoManager(env.provider.connection);
+
+    const vaultMarketAccounts = await createVaultsWithTwoReservesMarketsWithTwoAssets(env, kaminoManager);
+
+    const solAmount = 10;
+    const solAmountToDeposit = new Decimal(3.0);
+
+    const user = Keypair.generate();
+    await env.provider.connection.requestAirdrop(user.publicKey, solAmount * LAMPORTS_PER_SOL);
+
+    const solVault = new KaminoVault(vaultMarketAccounts.solVaultAddress);
+
+    // Deposit to Vault
+    const depositIx = await kaminoManager.depositToVault(user.publicKey, solVault, solAmountToDeposit);
+
+    const _depositTxSignature = await buildAndSendTxn(
+      env.provider.connection,
+      user,
+      [...depositIx],
+      [],
+      [],
+      'DepositToVault'
+    );
+
+    await solVault.reload(env.provider.connection);
+
+    // Withdraw from Vault
+    const userSharesForVault = await kaminoManager.getUserVaultSharesBalance(user.publicKey, solVault);
+
+    const withdrawIxs = await kaminoManager.withdrawFromVault(
+      user.publicKey,
+      solVault,
+      userSharesForVault,
+      await env.provider.connection.getSlot('confirmed')
+    );
+
+    const _withdrawTxSignature = await buildAndSendTxn(
+      env.provider.connection,
+      user,
+      [...withdrawIxs],
+      [],
+      [],
+      'WithdrawFromVault'
     );
   });
 });

@@ -196,10 +196,9 @@ export class KaminoManager {
     user: PublicKey,
     vault: KaminoVault,
     shareAmount: Decimal,
-    marketWithAddress: MarketWithAddress,
     slot: number
   ): Promise<TransactionInstruction[]> {
-    return this._vaultClient.withdraw(user, vault, shareAmount, marketWithAddress, slot);
+    return this._vaultClient.withdraw(user, vault, shareAmount, slot);
   }
 
   async getVaultTokensPerShare(vault: KaminoVault, slot: number): Promise<Decimal> {

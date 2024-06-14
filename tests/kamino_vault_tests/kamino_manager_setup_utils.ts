@@ -19,25 +19,26 @@ import { createMint } from '../token_utils';
 import { PublicKey } from '@solana/web3.js';
 import Decimal from 'decimal.js';
 
+// SOL & USDC just for testing purposes, can be any coin
 export type MarketTestAccounts = {
   marketAddress: PublicKey;
-  collReserve: PublicKey;
-  debtReserve: PublicKey;
-  collReserveConfig: AssetReserveConfig;
-  debtReserveConfig: AssetReserveConfig;
+  solReserve: PublicKey;
+  usdcReserve: PublicKey;
+  solReserveConfig: AssetReserveConfig;
+  usdcReserveConfig: AssetReserveConfig;
 };
 
 export type VaultMarketAccounts = {
-  debtVaultAddress: PublicKey;
-  collVaultAddress: PublicKey;
+  solVaultAddress: PublicKey;
+  usdcVaultAddress: PublicKey;
   marketAccounts: Array<MarketTestAccounts>;
 };
 
 export async function createMarketWithTwoAssets(
   env: Env,
   kaminoManager: KaminoManager,
-  collConfigOverride?: AssetReserveConfig,
-  debtConfigOverride?: AssetReserveConfig,
+  solConfigOverride?: AssetReserveConfig,
+  usdcConfigOverride?: AssetReserveConfig,
   usdcMintOverride?: PublicKey
 ): Promise<MarketTestAccounts> {
   // Creating a market
@@ -56,8 +57,8 @@ export async function createMarketWithTwoAssets(
   const mintUSDC = usdcMintOverride ? usdcMintOverride : await createMint(env, env.admin.publicKey, 6);
 
   // Create Asset Configs and add them to the market
-  const collConfig = collConfigOverride
-    ? collConfigOverride
+  const solConfig = solConfigOverride
+    ? solConfigOverride
     : new AssetReserveConfig({
         mint: NATIVE_MINT,
         tokenName: 'SOL',
@@ -73,8 +74,8 @@ export async function createMarketWithTwoAssets(
         borrowLimit: new Decimal(0.0),
       });
 
-  const debtConfig = debtConfigOverride
-    ? debtConfigOverride
+  const usdcConfig = usdcConfigOverride
+    ? usdcConfigOverride
     : new AssetReserveConfig({
         mint: mintUSDC,
         tokenName: 'USDC',
@@ -90,76 +91,76 @@ export async function createMarketWithTwoAssets(
         borrowLimit: new Decimal(750.0),
       });
 
-  const { reserve: collReserveKp, txnIxns: createCollReserveTxnIxns } = await kaminoManager.addAssetToMarket({
+  const { reserve: solReserveKp, txnIxns: createsolReserveTxnIxns } = await kaminoManager.addAssetToMarket({
     admin: env.admin.publicKey,
     marketAddress: marketKp.publicKey,
-    assetConfig: collConfig,
+    assetConfig: solConfig,
   });
 
-  const _createCollReserveSig = await buildAndSendTxn(
+  const _createsolReserveSig = await buildAndSendTxn(
     env.provider.connection,
     env.admin,
-    createCollReserveTxnIxns[0],
-    [collReserveKp],
+    createsolReserveTxnIxns[0],
+    [solReserveKp],
     [],
-    'KaminoManager_CreateCollReserve'
+    'KaminoManager_CreatesolReserve'
   );
 
-  const _updateCollReserveSig = await buildAndSendTxn(
+  const _updatesolReserveSig = await buildAndSendTxn(
     env.provider.connection,
     env.admin,
-    createCollReserveTxnIxns[1],
+    createsolReserveTxnIxns[1],
     [],
     [],
-    'KaminoManager_UpdateCollReserve'
+    'KaminoManager_UpdatesolReserve'
   );
 
-  const { reserve: debtReserveKp, txnIxns: createDebtReserveTxnIxns } = await kaminoManager.addAssetToMarket({
+  const { reserve: usdcReserveKp, txnIxns: createusdcReserveTxnIxns } = await kaminoManager.addAssetToMarket({
     admin: env.admin.publicKey,
     marketAddress: marketKp.publicKey,
-    assetConfig: debtConfig,
+    assetConfig: usdcConfig,
   });
 
-  const _createDebtReserveSig = await buildAndSendTxn(
+  const _createusdcReserveSig = await buildAndSendTxn(
     env.provider.connection,
     env.admin,
-    createDebtReserveTxnIxns[0],
-    [debtReserveKp],
+    createusdcReserveTxnIxns[0],
+    [usdcReserveKp],
     [],
-    'KaminoManager_CreateDebtReserve'
+    'KaminoManager_CreateusdcReserve'
   );
 
-  const _updateDebtReserveSig = await buildAndSendTxn(
+  const _updateusdcReserveSig = await buildAndSendTxn(
     env.provider.connection,
     env.admin,
-    createDebtReserveTxnIxns[1],
+    createusdcReserveTxnIxns[1],
     [],
     [],
-    'KaminoManager_UpdateDebtReserve'
+    'KaminoManager_UpdateusdcReserve'
   );
 
   return {
     marketAddress: marketKp.publicKey,
-    collReserve: collReserveKp.publicKey,
-    debtReserve: debtReserveKp.publicKey,
-    collReserveConfig: collConfig,
-    debtReserveConfig: debtConfig,
+    solReserve: solReserveKp.publicKey,
+    usdcReserve: usdcReserveKp.publicKey,
+    solReserveConfig: solConfig,
+    usdcReserveConfig: usdcConfig,
   };
 }
 
 export async function createTwoMarketsWithTwoAssets(
   env: Env,
   kaminoManager: KaminoManager,
-  collConfigOverride?: CollateralConfig,
-  debtConfigOverride?: DebtConfig
+  solConfigOverride?: CollateralConfig,
+  usdcConfigOverride?: DebtConfig
 ): Promise<[MarketTestAccounts, MarketTestAccounts]> {
-  const marketSetup1 = await createMarketWithTwoAssets(env, kaminoManager, collConfigOverride, debtConfigOverride);
+  const marketSetup1 = await createMarketWithTwoAssets(env, kaminoManager, solConfigOverride, usdcConfigOverride);
   const marketSetup2 = await createMarketWithTwoAssets(
     env,
     kaminoManager,
-    collConfigOverride,
-    debtConfigOverride,
-    marketSetup1.debtReserveConfig.mint
+    solConfigOverride,
+    usdcConfigOverride,
+    marketSetup1.usdcReserveConfig.mint
   );
 
   return [marketSetup1, marketSetup2];
@@ -168,107 +169,107 @@ export async function createTwoMarketsWithTwoAssets(
 export async function createVaultsWithTwoReservesMarketsWithTwoAssets(
   env: Env,
   kaminoManager: KaminoManager,
-  collConfigOverride?: CollateralConfig,
-  debtConfigOverride?: DebtConfig,
+  solConfigOverride?: CollateralConfig,
+  usdcConfigOverride?: DebtConfig,
   weightsOverride?: Array<number>
 ): Promise<VaultMarketAccounts> {
-  const marketSetup1 = await createMarketWithTwoAssets(env, kaminoManager, collConfigOverride, debtConfigOverride);
+  const marketSetup1 = await createMarketWithTwoAssets(env, kaminoManager, solConfigOverride, usdcConfigOverride);
   const marketSetup2 = await createMarketWithTwoAssets(
     env,
     kaminoManager,
-    collConfigOverride,
-    debtConfigOverride,
-    marketSetup1.debtReserveConfig.mint
+    solConfigOverride,
+    usdcConfigOverride,
+    marketSetup1.usdcReserveConfig.mint
   );
 
   const weights = weightsOverride ? weightsOverride : [100, 200];
 
   // Create kamino vault config and add to the market
-  const kaminoDebtVaultConfig = new KaminoVaultConfig({
+  const kaminousdcVaultConfig = new KaminoVaultConfig({
     admin: env.admin.publicKey,
-    tokenMint: marketSetup1.debtReserveConfig.mint,
+    tokenMint: marketSetup1.usdcReserveConfig.mint,
     performanceFeeRate: new Decimal(0.0),
     managementFeeRate: new Decimal(0.0),
   });
 
-  const kaminoCollVaultConfig = new KaminoVaultConfig({
+  const kaminosolVaultConfig = new KaminoVaultConfig({
     admin: env.admin.publicKey,
-    tokenMint: marketSetup1.collReserveConfig.mint,
+    tokenMint: marketSetup1.solReserveConfig.mint,
     performanceFeeRate: new Decimal(0.0),
     managementFeeRate: new Decimal(0.0),
   });
 
-  const [debtVaultKp, debtVaultCreateInstructions] = await kaminoManager.createVault(kaminoDebtVaultConfig);
+  const [usdcVaultKp, usdcVaultCreateInstructions] = await kaminoManager.createVault(kaminousdcVaultConfig);
   await buildAndSendTxn(
     env.provider.connection,
     env.admin,
-    debtVaultCreateInstructions,
-    [debtVaultKp],
+    usdcVaultCreateInstructions,
+    [usdcVaultKp],
     [],
-    'InitDebtVault'
+    'InitusdcVault'
   );
 
-  const [collVaultKp, collVaultCreateInstructions] = await kaminoManager.createVault(kaminoCollVaultConfig);
+  const [solVaultKp, solVaultCreateInstructions] = await kaminoManager.createVault(kaminosolVaultConfig);
   await buildAndSendTxn(
     env.provider.connection,
     env.admin,
-    collVaultCreateInstructions,
-    [collVaultKp],
+    solVaultCreateInstructions,
+    [solVaultKp],
     [],
-    'InitCollVault'
+    'InitsolVault'
   );
 
-  const debtVault = new KaminoVault(debtVaultKp.publicKey);
-  const collVault = new KaminoVault(collVaultKp.publicKey);
+  const usdcVault = new KaminoVault(usdcVaultKp.publicKey);
+  const solVault = new KaminoVault(solVaultKp.publicKey);
 
-  const debtReserveWithAddress1: ReserveWithAddress = {
-    address: marketSetup1.debtReserve,
-    state: (await Reserve.fetch(env.provider.connection, marketSetup1.debtReserve))!,
+  const usdcReserveWithAddress1: ReserveWithAddress = {
+    address: marketSetup1.usdcReserve,
+    state: (await Reserve.fetch(env.provider.connection, marketSetup1.usdcReserve))!,
   };
-  const debtReserveWithAddress2: ReserveWithAddress = {
-    address: marketSetup2.debtReserve,
-    state: (await Reserve.fetch(env.provider.connection, marketSetup2.debtReserve))!,
+  const usdcReserveWithAddress2: ReserveWithAddress = {
+    address: marketSetup2.usdcReserve,
+    state: (await Reserve.fetch(env.provider.connection, marketSetup2.usdcReserve))!,
   };
-  const collReserveWithAddress1: ReserveWithAddress = {
-    address: marketSetup1.collReserve,
-    state: (await Reserve.fetch(env.provider.connection, marketSetup1.collReserve))!,
+  const solReserveWithAddress1: ReserveWithAddress = {
+    address: marketSetup1.solReserve,
+    state: (await Reserve.fetch(env.provider.connection, marketSetup1.solReserve))!,
   };
-  const collReserveWithAddress2: ReserveWithAddress = {
-    address: marketSetup2.collReserve,
-    state: (await Reserve.fetch(env.provider.connection, marketSetup2.collReserve))!,
+  const solReserveWithAddress2: ReserveWithAddress = {
+    address: marketSetup2.solReserve,
+    state: (await Reserve.fetch(env.provider.connection, marketSetup2.solReserve))!,
   };
 
   // Update Reserve Allocation
-  const firstDebtReserveAllocationConfig = new ReserveAllocationConfig(
-    debtReserveWithAddress1,
+  const firstusdcReserveAllocationConfig = new ReserveAllocationConfig(
+    usdcReserveWithAddress1,
     weights[0],
     new Decimal(100)
   );
-  const secondDebtReserveAllocationConfig = new ReserveAllocationConfig(
-    debtReserveWithAddress2,
+  const secondusdcReserveAllocationConfig = new ReserveAllocationConfig(
+    usdcReserveWithAddress2,
     weights[1],
     new Decimal(50)
   );
 
-  const ix1 = await kaminoManager.updateVaultReserveAllocation(debtVault, firstDebtReserveAllocationConfig);
-  const ix2 = await kaminoManager.updateVaultReserveAllocation(debtVault, secondDebtReserveAllocationConfig);
+  const ix1 = await kaminoManager.updateVaultReserveAllocation(usdcVault, firstusdcReserveAllocationConfig);
+  const ix2 = await kaminoManager.updateVaultReserveAllocation(usdcVault, secondusdcReserveAllocationConfig);
 
-  await buildAndSendTxn(env.provider.connection, env.admin, [ix1, ix2], [], [], 'UpdateDebtVaultReserveAllocation');
+  await buildAndSendTxn(env.provider.connection, env.admin, [ix1, ix2], [], [], 'UpdateusdcVaultReserveAllocation');
 
-  const firstCollReserveAllocationConfig = new ReserveAllocationConfig(
-    collReserveWithAddress1,
+  const firstsolReserveAllocationConfig = new ReserveAllocationConfig(
+    solReserveWithAddress1,
     weights[0],
     new Decimal(100)
   );
-  const secondCollReserveAllocationConfig = new ReserveAllocationConfig(
-    collReserveWithAddress2,
+  const secondsolReserveAllocationConfig = new ReserveAllocationConfig(
+    solReserveWithAddress2,
     weights[1],
     new Decimal(50)
   );
 
   const computeBudgetIx = buildComputeBudgetIx(300_000);
-  const ixn1 = await kaminoManager.updateVaultReserveAllocation(collVault, firstCollReserveAllocationConfig);
-  const ixn2 = await kaminoManager.updateVaultReserveAllocation(collVault, secondCollReserveAllocationConfig);
+  const ixn1 = await kaminoManager.updateVaultReserveAllocation(solVault, firstsolReserveAllocationConfig);
+  const ixn2 = await kaminoManager.updateVaultReserveAllocation(solVault, secondsolReserveAllocationConfig);
 
   await buildAndSendTxn(
     env.provider.connection,
@@ -276,12 +277,12 @@ export async function createVaultsWithTwoReservesMarketsWithTwoAssets(
     [computeBudgetIx, ixn1, ixn2],
     [],
     [],
-    'UpdateCollVaultReserveAllocation'
+    'UpdatesolVaultReserveAllocation'
   );
 
   return {
-    debtVaultAddress: debtVaultKp.publicKey,
-    collVaultAddress: collVaultKp.publicKey,
+    usdcVaultAddress: usdcVaultKp.publicKey,
+    solVaultAddress: solVaultKp.publicKey,
     marketAccounts: [marketSetup1, marketSetup2],
   };
 }
