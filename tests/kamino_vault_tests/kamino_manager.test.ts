@@ -256,6 +256,8 @@ describe('Kamino Manager Tests', function () {
     // Withdraw from Vault
     const userSharesForVault = await kaminoManager.getUserVaultSharesBalance(user.publicKey, solVault);
 
+    console.log('userSharesForVault: ', userSharesForVault);
+
     const withdrawIxs = await kaminoManager.withdrawFromVault(
       user.publicKey,
       solVault,
@@ -271,5 +273,52 @@ describe('Kamino Manager Tests', function () {
       [],
       'WithdrawFromVault'
     );
+  });
+
+  it('kamino_manager_invest', async function () {
+    const env = await initEnv('localnet');
+    const kaminoManager = new KaminoManager(env.provider.connection);
+
+    const vaultMarketAccounts = await createVaultsWithTwoReservesMarketsWithTwoAssets(env, kaminoManager);
+
+    const solAmount = 10;
+    const solAmountToDeposit = new Decimal(3.0);
+
+    const user = Keypair.generate();
+    await env.provider.connection.requestAirdrop(user.publicKey, solAmount * LAMPORTS_PER_SOL);
+
+    const solVault = new KaminoVault(vaultMarketAccounts.solVaultAddress);
+
+    // Deposit to Vault
+    const depositIx = await kaminoManager.depositToVault(user.publicKey, solVault, solAmountToDeposit);
+
+    const _depositTxSignature = await buildAndSendTxn(
+      env.provider.connection,
+      user,
+      [...depositIx],
+      [],
+      [],
+      'DepositToVault'
+    );
+
+    await solVault.reload(env.provider.connection);
+
+    // Withdraw from Vault
+    const userSharesForVault = await kaminoManager.getUserVaultSharesBalance(user.publicKey, solVault);
+
+    console.log('userSharesForVault: ', userSharesForVault);
+
+    // const investIxs = await kaminoManager.investAllReserves(solVault);
+
+    // TODO: This won't work until we update the SDK to the latest version of klend master codegen
+    // Current SDK is running on an older version of the codegen, for latest klend deployed on mainnet
+    // const _withdrawTxSignature = await buildAndSendTxn(
+    //   env.provider.connection,
+    //   env.admin,
+    //   [...investIxs],
+    //   [],
+    //   [],
+    //   'InvestAll'
+    // );
   });
 });

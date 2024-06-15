@@ -39,6 +39,7 @@ import {
 } from '../idl_codegen/types';
 import { numberToLamportsDecimal } from './utils';
 import Decimal from 'decimal.js';
+import { ReserveWithAddress } from '../../dist/classes/reserve';
 
 /**
  * KaminoVaultClient is a class that provides a high-level interface to interact with the Kamino Vault program.
@@ -104,7 +105,7 @@ export class KaminoManager {
       quoteCurrency: Array(32).fill(0),
     };
 
-    createMarketIxns.push(initLendingMarket(args, accounts));
+    createMarketIxns.push(initLendingMarket(args, accounts, this._kaminoLendProgramId));
 
     return { market: marketAccount, ixns: createMarketIxns };
   }
@@ -116,7 +117,7 @@ export class KaminoManager {
   async addAssetToMarket(
     params: AddAssetToMarketParams
   ): Promise<{ reserve: Keypair; txnIxns: TransactionInstruction[][] }> {
-    const market = await LendingMarket.fetch(this._connection, params.marketAddress);
+    const market = await LendingMarket.fetch(this._connection, params.marketAddress, this._kaminoLendProgramId);
     if (!market) {
       throw new Error('Market not found');
     }
@@ -162,7 +163,7 @@ export class KaminoManager {
     reserve: PublicKey,
     config: ReserveConfig
   ): Promise<TransactionInstruction[]> {
-    const reserveState = await Reserve.fetch(this._connection, reserve);
+    const reserveState = await Reserve.fetch(this._connection, reserve, this._kaminoLendProgramId);
     const ixns: TransactionInstruction[] = [];
 
     if (!reserveState) {
@@ -211,6 +212,17 @@ export class KaminoManager {
 
   getKaminoVaultClient(): KaminoVaultClient {
     return this._vaultClient;
+  }
+
+  async investAllReserves(kaminoVault: KaminoVault): Promise<TransactionInstruction[]> {
+    return this._vaultClient.investAllReserves(kaminoVault);
+  }
+
+  async investSingleReserves(
+    kaminoVault: KaminoVault,
+    reserveWithAddress: ReserveWithAddress
+  ): Promise<TransactionInstruction> {
+    return this._vaultClient.investSingleReserve(kaminoVault, reserveWithAddress);
   }
 } // KaminoManager
 
@@ -275,6 +287,40 @@ export class AssetReserveConfig implements AssetConfig {
       mintDecimals: this.mintDecimals,
       tokenName: this.tokenName,
     });
+  }
+}
+
+export class AssetReserveConfigCli implements AssetConfig {
+  readonly mint: PublicKey;
+  readonly tokenName: string;
+  readonly mintDecimals: number;
+  private reserveConfig: ReserveConfig | undefined;
+  assetReserveConfigParams: AssetReserveConfigParams;
+
+  constructor(mint: PublicKey, reserveConfig: ReserveConfig) {
+    this.reserveConfig = reserveConfig;
+    this.tokenName = '';
+    this.mintDecimals = 0;
+    this.assetReserveConfigParams = DefaultConfigParams;
+    this.mint = mint;
+  }
+
+  setAssetConfigParams(assetReserveConfigParams: AssetReserveConfigParams): void {
+    this.assetReserveConfigParams = assetReserveConfigParams;
+  }
+
+  setReserveConfig(reserveConfig: ReserveConfig) {
+    this.reserveConfig = reserveConfig;
+  }
+
+  getReserveConfig(): ReserveConfig {
+    return this.reserveConfig
+      ? this.reserveConfig
+      : buildReserveConfig({
+          configParams: this.assetReserveConfigParams,
+          mintDecimals: this.mintDecimals,
+          tokenName: this.tokenName,
+        });
   }
 }
 
