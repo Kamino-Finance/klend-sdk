@@ -430,8 +430,8 @@ export const sendTransactionsFromAction = async (
     const preTxn = await buildVersionedTransaction(env.provider.connection, payer.publicKey, kaminoAction.preTxnIxs);
     console.log('PreTxnIxns:', kaminoAction.preTxnIxsLabels);
     try {
-    const txHash = await buildAndSendTxnWithLogs(env.provider.connection, preTxn, payer, signers);
-    console.log(`PreTxnIxns hash: ${txHash}`);
+      const txHash = await buildAndSendTxnWithLogs(env.provider.connection, preTxn, payer, signers);
+      console.log(`PreTxnIxns hash: ${txHash}`);
     } catch (e) {
       console.log('PreTxnIxns error:', e);
     }
@@ -520,6 +520,9 @@ export const createMarketWithTwoReserves = async (
   requestElevationGroup: boolean
 ) => {
   const env = await initEnv('localnet');
+
+  const scope = new Scope('localnet', env.provider.connection);
+  await createScopeFeed(env, scope);
 
   const [createMarketSig, lendingMarket] = await createMarket(env);
   console.log(createMarketSig);

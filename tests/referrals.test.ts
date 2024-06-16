@@ -1249,7 +1249,7 @@ describe('Referrals Tests', function () {
         new VanillaObligation(PROGRAM_ID)
       );
 
-      await sendTransactionsFromAction(env, depositAction, depositor);
+      await sendTransactionsFromAction(env, depositAction, depositor, [depositor]);
       await sleep(2000);
     }
 
@@ -1589,7 +1589,7 @@ describe('Referrals Tests', function () {
       true
     );
 
-    await sendTransactionsFromAction(env, depositAction, depositorOnly);
+    await sendTransactionsFromAction(env, depositAction, depositorOnly, [depositorOnly]);
     await sleep(2000);
 
     for (let i = 0; i < 3; i++) {
@@ -1613,7 +1613,7 @@ describe('Referrals Tests', function () {
         referrer.publicKey
       );
 
-      await sendTransactionsFromAction(env, depositAction, borrower);
+      await sendTransactionsFromAction(env, depositAction, borrower, [borrower]);
       await sleep(2000);
 
       const borrowAction = await KaminoAction.buildBorrowTxns(
@@ -1629,7 +1629,7 @@ describe('Referrals Tests', function () {
         referrer.publicKey
       );
 
-      await sendTransactionsFromAction(env, borrowAction, borrower);
+      await sendTransactionsFromAction(env, borrowAction, borrower, [borrower]);
       await sleep(2000);
 
       const amountUsersReferred = await getTotalUsersReferred(env.provider.connection, referrer.publicKey);
