@@ -153,8 +153,11 @@ function getDefaultReserveFields(): ReserveFields {
       multiplierTagBoost: [],
       protocolLiquidationFeePct: 0,
       protocolTakeRatePct: 0,
-      reserved0: [],
       reserved1: [],
+      hostFixedInterestRateBps: 0,
+      utilizationLimitBlockBorrowingAbove: 0,
+      borrowLimitOutsideElevationGroup: new BN(0),
+      borrowLimitAgainstThisCollateralInElevationGroup: new Array(32).fill(new BN(0)),
       status: 0,
       tokenInfo: {
         heuristic: {
@@ -179,6 +182,8 @@ function getDefaultReserveFields(): ReserveFields {
           priceAggregator: PublicKey.default,
           twapAggregator: PublicKey.default,
         },
+        blockPriceUsage: 0,
+        reserved: [],
       },
     },
     configPadding: [],
@@ -217,5 +222,7 @@ function getDefaultReserveFields(): ReserveFields {
     reserveCollateralPadding: [],
     reserveLiquidityPadding: [],
     version: new BN(0),
+    borrowedAmountOutsideElevationGroup: new BN(0),
+    borrowedAmountsAgainstThisReserveInElevationGroups: new Array(32).fill(new BN(0)),
   };
 }
