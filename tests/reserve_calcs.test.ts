@@ -18,10 +18,47 @@ describe('reserve_calcs', function () {
     });
     const totalSupplyStale = reserve.getTotalSupply();
     const totalSupplyPlusInterest = reserve.getEstimatedTotalSupply(5, 0);
+    const accumulatedProtocolFees = reserve.getAccumulatedProtocolFees();
+    const { accumulatedProtocolFees: estimatedAccumulatedProtocolFees } = reserve.getEstimatedAccumulatedProtocolFees(
+      1000,
+      0
+    );
 
     expect(totalSupplyStale.toString()).eq('1000000.000000000086736173798840352915036');
     expect(totalSupplyPlusInterest.toString()).eq('1000000.000000000086736173799489749616243');
+    expect(accumulatedProtocolFees.toString()).eq('0');
+    expect(estimatedAccumulatedProtocolFees.toFixed()).eq('0.0000000000000000000229198835920763525402574346465545');
   });
+});
+
+it('reserve_calculated_estimated_supply_with_host_fixed_interest_rate', async function () {
+  const reserve = testKaminoReserve({
+    liquidityAvailableAmount: new BN(1000000),
+    collTotalSupply: new BN(1000000000),
+    borrowRateCurve: testCurve(),
+    protocolTakeRatePct: 15,
+    borrowedAmount: new BN(100000000),
+    accumulatedReferrerFeesSf: new BN(0),
+    hostFixedInterestRateBps: 1000,
+  });
+  const totalSupplyStale = reserve.getTotalSupply();
+  const totalSupplyPlusInterest = reserve.getEstimatedTotalSupply(5, 0);
+
+  const accumulatedProtocolFees = reserve.getAccumulatedProtocolFees();
+  const {
+    accumulatedProtocolFees: estimatedAccumulatedProtocolFees,
+    compoundedFixedHostFee,
+    compoundedVariableProtocolFee,
+  } = reserve.getEstimatedAccumulatedProtocolFees(1000, 0);
+
+  expect(totalSupplyStale.toString()).eq('1000000.000000000086736173798840352915036');
+  expect(totalSupplyPlusInterest.toString()).eq('1000000.000000000086736173215032716679305');
+
+  expect(accumulatedProtocolFees.toString()).eq('0');
+  expect(estimatedAccumulatedProtocolFees.toFixed()).eq('0.000000000000000116914418672757634732329393828148462');
+  expect(estimatedAccumulatedProtocolFees.toString()).equals(
+    compoundedFixedHostFee.plus(compoundedVariableProtocolFee).toString()
+  );
 });
 
 function testKaminoReserve(args: TestReserveFields): KaminoReserve {
@@ -51,6 +88,7 @@ type TestReserveFields = {
   pendingReferrerFeesSf?: BN;
   borrowRateCurve?: Array<CurvePointFields>;
   protocolTakeRatePct?: number;
+  hostFixedInterestRateBps?: number;
 };
 
 function testReserve({
@@ -63,6 +101,7 @@ function testReserve({
   pendingReferrerFeesSf,
   borrowRateCurve,
   protocolTakeRatePct,
+  hostFixedInterestRateBps,
 }: TestReserveFields): Reserve {
   const r = getDefaultReserveFields();
   r.lastUpdate.slot = lastUpdateSlot ? new BN(lastUpdateSlot) : r.lastUpdate.slot;
@@ -74,6 +113,7 @@ function testReserve({
   r.liquidity.pendingReferrerFeesSf = pendingReferrerFeesSf || r.liquidity.pendingReferrerFeesSf;
   r.config.borrowRateCurve.points = borrowRateCurve || r.config.borrowRateCurve.points;
   r.config.protocolTakeRatePct = protocolTakeRatePct || r.config.protocolTakeRatePct;
+  r.config.hostFixedInterestRateBps = hostFixedInterestRateBps || r.config.hostFixedInterestRateBps;
   return new Reserve(r);
 }
 

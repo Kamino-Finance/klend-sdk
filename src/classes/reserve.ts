@@ -349,6 +349,30 @@ export class KaminoReserve {
     return { totalBorrow, totalSupply };
   }
 
+  getEstimatedAccumulatedProtocolFees(
+    slot: number,
+    referralFeeBps: number
+  ): { accumulatedProtocolFees: Decimal; compoundedVariableProtocolFee: Decimal; compoundedFixedHostFee: Decimal } {
+    const slotsElapsed = Math.max(slot - this.state.lastUpdate.slot.toNumber(), 0);
+    let accumulatedProtocolFees: Decimal;
+    let compoundedVariableProtocolFee: Decimal;
+    let compoundedFixedHostFee: Decimal;
+    if (slotsElapsed === 0) {
+      accumulatedProtocolFees = this.getAccumulatedProtocolFees();
+      compoundedVariableProtocolFee = new Decimal(0);
+      compoundedFixedHostFee = new Decimal(0);
+    } else {
+      const { newAccProtocolFees, variableProtocolFee, fixedHostFee } = this.compoundInterest(
+        slotsElapsed,
+        referralFeeBps
+      );
+      accumulatedProtocolFees = newAccProtocolFees;
+      compoundedVariableProtocolFee = variableProtocolFee;
+      compoundedFixedHostFee = fixedHostFee;
+    }
+    return { accumulatedProtocolFees, compoundedVariableProtocolFee, compoundedFixedHostFee };
+  }
+
   calculateUtilizationRatio() {
     const totalBorrows = this.getBorrowedAmount();
     const totalSupply = this.getTotalSupply();
