@@ -1200,7 +1200,7 @@ describe('Main lending market instruction tests', function () {
       // Update elevation group borrow limit against this collateral
       const buffer = Buffer.alloc(32 * 8);
       buffer.writeBigUint64LE(
-        BigInt(obligation!.getBorrowByMint(NATIVE_MINT)!.amount.add(1).toDecimalPlaces(0).toString()),
+        BigInt(obligation!.getBorrowByMint(NATIVE_MINT)!.amount.add(2).toDecimalPlaces(0).toString()),
         0
       );
 
@@ -1232,7 +1232,7 @@ describe('Main lending market instruction tests', function () {
       obligation = await kaminoMarket.getObligationByWallet(depositor.publicKey, new VanillaObligation(PROGRAM_ID));
 
       const maxBorrowBeforeElevationCapRaise = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
-      assert.ok(maxBorrowBeforeElevationCapRaise.equals(0));
+      assert.ok(maxBorrowBeforeElevationCapRaise.equals(1));
       const newBuffer = Buffer.alloc(32 * 8);
       newBuffer.writeBigUint64LE(BigInt(U64_MAX), 0);
 

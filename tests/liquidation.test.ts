@@ -111,7 +111,7 @@ describe('liquidation', function () {
     const liquidateAction = await KaminoAction.buildLiquidateTxns(
       kaminoMarket,
       '300000000',
-      '314999999',
+      '314999998',
       debtReserve.getLiquidityMint(),
       collReserve.getLiquidityMint(),
       liquidator.publicKey,
