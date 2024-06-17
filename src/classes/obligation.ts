@@ -902,11 +902,14 @@ export class KaminoObligation {
           throw new Error('Reserve not found');
         }
 
-        const maxDebtAllowedAgainstCollateral = reserve
-          .getBorrowLimitAgainstCollateralInElevationGroup(this.state.elevationGroup)
-          .sub(reserve.getBorrowedAmountAgainstCollateralInElevationGroup(this.state.elevationGroup));
+        const maxDebtAllowedAgainstCollateral = depositReserve
+          .getBorrowLimitAgainstCollateralInElevationGroup(this.state.elevationGroup - 1)
+          .sub(depositReserve.getBorrowedAmountAgainstCollateralInElevationGroup(this.state.elevationGroup - 1));
 
-        maxDebtTakenAgainstCollaterals = Decimal.min(maxDebtAllowedAgainstCollateral, maxDebtTakenAgainstCollaterals);
+        maxDebtTakenAgainstCollaterals = Decimal.max(
+          new Decimal(0),
+          Decimal.min(maxDebtAllowedAgainstCollateral, maxDebtTakenAgainstCollaterals)
+        );
       }
       borrowLimitDependentOnElevationGroup = maxDebtTakenAgainstCollaterals;
     }
