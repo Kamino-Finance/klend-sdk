@@ -141,6 +141,10 @@ export class KaminoReserve {
     return new Fraction(this.state.config.fees.borrowFeeSf).toDecimal();
   };
 
+  /**
+   *
+   * @returns the fixed interest rate allocated to the host
+   */
   getFixedHostInterestRate = (): Decimal => {
     return new Decimal(this.state.config.hostFixedInterestRateBps).div(10_000);
   };
@@ -286,20 +290,36 @@ export class KaminoReserve {
     return new Decimal(this.state.config.debtWithdrawalCap.configCapacity.toString());
   }
 
+  /**
+   *
+   * @returns the borrow limit of the reserve outside the elevation group
+   */
   getBorrowLimitOutsideElevationGroup(): Decimal {
     return new Decimal(this.state.config.borrowLimitOutsideElevationGroup.toString());
   }
 
+  /**
+   *
+   * @returns the borrowed amount of the reserve outside the elevation group
+   */
   getBorrowedAmountOutsideElevationGroup(): Decimal {
     return new Decimal(this.state.borrowedAmountOutsideElevationGroup.toString());
   }
 
+  /**
+   *
+   * @returns the borrow limit against the collateral reserve in the elevation group
+   */
   getBorrowLimitAgainstCollateralInElevationGroup(elevationGroupIndex: number): Decimal {
     return new Decimal(
       this.state.config.borrowLimitAgainstThisCollateralInElevationGroup[elevationGroupIndex].toString()
     );
   }
 
+  /**
+   *
+   * @returns the borrowed amount against the collateral reserve in the elevation group
+   */
   getBorrowedAmountAgainstCollateralInElevationGroup(elevationGroupIndex: number): Decimal {
     return new Decimal(this.state.borrowedAmountsAgainstThisReserveInElevationGroups[elevationGroupIndex].toString());
   }
