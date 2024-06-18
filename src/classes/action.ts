@@ -1112,7 +1112,9 @@ export class KaminoAction {
       },
       this.kaminoMarket.programId
     );
-    borrowIx.keys = borrowIx.keys.concat([...depositReserveAccountMetas]);
+    borrowIx.keys = this.obligation?.state.elevationGroup
+      ? borrowIx.keys.concat([...depositReserveAccountMetas])
+      : borrowIx.keys;
     this.lendingIxs.push(borrowIx);
   }
 
@@ -1186,7 +1188,10 @@ export class KaminoAction {
       this.kaminoMarket.programId
     );
 
-    borrowIx.keys = borrowIx.keys.concat([...depositReserveAccountMetas]);
+    borrowIx.keys =
+      this.obligation?.state.elevationGroup !== 0
+        ? borrowIx.keys.concat([...depositReserveAccountMetas])
+        : borrowIx.keys;
 
     this.lendingIxs.push(borrowIx);
   }
@@ -1320,7 +1325,9 @@ export class KaminoAction {
       },
       this.kaminoMarket.programId
     );
-    repayIx.keys = repayIx.keys.concat([...depositReserveAccountMetas]);
+
+    repayIx.keys =
+      this.obligation?.state.elevationGroup !== 0 ? repayIx.keys.concat([...depositReserveAccountMetas]) : repayIx.keys;
 
     this.lendingIxs.push(repayIx);
   }
@@ -1366,7 +1373,10 @@ export class KaminoAction {
       },
       this.kaminoMarket.programId
     );
-    liquidateIx.keys = liquidateIx.keys.concat([...depositReserveAccountMetas]);
+    liquidateIx.keys =
+      this.obligation?.state.elevationGroup !== 0
+        ? liquidateIx.keys.concat([...depositReserveAccountMetas])
+        : liquidateIx.keys;
     this.lendingIxs.push(liquidateIx);
   }
 
