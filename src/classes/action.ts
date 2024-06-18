@@ -1624,13 +1624,17 @@ export class KaminoAction {
         if (commonElevationGroups.length === 0) {
           console.log('No common elevation groups found, staying with default');
         } else {
-          const eModeGroupWithMaxLtv = commonElevationGroups.reduce((prev, curr) => {
-            const prevGroup = groups.find((group) => group.id === prev);
-            const currGroup = groups.find((group) => group.id === curr);
+          const eModeGroupWithMaxLtvAndDebtReserve = commonElevationGroups.reduce((prev, curr) => {
+            const prevGroup = groups.find(
+              (group) => group.id === prev && group.debtReserve.equals(this.outflowReserve!.address)
+            );
+            const currGroup = groups.find(
+              (group) => group.id === curr && group.debtReserve.equals(this.outflowReserve!.address)
+            );
             return prevGroup!.ltvPct > currGroup!.ltvPct ? prev : curr;
           });
 
-          const eModeGroup = groups.find((group) => group.id === eModeGroupWithMaxLtv)!.id;
+          const eModeGroup = groups.find((group) => group.id === eModeGroupWithMaxLtvAndDebtReserve)!.id;
           console.log('Setting eModeGroup to', eModeGroup);
 
           if (eModeGroup !== 0 && eModeGroup !== this.obligation?.state.elevationGroup) {
