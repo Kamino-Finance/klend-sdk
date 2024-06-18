@@ -70,7 +70,8 @@ export async function createMarket(env: Env): Promise<[TransactionSignature, Key
 export async function createReserve(
   env: Env,
   lendingMarket: PublicKey,
-  liquidityMint: PublicKey
+  liquidityMint: PublicKey,
+  liquidityTokenProgram: PublicKey = TOKEN_PROGRAM_ID
 ): Promise<[TransactionSignature, Keypair]> {
   const reserveAccount = Keypair.generate();
   const size = Reserve.layout.span + 8;
@@ -99,7 +100,8 @@ export async function createReserve(
     feeReceiver: feeVault,
     reserveCollateralMint: collateralMint,
     reserveCollateralSupply: collateralSupplyVault,
-    tokenProgram: TOKEN_PROGRAM_ID,
+    collateralTokenProgram: TOKEN_PROGRAM_ID,
+    liquidityTokenProgram,
     systemProgram: SystemProgram.programId,
     rent: SYSVAR_RENT_PUBKEY,
   };

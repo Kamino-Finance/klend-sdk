@@ -7,28 +7,32 @@ import {
   createAssociatedTokenAccountIdempotentInstruction,
 } from '../src';
 import { Env } from './setup_utils';
-import { Token, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import {
+  createBurnInstruction,
+  createInitializeMint2Instruction,
+  createMintToInstruction,
+  TOKEN_PROGRAM_ID,
+} from '@solana/spl-token';
 
 export async function createMint(
   env: Env,
   authority: PublicKey,
   decimals: number = 6,
-  mintOverride?: Keypair
+  mintOverride?: Keypair,
+  tokenProgram: PublicKey = TOKEN_PROGRAM_ID
 ): Promise<PublicKey> {
-  if (mintOverride) {
-    return await createMintFromKeypair(env, authority, mintOverride, decimals);
-  }
-  const mint = anchor.web3.Keypair.generate();
-  return await createMintFromKeypair(env, authority, mint, decimals);
+  const mint = mintOverride || anchor.web3.Keypair.generate();
+  return await createMintFromKeypair(env, authority, mint, decimals, tokenProgram);
 }
 
 export async function createMintFromKeypair(
   env: Env,
   authority: PublicKey,
   mint: Keypair,
-  decimals: number = 6
+  decimals: number = 6,
+  tokenProgramId: PublicKey = TOKEN_PROGRAM_ID
 ): Promise<PublicKey> {
-  const instructions = await createMintInstructions(env, authority, mint.publicKey, decimals);
+  const instructions = await createMintInstructions(env, authority, mint.publicKey, decimals, tokenProgramId);
 
   const tx = await buildVersionedTransaction(env.provider.connection, env.wallet.payer.publicKey, instructions);
 
@@ -40,7 +44,8 @@ async function createMintInstructions(
   env: Env,
   authority: PublicKey,
   mint: PublicKey,
-  decimals: number
+  decimals: number,
+  tokenProgramId: PublicKey = TOKEN_PROGRAM_ID
 ): Promise<TransactionInstruction[]> {
   return [
     anchor.web3.SystemProgram.createAccount({
@@ -48,18 +53,19 @@ async function createMintInstructions(
       newAccountPubkey: mint,
       space: 82,
       lamports: await env.provider.connection.getMinimumBalanceForRentExemption(82),
-      programId: TOKEN_PROGRAM_ID,
+      programId: tokenProgramId,
     }),
-    Token.createInitMintInstruction(TOKEN_PROGRAM_ID, mint, decimals, authority, null),
+    createInitializeMint2Instruction(mint, decimals, authority, null, tokenProgramId),
   ];
 }
 
 export async function createAta(
   env: Env,
   owner: PublicKey,
-  mint: PublicKey
+  mint: PublicKey,
+  tokenProgram: PublicKey = TOKEN_PROGRAM_ID
 ): Promise<[TransactionSignature, PublicKey]> {
-  const [ata, ix] = await createAssociatedTokenAccountIdempotentInstruction(owner, mint, env.admin.publicKey);
+  const [ata, ix] = createAssociatedTokenAccountIdempotentInstruction(owner, mint, env.admin.publicKey, tokenProgram);
 
   const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [ix]);
 
@@ -71,29 +77,21 @@ export function getMintToIx(
   authority: PublicKey,
   mintPubkey: PublicKey,
   tokenAccount: PublicKey,
-  amount: number
+  amount: number,
+  tokenProgram: PublicKey = TOKEN_PROGRAM_ID
 ): TransactionInstruction {
-  const ix = Token.createMintToInstruction(
-    TOKEN_PROGRAM_ID, // always TOKEN_PROGRAM_ID
-    mintPubkey, // mint
-    tokenAccount, // receiver (sholud be a token account)
-    authority, // mint authority
-    [], // only multisig account will use. leave it empty now.
-    amount // amount. if your decimals is 8, you mint 10^8 for 1 token.
-  );
-
-  return ix;
+  return createMintToInstruction(mintPubkey, tokenAccount, authority, amount, [], tokenProgram);
 }
 
 export function getBurnFromIx(
   signer: PublicKey,
   mintPubkey: PublicKey,
   tokenAccount: PublicKey,
-  amount: number
+  amount: number,
+  tokenProgram: PublicKey = TOKEN_PROGRAM_ID
 ): TransactionInstruction {
   console.log(`burnFrom ${tokenAccount.toString()} mint ${mintPubkey.toString()} amount ${amount}`);
-  const ix = Token.createBurnInstruction(TOKEN_PROGRAM_ID, mintPubkey, tokenAccount, signer, [], amount);
-  return ix;
+  return createBurnInstruction(tokenAccount, mintPubkey, signer, amount, [], tokenProgram);
 }
 
 export async function mintTo(
@@ -101,9 +99,10 @@ export async function mintTo(
   mint: PublicKey,
   recipient: PublicKey,
   amount: number,
-  createAtaIxns: TransactionInstruction[] = []
+  createAtaIxns: TransactionInstruction[] = [],
+  tokenProgram: PublicKey = TOKEN_PROGRAM_ID
 ): Promise<TransactionSignature> {
-  const instruction = getMintToIx(env.admin.publicKey, mint, recipient, amount);
+  const instruction = getMintToIx(env.admin.publicKey, mint, recipient, amount, tokenProgram);
 
   const tx = await buildVersionedTransaction(env.provider.connection, env.wallet.payer.publicKey, [
     ...createAtaIxns,

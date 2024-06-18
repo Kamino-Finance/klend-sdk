@@ -18,7 +18,6 @@ import {
   VanillaObligation,
 } from '../src';
 import { PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { sleep } from '@hubbleprotocol/farms-sdk';
 import { updateReserve } from './setup_operations';
 import Decimal from 'decimal.js';
@@ -59,7 +58,6 @@ describe('obligation', function () {
         seed2Account: obligationType.toArgs().seed2,
         ownerUserMetadata: userMetadataAddress,
         rent: SYSVAR_RENT_PUBKEY,
-        tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       }
     );

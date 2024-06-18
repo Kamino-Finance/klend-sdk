@@ -14,12 +14,14 @@ export interface WithdrawObligationCollateralAndRedeemReserveCollateralAccounts 
   lendingMarket: PublicKey
   lendingMarketAuthority: PublicKey
   withdrawReserve: PublicKey
+  reserveLiquidityMint: PublicKey
   reserveSourceCollateral: PublicKey
   reserveCollateralMint: PublicKey
   reserveLiquiditySupply: PublicKey
   userDestinationLiquidity: PublicKey
   placeholderUserDestinationCollateral: PublicKey
-  tokenProgram: PublicKey
+  collateralTokenProgram: PublicKey
+  liquidityTokenProgram: PublicKey
   instructionSysvarAccount: PublicKey
 }
 
@@ -40,6 +42,11 @@ export function withdrawObligationCollateralAndRedeemReserveCollateral(
       isWritable: false,
     },
     { pubkey: accounts.withdrawReserve, isSigner: false, isWritable: true },
+    {
+      pubkey: accounts.reserveLiquidityMint,
+      isSigner: false,
+      isWritable: true,
+    },
     {
       pubkey: accounts.reserveSourceCollateral,
       isSigner: false,
@@ -65,7 +72,16 @@ export function withdrawObligationCollateralAndRedeemReserveCollateral(
       isSigner: false,
       isWritable: false,
     },
-    { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
+    {
+      pubkey: accounts.collateralTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.liquidityTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
     {
       pubkey: accounts.instructionSysvarAccount,
       isSigner: false,

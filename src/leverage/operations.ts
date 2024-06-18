@@ -19,9 +19,10 @@ import {
   removeBudgetAndAtaIxns,
 } from '../utils';
 import { calcAdjustAmounts, calcWithdrawAmounts, simulateMintKToken, toJson } from './calcs';
-import { TOKEN_PROGRAM_ID, Token } from '@solana/spl-token';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { Kamino, InstructionsWithLookupTables, StrategyWithAddress, TokenAmounts } from '@hubbleprotocol/kamino-sdk';
 import { getExpectedTokenBalanceAfterBorrow, getKtokenToTokenSwapper, getTokenToKtokenSwapper } from './utils';
+import { createCloseAccountInstruction } from '../utils/token';
 
 export type SwapIxnsProvider = (
   amountInLamports: number,
@@ -825,8 +826,8 @@ export const getWithdrawWithLeverageIxns = async (props: {
 
   const closeWsolAtaIxns: TransactionInstruction[] = [];
   if (depositTokenIsSol || debtTokenMint.equals(WRAPPED_SOL_MINT)) {
-    const wsolAta = await getAssociatedTokenAddress(WRAPPED_SOL_MINT, user, false);
-    closeWsolAtaIxns.push(Token.createCloseAccountInstruction(TOKEN_PROGRAM_ID, wsolAta, user, user, []));
+    const wsolAta = getAssociatedTokenAddress(WRAPPED_SOL_MINT, user, false);
+    closeWsolAtaIxns.push(createCloseAccountInstruction(wsolAta, user, user, TOKEN_PROGRAM_ID));
   }
   closeAtasIxns.push(...closeWsolAtaIxns);
 
@@ -1540,7 +1541,7 @@ export const getDecreaseLeverageIxns = async (props: {
   const closeWsolAtaIxns: TransactionInstruction[] = [];
   if (debtTokenMint.equals(WRAPPED_SOL_MINT)) {
     const wsolAta = await getAssociatedTokenAddress(WRAPPED_SOL_MINT, user, false);
-    closeWsolAtaIxns.push(Token.createCloseAccountInstruction(TOKEN_PROGRAM_ID, wsolAta, user, user, []));
+    closeWsolAtaIxns.push(createCloseAccountInstruction(wsolAta, user, user, TOKEN_PROGRAM_ID));
   }
   closeAtasIxns.push(...closeWsolAtaIxns);
 

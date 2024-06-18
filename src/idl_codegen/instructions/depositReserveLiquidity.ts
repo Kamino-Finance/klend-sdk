@@ -13,11 +13,13 @@ export interface DepositReserveLiquidityAccounts {
   reserve: PublicKey
   lendingMarket: PublicKey
   lendingMarketAuthority: PublicKey
+  reserveLiquidityMint: PublicKey
   reserveLiquiditySupply: PublicKey
   reserveCollateralMint: PublicKey
   userSourceLiquidity: PublicKey
   userDestinationCollateral: PublicKey
-  tokenProgram: PublicKey
+  collateralTokenProgram: PublicKey
+  liquidityTokenProgram: PublicKey
   instructionSysvarAccount: PublicKey
 }
 
@@ -38,6 +40,11 @@ export function depositReserveLiquidity(
       isWritable: false,
     },
     {
+      pubkey: accounts.reserveLiquidityMint,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
       pubkey: accounts.reserveLiquiditySupply,
       isSigner: false,
       isWritable: true,
@@ -53,7 +60,16 @@ export function depositReserveLiquidity(
       isSigner: false,
       isWritable: true,
     },
-    { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
+    {
+      pubkey: accounts.collateralTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.liquidityTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
     {
       pubkey: accounts.instructionSysvarAccount,
       isSigner: false,
