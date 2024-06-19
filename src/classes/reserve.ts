@@ -641,7 +641,10 @@ export class KaminoReserve {
     const referralRate = new Decimal(referralFeeBps).div(10_000);
     const fixedHostInterestRate = this.getFixedHostInterestRate();
 
-    const compoundedInterestRate = this.approximateCompoundedInterest(new Decimal(currentBorrowRate), slotsElapsed);
+    const compoundedInterestRate = this.approximateCompoundedInterest(
+      new Decimal(currentBorrowRate).plus(fixedHostInterestRate),
+      slotsElapsed
+    );
     const compoundedFixedRate = this.approximateCompoundedInterest(fixedHostInterestRate, slotsElapsed);
 
     const previousDebt = this.getBorrowedAmount();
