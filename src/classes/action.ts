@@ -1188,10 +1188,7 @@ export class KaminoAction {
       this.kaminoMarket.programId
     );
 
-    borrowIx.keys =
-      this.obligation?.state.elevationGroup !== 0
-        ? borrowIx.keys.concat([...depositReserveAccountMetas])
-        : borrowIx.keys;
+    borrowIx.keys = borrowIx.keys.concat([...depositReserveAccountMetas]);
 
     this.lendingIxs.push(borrowIx);
   }
@@ -1201,25 +1198,32 @@ export class KaminoAction {
       `repayObligationLiquidity(reserve=${this.reserve!.address})(obligation=${this.getObligationPda()})`
     );
     this.lendingIxsLabels.push(`withdrawObligationCollateralAndRedeemReserveCollateral`);
-    this.lendingIxs.push(
-      repayObligationLiquidity(
-        {
-          liquidityAmount: this.amount,
-        },
-        {
-          owner: this.owner,
-          obligation: this.getObligationPda(),
-          lendingMarket: this.kaminoMarket.getAddress(),
-          repayReserve: this.reserve!.address,
-          userSourceLiquidity: this.userTokenAccountAddress,
-          reserveDestinationLiquidity: this.reserve.state.liquidity.supplyVault,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
-        },
-        this.kaminoMarket.programId
-      )
+
+    const depositReservesList = this.getAdditionalDepositReservesList();
+
+    const depositReserveAccountMetas = depositReservesList.map((reserve) => {
+      return { pubkey: reserve, isSigner: false, isWritable: true };
+    });
+    const repayIx = repayObligationLiquidity(
+      {
+        liquidityAmount: this.amount,
+      },
+      {
+        owner: this.owner,
+        obligation: this.getObligationPda(),
+        lendingMarket: this.kaminoMarket.getAddress(),
+        repayReserve: this.reserve!.address,
+        userSourceLiquidity: this.userTokenAccountAddress,
+        reserveDestinationLiquidity: this.reserve.state.liquidity.supplyVault,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
+      },
+      this.kaminoMarket.programId
     );
 
+    repayIx.keys = repayIx.keys.concat([...depositReserveAccountMetas]);
+
+    this.lendingIxs.push(repayIx);
     if (!this.outflowReserve) {
       throw new Error(`outflowReserve not set`);
     }
