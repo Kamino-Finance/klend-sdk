@@ -13,12 +13,14 @@ export interface FlashBorrowReserveLiquidityAccounts {
   lendingMarketAuthority: PublicKey
   lendingMarket: PublicKey
   reserve: PublicKey
+  reserveLiquidityMint: PublicKey
   reserveSourceLiquidity: PublicKey
   userDestinationLiquidity: PublicKey
   reserveLiquidityFeeReceiver: PublicKey
   referrerTokenState: PublicKey
   referrerAccount: PublicKey
   sysvarInfo: PublicKey
+  /** flash loans on token_22 tokens are currently purposefully disabled */
   tokenProgram: PublicKey
 }
 
@@ -42,6 +44,11 @@ export function flashBorrowReserveLiquidity(
     },
     { pubkey: accounts.lendingMarket, isSigner: false, isWritable: false },
     { pubkey: accounts.reserve, isSigner: false, isWritable: true },
+    {
+      pubkey: accounts.reserveLiquidityMint,
+      isSigner: false,
+      isWritable: true,
+    },
     {
       pubkey: accounts.reserveSourceLiquidity,
       isSigner: false,

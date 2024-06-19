@@ -12,6 +12,7 @@ export interface WithdrawProtocolFeeAccounts {
   lendingMarketOwner: PublicKey
   lendingMarket: PublicKey
   reserve: PublicKey
+  reserveLiquidityMint: PublicKey
   lendingMarketAuthority: PublicKey
   feeVault: PublicKey
   lendingMarketOwnerAta: PublicKey
@@ -29,6 +30,11 @@ export function withdrawProtocolFee(
     { pubkey: accounts.lendingMarketOwner, isSigner: true, isWritable: false },
     { pubkey: accounts.lendingMarket, isSigner: false, isWritable: false },
     { pubkey: accounts.reserve, isSigner: false, isWritable: false },
+    {
+      pubkey: accounts.reserveLiquidityMint,
+      isSigner: false,
+      isWritable: true,
+    },
     {
       pubkey: accounts.lendingMarketAuthority,
       isSigner: false,

@@ -107,6 +107,7 @@ export type CustomError =
   | ElevationGroupDebtReserveAsCollateral
   | ObligationCollateralExceedsElevationGroupLimit
   | ObligationElevationGroupMultipleDebtReserve
+  | UnsupportedTokenExtension
 
 export class InvalidMarketAuthority extends Error {
   static readonly code = 6000
@@ -1353,6 +1354,17 @@ export class ObligationElevationGroupMultipleDebtReserve extends Error {
   }
 }
 
+export class UnsupportedTokenExtension extends Error {
+  static readonly code = 6108
+  readonly code = 6108
+  readonly name = "UnsupportedTokenExtension"
+  readonly msg = "Mint has a token (2022) extension that is not supported"
+
+  constructor(readonly logs?: string[]) {
+    super("6108: Mint has a token (2022) extension that is not supported")
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 6000:
@@ -1571,6 +1583,8 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new ObligationCollateralExceedsElevationGroupLimit(logs)
     case 6107:
       return new ObligationElevationGroupMultipleDebtReserve(logs)
+    case 6108:
+      return new UnsupportedTokenExtension(logs)
   }
 
   return null

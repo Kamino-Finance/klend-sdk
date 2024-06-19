@@ -507,6 +507,13 @@ export class KaminoReserve {
   }
 
   /**
+   * @returns the token program of the reserve liquidity mint
+   */
+  getLiquidityTokenProgram(): PublicKey {
+    return this.state.liquidity.tokenProgram;
+  }
+
+  /**
    * @returns the mint of the reserve collateral token , i.e. the cToken minted for depositing the liquidity token
    */
   getCTokenMint(): PublicKey {

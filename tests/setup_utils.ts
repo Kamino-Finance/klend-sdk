@@ -58,7 +58,12 @@ import {
   updateReserve,
 } from './setup_operations';
 import { createAta, createMint, getBurnFromIx, getMintToIx, mintTo } from './token_utils';
-import { TOKEN_PROGRAM_ID, Token } from '@solana/spl-token';
+import {
+  TOKEN_PROGRAM_ID,
+  createTransferCheckedInstruction,
+  getMint,
+  createCloseAccountInstruction,
+} from '@solana/spl-token';
 import { Price, PriceFeed, getPriceAcc } from './kamino/price';
 import { AssetQuantityTuple, isKToken } from './kamino/utils';
 import {
@@ -190,6 +195,7 @@ export const makeReserveConfig = (tokenName: string, params: ConfigParams = Defa
     USDH: pythUsdcPrice,
     USDT: pythUsdcPrice,
     UXD: pythUsdcPrice,
+    PYUSD: pythUsdcPrice,
   };
 
   const priceFeed = params.priceFeed
@@ -513,12 +519,21 @@ export const createMarketWithLoan = async (deposit: BN, borrow: BN) => {
   return { env, reserve, kaminoMarket, obligation };
 };
 
+export type ReserveSpec = {
+  symbol: string;
+  tokenProgram: PublicKey;
+};
+
 export const createMarketWithTwoReserves = async (
-  firstSymbol: string,
-  secondSymbol: string,
+  firstReserve: string | ReserveSpec,
+  secondReserve: string | ReserveSpec,
   requestElevationGroup: boolean
 ) => {
   const env = await initEnv('localnet');
+  const firstReserveSpec =
+    typeof firstReserve === 'string' ? { symbol: firstReserve, tokenProgram: TOKEN_PROGRAM_ID } : firstReserve;
+  const secondReserveSpec =
+    typeof secondReserve === 'string' ? { symbol: secondReserve, tokenProgram: TOKEN_PROGRAM_ID } : secondReserve;
 
   const [createMarketSig, lendingMarket] = await createMarket(env);
   console.log(createMarketSig);
@@ -526,19 +541,23 @@ export const createMarketWithTwoReserves = async (
   await updateMarketMultiplierPoints(env, lendingMarket.publicKey, 1);
 
   const [firstMint, secondMint] = await Promise.all([
-    firstSymbol === 'SOL' ? WRAPPED_SOL_MINT : createMint(env, env.admin.publicKey, 6),
-    secondSymbol === 'SOL' ? WRAPPED_SOL_MINT : createMint(env, env.admin.publicKey, 6),
+    firstReserveSpec.symbol === 'SOL'
+      ? WRAPPED_SOL_MINT
+      : createMint(env, env.admin.publicKey, 6, Keypair.generate(), firstReserveSpec.tokenProgram),
+    secondReserveSpec.symbol === 'SOL'
+      ? WRAPPED_SOL_MINT
+      : createMint(env, env.admin.publicKey, 6, Keypair.generate(), secondReserveSpec.tokenProgram),
   ]);
 
   await sleep(2000);
-  const [[, firstReserve], [, secondReserve]] = await Promise.all([
-    createReserve(env, lendingMarket.publicKey, firstMint),
-    createReserve(env, lendingMarket.publicKey, secondMint),
+  const [[, firstReserveAddress], [, secondReserveAddress]] = await Promise.all([
+    createReserve(env, lendingMarket.publicKey, firstMint, firstReserveSpec.tokenProgram),
+    createReserve(env, lendingMarket.publicKey, secondMint, secondReserveSpec.tokenProgram),
   ]);
 
   if (requestElevationGroup) {
     await sleep(1000);
-    await updateMarketElevationGroup(env, lendingMarket.publicKey, secondReserve.publicKey);
+    await updateMarketElevationGroup(env, lendingMarket.publicKey, secondReserveAddress.publicKey);
   }
 
   const extraParams: ConfigParams = requestElevationGroup
@@ -549,12 +568,12 @@ export const createMarketWithTwoReserves = async (
     : {
         ...DefaultConfigParams,
       };
-  const firstReserveConfig = makeReserveConfig(firstSymbol, extraParams);
-  const secondReserveConfig = makeReserveConfig(secondSymbol, extraParams);
+  const firstReserveConfig = makeReserveConfig(firstReserveSpec.symbol, extraParams);
+  const secondReserveConfig = makeReserveConfig(secondReserveSpec.symbol, extraParams);
 
   await Promise.all([
-    updateReserve(env, firstReserve.publicKey, firstReserveConfig),
-    updateReserve(env, secondReserve.publicKey, secondReserveConfig),
+    updateReserve(env, firstReserveAddress.publicKey, firstReserveConfig),
+    updateReserve(env, secondReserveAddress.publicKey, secondReserveConfig),
   ]);
   await sleep(1000);
 
@@ -617,10 +636,11 @@ export const newUser = async (
       console.log('reserve.getLiquidityMint()', reserve.getLiquidityMint());
 
       if (mint.equals(WRAPPED_SOL_MINT)) {
-        const [ata, ix] = await createAssociatedTokenAccountIdempotentInstruction(
+        const [ata, ix] = createAssociatedTokenAccountIdempotentInstruction(
           depositor.publicKey,
           mint,
-          depositor.publicKey
+          depositor.publicKey,
+          TOKEN_PROGRAM_ID
         );
         const lamports = amount.toNumber() * LAMPORTS_PER_SOL;
         await env.provider.connection.requestAirdrop(depositor.publicKey, lamports);
@@ -658,10 +678,11 @@ export const newUser = async (
         };
         await crankStrategyScopePrices(env, kamino!, kaminoMarket.scope, strategy!, symbol, priceFeed);
       } else {
-        const [ata, ix] = await createAssociatedTokenAccountIdempotentInstruction(
+        const [ata, ix] = createAssociatedTokenAccountIdempotentInstruction(
           depositor.publicKey,
           mint,
-          env.admin.publicKey
+          env.admin.publicKey,
+          reserve.getLiquidityTokenProgram()
         );
         await mintTo(env, mint, ata, amount.toNumber() * 10 ** reserve.state.liquidity.mintDecimals.toNumber(), [ix]);
       }
@@ -784,10 +805,10 @@ export async function getLocalSwapIxs(
   console.log('inputMintAmount', inputMintAmount.toString());
   console.log('outputMintAmount', outputMintAmount.toString());
 
-  const inputMint = new Token(env.provider.connection, tokenAMint, TOKEN_PROGRAM_ID, env.admin);
-  const outputMint = new Token(env.provider.connection, tokenBMint, TOKEN_PROGRAM_ID, env.admin);
-  const inputMintDecimals = (await inputMint.getMintInfo()).decimals;
-  const outputMintDecimals = (await outputMint.getMintInfo()).decimals;
+  const inputMint = await getMint(env.provider.connection, tokenAMint);
+  const outputMint = await getMint(env.provider.connection, tokenBMint);
+  const inputMintDecimals = inputMint.decimals;
+  const outputMintDecimals = outputMint.decimals;
 
   const aToBurn = inputMintAmount.mul(new Decimal(10).pow(inputMintDecimals));
   const bToMint = outputMintAmount.mul(new Decimal(10).pow(outputMintDecimals));
@@ -799,29 +820,30 @@ export async function getLocalSwapIxs(
     // therefore burn == send that amount to a new random user newly created
     // If we're 'selling' 'sol' it means we actually need to transfer wsols to the admin
     const sourceWsolAta = await getAssociatedTokenAddress(WRAPPED_SOL_MINT, user, false);
-    const [wsolAtaForAdmin, createWSOLAccountIx] = await createAssociatedTokenAccountIdempotentInstruction(
+    const [wsolAtaForAdmin, createWSOLAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
       env.admin.publicKey,
       WRAPPED_SOL_MINT,
-      env.admin.publicKey
+      env.admin.publicKey,
+      TOKEN_PROGRAM_ID
     );
 
-    const transferIx = Token.createTransferCheckedInstruction(
-      TOKEN_PROGRAM_ID,
+    const transferIx = createTransferCheckedInstruction(
       sourceWsolAta,
       WRAPPED_SOL_MINT,
       wsolAtaForAdmin,
       user,
-      [],
       aToBurn.floor().toNumber(),
-      9
+      9,
+      [],
+      TOKEN_PROGRAM_ID
     );
 
-    const closeWSOLAccountIx = Token.createCloseAccountInstruction(
-      TOKEN_PROGRAM_ID,
+    const closeWSOLAccountIx = createCloseAccountInstruction(
       wsolAtaForAdmin,
       env.admin.publicKey,
       env.admin.publicKey,
-      []
+      [],
+      TOKEN_PROGRAM_ID
     );
 
     console.log('Swapping in', tokenAMint.toString(), 'as wsol', aToBurn.floor().toNumber());
@@ -842,31 +864,32 @@ export async function getLocalSwapIxs(
     const userWsolAta = await getAssociatedTokenAddress(WRAPPED_SOL_MINT, user, false);
 
     // create wsol ata for admin
-    const [wsolAtaForAdmin, createWSOLAccountIx] = await createAssociatedTokenAccountIdempotentInstruction(
+    const [wsolAtaForAdmin, createWSOLAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
       env.admin.publicKey,
       WRAPPED_SOL_MINT,
-      env.admin.publicKey
+      env.admin.publicKey,
+      TOKEN_PROGRAM_ID
     );
 
-    const closeWSOLAccountIx = Token.createCloseAccountInstruction(
-      TOKEN_PROGRAM_ID,
+    const closeWSOLAccountIx = createCloseAccountInstruction(
       wsolAtaForAdmin,
       env.admin.publicKey,
       env.admin.publicKey,
-      []
+      [],
+      TOKEN_PROGRAM_ID
     );
 
     const depositIntoWsolAta = getDepositWsolIxns(env.admin.publicKey, wsolAtaForAdmin, bToMint.ceil());
 
-    const transferIx = Token.createTransferCheckedInstruction(
-      TOKEN_PROGRAM_ID,
+    const transferIx = createTransferCheckedInstruction(
       wsolAtaForAdmin,
       WRAPPED_SOL_MINT,
       userWsolAta,
       env.admin.publicKey,
-      [],
       bToMint.floor().toNumber(),
-      9
+      9,
+      [],
+      TOKEN_PROGRAM_ID
     );
 
     console.log(
@@ -917,10 +940,8 @@ export const getLocalKaminoSwapper = async (env: Env) => {
     _slippage: Decimal,
     _allKeys: PublicKey[]
   ) => {
-    const aDecimals = (await new Token(env.provider.connection, tokenAMint, TOKEN_PROGRAM_ID, env.admin).getMintInfo())
-      .decimals;
-    const bDecimals = (await new Token(env.provider.connection, tokenBMint, TOKEN_PROGRAM_ID, env.admin).getMintInfo())
-      .decimals;
+    const aDecimals = (await getMint(env.provider.connection, tokenAMint)).decimals;
+    const bDecimals = (await getMint(env.provider.connection, tokenBMint)).decimals;
 
     console.log(
       'Calling getLocalKaminoSwapper',

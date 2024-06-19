@@ -16,8 +16,10 @@ export interface LiquidateObligationAndRedeemReserveCollateralAccounts {
   lendingMarket: PublicKey
   lendingMarketAuthority: PublicKey
   repayReserve: PublicKey
+  repayReserveLiquidityMint: PublicKey
   repayReserveLiquiditySupply: PublicKey
   withdrawReserve: PublicKey
+  withdrawReserveLiquidityMint: PublicKey
   withdrawReserveCollateralMint: PublicKey
   withdrawReserveCollateralSupply: PublicKey
   withdrawReserveLiquiditySupply: PublicKey
@@ -25,7 +27,9 @@ export interface LiquidateObligationAndRedeemReserveCollateralAccounts {
   userSourceLiquidity: PublicKey
   userDestinationCollateral: PublicKey
   userDestinationLiquidity: PublicKey
-  tokenProgram: PublicKey
+  collateralTokenProgram: PublicKey
+  repayLiquidityTokenProgram: PublicKey
+  withdrawLiquidityTokenProgram: PublicKey
   instructionSysvarAccount: PublicKey
 }
 
@@ -51,11 +55,21 @@ export function liquidateObligationAndRedeemReserveCollateral(
     },
     { pubkey: accounts.repayReserve, isSigner: false, isWritable: true },
     {
+      pubkey: accounts.repayReserveLiquidityMint,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
       pubkey: accounts.repayReserveLiquiditySupply,
       isSigner: false,
       isWritable: true,
     },
     { pubkey: accounts.withdrawReserve, isSigner: false, isWritable: true },
+    {
+      pubkey: accounts.withdrawReserveLiquidityMint,
+      isSigner: false,
+      isWritable: true,
+    },
     {
       pubkey: accounts.withdrawReserveCollateralMint,
       isSigner: false,
@@ -87,7 +101,21 @@ export function liquidateObligationAndRedeemReserveCollateral(
       isSigner: false,
       isWritable: true,
     },
-    { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
+    {
+      pubkey: accounts.collateralTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.repayLiquidityTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.withdrawLiquidityTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
     {
       pubkey: accounts.instructionSysvarAccount,
       isSigner: false,

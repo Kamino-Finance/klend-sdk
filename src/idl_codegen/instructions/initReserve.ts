@@ -15,7 +15,8 @@ export interface InitReserveAccounts {
   reserveCollateralMint: PublicKey
   reserveCollateralSupply: PublicKey
   rent: PublicKey
-  tokenProgram: PublicKey
+  liquidityTokenProgram: PublicKey
+  collateralTokenProgram: PublicKey
   systemProgram: PublicKey
 }
 
@@ -54,7 +55,16 @@ export function initReserve(
       isWritable: true,
     },
     { pubkey: accounts.rent, isSigner: false, isWritable: false },
-    { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
+    {
+      pubkey: accounts.liquidityTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.collateralTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
     { pubkey: accounts.systemProgram, isSigner: false, isWritable: false },
   ]
   const identifier = Buffer.from([138, 245, 71, 225, 153, 4, 3, 43])

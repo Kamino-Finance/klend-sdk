@@ -6,17 +6,8 @@ import {
   TransactionSignature,
   VersionedTransaction,
 } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { Env } from './setup_utils';
-import {
-  initFarmsForReserve,
-  InitFarmsForReserveAccounts,
-  KaminoObligation,
-  LendingMarket,
-  lendingMarketAuthPda,
-  Reserve,
-  sleep,
-} from '../src';
+import { initFarmsForReserve, KaminoObligation, LendingMarket, lendingMarketAuthPda, Reserve, sleep } from '../src';
 import { ReserveFarmKind } from '../src/idl_codegen/types';
 import { buildAndSendTxnWithLogs, buildVersionedTransaction } from '../src/utils';
 import Decimal from 'decimal.js';
@@ -63,9 +54,8 @@ export async function initializeFarmsForReserve(
       farmState: farmState.publicKey,
       farmsVaultAuthority: getFarmAuthorityPDA(farmsId, farmState.publicKey),
       rent: SYSVAR_RENT_PUBKEY,
-      tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
-    } as InitFarmsForReserveAccounts
+    }
   );
 
   const tx = await buildVersionedTransaction(env.provider.connection, lendingMarketOwner, [createFarmIx, ix]);

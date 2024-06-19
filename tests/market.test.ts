@@ -1,7 +1,6 @@
 import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, Transaction, TransactionInstruction } from '@solana/web3.js';
 import Decimal from 'decimal.js';
 import BN from 'bn.js';
-import * as anchor from '@coral-xyz/anchor';
 import {
   DEFAULT_RECENT_SLOT_DURATION_MS,
   getBorrowRate,
@@ -42,8 +41,8 @@ import {
   updateReserve,
   updateReserveSingleValue,
 } from './setup_operations';
-import { createAta } from './token_utils';
-import { NATIVE_MINT, TOKEN_PROGRAM_ID, Token } from '@solana/spl-token';
+import { createAta, createMint, mintTo } from './token_utils';
+import { NATIVE_MINT, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token';
 import { ReserveConfig, UpdateConfigMode } from '../src/idl_codegen/types';
 import { Fraction } from '../src/classes/fraction';
 
@@ -190,7 +189,7 @@ describe('Main lending market instruction tests', function () {
     console.log(createMarketSig);
     await sleep(2000);
 
-    const usdh = await createMint(env.provider, env.admin.publicKey, 6);
+    const usdh = await createMint(env, env.admin.publicKey, 6);
     await sleep(2000);
     const [, reserve] = await createReserve(env, lendingMarket.publicKey, usdh);
     await sleep(2000);
@@ -201,7 +200,7 @@ describe('Main lending market instruction tests', function () {
 
     const [, usdhAta] = await createAta(env, env.admin.publicKey, usdh);
     await sleep(2000);
-    await mintTo(env.provider, usdh, usdhAta, 1000_000000);
+    await mintTo(env, usdh, usdhAta, 1000_000000);
 
     const kaminoMarket = (await KaminoMarket.load(
       env.provider.connection,
@@ -261,7 +260,7 @@ describe('Main lending market instruction tests', function () {
     console.log(createMarketSig);
     await sleep(2000);
 
-    const usdh = await createMint(env.provider, env.admin.publicKey, 6);
+    const usdh = await createMint(env, env.admin.publicKey, 6);
     await sleep(2000);
     const [, usdhReserve] = await createReserve(env, lendingMarket.publicKey, usdh);
     await sleep(2000);
@@ -310,7 +309,7 @@ describe('Main lending market instruction tests', function () {
 
     const [, usdhAta] = await createAta(env, depositor.publicKey, usdh);
     await sleep(2000);
-    await mintTo(env.provider, usdh, usdhAta, 1000_000000);
+    await mintTo(env, usdh, usdhAta, 1000_000000);
     await sleep(2000);
 
     const kaminoDepositAction = await KaminoAction.buildDepositTxns(
@@ -433,7 +432,7 @@ describe('Main lending market instruction tests', function () {
     console.log(createMarketSig);
     await sleep(2000);
 
-    const usdh = await createMint(env.provider, env.admin.publicKey, 6);
+    const usdh = await createMint(env, env.admin.publicKey, 6);
     await sleep(2000);
     const [, usdhReserve] = await createReserve(env, lendingMarket.publicKey, usdh);
     await sleep(2000);
@@ -463,7 +462,7 @@ describe('Main lending market instruction tests', function () {
 
     const [, usdhAta] = await createAta(env, depositor.publicKey, usdh);
     await sleep(2000);
-    await mintTo(env.provider, usdh, usdhAta, 1000_000000);
+    await mintTo(env, usdh, usdhAta, 1000_000000);
     await sleep(2000);
 
     await createAta(env, env.admin.publicKey, usdh);
@@ -603,14 +602,14 @@ describe('Main lending market instruction tests', function () {
     console.log(createMarketSig);
     await sleep(2000);
 
-    const usdh = await createMint(env.provider, env.admin.publicKey, 6);
+    const usdh = await createMint(env, env.admin.publicKey, 6);
     await sleep(2000);
     const [, usdhReserve] = await createReserve(env, lendingMarket.publicKey, usdh);
     await sleep(2000);
 
     const [, usdhAta] = await createAta(env, env.admin.publicKey, usdh);
     await sleep(2000);
-    await mintTo(env.provider, usdh, usdhAta, 1000_000000);
+    await mintTo(env, usdh, usdhAta, 1000_000000);
     await sleep(2000);
 
     const reserveConfig = makeReserveConfig(symbol);
@@ -676,6 +675,70 @@ describe('Main lending market instruction tests', function () {
     );
   });
 
+  it('performs_a_withdraw_of_a_token22_mint', async function () {
+    const symbol = 'PYUSD';
+    const depositAmount = new BN('100');
+
+    const {
+      env,
+      kaminoMarket,
+      firstMint: pyUsd,
+    } = await createMarketWithTwoReserves({ symbol, tokenProgram: TOKEN_2022_PROGRAM_ID }, 'SOL', false);
+
+    const [, pyUsdAta] = await createAta(env, env.admin.publicKey, pyUsd, TOKEN_2022_PROGRAM_ID);
+    await sleep(2000);
+    await mintTo(env, pyUsd, pyUsdAta, 1000_000000, [], TOKEN_2022_PROGRAM_ID);
+    await sleep(2000);
+
+    const kaminoDepositAction = await KaminoAction.buildDepositTxns(
+      kaminoMarket,
+      depositAmount,
+      pyUsd,
+      env.admin.publicKey,
+      new VanillaObligation(PROGRAM_ID)
+    );
+
+    const depositTx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [
+      ...kaminoDepositAction.setupIxs,
+      ...kaminoDepositAction.lendingIxs,
+      ...kaminoDepositAction.cleanupIxs,
+    ]);
+    const _depositTxHash = await buildAndSendTxnWithLogs(env.provider.connection, depositTx, env.admin, []);
+
+    const depositBefore = await kaminoMarket.getObligationDepositByWallet(
+      env.admin.publicKey,
+      pyUsd,
+      new VanillaObligation(PROGRAM_ID)
+    );
+
+    const kaminoWithdrawAction = await KaminoAction.buildWithdrawTxns(
+      kaminoMarket,
+      depositAmount,
+      pyUsd,
+      env.admin.publicKey,
+      new VanillaObligation(PROGRAM_ID)
+    );
+
+    const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [
+      ...kaminoWithdrawAction.setupIxs,
+      ...kaminoWithdrawAction.lendingIxs,
+      ...kaminoWithdrawAction.cleanupIxs,
+    ]);
+    const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
+
+    const depositAfter = await kaminoMarket.getObligationDepositByWallet(
+      env.admin.publicKey,
+      pyUsd,
+      new VanillaObligation(PROGRAM_ID)
+    );
+
+    assertAlmostEqual(
+      new Decimal(depositBefore).sub(new Decimal(depositAfter)).toNumber(),
+      depositAmount.toNumber(),
+      20
+    );
+  });
+
   it('performs_a_borrow_and_repay_usdh', async function () {
     const borrowSymbol = 'USDH';
     const depositSymbol = 'SOL';
@@ -689,7 +752,7 @@ describe('Main lending market instruction tests', function () {
     console.log(createMarketSig);
     await sleep(2000);
 
-    const usdh = await createMint(env.provider, env.admin.publicKey, 6);
+    const usdh = await createMint(env, env.admin.publicKey, 6);
     await sleep(2000);
     const [, usdhReserve] = await createReserve(env, lendingMarket.publicKey, usdh);
     await sleep(2000);
@@ -719,7 +782,7 @@ describe('Main lending market instruction tests', function () {
 
     const [, usdhAta] = await createAta(env, depositor.publicKey, usdh);
     await sleep(2000);
-    await mintTo(env.provider, usdh, usdhAta, 1000_000000);
+    await mintTo(env, usdh, usdhAta, 1000_000000);
     await sleep(2000);
 
     const depositActionDepositor = await KaminoAction.buildDepositTxns(
@@ -827,7 +890,7 @@ describe('Main lending market instruction tests', function () {
     console.log(createMarketSig);
     await sleep(2000);
 
-    const usdh = await createMint(env.provider, env.admin.publicKey, 6);
+    const usdh = await createMint(env, env.admin.publicKey, 6);
     await sleep(2000);
     const [, depositReserve] = await createReserve(env, lendingMarket.publicKey, usdh);
     const [, borrowReserve] = await createReserve(env, lendingMarket.publicKey, NATIVE_MINT);
@@ -847,7 +910,7 @@ describe('Main lending market instruction tests', function () {
 
     const [, usdhAta] = await createAta(env, depositor.publicKey, usdh);
     await sleep(2000);
-    await mintTo(env.provider, usdh, usdhAta, 1000_000000);
+    await mintTo(env, usdh, usdhAta, 1000_000000);
 
     const kaminoMarket = (await KaminoMarket.load(
       env.provider.connection,
@@ -952,6 +1015,124 @@ describe('Main lending market instruction tests', function () {
     assert.ok(new Decimal(borrowFinal).lessThan(new Decimal(borrowAfter)));
   });
 
+  it('performs_a_borrow_and_repay_token22_mint', async function () {
+    const borrowSymbol = 'PYUSD';
+    const depositSymbol = 'SOL';
+    const depositAmount = new BN('100000000');
+    const borrowAmount = new BN('100000');
+
+    const {
+      env,
+      kaminoMarket,
+      firstMint: pyUsd,
+    } = await createMarketWithTwoReserves(
+      { symbol: borrowSymbol, tokenProgram: TOKEN_2022_PROGRAM_ID },
+      depositSymbol,
+      false
+    );
+
+    const depositor = Keypair.generate();
+    await env.provider.connection.requestAirdrop(depositor.publicKey, 10 * LAMPORTS_PER_SOL);
+    await sleep(2000);
+
+    const [, usdhAta] = await createAta(env, depositor.publicKey, pyUsd, TOKEN_2022_PROGRAM_ID);
+    await sleep(2000);
+    await mintTo(env, pyUsd, usdhAta, 1000_000000, [], TOKEN_2022_PROGRAM_ID);
+    await sleep(2000);
+
+    const depositActionDepositor = await KaminoAction.buildDepositTxns(
+      kaminoMarket,
+      borrowAmount.mul(new BN(10)),
+      pyUsd,
+      depositor.publicKey,
+      new VanillaObligation(PROGRAM_ID)
+    );
+
+    {
+      const tx = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, [
+        ...depositActionDepositor.setupIxs,
+        ...depositActionDepositor.lendingIxs,
+        ...depositActionDepositor.cleanupIxs,
+      ]);
+      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, depositor, []);
+    }
+
+    const depositAction = await KaminoAction.buildDepositTxns(
+      kaminoMarket,
+      depositAmount,
+      NATIVE_MINT,
+      depositor.publicKey,
+      new VanillaObligation(PROGRAM_ID)
+    );
+
+    {
+      const tx = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, [
+        ...depositAction.setupIxs,
+        ...depositAction.lendingIxs,
+        ...depositAction.cleanupIxs,
+      ]);
+      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, depositor, []);
+    }
+
+    const borrowBefore = await kaminoMarket.getObligationBorrowByWallet(
+      depositor.publicKey,
+      pyUsd,
+      new VanillaObligation(PROGRAM_ID)
+    );
+
+    const borrowAction = await KaminoAction.buildBorrowTxns(
+      kaminoMarket,
+      borrowAmount,
+      pyUsd,
+      depositor.publicKey,
+      new VanillaObligation(PROGRAM_ID)
+    );
+
+    {
+      const tx = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, [
+        ...borrowAction.setupIxs,
+        ...borrowAction.lendingIxs,
+        ...borrowAction.cleanupIxs,
+      ]);
+      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, depositor, []);
+    }
+
+    const borrowAfter = await kaminoMarket.getObligationBorrowByWallet(
+      depositor.publicKey,
+      pyUsd,
+      new VanillaObligation(PROGRAM_ID)
+    );
+    assert.ok(new Decimal(borrowAfter).sub(new Decimal(borrowBefore)).greaterThan(0));
+
+    const repayAction = await KaminoAction.buildRepayTxns(
+      kaminoMarket,
+      borrowAmount.add(new BN(1)),
+      pyUsd,
+      depositor.publicKey,
+      new VanillaObligation(PROGRAM_ID),
+      await env.provider.connection.getSlot()
+    );
+
+    {
+      const tx = await buildVersionedTransaction(env.provider.connection, depositor.publicKey, [
+        ...repayAction.setupIxs,
+        ...repayAction.lendingIxs,
+        ...repayAction.cleanupIxs,
+      ]);
+      const _txHash = await buildAndSendTxnWithLogs(env.provider.connection, tx, depositor, []);
+    }
+
+    const borrowFinal = await kaminoMarket.getObligationBorrowByWallet(
+      depositor.publicKey,
+      pyUsd,
+      new VanillaObligation(PROGRAM_ID)
+    );
+    console.log('borrowBefore', borrowBefore);
+    console.log('borrowAfter', borrowAfter);
+    console.log('borrowFinal', borrowFinal);
+    assert.ok(new Decimal(borrowFinal).lessThan(new Decimal(borrowAfter)));
+  });
+
   it('borrow_max_sol', async function () {
     const depositSymbol = 'USDH';
     const borrowSymbol = 'SOL';
@@ -970,7 +1151,7 @@ describe('Main lending market instruction tests', function () {
 
     const [, usdhAta] = await createAta(env, depositor.publicKey, usdhMint);
     await sleep(2000);
-    await mintTo(env.provider, usdhMint, usdhAta, 200000_000000);
+    await mintTo(env, usdhMint, usdhAta, 200000_000000);
 
     const depositAmount = new BN('1000000000'); // 100 USDH
 
@@ -1507,8 +1688,8 @@ describe('Main lending market instruction tests', function () {
     const [, lendingMarket] = await createMarket(env);
     await sleep(2000);
 
-    const usdhMint = await createMint(env.provider, env.admin.publicKey, 6);
-    const msolMint = await createMint(env.provider, env.admin.publicKey, 6);
+    const usdhMint = await createMint(env, env.admin.publicKey, 6);
+    const msolMint = await createMint(env, env.admin.publicKey, 6);
     await sleep(2000);
     const [, usdhReserve] = await createReserve(env, lendingMarket.publicKey, usdhMint);
     await sleep(2000);
@@ -1543,7 +1724,7 @@ describe('Main lending market instruction tests', function () {
 
     const [, usdhAta] = await createAta(env, depositor.publicKey, usdhMint);
     await sleep(2000);
-    await mintTo(env.provider, usdhMint, usdhAta, 200000_000000);
+    await mintTo(env, usdhMint, usdhAta, 200000_000000);
 
     const [usdhReserveAddress, reserveAccount] = await getReserveFromMintAndMarket(
       env.provider.connection,
@@ -1754,65 +1935,3 @@ it.skip('get_multiple_obligation_by_address', async function () {
   });
   assert.ok(areAllTheSame);
 });
-
-export async function mintTo(
-  provider: anchor.AnchorProvider,
-  mintPubkey: PublicKey,
-  tokenAccount: PublicKey,
-  amount: number
-) {
-  const tx = new Transaction().add(
-    Token.createMintToInstruction(
-      TOKEN_PROGRAM_ID, // always TOKEN_PROGRAM_ID
-      mintPubkey, // mint
-      tokenAccount, // receiver (sholud be a token account)
-      provider.wallet.publicKey, // mint authority
-      [], // only multisig account will use. leave it empty now.
-      amount // amount. if your decimals is 8, you mint 10^8 for 1 token.
-    )
-  );
-
-  await provider.sendAndConfirm(tx);
-}
-
-export async function createMint(
-  provider: anchor.AnchorProvider,
-  authority: PublicKey,
-  decimals: number = 6
-): Promise<PublicKey> {
-  const mint = anchor.web3.Keypair.generate();
-  return await createMintFromKeypair(provider, authority, mint, decimals);
-}
-
-export async function createMintFromKeypair(
-  provider: anchor.AnchorProvider,
-  authority: PublicKey,
-  mint: Keypair,
-  decimals: number = 6
-): Promise<PublicKey> {
-  const instructions = await createMintInstructions(provider, authority, mint.publicKey, decimals);
-
-  const tx = new anchor.web3.Transaction();
-  tx.add(...instructions);
-
-  await provider.sendAndConfirm(tx, [mint]);
-  return mint.publicKey;
-}
-
-async function createMintInstructions(
-  provider: anchor.AnchorProvider,
-  authority: PublicKey,
-  mint: PublicKey,
-  decimals: number
-): Promise<TransactionInstruction[]> {
-  return [
-    anchor.web3.SystemProgram.createAccount({
-      fromPubkey: provider.wallet.publicKey,
-      newAccountPubkey: mint,
-      space: 82,
-      lamports: await provider.connection.getMinimumBalanceForRentExemption(82),
-      programId: TOKEN_PROGRAM_ID,
-    }),
-    Token.createInitMintInstruction(TOKEN_PROGRAM_ID, mint, decimals, authority, null),
-  ];
-}
