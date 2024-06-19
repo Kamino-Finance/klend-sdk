@@ -1610,7 +1610,10 @@ export class KaminoAction {
         const groupsColl = this.reserve.state.config.elevationGroups;
         const groupsDebt = this.outflowReserve!.state.config.elevationGroups;
         const groups = this.kaminoMarket.state.elevationGroups;
-        const commonElevationGroups = [...groupsColl].filter((item) => groupsDebt.includes(item) && item !== 0);
+        const commonElevationGroups = [...groupsColl].filter(
+          (item) =>
+            groupsDebt.includes(item) && item !== 0 && groups[item - 1].debtReserve.equals(this.outflowReserve!.address)
+        );
 
         console.log(
           'Groups of coll reserve',
@@ -1625,12 +1628,8 @@ export class KaminoAction {
           console.log('No common elevation groups found, staying with default');
         } else {
           const eModeGroupWithMaxLtvAndDebtReserve = commonElevationGroups.reduce((prev, curr) => {
-            const prevGroup = groups.find(
-              (group) => group.id === prev && group.debtReserve.equals(this.outflowReserve!.address)
-            );
-            const currGroup = groups.find(
-              (group) => group.id === curr && group.debtReserve.equals(this.outflowReserve!.address)
-            );
+            const prevGroup = groups.find((group) => group.id === prev);
+            const currGroup = groups.find((group) => group.id === curr);
             return prevGroup!.ltvPct > currGroup!.ltvPct ? prev : curr;
           });
 
