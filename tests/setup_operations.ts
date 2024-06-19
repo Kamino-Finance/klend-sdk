@@ -84,7 +84,7 @@ export async function createReserve(
     programId: env.program.programId,
   });
 
-  const { liquiditySupplyVault, collateralMint, collateralSupplyVault, feeVault } = await reservePdas(
+  const { liquiditySupplyVault, collateralMint, collateralSupplyVault, feeVault } = reservePdas(
     env.program.programId,
     lendingMarket,
     liquidityMint

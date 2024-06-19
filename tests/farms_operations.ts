@@ -133,7 +133,7 @@ export async function updateRps(
   await sleep(3000);
   const reserveState: Reserve = (await Reserve.fetch(env.provider.connection, reserve))!!;
   const farmAddress = kind === 'Collateral' ? reserveState.farmCollateral : reserveState.farmDebt;
-  const ix = await farmsClient.updateRewardToFarmIx(
+  const ix = await farmsClient.updateFarmConfigIx(
     env.admin.publicKey,
     farmAddress,
     rewardMint,

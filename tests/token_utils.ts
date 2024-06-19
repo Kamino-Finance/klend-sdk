@@ -8,10 +8,10 @@ import {
 } from '../src';
 import { Env } from './setup_utils';
 import {
-  createBurnInstruction,
-  createInitializeMint2Instruction,
-  createMintToInstruction,
   TOKEN_PROGRAM_ID,
+  createBurnInstruction,
+  createInitializeMintInstruction,
+  createMintToInstruction,
 } from '@solana/spl-token';
 
 export async function createMint(
@@ -55,7 +55,7 @@ async function createMintInstructions(
       lamports: await env.provider.connection.getMinimumBalanceForRentExemption(82),
       programId: tokenProgramId,
     }),
-    createInitializeMint2Instruction(mint, decimals, authority, null, tokenProgramId),
+    createInitializeMintInstruction(mint, decimals, authority, null, tokenProgramId),
   ];
 }
 

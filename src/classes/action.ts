@@ -10,7 +10,12 @@ import {
   TransactionInstruction,
   TransactionSignature,
 } from '@solana/web3.js';
-import { ASSOCIATED_TOKEN_PROGRAM_ID, NATIVE_MINT, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  NATIVE_MINT,
+  TOKEN_PROGRAM_ID,
+  createCloseAccountInstruction,
+} from '@solana/spl-token';
 import BN from 'bn.js';
 import Decimal from 'decimal.js';
 import {
@@ -62,7 +67,6 @@ import { farmsId } from '@hubbleprotocol/farms-sdk';
 import { Reserve } from '../idl_codegen/accounts';
 import { VanillaObligation } from '../utils/ObligationType';
 import { PROGRAM_ID } from '../lib';
-import { createCloseAccountInstruction } from '../utils/token';
 
 export const POSITION_LIMIT = 10;
 export const BORROWS_LIMIT = 5;
@@ -2407,6 +2411,7 @@ export class KaminoAction {
       userTokenAccountAddress,
       this.owner,
       this.owner,
+      [],
       TOKEN_PROGRAM_ID
     );
 

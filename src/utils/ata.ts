@@ -1,4 +1,8 @@
-import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountIdempotentInstruction as createAtaIx,
+} from '@solana/spl-token';
 import { ComputeBudgetProgram, Connection, PublicKey, SystemProgram, TransactionInstruction } from '@solana/web3.js';
 import { SOL_MINTS } from '../leverage';
 import Decimal from 'decimal.js';
@@ -25,15 +29,14 @@ export function createAssociatedTokenAccountIdempotentInstruction(
   if (!ataAddress) {
     ataAddress = getAssociatedTokenAddress(mint, owner, true, tokenProgram, ASSOCIATED_TOKEN_PROGRAM_ID);
   }
-  const createUserTokenAccountIx = buildAssociatedTokenAccountInstruction(
+  const createUserTokenAccountIx = createAtaIx(
     payer,
     ataAddress,
     owner,
     mint,
-    Buffer.from([1]),
     tokenProgram,
     ASSOCIATED_TOKEN_PROGRAM_ID
-  );
+  )
   return [ataAddress, createUserTokenAccountIx];
 }
 
@@ -184,30 +187,4 @@ export async function getTokenAccountBalanceDecimal(
     const tokenData = (await connection.getTokenAccountBalance(tokenAta)).value;
     return new Decimal(tokenData.uiAmountString!);
   }
-}
-
-// copied from sdk - i think there is an es6/cjs import issue
-function buildAssociatedTokenAccountInstruction(
-  payer: PublicKey,
-  associatedToken: PublicKey,
-  owner: PublicKey,
-  mint: PublicKey,
-  instructionData: Buffer,
-  programId = TOKEN_PROGRAM_ID,
-  associatedTokenProgramId = ASSOCIATED_TOKEN_PROGRAM_ID
-): TransactionInstruction {
-  const keys = [
-    { pubkey: payer, isSigner: true, isWritable: true },
-    { pubkey: associatedToken, isSigner: false, isWritable: true },
-    { pubkey: owner, isSigner: false, isWritable: false },
-    { pubkey: mint, isSigner: false, isWritable: false },
-    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-    { pubkey: programId, isSigner: false, isWritable: false },
-  ];
-
-  return new TransactionInstruction({
-    keys,
-    programId: associatedTokenProgramId,
-    data: instructionData,
-  });
 }
