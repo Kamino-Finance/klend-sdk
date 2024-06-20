@@ -5,6 +5,7 @@ import { Connection, PublicKey } from '@solana/web3.js';
 import { CurvePointFields } from '../src/idl_codegen/types';
 import { expect } from 'chai';
 import { endpointFromCluster } from './setup_utils';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 describe('reserve_calcs', function () {
   it('reserve_calculate_estimated_and_stale_supply', async function () {
@@ -52,10 +53,10 @@ it('reserve_calculated_estimated_supply_with_host_fixed_interest_rate', async fu
   } = reserve.getEstimatedAccumulatedProtocolFees(1000, 0);
 
   expect(totalSupplyStale.toString()).eq('1000000.000000000086736173798840352915036');
-  expect(totalSupplyPlusInterest.toString()).eq('1000000.000000000086736173215032716679305');
+  expect(totalSupplyPlusInterest.toString()).eq('1000000.000000000086736173799489749620361');
 
   expect(accumulatedProtocolFees.toString()).eq('0');
-  expect(estimatedAccumulatedProtocolFees.toFixed()).eq('0.000000000000000116914418672757634732329393828148462');
+  expect(estimatedAccumulatedProtocolFees.toFixed()).eq('0.000000000000000137542330260089777451133815435695863');
   expect(estimatedAccumulatedProtocolFees.toString()).equals(
     compoundedFixedHostFee.plus(compoundedVariableProtocolFee).toString()
   );
@@ -257,6 +258,7 @@ function getDefaultReserveFields(): ReserveFields {
       padding3: [],
       pendingReferrerFeesSf: new BN(0),
       supplyVault: PublicKey.default,
+      tokenProgram: TOKEN_PROGRAM_ID,
     },
     padding: [],
     reserveCollateralPadding: [],
