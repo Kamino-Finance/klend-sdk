@@ -712,7 +712,7 @@ export const balance = async (
     return balance;
   }
 
-  const ata = await getAssociatedTokenAddress(mint, user.publicKey);
+  const ata = getAssociatedTokenAddress(mint, user.publicKey);
   if (await checkIfAccountExists(env.provider.connection, ata)) {
     const balance = await env.provider.connection.getTokenAccountBalance(ata);
     return balance.value.uiAmount;
@@ -800,8 +800,8 @@ export async function getLocalSwapIxs(
   tokenBMint: PublicKey,
   user: PublicKey
 ): Promise<[TransactionInstruction[], PublicKey[]]> {
-  const tokenAAta = await getAssociatedTokenAddress(tokenAMint, user);
-  const tokenBAta = await getAssociatedTokenAddress(tokenBMint, user);
+  const tokenAAta = getAssociatedTokenAddress(tokenAMint, user);
+  const tokenBAta = getAssociatedTokenAddress(tokenBMint, user);
   console.log('inputMintAmount', inputMintAmount.toString());
   console.log('outputMintAmount', outputMintAmount.toString());
 

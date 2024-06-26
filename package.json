@@ -44,7 +44,7 @@
     "@coral-xyz/anchor": "^0.28.0",
     "@coral-xyz/borsh": "^0.28.0",
     "@hubbleprotocol/farms-sdk": "^0.4.4",
-    "@hubbleprotocol/kamino-sdk": "^5.0.20",
+    "@hubbleprotocol/kamino-sdk": "^5.1.0",
     "@hubbleprotocol/scope-sdk": "^5.0.20",
     "@pythnetwork/client": "^2.5.1",
     "@solana/buffer-layout": "^4.0.0",
