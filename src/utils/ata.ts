@@ -36,7 +36,7 @@ export function createAssociatedTokenAccountIdempotentInstruction(
     mint,
     tokenProgram,
     ASSOCIATED_TOKEN_PROGRAM_ID
-  )
+  );
   return [ataAddress, createUserTokenAccountIx];
 }
 
