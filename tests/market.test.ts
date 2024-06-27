@@ -1246,12 +1246,13 @@ describe('Main lending market instruction tests', function () {
 
       await updateReserveSingleValue(
         env,
-        solReserve!,
+        usdhReserve!,
         buffer,
         UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator + 1
       );
 
-      await kaminoMarket.reloadSingleReserve(solReserve!.address);
+      await kaminoMarket.reload();
+      usdhReserve = kaminoMarket.getReserveBySymbol('USDH');
       solReserve = kaminoMarket.getReserveBySymbol('SOL');
 
       const maxBorrow = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
@@ -1262,7 +1263,7 @@ describe('Main lending market instruction tests', function () {
       // revert change
       await updateReserveSingleValue(
         env,
-        solReserve!,
+        usdhReserve!,
         buffer,
         UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator + 1
       );
@@ -1280,7 +1281,7 @@ describe('Main lending market instruction tests', function () {
 
       await sendTransactionsFromAction(env, borrowAction, [depositor], []);
 
-      await kaminoMarket.reloadSingleReserve(solReserve!.address);
+      await kaminoMarket.reload();
       obligation = await kaminoMarket.getObligationByWallet(depositor.publicKey, new VanillaObligation(PROGRAM_ID));
 
       const maxBorrowSol = obligation!.getMaxBorrowAmount(kaminoMarket, NATIVE_MINT, currentSlot);
