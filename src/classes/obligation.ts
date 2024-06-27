@@ -855,10 +855,15 @@ export class KaminoObligation {
     const reserveAvailableAmount = reserve.getLiquidityAvailableAmount();
     let reserveBorrowCapRemained = reserve.stats.reserveBorrowLimit.sub(reserve.getBorrowedAmount());
 
-    reserveBorrowCapRemained =
-      reserve.state.config.disableUsageAsCollOutsideEmode === 1 && !elevationGroupActivated
-        ? new Decimal(0)
-        : reserveBorrowCapRemained;
+    this.deposits.forEach((deposit) => {
+      const depositReserve = market.getReserveByAddress(deposit.reserveAddress);
+      if (!depositReserve) {
+        throw new Error('Reserve not found');
+      }
+      if (depositReserve.state.config.disableUsageAsCollOutsideEmode && !elevationGroupActivated) {
+        reserveBorrowCapRemained = new Decimal(0);
+      }
+    });
 
     let maxBorrowAmount = Decimal.min(maxObligationBorrowPower, reserveAvailableAmount, reserveBorrowCapRemained);
 
