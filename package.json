@@ -43,7 +43,7 @@
     "@bokuweb/zstd-wasm": "^0.0.20",
     "@coral-xyz/anchor": "^0.28.0",
     "@coral-xyz/borsh": "^0.28.0",
-    "@hubbleprotocol/farms-sdk": "^0.4.4",
+    "@hubbleprotocol/farms-sdk": "^0.5.0",
     "@hubbleprotocol/kamino-sdk": "^5.1.0",
     "@hubbleprotocol/scope-sdk": "^5.0.20",
     "@pythnetwork/client": "^2.5.1",
