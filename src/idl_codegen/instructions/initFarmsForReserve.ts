@@ -18,7 +18,6 @@ export interface InitFarmsForReserveAccounts {
   farmState: PublicKey
   farmsVaultAuthority: PublicKey
   rent: PublicKey
-  tokenProgram: PublicKey
   systemProgram: PublicKey
 }
 
@@ -47,7 +46,6 @@ export function initFarmsForReserve(
       isWritable: false,
     },
     { pubkey: accounts.rent, isSigner: false, isWritable: false },
-    { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
     { pubkey: accounts.systemProgram, isSigner: false, isWritable: false },
   ]
   const identifier = Buffer.from([218, 6, 62, 233, 1, 33, 232, 82])

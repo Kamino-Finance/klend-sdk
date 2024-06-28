@@ -663,7 +663,7 @@ export async function mintKTokenToUser(
   );
   await sleep(2000);
   const budgetIx = createAddExtraComputeUnitsIx(1_400_000);
-  const [, sharesAtaIx] = await createAssociatedTokenAccountIdempotentInstruction(user.publicKey, strategy.sharesMint);
+  const [, sharesAtaIx] = createAssociatedTokenAccountIdempotentInstruction(user.publicKey, strategy.sharesMint);
   const depositIx = await kamino.deposit(
     { address, strategy },
     new Decimal('1000'),
@@ -704,10 +704,11 @@ export async function mintToUser(
   user: PublicKey,
   amountLamports: number,
   mintAuthority: Keypair,
-  mintIntoWsolAta: boolean = false
+  mintIntoWsolAta: boolean = false,
+  tokenProgram: PublicKey = TOKEN_PROGRAM_ID
 ) {
   if (mint.equals(WSOL_MINT)) {
-    const [ata, ix] = await createAssociatedTokenAccountIdempotentInstruction(user, mint, user);
+    const [ata, ix] = createAssociatedTokenAccountIdempotentInstruction(user, mint, user);
 
     await env.provider.connection.requestAirdrop(user, amountLamports);
     await sleep(3000);
@@ -732,8 +733,13 @@ export async function mintToUser(
       await env.provider.connection.confirmTransaction(txHash, 'confirmed');
     }
   } else {
-    const [ata, ix] = await createAssociatedTokenAccountIdempotentInstruction(user, mint, mintAuthority.publicKey);
-    const instruction = getMintToIx(mintAuthority.publicKey, mint, ata, amountLamports);
+    const [ata, ix] = createAssociatedTokenAccountIdempotentInstruction(
+      user,
+      mint,
+      mintAuthority.publicKey,
+      tokenProgram
+    );
+    const instruction = getMintToIx(mintAuthority.publicKey, mint, ata, amountLamports, tokenProgram);
 
     const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [ix, instruction]);
 

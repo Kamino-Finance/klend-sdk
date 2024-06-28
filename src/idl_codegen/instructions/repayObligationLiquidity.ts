@@ -13,6 +13,7 @@ export interface RepayObligationLiquidityAccounts {
   obligation: PublicKey
   lendingMarket: PublicKey
   repayReserve: PublicKey
+  reserveLiquidityMint: PublicKey
   reserveDestinationLiquidity: PublicKey
   userSourceLiquidity: PublicKey
   tokenProgram: PublicKey
@@ -31,6 +32,11 @@ export function repayObligationLiquidity(
     { pubkey: accounts.obligation, isSigner: false, isWritable: true },
     { pubkey: accounts.lendingMarket, isSigner: false, isWritable: false },
     { pubkey: accounts.repayReserve, isSigner: false, isWritable: true },
+    {
+      pubkey: accounts.reserveLiquidityMint,
+      isSigner: false,
+      isWritable: true,
+    },
     {
       pubkey: accounts.reserveDestinationLiquidity,
       isSigner: false,

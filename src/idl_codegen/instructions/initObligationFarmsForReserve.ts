@@ -19,7 +19,6 @@ export interface InitObligationFarmsForReserveAccounts {
   lendingMarket: PublicKey
   farmsProgram: PublicKey
   rent: PublicKey
-  tokenProgram: PublicKey
   systemProgram: PublicKey
 }
 
@@ -45,7 +44,6 @@ export function initObligationFarmsForReserve(
     { pubkey: accounts.lendingMarket, isSigner: false, isWritable: false },
     { pubkey: accounts.farmsProgram, isSigner: false, isWritable: false },
     { pubkey: accounts.rent, isSigner: false, isWritable: false },
-    { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
     { pubkey: accounts.systemProgram, isSigner: false, isWritable: false },
   ]
   const identifier = Buffer.from([136, 63, 15, 186, 211, 152, 168, 164])

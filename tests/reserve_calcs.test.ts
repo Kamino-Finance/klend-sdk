@@ -5,6 +5,7 @@ import { Connection, PublicKey } from '@solana/web3.js';
 import { CurvePointFields } from '../src/idl_codegen/types';
 import { expect } from 'chai';
 import { endpointFromCluster } from './setup_utils';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 describe('reserve_calcs', function () {
   it('reserve_calculate_estimated_and_stale_supply', async function () {
@@ -18,10 +19,47 @@ describe('reserve_calcs', function () {
     });
     const totalSupplyStale = reserve.getTotalSupply();
     const totalSupplyPlusInterest = reserve.getEstimatedTotalSupply(5, 0);
+    const accumulatedProtocolFees = reserve.getAccumulatedProtocolFees();
+    const { accumulatedProtocolFees: estimatedAccumulatedProtocolFees } = reserve.getEstimatedAccumulatedProtocolFees(
+      1000,
+      0
+    );
 
     expect(totalSupplyStale.toString()).eq('1000000.000000000086736173798840352915036');
     expect(totalSupplyPlusInterest.toString()).eq('1000000.000000000086736173799489749616243');
+    expect(accumulatedProtocolFees.toString()).eq('0');
+    expect(estimatedAccumulatedProtocolFees.toFixed()).eq('0.0000000000000000000229198835920763525402574346465545');
   });
+});
+
+it('reserve_calculated_estimated_supply_with_host_fixed_interest_rate', async function () {
+  const reserve = testKaminoReserve({
+    liquidityAvailableAmount: new BN(1000000),
+    collTotalSupply: new BN(1000000000),
+    borrowRateCurve: testCurve(),
+    protocolTakeRatePct: 15,
+    borrowedAmount: new BN(100000000),
+    accumulatedReferrerFeesSf: new BN(0),
+    hostFixedInterestRateBps: 1000,
+  });
+  const totalSupplyStale = reserve.getTotalSupply();
+  const totalSupplyPlusInterest = reserve.getEstimatedTotalSupply(5, 0);
+
+  const accumulatedProtocolFees = reserve.getAccumulatedProtocolFees();
+  const {
+    accumulatedProtocolFees: estimatedAccumulatedProtocolFees,
+    compoundedFixedHostFee,
+    compoundedVariableProtocolFee,
+  } = reserve.getEstimatedAccumulatedProtocolFees(1000, 0);
+
+  expect(totalSupplyStale.toString()).eq('1000000.000000000086736173798840352915036');
+  expect(totalSupplyPlusInterest.toString()).eq('1000000.000000000086736173799489749620361');
+
+  expect(accumulatedProtocolFees.toString()).eq('0');
+  expect(estimatedAccumulatedProtocolFees.toFixed()).eq('0.000000000000000137542330260089777451133815435695863');
+  expect(estimatedAccumulatedProtocolFees.toString()).equals(
+    compoundedFixedHostFee.plus(compoundedVariableProtocolFee).toString()
+  );
 });
 
 function testKaminoReserve(args: TestReserveFields): KaminoReserve {
@@ -51,6 +89,7 @@ type TestReserveFields = {
   pendingReferrerFeesSf?: BN;
   borrowRateCurve?: Array<CurvePointFields>;
   protocolTakeRatePct?: number;
+  hostFixedInterestRateBps?: number;
 };
 
 function testReserve({
@@ -63,6 +102,7 @@ function testReserve({
   pendingReferrerFeesSf,
   borrowRateCurve,
   protocolTakeRatePct,
+  hostFixedInterestRateBps,
 }: TestReserveFields): Reserve {
   const r = getDefaultReserveFields();
   r.lastUpdate.slot = lastUpdateSlot ? new BN(lastUpdateSlot) : r.lastUpdate.slot;
@@ -74,6 +114,7 @@ function testReserve({
   r.liquidity.pendingReferrerFeesSf = pendingReferrerFeesSf || r.liquidity.pendingReferrerFeesSf;
   r.config.borrowRateCurve.points = borrowRateCurve || r.config.borrowRateCurve.points;
   r.config.protocolTakeRatePct = protocolTakeRatePct || r.config.protocolTakeRatePct;
+  r.config.hostFixedInterestRateBps = hostFixedInterestRateBps || r.config.hostFixedInterestRateBps;
   return new Reserve(r);
 }
 
@@ -153,8 +194,11 @@ function getDefaultReserveFields(): ReserveFields {
       multiplierTagBoost: [],
       protocolLiquidationFeePct: 0,
       protocolTakeRatePct: 0,
-      reserved0: [],
       reserved1: [],
+      hostFixedInterestRateBps: 0,
+      utilizationLimitBlockBorrowingAbove: 0,
+      borrowLimitOutsideElevationGroup: new BN(0),
+      borrowLimitAgainstThisCollateralInElevationGroup: new Array(32).fill(new BN(0)),
       status: 0,
       tokenInfo: {
         heuristic: {
@@ -179,6 +223,8 @@ function getDefaultReserveFields(): ReserveFields {
           priceAggregator: PublicKey.default,
           twapAggregator: PublicKey.default,
         },
+        blockPriceUsage: 0,
+        reserved: [],
       },
     },
     configPadding: [],
@@ -212,10 +258,13 @@ function getDefaultReserveFields(): ReserveFields {
       padding3: [],
       pendingReferrerFeesSf: new BN(0),
       supplyVault: PublicKey.default,
+      tokenProgram: TOKEN_PROGRAM_ID,
     },
     padding: [],
     reserveCollateralPadding: [],
     reserveLiquidityPadding: [],
     version: new BN(0),
+    borrowedAmountOutsideElevationGroup: new BN(0),
+    borrowedAmountsAgainstThisReserveInElevationGroups: new Array(32).fill(new BN(0)),
   };
 }

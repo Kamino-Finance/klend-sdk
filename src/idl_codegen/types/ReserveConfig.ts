@@ -8,7 +8,8 @@ export interface ReserveConfigFields {
   status: number
   /** Asset tier -> 0 - regular (collateral & debt), 1 - isolated collateral, 2 - isolated debt */
   assetTier: number
-  reserved0: Array<number>
+  /** Flat rate that goes to the host */
+  hostFixedInterestRateBps: number
   /** Boost for side (debt or collateral) */
   multiplierSideBoost: Array<number>
   /** Reward points multiplier per obligation type */
@@ -57,6 +58,19 @@ export interface ReserveConfigFields {
   disableUsageAsCollOutsideEmode: number
   utilizationLimitBlockBorrowingAbove: number
   reserved1: Array<number>
+  /**
+   * Maximum amount liquidity of this reserve borrowed outside all elevation groups
+   * - u64::MAX for inf
+   * - 0 to disable borrows outside elevation groups
+   */
+  borrowLimitOutsideElevationGroup: BN
+  /**
+   * Defines the maximum amount (in lamports of elevation group debt asset)
+   * that can be borrowed when this reserve is used as collateral.
+   * - u64::MAX for inf
+   * - 0 to disable borrows in this elevation group (expected value for the debt asset)
+   */
+  borrowLimitAgainstThisCollateralInElevationGroup: Array<BN>
 }
 
 export interface ReserveConfigJSON {
@@ -64,7 +78,8 @@ export interface ReserveConfigJSON {
   status: number
   /** Asset tier -> 0 - regular (collateral & debt), 1 - isolated collateral, 2 - isolated debt */
   assetTier: number
-  reserved0: Array<number>
+  /** Flat rate that goes to the host */
+  hostFixedInterestRateBps: number
   /** Boost for side (debt or collateral) */
   multiplierSideBoost: Array<number>
   /** Reward points multiplier per obligation type */
@@ -113,6 +128,19 @@ export interface ReserveConfigJSON {
   disableUsageAsCollOutsideEmode: number
   utilizationLimitBlockBorrowingAbove: number
   reserved1: Array<number>
+  /**
+   * Maximum amount liquidity of this reserve borrowed outside all elevation groups
+   * - u64::MAX for inf
+   * - 0 to disable borrows outside elevation groups
+   */
+  borrowLimitOutsideElevationGroup: string
+  /**
+   * Defines the maximum amount (in lamports of elevation group debt asset)
+   * that can be borrowed when this reserve is used as collateral.
+   * - u64::MAX for inf
+   * - 0 to disable borrows in this elevation group (expected value for the debt asset)
+   */
+  borrowLimitAgainstThisCollateralInElevationGroup: Array<string>
 }
 
 /** Reserve configuration values */
@@ -121,7 +149,8 @@ export class ReserveConfig {
   readonly status: number
   /** Asset tier -> 0 - regular (collateral & debt), 1 - isolated collateral, 2 - isolated debt */
   readonly assetTier: number
-  readonly reserved0: Array<number>
+  /** Flat rate that goes to the host */
+  readonly hostFixedInterestRateBps: number
   /** Boost for side (debt or collateral) */
   readonly multiplierSideBoost: Array<number>
   /** Reward points multiplier per obligation type */
@@ -170,11 +199,24 @@ export class ReserveConfig {
   readonly disableUsageAsCollOutsideEmode: number
   readonly utilizationLimitBlockBorrowingAbove: number
   readonly reserved1: Array<number>
+  /**
+   * Maximum amount liquidity of this reserve borrowed outside all elevation groups
+   * - u64::MAX for inf
+   * - 0 to disable borrows outside elevation groups
+   */
+  readonly borrowLimitOutsideElevationGroup: BN
+  /**
+   * Defines the maximum amount (in lamports of elevation group debt asset)
+   * that can be borrowed when this reserve is used as collateral.
+   * - u64::MAX for inf
+   * - 0 to disable borrows in this elevation group (expected value for the debt asset)
+   */
+  readonly borrowLimitAgainstThisCollateralInElevationGroup: Array<BN>
 
   constructor(fields: ReserveConfigFields) {
     this.status = fields.status
     this.assetTier = fields.assetTier
-    this.reserved0 = fields.reserved0
+    this.hostFixedInterestRateBps = fields.hostFixedInterestRateBps
     this.multiplierSideBoost = fields.multiplierSideBoost
     this.multiplierTagBoost = fields.multiplierTagBoost
     this.protocolTakeRatePct = fields.protocolTakeRatePct
@@ -207,6 +249,10 @@ export class ReserveConfig {
     this.utilizationLimitBlockBorrowingAbove =
       fields.utilizationLimitBlockBorrowingAbove
     this.reserved1 = fields.reserved1
+    this.borrowLimitOutsideElevationGroup =
+      fields.borrowLimitOutsideElevationGroup
+    this.borrowLimitAgainstThisCollateralInElevationGroup =
+      fields.borrowLimitAgainstThisCollateralInElevationGroup
   }
 
   static layout(property?: string) {
@@ -214,7 +260,7 @@ export class ReserveConfig {
       [
         borsh.u8("status"),
         borsh.u8("assetTier"),
-        borsh.array(borsh.u8(), 2, "reserved0"),
+        borsh.u16("hostFixedInterestRateBps"),
         borsh.array(borsh.u8(), 2, "multiplierSideBoost"),
         borsh.array(borsh.u8(), 8, "multiplierTagBoost"),
         borsh.u8("protocolTakeRatePct"),
@@ -238,6 +284,12 @@ export class ReserveConfig {
         borsh.u8("disableUsageAsCollOutsideEmode"),
         borsh.u8("utilizationLimitBlockBorrowingAbove"),
         borsh.array(borsh.u8(), 2, "reserved1"),
+        borsh.u64("borrowLimitOutsideElevationGroup"),
+        borsh.array(
+          borsh.u64(),
+          32,
+          "borrowLimitAgainstThisCollateralInElevationGroup"
+        ),
       ],
       property
     )
@@ -248,7 +300,7 @@ export class ReserveConfig {
     return new ReserveConfig({
       status: obj.status,
       assetTier: obj.assetTier,
-      reserved0: obj.reserved0,
+      hostFixedInterestRateBps: obj.hostFixedInterestRateBps,
       multiplierSideBoost: obj.multiplierSideBoost,
       multiplierTagBoost: obj.multiplierTagBoost,
       protocolTakeRatePct: obj.protocolTakeRatePct,
@@ -277,6 +329,9 @@ export class ReserveConfig {
       utilizationLimitBlockBorrowingAbove:
         obj.utilizationLimitBlockBorrowingAbove,
       reserved1: obj.reserved1,
+      borrowLimitOutsideElevationGroup: obj.borrowLimitOutsideElevationGroup,
+      borrowLimitAgainstThisCollateralInElevationGroup:
+        obj.borrowLimitAgainstThisCollateralInElevationGroup,
     })
   }
 
@@ -284,7 +339,7 @@ export class ReserveConfig {
     return {
       status: fields.status,
       assetTier: fields.assetTier,
-      reserved0: fields.reserved0,
+      hostFixedInterestRateBps: fields.hostFixedInterestRateBps,
       multiplierSideBoost: fields.multiplierSideBoost,
       multiplierTagBoost: fields.multiplierTagBoost,
       protocolTakeRatePct: fields.protocolTakeRatePct,
@@ -315,6 +370,9 @@ export class ReserveConfig {
       utilizationLimitBlockBorrowingAbove:
         fields.utilizationLimitBlockBorrowingAbove,
       reserved1: fields.reserved1,
+      borrowLimitOutsideElevationGroup: fields.borrowLimitOutsideElevationGroup,
+      borrowLimitAgainstThisCollateralInElevationGroup:
+        fields.borrowLimitAgainstThisCollateralInElevationGroup,
     }
   }
 
@@ -322,7 +380,7 @@ export class ReserveConfig {
     return {
       status: this.status,
       assetTier: this.assetTier,
-      reserved0: this.reserved0,
+      hostFixedInterestRateBps: this.hostFixedInterestRateBps,
       multiplierSideBoost: this.multiplierSideBoost,
       multiplierTagBoost: this.multiplierTagBoost,
       protocolTakeRatePct: this.protocolTakeRatePct,
@@ -349,6 +407,12 @@ export class ReserveConfig {
       utilizationLimitBlockBorrowingAbove:
         this.utilizationLimitBlockBorrowingAbove,
       reserved1: this.reserved1,
+      borrowLimitOutsideElevationGroup:
+        this.borrowLimitOutsideElevationGroup.toString(),
+      borrowLimitAgainstThisCollateralInElevationGroup:
+        this.borrowLimitAgainstThisCollateralInElevationGroup.map((item) =>
+          item.toString()
+        ),
     }
   }
 
@@ -356,7 +420,7 @@ export class ReserveConfig {
     return new ReserveConfig({
       status: obj.status,
       assetTier: obj.assetTier,
-      reserved0: obj.reserved0,
+      hostFixedInterestRateBps: obj.hostFixedInterestRateBps,
       multiplierSideBoost: obj.multiplierSideBoost,
       multiplierTagBoost: obj.multiplierTagBoost,
       protocolTakeRatePct: obj.protocolTakeRatePct,
@@ -387,6 +451,13 @@ export class ReserveConfig {
       utilizationLimitBlockBorrowingAbove:
         obj.utilizationLimitBlockBorrowingAbove,
       reserved1: obj.reserved1,
+      borrowLimitOutsideElevationGroup: new BN(
+        obj.borrowLimitOutsideElevationGroup
+      ),
+      borrowLimitAgainstThisCollateralInElevationGroup:
+        obj.borrowLimitAgainstThisCollateralInElevationGroup.map(
+          (item) => new BN(item)
+        ),
     })
   }
 

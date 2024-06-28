@@ -142,6 +142,14 @@ export class KaminoReserve {
   };
 
   /**
+   *
+   * @returns the fixed interest rate allocated to the host
+   */
+  getFixedHostInterestRate = (): Decimal => {
+    return new Decimal(this.state.config.hostFixedInterestRateBps).div(10_000);
+  };
+
+  /**
    * Use getEstimatedTotalSupply() for the most accurate value
    * @returns the stale total liquidity supply of the reserve from the last refresh
    */
@@ -284,6 +292,40 @@ export class KaminoReserve {
 
   /**
    *
+   * @returns the borrow limit of the reserve outside the elevation group
+   */
+  getBorrowLimitOutsideElevationGroup(): Decimal {
+    return new Decimal(this.state.config.borrowLimitOutsideElevationGroup.toString());
+  }
+
+  /**
+   *
+   * @returns the borrowed amount of the reserve outside the elevation group
+   */
+  getBorrowedAmountOutsideElevationGroup(): Decimal {
+    return new Decimal(this.state.borrowedAmountOutsideElevationGroup.toString());
+  }
+
+  /**
+   *
+   * @returns the borrow limit against the collateral reserve in the elevation group
+   */
+  getBorrowLimitAgainstCollateralInElevationGroup(elevationGroupIndex: number): Decimal {
+    return new Decimal(
+      this.state.config.borrowLimitAgainstThisCollateralInElevationGroup[elevationGroupIndex].toString()
+    );
+  }
+
+  /**
+   *
+   * @returns the borrowed amount against the collateral reserve in the elevation group
+   */
+  getBorrowedAmountAgainstCollateralInElevationGroup(elevationGroupIndex: number): Decimal {
+    return new Decimal(this.state.borrowedAmountsAgainstThisReserveInElevationGroups[elevationGroupIndex].toString());
+  }
+
+  /**
+   *
    * @returns the current capacity of the daily debt withdrawal cap
    */
   getDebtWithdrawalCapCurrent(slot: number): Decimal {
@@ -325,6 +367,30 @@ export class KaminoReserve {
       totalSupply = newTotalSupply;
     }
     return { totalBorrow, totalSupply };
+  }
+
+  getEstimatedAccumulatedProtocolFees(
+    slot: number,
+    referralFeeBps: number
+  ): { accumulatedProtocolFees: Decimal; compoundedVariableProtocolFee: Decimal; compoundedFixedHostFee: Decimal } {
+    const slotsElapsed = Math.max(slot - this.state.lastUpdate.slot.toNumber(), 0);
+    let accumulatedProtocolFees: Decimal;
+    let compoundedVariableProtocolFee: Decimal;
+    let compoundedFixedHostFee: Decimal;
+    if (slotsElapsed === 0) {
+      accumulatedProtocolFees = this.getAccumulatedProtocolFees();
+      compoundedVariableProtocolFee = new Decimal(0);
+      compoundedFixedHostFee = new Decimal(0);
+    } else {
+      const { newAccProtocolFees, variableProtocolFee, fixedHostFee } = this.compoundInterest(
+        slotsElapsed,
+        referralFeeBps
+      );
+      accumulatedProtocolFees = newAccProtocolFees;
+      compoundedVariableProtocolFee = variableProtocolFee;
+      compoundedFixedHostFee = fixedHostFee;
+    }
+    return { accumulatedProtocolFees, compoundedVariableProtocolFee, compoundedFixedHostFee };
   }
 
   calculateUtilizationRatio() {
@@ -438,6 +504,13 @@ export class KaminoReserve {
    */
   getLiquidityMint(): PublicKey {
     return this.state.liquidity.mintPubkey;
+  }
+
+  /**
+   * @returns the token program of the reserve liquidity mint
+   */
+  getLiquidityTokenProgram(): PublicKey {
+    return this.state.liquidity.tokenProgram;
   }
 
   /**
@@ -556,7 +629,8 @@ export class KaminoReserve {
   ): {
     newDebt: Decimal;
     netNewDebt: Decimal;
-    totalProtocolFee: Decimal;
+    variableProtocolFee: Decimal;
+    fixedHostFee: Decimal;
     absoluteReferralFee: Decimal;
     maxReferralFees: Decimal;
     newAccProtocolFees: Decimal;
@@ -565,25 +639,36 @@ export class KaminoReserve {
     const currentBorrowRate = this.calculateBorrowAPR();
     const protocolTakeRate = new Decimal(this.state.config.protocolTakeRatePct).div(100);
     const referralRate = new Decimal(referralFeeBps).div(10_000);
+    const fixedHostInterestRate = this.getFixedHostInterestRate();
 
-    const compoundInterestRate = this.approximateCompoundedInterest(new Decimal(currentBorrowRate), slotsElapsed);
+    const compoundedInterestRate = this.approximateCompoundedInterest(
+      new Decimal(currentBorrowRate).plus(fixedHostInterestRate),
+      slotsElapsed
+    );
+    const compoundedFixedRate = this.approximateCompoundedInterest(fixedHostInterestRate, slotsElapsed);
 
     const previousDebt = this.getBorrowedAmount();
-    const newDebt = previousDebt.mul(compoundInterestRate);
-    const netNewDebt = newDebt.sub(previousDebt);
+    const newDebt = previousDebt.mul(compoundedInterestRate);
+    const fixedHostFee = previousDebt.mul(compoundedFixedRate).sub(previousDebt);
 
-    const totalProtocolFee = netNewDebt.mul(protocolTakeRate);
+    const netNewDebt = newDebt.sub(previousDebt).sub(fixedHostFee);
+
+    const variableProtocolFee = netNewDebt.mul(protocolTakeRate);
     const absoluteReferralFee = protocolTakeRate.mul(referralRate);
     const maxReferralFees = netNewDebt.mul(absoluteReferralFee);
 
-    const newAccProtocolFees = totalProtocolFee.sub(maxReferralFees).add(this.getAccumulatedProtocolFees());
+    const newAccProtocolFees = variableProtocolFee
+      .add(fixedHostFee)
+      .sub(maxReferralFees)
+      .add(this.getAccumulatedProtocolFees());
 
     const pendingReferralFees = this.getPendingReferrerFees().add(maxReferralFees);
 
     return {
       newDebt,
       netNewDebt,
-      totalProtocolFee,
+      variableProtocolFee,
+      fixedHostFee,
       absoluteReferralFee,
       maxReferralFees,
       newAccProtocolFees,

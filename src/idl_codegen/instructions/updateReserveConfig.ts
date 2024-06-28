@@ -6,7 +6,8 @@ import { PROGRAM_ID } from "../programId"
 
 export interface UpdateReserveConfigArgs {
   mode: BN
-  value: Array<number>
+  value: Uint8Array
+  skipValidation: boolean
 }
 
 export interface UpdateReserveConfigAccounts {
@@ -17,7 +18,8 @@ export interface UpdateReserveConfigAccounts {
 
 export const layout = borsh.struct([
   borsh.u64("mode"),
-  borsh.array(borsh.u8(), 648, "value"),
+  borsh.vecU8("value"),
+  borsh.bool("skipValidation"),
 ])
 
 export function updateReserveConfig(
@@ -35,7 +37,12 @@ export function updateReserveConfig(
   const len = layout.encode(
     {
       mode: args.mode,
-      value: args.value,
+      value: Buffer.from(
+        args.value.buffer,
+        args.value.byteOffset,
+        args.value.length
+      ),
+      skipValidation: args.skipValidation,
     },
     buffer
   )
