@@ -12,6 +12,7 @@ import * as assert from 'assert';
 import { MultiplyObligation, fuzzyEq, sleep } from '../src';
 
 import {
+  U64_MAX,
   getAdjustLeverageSwapInputs,
   getDepositWithLeverageSwapInputs,
   getWithdrawWithLeverageSwapInputs,
@@ -25,6 +26,8 @@ import {
 } from './leverage_utils';
 import { assertSwapInputsMatch } from './assert';
 import { lamportsToNumberDecimal } from '../src/classes/utils';
+import { updateReserveSingleValue } from './setup_operations';
+import { UpdateConfigMode } from '../src/idl_codegen/types';
 
 // TODO: test with sol and wrapped sol
 // - [x] test when the one of the tokens is 0 entirely
@@ -1907,6 +1910,18 @@ describe('Leverage SDK tests', function () {
       [collToken, new Decimal(1000.05)],
       [debtToken, new Decimal(1000.05)],
       requestElevationGroup
+    );
+
+    const collReserve = kaminoMarket.getReserveBySymbol(collToken);
+
+    const buffer = Buffer.alloc(8 * 32);
+    buffer.writeBigUint64LE(BigInt(U64_MAX), 0);
+
+    await updateReserveSingleValue(
+      env,
+      collReserve!,
+      buffer,
+      UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.discriminator + 1 // discriminator + 1 matches the enum
     );
 
     console.log('Creating user ===');

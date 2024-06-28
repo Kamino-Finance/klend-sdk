@@ -18,7 +18,6 @@ export interface RefreshObligationFarmsForReserveAccounts {
   lendingMarket: PublicKey
   farmsProgram: PublicKey
   rent: PublicKey
-  tokenProgram: PublicKey
   systemProgram: PublicKey
 }
 
@@ -47,7 +46,6 @@ export function refreshObligationFarmsForReserve(
     { pubkey: accounts.lendingMarket, isSigner: false, isWritable: false },
     { pubkey: accounts.farmsProgram, isSigner: false, isWritable: false },
     { pubkey: accounts.rent, isSigner: false, isWritable: false },
-    { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
     { pubkey: accounts.systemProgram, isSigner: false, isWritable: false },
   ]
   const identifier = Buffer.from([140, 144, 253, 21, 10, 74, 248, 3])

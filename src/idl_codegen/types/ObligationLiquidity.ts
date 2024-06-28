@@ -15,6 +15,8 @@ export interface ObligationLiquidityFields {
   marketValueSf: BN
   /** Risk adjusted liquidity market value in quote currency - DEBUG ONLY - use market_value instead */
   borrowFactorAdjustedMarketValueSf: BN
+  /** Amount of liquidity borrowed outside of an elevation group */
+  borrowedAmountOutsideElevationGroups: BN
   padding2: Array<BN>
 }
 
@@ -30,6 +32,8 @@ export interface ObligationLiquidityJSON {
   marketValueSf: string
   /** Risk adjusted liquidity market value in quote currency - DEBUG ONLY - use market_value instead */
   borrowFactorAdjustedMarketValueSf: string
+  /** Amount of liquidity borrowed outside of an elevation group */
+  borrowedAmountOutsideElevationGroups: string
   padding2: Array<string>
 }
 
@@ -46,6 +50,8 @@ export class ObligationLiquidity {
   readonly marketValueSf: BN
   /** Risk adjusted liquidity market value in quote currency - DEBUG ONLY - use market_value instead */
   readonly borrowFactorAdjustedMarketValueSf: BN
+  /** Amount of liquidity borrowed outside of an elevation group */
+  readonly borrowedAmountOutsideElevationGroups: BN
   readonly padding2: Array<BN>
 
   constructor(fields: ObligationLiquidityFields) {
@@ -58,6 +64,8 @@ export class ObligationLiquidity {
     this.marketValueSf = fields.marketValueSf
     this.borrowFactorAdjustedMarketValueSf =
       fields.borrowFactorAdjustedMarketValueSf
+    this.borrowedAmountOutsideElevationGroups =
+      fields.borrowedAmountOutsideElevationGroups
     this.padding2 = fields.padding2
   }
 
@@ -70,7 +78,8 @@ export class ObligationLiquidity {
         borsh.u128("borrowedAmountSf"),
         borsh.u128("marketValueSf"),
         borsh.u128("borrowFactorAdjustedMarketValueSf"),
-        borsh.array(borsh.u64(), 8, "padding2"),
+        borsh.u64("borrowedAmountOutsideElevationGroups"),
+        borsh.array(borsh.u64(), 7, "padding2"),
       ],
       property
     )
@@ -87,6 +96,8 @@ export class ObligationLiquidity {
       borrowedAmountSf: obj.borrowedAmountSf,
       marketValueSf: obj.marketValueSf,
       borrowFactorAdjustedMarketValueSf: obj.borrowFactorAdjustedMarketValueSf,
+      borrowedAmountOutsideElevationGroups:
+        obj.borrowedAmountOutsideElevationGroups,
       padding2: obj.padding2,
     })
   }
@@ -102,6 +113,8 @@ export class ObligationLiquidity {
       marketValueSf: fields.marketValueSf,
       borrowFactorAdjustedMarketValueSf:
         fields.borrowFactorAdjustedMarketValueSf,
+      borrowedAmountOutsideElevationGroups:
+        fields.borrowedAmountOutsideElevationGroups,
       padding2: fields.padding2,
     }
   }
@@ -115,6 +128,8 @@ export class ObligationLiquidity {
       marketValueSf: this.marketValueSf.toString(),
       borrowFactorAdjustedMarketValueSf:
         this.borrowFactorAdjustedMarketValueSf.toString(),
+      borrowedAmountOutsideElevationGroups:
+        this.borrowedAmountOutsideElevationGroups.toString(),
       padding2: this.padding2.map((item) => item.toString()),
     }
   }
@@ -130,6 +145,9 @@ export class ObligationLiquidity {
       marketValueSf: new BN(obj.marketValueSf),
       borrowFactorAdjustedMarketValueSf: new BN(
         obj.borrowFactorAdjustedMarketValueSf
+      ),
+      borrowedAmountOutsideElevationGroups: new BN(
+        obj.borrowedAmountOutsideElevationGroups
       ),
       padding2: obj.padding2.map((item) => new BN(item)),
     })

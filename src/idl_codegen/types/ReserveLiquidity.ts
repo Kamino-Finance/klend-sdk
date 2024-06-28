@@ -40,6 +40,8 @@ export interface ReserveLiquidityFields {
   pendingReferrerFeesSf: BN
   /** Reserve referrer fee absolute rate calculated at each refresh_reserve operation (scaled fraction) */
   absoluteReferralRateSf: BN
+  /** Token program of the liquidity mint */
+  tokenProgram: PublicKey
   padding2: Array<BN>
   padding3: Array<BN>
 }
@@ -81,6 +83,8 @@ export interface ReserveLiquidityJSON {
   pendingReferrerFeesSf: string
   /** Reserve referrer fee absolute rate calculated at each refresh_reserve operation (scaled fraction) */
   absoluteReferralRateSf: string
+  /** Token program of the liquidity mint */
+  tokenProgram: string
   padding2: Array<string>
   padding3: Array<string>
 }
@@ -123,6 +127,8 @@ export class ReserveLiquidity {
   readonly pendingReferrerFeesSf: BN
   /** Reserve referrer fee absolute rate calculated at each refresh_reserve operation (scaled fraction) */
   readonly absoluteReferralRateSf: BN
+  /** Token program of the liquidity mint */
+  readonly tokenProgram: PublicKey
   readonly padding2: Array<BN>
   readonly padding3: Array<BN>
 
@@ -144,6 +150,7 @@ export class ReserveLiquidity {
     this.accumulatedReferrerFeesSf = fields.accumulatedReferrerFeesSf
     this.pendingReferrerFeesSf = fields.pendingReferrerFeesSf
     this.absoluteReferralRateSf = fields.absoluteReferralRateSf
+    this.tokenProgram = fields.tokenProgram
     this.padding2 = fields.padding2
     this.padding3 = fields.padding3
   }
@@ -166,7 +173,8 @@ export class ReserveLiquidity {
         borsh.u128("accumulatedReferrerFeesSf"),
         borsh.u128("pendingReferrerFeesSf"),
         borsh.u128("absoluteReferralRateSf"),
-        borsh.array(borsh.u64(), 55, "padding2"),
+        borsh.publicKey("tokenProgram"),
+        borsh.array(borsh.u64(), 51, "padding2"),
         borsh.array(borsh.u128(), 32, "padding3"),
       ],
       property
@@ -193,6 +201,7 @@ export class ReserveLiquidity {
       accumulatedReferrerFeesSf: obj.accumulatedReferrerFeesSf,
       pendingReferrerFeesSf: obj.pendingReferrerFeesSf,
       absoluteReferralRateSf: obj.absoluteReferralRateSf,
+      tokenProgram: obj.tokenProgram,
       padding2: obj.padding2,
       padding3: obj.padding3,
     })
@@ -217,6 +226,7 @@ export class ReserveLiquidity {
       accumulatedReferrerFeesSf: fields.accumulatedReferrerFeesSf,
       pendingReferrerFeesSf: fields.pendingReferrerFeesSf,
       absoluteReferralRateSf: fields.absoluteReferralRateSf,
+      tokenProgram: fields.tokenProgram,
       padding2: fields.padding2,
       padding3: fields.padding3,
     }
@@ -239,6 +249,7 @@ export class ReserveLiquidity {
       accumulatedReferrerFeesSf: this.accumulatedReferrerFeesSf.toString(),
       pendingReferrerFeesSf: this.pendingReferrerFeesSf.toString(),
       absoluteReferralRateSf: this.absoluteReferralRateSf.toString(),
+      tokenProgram: this.tokenProgram.toString(),
       padding2: this.padding2.map((item) => item.toString()),
       padding3: this.padding3.map((item) => item.toString()),
     }
@@ -263,6 +274,7 @@ export class ReserveLiquidity {
       accumulatedReferrerFeesSf: new BN(obj.accumulatedReferrerFeesSf),
       pendingReferrerFeesSf: new BN(obj.pendingReferrerFeesSf),
       absoluteReferralRateSf: new BN(obj.absoluteReferralRateSf),
+      tokenProgram: new PublicKey(obj.tokenProgram),
       padding2: obj.padding2.map((item) => new BN(item)),
       padding3: obj.padding3.map((item) => new BN(item)),
     })

@@ -17,7 +17,6 @@ export interface InitObligationAccounts {
   seed2Account: PublicKey
   ownerUserMetadata: PublicKey
   rent: PublicKey
-  tokenProgram: PublicKey
   systemProgram: PublicKey
 }
 
@@ -37,7 +36,6 @@ export function initObligation(
     { pubkey: accounts.seed2Account, isSigner: false, isWritable: false },
     { pubkey: accounts.ownerUserMetadata, isSigner: false, isWritable: false },
     { pubkey: accounts.rent, isSigner: false, isWritable: false },
-    { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
     { pubkey: accounts.systemProgram, isSigner: false, isWritable: false },
   ]
   const identifier = Buffer.from([251, 10, 231, 76, 27, 11, 159, 96])

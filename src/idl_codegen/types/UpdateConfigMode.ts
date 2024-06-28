@@ -1015,6 +1015,75 @@ export class UpdateBlockPriceUsage {
   }
 }
 
+export interface UpdateBorrowLimitOutsideElevationGroupJSON {
+  kind: "UpdateBorrowLimitOutsideElevationGroup"
+}
+
+export class UpdateBorrowLimitOutsideElevationGroup {
+  static readonly discriminator = 44
+  static readonly kind = "UpdateBorrowLimitOutsideElevationGroup"
+  readonly discriminator = 44
+  readonly kind = "UpdateBorrowLimitOutsideElevationGroup"
+
+  toJSON(): UpdateBorrowLimitOutsideElevationGroupJSON {
+    return {
+      kind: "UpdateBorrowLimitOutsideElevationGroup",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateBorrowLimitOutsideElevationGroup: {},
+    }
+  }
+}
+
+export interface UpdateBorrowLimitsInElevationGroupAgainstThisReserveJSON {
+  kind: "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"
+}
+
+export class UpdateBorrowLimitsInElevationGroupAgainstThisReserve {
+  static readonly discriminator = 45
+  static readonly kind = "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"
+  readonly discriminator = 45
+  readonly kind = "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"
+
+  toJSON(): UpdateBorrowLimitsInElevationGroupAgainstThisReserveJSON {
+    return {
+      kind: "UpdateBorrowLimitsInElevationGroupAgainstThisReserve",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateBorrowLimitsInElevationGroupAgainstThisReserve: {},
+    }
+  }
+}
+
+export interface UpdateHostFixedInterestRateBpsJSON {
+  kind: "UpdateHostFixedInterestRateBps"
+}
+
+export class UpdateHostFixedInterestRateBps {
+  static readonly discriminator = 46
+  static readonly kind = "UpdateHostFixedInterestRateBps"
+  readonly discriminator = 46
+  readonly kind = "UpdateHostFixedInterestRateBps"
+
+  toJSON(): UpdateHostFixedInterestRateBpsJSON {
+    return {
+      kind: "UpdateHostFixedInterestRateBps",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateHostFixedInterestRateBps: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if (typeof obj !== "object") {
@@ -1152,6 +1221,15 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   }
   if ("UpdateBlockPriceUsage" in obj) {
     return new UpdateBlockPriceUsage()
+  }
+  if ("UpdateBorrowLimitOutsideElevationGroup" in obj) {
+    return new UpdateBorrowLimitOutsideElevationGroup()
+  }
+  if ("UpdateBorrowLimitsInElevationGroupAgainstThisReserve" in obj) {
+    return new UpdateBorrowLimitsInElevationGroupAgainstThisReserve()
+  }
+  if ("UpdateHostFixedInterestRateBps" in obj) {
+    return new UpdateHostFixedInterestRateBps()
   }
 
   throw new Error("Invalid enum object")
@@ -1293,6 +1371,15 @@ export function fromJSON(
     case "UpdateBlockPriceUsage": {
       return new UpdateBlockPriceUsage()
     }
+    case "UpdateBorrowLimitOutsideElevationGroup": {
+      return new UpdateBorrowLimitOutsideElevationGroup()
+    }
+    case "UpdateBorrowLimitsInElevationGroupAgainstThisReserve": {
+      return new UpdateBorrowLimitsInElevationGroupAgainstThisReserve()
+    }
+    case "UpdateHostFixedInterestRateBps": {
+      return new UpdateHostFixedInterestRateBps()
+    }
   }
 }
 
@@ -1342,6 +1429,9 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateDisableUsageAsCollateralOutsideEmode"),
     borsh.struct([], "UpdateBlockBorrowingAboveUtilization"),
     borsh.struct([], "UpdateBlockPriceUsage"),
+    borsh.struct([], "UpdateBorrowLimitOutsideElevationGroup"),
+    borsh.struct([], "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"),
+    borsh.struct([], "UpdateHostFixedInterestRateBps"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

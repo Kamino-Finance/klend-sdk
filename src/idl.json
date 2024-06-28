@@ -143,7 +143,12 @@
           "isSigner": false
         },
         {
-          "name": "tokenProgram",
+          "name": "liquidityTokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "collateralTokenProgram",
           "isMut": false,
           "isSigner": false
         },
@@ -204,11 +209,6 @@
           "isSigner": false
         },
         {
-          "name": "tokenProgram",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "systemProgram",
           "isMut": false,
           "isSigner": false
@@ -222,7 +222,7 @@
       ]
     },
     {
-      "name": "updateSingleReserveConfig",
+      "name": "updateReserveConfig",
       "accounts": [
         {
           "name": "lendingMarketOwner",
@@ -247,12 +247,7 @@
         },
         {
           "name": "value",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
+          "type": "bytes"
         },
         {
           "name": "skipValidation",
@@ -261,45 +256,15 @@
       ]
     },
     {
-      "name": "updateEntireReserveConfig",
-      "accounts": [
-        {
-          "name": "lendingMarketOwner",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
-          "name": "lendingMarket",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "reserve",
-          "isMut": true,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "mode",
-          "type": "u64"
-        },
-        {
-          "name": "value",
-          "type": {
-            "array": [
-              "u8",
-              648
-            ]
-          }
-        }
-      ]
-    },
-    {
       "name": "redeemFees",
       "accounts": [
         {
           "name": "reserve",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "reserveLiquidityMint",
           "isMut": true,
           "isSigner": false
         },
@@ -383,6 +348,11 @@
         {
           "name": "reserve",
           "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "reserveLiquidityMint",
+          "isMut": true,
           "isSigner": false
         },
         {
@@ -477,6 +447,11 @@
           "isSigner": false
         },
         {
+          "name": "reserveLiquidityMint",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "reserveLiquiditySupply",
           "isMut": true,
           "isSigner": false
@@ -497,7 +472,12 @@
           "isSigner": false
         },
         {
-          "name": "tokenProgram",
+          "name": "collateralTokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "liquidityTokenProgram",
           "isMut": false,
           "isSigner": false
         },
@@ -538,6 +518,11 @@
           "isSigner": false
         },
         {
+          "name": "reserveLiquidityMint",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "reserveCollateralMint",
           "isMut": true,
           "isSigner": false
@@ -558,7 +543,12 @@
           "isSigner": false
         },
         {
-          "name": "tokenProgram",
+          "name": "collateralTokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "liquidityTokenProgram",
           "isMut": false,
           "isSigner": false
         },
@@ -615,11 +605,6 @@
         },
         {
           "name": "rent",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "tokenProgram",
           "isMut": false,
           "isSigner": false
         },
@@ -692,11 +677,6 @@
           "isSigner": false
         },
         {
-          "name": "tokenProgram",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "systemProgram",
           "isMut": false,
           "isSigner": false
@@ -754,11 +734,6 @@
         },
         {
           "name": "rent",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "tokenProgram",
           "isMut": false,
           "isSigner": false
         },
@@ -867,7 +842,7 @@
         },
         {
           "name": "withdrawReserve",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
@@ -923,6 +898,11 @@
         },
         {
           "name": "borrowReserve",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "borrowReserveLiquidityMint",
           "isMut": true,
           "isSigner": false
         },
@@ -989,6 +969,11 @@
           "isSigner": false
         },
         {
+          "name": "reserveLiquidityMint",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "reserveDestinationLiquidity",
           "isMut": true,
           "isSigner": false
@@ -1045,6 +1030,11 @@
           "isSigner": false
         },
         {
+          "name": "reserveLiquidityMint",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "reserveLiquiditySupply",
           "isMut": true,
           "isSigner": false
@@ -1071,7 +1061,12 @@
           "isOptional": true
         },
         {
-          "name": "tokenProgram",
+          "name": "collateralTokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "liquidityTokenProgram",
           "isMut": false,
           "isSigner": false
         },
@@ -1117,6 +1112,11 @@
           "isSigner": false
         },
         {
+          "name": "reserveLiquidityMint",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "reserveSourceCollateral",
           "isMut": true,
           "isSigner": false
@@ -1143,7 +1143,12 @@
           "isOptional": true
         },
         {
-          "name": "tokenProgram",
+          "name": "collateralTokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "liquidityTokenProgram",
           "isMut": false,
           "isSigner": false
         },
@@ -1189,12 +1194,22 @@
           "isSigner": false
         },
         {
+          "name": "repayReserveLiquidityMint",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "repayReserveLiquiditySupply",
           "isMut": true,
           "isSigner": false
         },
         {
           "name": "withdrawReserve",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "withdrawReserveLiquidityMint",
           "isMut": true,
           "isSigner": false
         },
@@ -1234,7 +1249,17 @@
           "isSigner": false
         },
         {
-          "name": "tokenProgram",
+          "name": "collateralTokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "repayLiquidityTokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "withdrawLiquidityTokenProgram",
           "isMut": false,
           "isSigner": false
         },
@@ -1250,7 +1275,7 @@
           "type": "u64"
         },
         {
-          "name": "minAcceptableReceivedCollateralAmount",
+          "name": "minAcceptableReceivedLiquidityAmount",
           "type": "u64"
         },
         {
@@ -1279,6 +1304,11 @@
         },
         {
           "name": "reserve",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "reserveLiquidityMint",
           "isMut": true,
           "isSigner": false
         },
@@ -1317,7 +1347,10 @@
         {
           "name": "tokenProgram",
           "isMut": false,
-          "isSigner": false
+          "isSigner": false,
+          "docs": [
+            "flash loans on token_22 tokens are currently purposefully disabled"
+          ]
         }
       ],
       "args": [
@@ -1351,6 +1384,11 @@
         },
         {
           "name": "reserve",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "reserveLiquidityMint",
           "isMut": true,
           "isSigner": false
         },
@@ -1389,7 +1427,10 @@
         {
           "name": "tokenProgram",
           "isMut": false,
-          "isSigner": false
+          "isSigner": false,
+          "docs": [
+            "flash loans on token_22 tokens are currently purposefully disabled"
+          ]
         }
       ],
       "args": [
@@ -1523,6 +1564,11 @@
         },
         {
           "name": "reserve",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "reserveLiquidityMint",
           "isMut": true,
           "isSigner": false
         },
@@ -1891,9 +1937,6 @@
           },
           {
             "name": "borrowDisabled",
-            "docs": [
-              "Padding used for alignment"
-            ],
             "type": "u8"
           },
           {
@@ -1997,11 +2040,15 @@
             "type": "u128"
           },
           {
+            "name": "minValueSkipLiquidationLtvBfChecks",
+            "type": "u64"
+          },
+          {
             "name": "padding1",
             "type": {
               "array": [
                 "u64",
-                178
+                177
               ]
             }
           }
@@ -2062,7 +2109,7 @@
             }
           },
           {
-            "name": "lowestReserveDepositLtv",
+            "name": "lowestReserveDepositLiquidationLtv",
             "docs": [
               "Worst LTV for the collaterals backing the loan, represented as a percentage"
             ],
@@ -2186,11 +2233,15 @@
             }
           },
           {
+            "name": "highestBorrowFactorPct",
+            "type": "u64"
+          },
+          {
             "name": "padding3",
             "type": {
               "array": [
                 "u64",
-                127
+                126
               ]
             }
           }
@@ -2427,7 +2478,24 @@
             "type": {
               "array": [
                 "u64",
-                150
+                117
+              ]
+            }
+          },
+          {
+            "name": "borrowedAmountOutsideElevationGroup",
+            "type": "u64"
+          },
+          {
+            "name": "borrowedAmountsAgainstThisReserveInElevationGroups",
+            "docs": [
+              "Amount of token borrowed in lamport of debt asset in the given",
+              "elevation group when this reserve is part of the collaterals."
+            ],
+            "type": {
+              "array": [
+                "u64",
+                32
               ]
             }
           },
@@ -2436,7 +2504,7 @@
             "type": {
               "array": [
                 "u64",
-                240
+                207
               ]
             }
           }
@@ -2581,6 +2649,15 @@
           },
           {
             "name": "UpdateBlockPriceUsage"
+          },
+          {
+            "name": "UpdateBorrowLimitOutsideElevationGroup"
+          },
+          {
+            "name": "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"
+          },
+          {
+            "name": "UpdateHostFixedInterestRateBps"
           }
         ]
       }
@@ -2700,6 +2777,9 @@
           },
           {
             "name": "UpdateMinNetValueObligationPostAction"
+          },
+          {
+            "name": "UpdateMinValueSkipPriorityLiqCheck"
           }
         ]
       }
@@ -2771,20 +2851,26 @@
             "type": "u8"
           },
           {
-            "name": "reserved",
-            "type": {
-              "array": [
-                "u8",
-                2
-              ]
-            }
+            "name": "maxReservesAsCollateral",
+            "type": "u8"
           },
           {
-            "name": "padding",
+            "name": "padding0",
+            "type": "u8"
+          },
+          {
+            "name": "debtReserve",
+            "docs": [
+              "Mandatory debt reserve for this elevation group"
+            ],
+            "type": "publicKey"
+          },
+          {
+            "name": "padding1",
             "type": {
               "array": [
                 "u64",
-                8
+                4
               ]
             }
           }
@@ -2837,11 +2923,21 @@
             "type": "u128"
           },
           {
+            "name": "borrowedAmountAgainstThisCollateralInElevationGroup",
+            "docs": [
+              "Debt amount (lamport) taken against this collateral.",
+              "(only meaningful if this obligation is part of an elevation group, otherwise 0)",
+              "This is only indicative of the debt computed on the last refresh obligation.",
+              "If the obligation have multiple collateral this value is the same for all of them."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "padding",
             "type": {
               "array": [
                 "u64",
-                10
+                9
               ]
             }
           }
@@ -2898,11 +2994,18 @@
             "type": "u128"
           },
           {
+            "name": "borrowedAmountOutsideElevationGroups",
+            "docs": [
+              "Amount of liquidity borrowed outside of an elevation group"
+            ],
+            "type": "u64"
+          },
+          {
             "name": "padding2",
             "type": {
               "array": [
                 "u64",
-                8
+                7
               ]
             }
           }
@@ -3042,13 +3145,11 @@
             "type": "u8"
           },
           {
-            "name": "reserved0",
-            "type": {
-              "array": [
-                "u8",
-                2
-              ]
-            }
+            "name": "hostFixedInterestRateBps",
+            "docs": [
+              "Flat rate that goes to the host"
+            ],
+            "type": "u16"
           },
           {
             "name": "multiplierSideBoost",
@@ -3228,6 +3329,30 @@
               "array": [
                 "u8",
                 2
+              ]
+            }
+          },
+          {
+            "name": "borrowLimitOutsideElevationGroup",
+            "docs": [
+              "Maximum amount liquidity of this reserve borrowed outside all elevation groups",
+              "- u64::MAX for inf",
+              "- 0 to disable borrows outside elevation groups"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "borrowLimitAgainstThisCollateralInElevationGroup",
+            "docs": [
+              "Defines the maximum amount (in lamports of elevation group debt asset)",
+              "that can be borrowed when this reserve is used as collateral.",
+              "- u64::MAX for inf",
+              "- 0 to disable borrows in this elevation group (expected value for the debt asset)"
+            ],
+            "type": {
+              "array": [
+                "u64",
+                32
               ]
             }
           }
@@ -3413,11 +3538,18 @@
             "type": "u128"
           },
           {
+            "name": "tokenProgram",
+            "docs": [
+              "Token program of the liquidity mint"
+            ],
+            "type": "publicKey"
+          },
+          {
             "name": "padding2",
             "type": {
               "array": [
                 "u64",
-                55
+                51
               ]
             }
           },
@@ -4041,8 +4173,8 @@
     },
     {
       "code": 6066,
-      "name": "LiquidationSlippageError",
-      "msg": "The reward amount is less than the minimum acceptable received collateral"
+      "name": "LiquidationRewardTooSmall",
+      "msg": "The reward amount is less than the minimum acceptable received liquidity"
     },
     {
       "code": 6067,
@@ -4203,6 +4335,56 @@
       "code": 6098,
       "name": "BorrowingAboveUtilizationRateDisabled",
       "msg": "Borrowing above set utilization rate is disabled"
+    },
+    {
+      "code": 6099,
+      "name": "LiquidationBorrowFactorPriority",
+      "msg": "Liquidation must prioritize the debt with the highest borrow factor"
+    },
+    {
+      "code": 6100,
+      "name": "LiquidationLowestLTVPriority",
+      "msg": "Liquidation must prioritize the collateral with the lowest LTV"
+    },
+    {
+      "code": 6101,
+      "name": "ElevationGroupBorrowLimitExceeded",
+      "msg": "Elevation group borrow limit exceeded"
+    },
+    {
+      "code": 6102,
+      "name": "ElevationGroupWithoutDebtReserve",
+      "msg": "The elevation group does not have a debt reserve defined"
+    },
+    {
+      "code": 6103,
+      "name": "ElevationGroupMaxCollateralReserveZero",
+      "msg": "The elevation group does not allow any collateral reserves"
+    },
+    {
+      "code": 6104,
+      "name": "ElevationGroupHasAnotherDebtReserve",
+      "msg": "In elevation group attempt to borrow from a reserve that is not the debt reserve"
+    },
+    {
+      "code": 6105,
+      "name": "ElevationGroupDebtReserveAsCollateral",
+      "msg": "The elevation group's debt reserve cannot be used as a collateral reserve"
+    },
+    {
+      "code": 6106,
+      "name": "ObligationCollateralExceedsElevationGroupLimit",
+      "msg": "Obligation have more collateral than the maximum allowed by the elevation group"
+    },
+    {
+      "code": 6107,
+      "name": "ObligationElevationGroupMultipleDebtReserve",
+      "msg": "Obligation is an elevation group but have more than one debt reserve"
+    },
+    {
+      "code": 6108,
+      "name": "UnsupportedTokenExtension",
+      "msg": "Mint has a token (2022) extension that is not supported"
     }
   ]
 }

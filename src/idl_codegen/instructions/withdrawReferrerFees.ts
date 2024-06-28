@@ -8,6 +8,7 @@ export interface WithdrawReferrerFeesAccounts {
   referrer: PublicKey
   referrerTokenState: PublicKey
   reserve: PublicKey
+  reserveLiquidityMint: PublicKey
   reserveSupplyLiquidity: PublicKey
   referrerTokenAccount: PublicKey
   lendingMarket: PublicKey
@@ -23,6 +24,11 @@ export function withdrawReferrerFees(
     { pubkey: accounts.referrer, isSigner: true, isWritable: true },
     { pubkey: accounts.referrerTokenState, isSigner: false, isWritable: true },
     { pubkey: accounts.reserve, isSigner: false, isWritable: true },
+    {
+      pubkey: accounts.reserveLiquidityMint,
+      isSigner: false,
+      isWritable: true,
+    },
     {
       pubkey: accounts.reserveSupplyLiquidity,
       isSigner: false,

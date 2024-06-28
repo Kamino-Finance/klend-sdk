@@ -8,7 +8,7 @@ import BN from 'bn.js';
 import { Fraction } from './fraction';
 import { ObligationCollateral, ObligationLiquidity } from '../idl_codegen/types';
 import { positiveOrZero, valueOrZero } from './utils';
-import { isNotNullPubkey, PubkeyHashMap } from '../utils';
+import { isNotNullPubkey, PubkeyHashMap, U64_MAX } from '../utils';
 import { ActionType } from './action';
 
 export type Position = {
@@ -855,10 +855,15 @@ export class KaminoObligation {
     const reserveAvailableAmount = reserve.getLiquidityAvailableAmount();
     let reserveBorrowCapRemained = reserve.stats.reserveBorrowLimit.sub(reserve.getBorrowedAmount());
 
-    reserveBorrowCapRemained =
-      reserve.state.config.disableUsageAsCollOutsideEmode === 1 && !elevationGroupActivated
-        ? new Decimal(0)
-        : reserveBorrowCapRemained;
+    this.deposits.forEach((deposit) => {
+      const depositReserve = market.getReserveByAddress(deposit.reserveAddress);
+      if (!depositReserve) {
+        throw new Error('Reserve not found');
+      }
+      if (depositReserve.state.config.disableUsageAsCollOutsideEmode && !elevationGroupActivated) {
+        reserveBorrowCapRemained = new Decimal(0);
+      }
+    });
 
     let maxBorrowAmount = Decimal.min(maxObligationBorrowPower, reserveAvailableAmount, reserveBorrowCapRemained);
 
@@ -886,6 +891,35 @@ export class KaminoObligation {
       );
       maxBorrowAmount = Decimal.min(maxBorrowAmount, maxBorrowBasedOnUtilization);
     }
+
+    let borrowLimitDependentOnElevationGroup = new Decimal(U64_MAX);
+
+    if (!elevationGroupActivated) {
+      borrowLimitDependentOnElevationGroup = reserve
+        .getBorrowLimitOutsideElevationGroup()
+        .sub(reserve.getBorrowedAmountOutsideElevationGroup());
+    } else {
+      let maxDebtTakenAgainstCollaterals = new Decimal(U64_MAX);
+      for (const [_, value] of this.deposits.entries()) {
+        const depositReserve = market.getReserveByAddress(value.reserveAddress);
+
+        if (!depositReserve) {
+          throw new Error('Reserve not found');
+        }
+
+        const maxDebtAllowedAgainstCollateral = depositReserve
+          .getBorrowLimitAgainstCollateralInElevationGroup(this.state.elevationGroup - 1)
+          .sub(depositReserve.getBorrowedAmountAgainstCollateralInElevationGroup(this.state.elevationGroup - 1));
+
+        maxDebtTakenAgainstCollaterals = Decimal.max(
+          new Decimal(0),
+          Decimal.min(maxDebtAllowedAgainstCollateral, maxDebtTakenAgainstCollaterals)
+        );
+      }
+      borrowLimitDependentOnElevationGroup = maxDebtTakenAgainstCollaterals;
+    }
+
+    maxBorrowAmount = Decimal.min(maxBorrowAmount, borrowLimitDependentOnElevationGroup);
 
     return Decimal.max(new Decimal(0), maxBorrowAmount);
   }
@@ -915,7 +949,6 @@ export class KaminoObligation {
     const reserveMaxLtv = elevationGroupActivated
       ? market.getElevationGroup(this.state.elevationGroup).ltvPct / 100
       : reserve.stats.loanToValuePct;
-
     // bf adjusted debt value > allowed_borrow_value
     if (this.refreshedStats.userTotalBorrowBorrowFactorAdjusted >= this.refreshedStats.borrowLimit) {
       return new Decimal(0);

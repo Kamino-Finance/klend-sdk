@@ -22,7 +22,6 @@ export interface LendingMarketFields {
   referralFeeBps: number
   emergencyMode: number
   autodeleverageEnabled: number
-  /** Padding used for alignment */
   borrowDisabled: number
   /**
    * Refresh price from oracle only if it's older than this percentage of the price max age.
@@ -51,6 +50,7 @@ export interface LendingMarketFields {
   elevationGroupPadding: Array<BN>
   /** Min net value accepted to be found in a position after any lending action in an obligation (scaled by quote currency decimals) */
   minNetValueInObligationSf: BN
+  minValueSkipLiquidationLtvBfChecks: BN
   padding1: Array<BN>
 }
 
@@ -72,7 +72,6 @@ export interface LendingMarketJSON {
   referralFeeBps: number
   emergencyMode: number
   autodeleverageEnabled: number
-  /** Padding used for alignment */
   borrowDisabled: number
   /**
    * Refresh price from oracle only if it's older than this percentage of the price max age.
@@ -101,6 +100,7 @@ export interface LendingMarketJSON {
   elevationGroupPadding: Array<string>
   /** Min net value accepted to be found in a position after any lending action in an obligation (scaled by quote currency decimals) */
   minNetValueInObligationSf: string
+  minValueSkipLiquidationLtvBfChecks: string
   padding1: Array<string>
 }
 
@@ -122,7 +122,6 @@ export class LendingMarket {
   readonly referralFeeBps: number
   readonly emergencyMode: number
   readonly autodeleverageEnabled: number
-  /** Padding used for alignment */
   readonly borrowDisabled: number
   /**
    * Refresh price from oracle only if it's older than this percentage of the price max age.
@@ -151,6 +150,7 @@ export class LendingMarket {
   readonly elevationGroupPadding: Array<BN>
   /** Min net value accepted to be found in a position after any lending action in an obligation (scaled by quote currency decimals) */
   readonly minNetValueInObligationSf: BN
+  readonly minValueSkipLiquidationLtvBfChecks: BN
   readonly padding1: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -179,7 +179,8 @@ export class LendingMarket {
     borsh.array(types.ElevationGroup.layout(), 32, "elevationGroups"),
     borsh.array(borsh.u64(), 90, "elevationGroupPadding"),
     borsh.u128("minNetValueInObligationSf"),
-    borsh.array(borsh.u64(), 178, "padding1"),
+    borsh.u64("minValueSkipLiquidationLtvBfChecks"),
+    borsh.array(borsh.u64(), 177, "padding1"),
   ])
 
   constructor(fields: LendingMarketFields) {
@@ -209,6 +210,8 @@ export class LendingMarket {
     )
     this.elevationGroupPadding = fields.elevationGroupPadding
     this.minNetValueInObligationSf = fields.minNetValueInObligationSf
+    this.minValueSkipLiquidationLtvBfChecks =
+      fields.minValueSkipLiquidationLtvBfChecks
     this.padding1 = fields.padding1
   }
 
@@ -282,6 +285,8 @@ export class LendingMarket {
       ),
       elevationGroupPadding: dec.elevationGroupPadding,
       minNetValueInObligationSf: dec.minNetValueInObligationSf,
+      minValueSkipLiquidationLtvBfChecks:
+        dec.minValueSkipLiquidationLtvBfChecks,
       padding1: dec.padding1,
     })
   }
@@ -313,6 +318,8 @@ export class LendingMarket {
         item.toString()
       ),
       minNetValueInObligationSf: this.minNetValueInObligationSf.toString(),
+      minValueSkipLiquidationLtvBfChecks:
+        this.minValueSkipLiquidationLtvBfChecks.toString(),
       padding1: this.padding1.map((item) => item.toString()),
     }
   }
@@ -348,6 +355,9 @@ export class LendingMarket {
         (item) => new BN(item)
       ),
       minNetValueInObligationSf: new BN(obj.minNetValueInObligationSf),
+      minValueSkipLiquidationLtvBfChecks: new BN(
+        obj.minValueSkipLiquidationLtvBfChecks
+      ),
       padding1: obj.padding1.map((item) => new BN(item)),
     })
   }

@@ -1,19 +1,12 @@
 import { TextEncoder } from 'util';
-import {
-  Connection,
-  Keypair,
-  PublicKey,
-  sendAndConfirmTransaction,
-  Transaction,
-  TransactionInstruction,
-} from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, sendAndConfirmTransaction, Transaction } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 import {
   StrategyConfigOptionKind,
   UpdateCollateralInfoModeKind,
 } from '@hubbleprotocol/kamino-sdk/dist/kamino-client/types';
 import * as KaminoInstructions from '@hubbleprotocol/kamino-sdk/dist/kamino-client/instructions';
-import { Token } from '@solana/spl-token';
+import { getMint } from '@solana/spl-token';
 
 import Decimal from 'decimal.js';
 import {
@@ -101,22 +94,6 @@ export function orderMints(mintX: PublicKey, mintY: PublicKey): [PublicKey, Publ
   }
 
   return [mintA, mintB];
-}
-
-export function getMintToIx(
-  signer: PublicKey,
-  mintPubkey: PublicKey,
-  tokenAccount: PublicKey,
-  amount: number
-): TransactionInstruction {
-  return Token.createMintToInstruction(
-    TOKEN_PROGRAM_ID, // always TOKEN_PROGRAM_ID
-    mintPubkey, // mint
-    tokenAccount, // receiver (sholud be a token account)
-    signer, // mint authority
-    [], // only multisig account will use. leave it empty now.
-    amount // amount. if your decimals is 8, you mint 10^8 for 1 token.
-  );
 }
 
 export type DeployedPool = {
@@ -268,5 +245,5 @@ export function getKTokenSymbols(symbol: string): [Dex, string, string] {
 export type AssetQuantityTuple = [string, string];
 
 export async function getMintDecimals(env: Env, mint: PublicKey): Promise<number> {
-  return (await new Token(env.provider.connection, mint, TOKEN_PROGRAM_ID, env.admin).getMintInfo()).decimals;
+  return (await getMint(env.provider.connection, mint, env.provider.connection.commitment, TOKEN_PROGRAM_ID)).decimals;
 }
