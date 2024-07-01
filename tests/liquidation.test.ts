@@ -65,7 +65,7 @@ describe('liquidation', function () {
       undefined,
       PublicKey.default
     );
-    await sendTransactionsFromAction(env, liquidateAction, [liquidator]);
+    await sendTransactionsFromAction(env, liquidateAction, liquidator, [liquidator]);
     await waitUntilMatches(async () => {
       const obligationState = (await kaminoMarket.getObligationByAddress(obligation.obligationAddress))!;
       // assert we liquidated some of the collateral
@@ -123,7 +123,7 @@ describe('liquidation', function () {
       undefined,
       PublicKey.default
     );
-    await sendTransactionsFromAction(env, liquidateAction, [liquidator]);
+    await sendTransactionsFromAction(env, liquidateAction, liquidator, [liquidator]);
     await waitUntilMatches(async () => {
       const obligationState = (await kaminoMarket.getObligationByAddress(obligation.obligationAddress))!;
       // assert we liquidated some of the collateral
@@ -180,7 +180,7 @@ describe('liquidation', function () {
       undefined,
       PublicKey.default
     );
-    await sendTransactionsFromAction(env, liquidateAction, [liquidator]);
+    await sendTransactionsFromAction(env, liquidateAction, liquidator, [liquidator]);
     await waitUntilMatches(async () => {
       const obligationState = (await kaminoMarket.getObligationByAddress(obligation.obligationAddress))!;
       // assert we liquidated some of the collateral
@@ -238,7 +238,7 @@ describe('liquidation', function () {
       undefined,
       PublicKey.default
     );
-    await sendTransactionsFromAction(env, liquidateAction, [liquidator]);
+    await sendTransactionsFromAction(env, liquidateAction, liquidator, [liquidator]);
     await waitUntilMatches(async () => {
       const obligationState = (await kaminoMarket.getObligationByAddress(obligation.obligationAddress))!;
       // assert we liquidated some of the collateral
@@ -296,7 +296,7 @@ describe('liquidation', function () {
       undefined,
       PublicKey.default
     );
-    await sendTransactionsFromAction(env, liquidateAction, [liquidator]);
+    await sendTransactionsFromAction(env, liquidateAction, liquidator, [liquidator]);
     await waitUntilMatches(async () => {
       const obligationState = (await kaminoMarket.getObligationByAddress(obligation.obligationAddress))!;
       // assert we liquidated some of the collateral

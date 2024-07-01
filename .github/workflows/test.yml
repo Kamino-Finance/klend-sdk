@@ -8,7 +8,7 @@ on:
       - master
 
 env:
-  solana_version: 'v1.16.21'
+  solana_version: 'v1.17.18'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -76,6 +76,7 @@ jobs:
           npx ts-mocha tests/obligation.test.ts --exit
           npx ts-mocha tests/referrals.test.ts --exit
           npx ts-mocha tests/reserve.test.ts --exit
+          npx ts-mocha tests/oracle.test.ts --exit
 
   tests-leverage:
     name: Tests Leverage

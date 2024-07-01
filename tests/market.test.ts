@@ -1163,7 +1163,7 @@ describe('Main lending market instruction tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, kaminoDepositUsdhAction, [depositor], []);
+    await sendTransactionsFromAction(env, kaminoDepositUsdhAction, depositor, [depositor], []);
 
     const currentSlot = await kaminoMarket.getConnection().getSlot();
 
@@ -1279,7 +1279,7 @@ describe('Main lending market instruction tests', function () {
         new VanillaObligation(PROGRAM_ID)
       );
 
-      await sendTransactionsFromAction(env, borrowAction, [depositor], []);
+      await sendTransactionsFromAction(env, borrowAction, depositor, [depositor], []);
 
       await kaminoMarket.reload();
       obligation = await kaminoMarket.getObligationByWallet(depositor.publicKey, new VanillaObligation(PROGRAM_ID));
@@ -1411,7 +1411,7 @@ describe('Main lending market instruction tests', function () {
         1
       );
 
-      await sendTransactionsFromAction(env, kaminoRequestElevationAction, [depositor], []);
+      await sendTransactionsFromAction(env, kaminoRequestElevationAction, depositor, [depositor], []);
 
       await sleep(2000);
       await kaminoMarket.reload();
@@ -1638,7 +1638,7 @@ describe('Main lending market instruction tests', function () {
         new VanillaObligation(PROGRAM_ID)
       );
 
-      await sendTransactionsFromAction(env, kaminoWithdrawAction, [depositor], []);
+      await sendTransactionsFromAction(env, kaminoWithdrawAction, depositor, [depositor], []);
     }
 
     {
@@ -1663,7 +1663,7 @@ describe('Main lending market instruction tests', function () {
         1
       );
 
-      await sendTransactionsFromAction(env, kaminoRequestElevationAction, [depositor], []);
+      await sendTransactionsFromAction(env, kaminoRequestElevationAction, depositor, [depositor], []);
 
       await kaminoMarket.reload();
       obligation = await kaminoMarket.getObligationByWallet(depositor.publicKey, new VanillaObligation(PROGRAM_ID));
@@ -1678,7 +1678,7 @@ describe('Main lending market instruction tests', function () {
         new VanillaObligation(PROGRAM_ID)
       );
 
-      await sendTransactionsFromAction(env, kaminoWithdrawAction, [depositor], []);
+      await sendTransactionsFromAction(env, kaminoWithdrawAction, depositor, [depositor], []);
     }
   });
 
@@ -1749,7 +1749,7 @@ describe('Main lending market instruction tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, kaminoDepositUsdhAction, [depositor], []);
+    await sendTransactionsFromAction(env, kaminoDepositUsdhAction, depositor, [depositor], []);
   });
 
   it.skip('fetches_all_obligations_from_the_lending_market', async function () {
