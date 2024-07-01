@@ -314,20 +314,16 @@ export class KaminoAction {
 
     // Union of addresses
     const distinctReserveCount =
-      [
-        ...new Set([
-          ...borrowReserves.map((e) => e.toBase58()),
-          ...(action === 'borrow' ? [reserve.toBase58()] : []),
-          ...(action === 'depositAndBorrow' ? [reserve.toBase58()] : []),
-        ]),
-      ].length +
-      [
-        ...new Set([
-          ...depositReserves.map((e) => e.toBase58()),
-          ...(action === 'deposit' ? [reserve.toBase58()] : []),
-          ...(action === 'depositAndBorrow' ? [outflowReserve!.toBase58()] : []),
-        ]),
-      ].length;
+      new PublicKeySet<PublicKey>([
+        ...borrowReserves.map((e) => e),
+        ...(action === 'borrow' ? [reserve] : []),
+        ...(action === 'depositAndBorrow' ? [reserve] : []),
+      ]).toArray().length +
+      new PublicKeySet<PublicKey>([
+        ...depositReserves.map((e) => e),
+        ...(action === 'deposit' ? [reserve] : []),
+        ...(action === 'depositAndBorrow' ? [outflowReserve!] : []),
+      ]).toArray().length;
 
     if (distinctReserveCount > POSITION_LIMIT) {
       throw Error(`Obligation already has max number of positions: ${POSITION_LIMIT}`);
@@ -438,7 +434,11 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new Array(...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address]));
+    const allReserves = new PublicKeySet<PublicKey>([
+      ...axn.depositReserves,
+      ...axn.borrowReserves,
+      axn.reserve.address,
+    ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
@@ -524,7 +524,11 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new Array(...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address]));
+    const allReserves = new PublicKeySet<PublicKey>([
+      ...axn.depositReserves,
+      ...axn.borrowReserves,
+      axn.reserve.address,
+    ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
@@ -574,7 +578,11 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new Array(...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address]));
+    const allReserves = new PublicKeySet<PublicKey>([
+      ...axn.depositReserves,
+      ...axn.borrowReserves,
+      axn.reserve.address,
+    ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
@@ -623,7 +631,11 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new Array(...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address]));
+    const allReserves = new PublicKeySet<PublicKey>([
+      ...axn.depositReserves,
+      ...axn.borrowReserves,
+      axn.reserve.address,
+    ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
@@ -672,7 +684,11 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new Array(...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address]));
+    const allReserves = new PublicKeySet<PublicKey>([
+      ...axn.depositReserves,
+      ...axn.borrowReserves,
+      axn.reserve.address,
+    ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
@@ -728,9 +744,12 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new Array(
-      ...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address, axn.outflowReserve!.address])
-    );
+    const allReserves = new PublicKeySet<PublicKey>([
+      ...axn.depositReserves,
+      ...axn.borrowReserves,
+      axn.reserve.address,
+      axn.outflowReserve!.address,
+    ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
@@ -793,9 +812,12 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new Array(
-      ...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address, axn.outflowReserve!.address])
-    );
+    const allReserves = new PublicKeySet<PublicKey>([
+      ...axn.depositReserves,
+      ...axn.borrowReserves,
+      axn.reserve.address,
+      axn.outflowReserve!.address,
+    ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
@@ -852,7 +874,11 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new Array(...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address]));
+    const allReserves = new PublicKeySet<PublicKey>([
+      ...axn.depositReserves,
+      ...axn.borrowReserves,
+      axn.reserve.address,
+    ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
@@ -919,7 +945,11 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new Array(...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address]));
+    const allReserves = new PublicKeySet<PublicKey>([
+      ...axn.depositReserves,
+      ...axn.borrowReserves,
+      axn.reserve.address,
+    ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
@@ -976,9 +1006,12 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new Array(
-      ...new Set([...axn.depositReserves, ...axn.borrowReserves, axn.reserve.address, axn.outflowReserve!.address])
-    );
+    const allReserves = new PublicKeySet<PublicKey>([
+      ...axn.depositReserves,
+      ...axn.borrowReserves,
+      axn.reserve.address,
+      axn.outflowReserve!.address,
+    ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
     if (tokenIds.length > 0) {
@@ -2248,21 +2281,22 @@ export class KaminoAction {
       return;
     }
 
-    const reserves = reservesArr.length !== 0 ? reservesArr : [...new Set([this.reserve, this.outflowReserve])];
+    const outflowReserve = this.outflowReserve?.address ? [this.outflowReserve.address] : [];
+
+    const reserves =
+      reservesArr.length !== 0
+        ? reservesArr.map((reserve) => reserve.address)
+        : new PublicKeySet<PublicKey>([this.reserve.address, ...outflowReserve]).toArray();
     const tokenStatesToCreate: [PublicKey, PublicKey][] = [];
     for (const reserve of reserves) {
       if (!reserve) {
         continue;
       }
 
-      const referrerTokenStateAddress = referrerTokenStatePda(
-        this.referrer,
-        reserve.address,
-        this.kaminoMarket.programId
-      )[0];
+      const referrerTokenStateAddress = referrerTokenStatePda(this.referrer, reserve, this.kaminoMarket.programId)[0];
 
       if (!(await checkIfAccountExists(this.kaminoMarket.getConnection(), referrerTokenStateAddress))) {
-        tokenStatesToCreate.push([referrerTokenStateAddress, reserve?.address]);
+        tokenStatesToCreate.push([referrerTokenStateAddress, reserve]);
       }
     }
 
