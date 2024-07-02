@@ -242,12 +242,7 @@ export class KaminoAction {
     const { kaminoObligation, depositReserves, borrowReserves, distinctReserveCount } =
       await KaminoAction.loadObligation(action, kaminoMarket, owner, reserve.address, obligation);
 
-    const [_, userMetadata] = await kaminoMarket.getUserMetadata(owner);
-    if (userMetadata) {
-      referrer = userMetadata.referrer;
-    }
-
-    const referrerKey = kaminoObligation ? kaminoObligation.state.referrer : referrer;
+    const referrerKey = await this.getReferrerKey(kaminoMarket, owner, kaminoObligation, referrer);
 
     return new KaminoAction(
       kaminoMarket,
@@ -366,7 +361,7 @@ export class KaminoAction {
       obligation.state.owner,
       kaminoMarket,
       obligation,
-      kaminoMarket.programId,
+      undefined,
       currentSlot
     );
 
@@ -399,7 +394,7 @@ export class KaminoAction {
       obligation.state.owner,
       kaminoMarket,
       obligation,
-      kaminoMarket.programId,
+      undefined,
       currentSlot
     );
 
@@ -2493,13 +2488,7 @@ export class KaminoAction {
         obligation,
         outflowReserve.address
       );
-
-    const [_, userMetadata] = await kaminoMarket.getUserMetadata(payer);
-    if (userMetadata) {
-      referrer = userMetadata.referrer;
-    }
-
-    const referrerKey = kaminoObligation ? kaminoObligation.state.referrer : referrer;
+    const referrerKey = await this.getReferrerKey(kaminoMarket, payer, kaminoObligation, referrer);
 
     let userTokenAccountAddress: PublicKey;
     let userCollateralAccountAddress: PublicKey;
@@ -2620,5 +2609,25 @@ export class KaminoAction {
     }
 
     return depositReservesList;
+  }
+
+  private static async getReferrerKey(
+    kaminoMarket: KaminoMarket,
+    owner: PublicKey,
+    kaminoObligation: KaminoObligation | null,
+    referrer: PublicKey
+  ) {
+    let referrerKey = referrer;
+    if (!referrer || referrer.equals(PublicKey.default)) {
+      if (kaminoObligation === null) {
+        const [_, userMetadata] = await kaminoMarket.getUserMetadata(owner);
+        if (userMetadata) {
+          referrerKey = userMetadata.referrer;
+        }
+      } else {
+        referrerKey = kaminoObligation.state.referrer;
+      }
+    }
+    return referrerKey;
   }
 }
