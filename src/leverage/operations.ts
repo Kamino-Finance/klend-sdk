@@ -380,13 +380,25 @@ export const getDepositWithLeverageIxns = async (props: {
 
   // // 1. Create atas & budget txns
   let mintsToCreateAtas: PublicKey[] = [];
+  let mintsToCreateAtasTokenPrograms: PublicKey[] = [];
   if (collIsKtoken) {
     const secondTokenAta = strategy!.strategy.tokenAMint.equals(debtTokenMint)
       ? strategy!.strategy.tokenBMint!
       : strategy!.strategy.tokenAMint!;
     mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint(), secondTokenAta];
+    mintsToCreateAtasTokenPrograms = [
+      collReserve?.getLiquidityTokenProgram()!,
+      debtReserve?.getLiquidityTokenProgram()!,
+      TOKEN_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
+    ];
   } else {
     mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint()];
+    mintsToCreateAtasTokenPrograms = [
+      collReserve?.getLiquidityTokenProgram()!,
+      debtReserve?.getLiquidityTokenProgram()!,
+      TOKEN_PROGRAM_ID,
+    ];
   }
 
   const budgetIxns = budgetAndPriorityFeeIxns || getComputeBudgetAndPriorityFeeIxns(3000000);
@@ -394,7 +406,7 @@ export const getDepositWithLeverageIxns = async (props: {
     atas: [collTokenAta, debtTokenAta],
     createAtasIxns,
     closeAtasIxns,
-  } = await getAtasWithCreateIxnsIfMissing(connection, user, mintsToCreateAtas);
+  } = await getAtasWithCreateIxnsIfMissing(connection, user, mintsToCreateAtas, mintsToCreateAtasTokenPrograms);
 
   // TODO: this needs to work the other way around also
   // TODO: marius test this with shorting leverage and with leverage looping
@@ -808,20 +820,32 @@ export const getWithdrawWithLeverageIxns = async (props: {
   console.log('Expecting to swap', collTokenSwapIn.toString(), 'coll for', debtTokenExpectedSwapOut.toString(), 'debt');
   // 1. Create atas & budget txns & user metadata
   let mintsToCreateAtas: PublicKey[] = [];
+  let mintsToCreateAtasTokenPrograms: PublicKey[] = [];
   if (collIsKtoken) {
     const secondTokenAta = strategy?.strategy.tokenAMint.equals(debtTokenMint)
       ? strategy?.strategy.tokenBMint!
       : strategy?.strategy.tokenAMint!;
     mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint(), secondTokenAta];
+    mintsToCreateAtasTokenPrograms = [
+      collReserve?.getLiquidityTokenProgram()!,
+      debtReserve?.getLiquidityTokenProgram()!,
+      TOKEN_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
+    ];
   } else {
     mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint()];
+    mintsToCreateAtasTokenPrograms = [
+      collReserve?.getLiquidityTokenProgram()!,
+      debtReserve?.getLiquidityTokenProgram()!,
+      TOKEN_PROGRAM_ID,
+    ];
   }
 
   const {
     atas: [, debtTokenAta],
     createAtasIxns,
     closeAtasIxns,
-  } = await getAtasWithCreateIxnsIfMissing(connection, user, mintsToCreateAtas);
+  } = await getAtasWithCreateIxnsIfMissing(connection, user, mintsToCreateAtas, mintsToCreateAtasTokenPrograms);
 
   const closeWsolAtaIxns: TransactionInstruction[] = [];
   if (depositTokenIsSol || debtTokenMint.equals(WRAPPED_SOL_MINT)) {
@@ -1254,20 +1278,32 @@ export const getIncreaseLeverageIxns = async (props: {
   // 1. Create atas & budget txns
   const budgetIxns = budgetAndPriorityFeeIxns || getComputeBudgetAndPriorityFeeIxns(3000000);
   let mintsToCreateAtas: PublicKey[] = [];
+  let mintsToCreateAtasTokenPrograms: PublicKey[] = [];
   if (collIsKtoken) {
     const secondTokenAta = strategy?.strategy.tokenAMint.equals(debtTokenMint)
       ? strategy?.strategy.tokenBMint!
       : strategy?.strategy.tokenAMint!;
     mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint(), secondTokenAta];
+    mintsToCreateAtasTokenPrograms = [
+      collReserve?.getLiquidityTokenProgram()!,
+      debtReserve?.getLiquidityTokenProgram()!,
+      TOKEN_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
+    ];
   } else {
     mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint()];
+    mintsToCreateAtasTokenPrograms = [
+      collReserve?.getLiquidityTokenProgram()!,
+      debtReserve?.getLiquidityTokenProgram()!,
+      TOKEN_PROGRAM_ID,
+    ];
   }
 
   const {
     atas: [collTokenAta, debtTokenAta],
     createAtasIxns,
     closeAtasIxns,
-  } = await getAtasWithCreateIxnsIfMissing(connection, user, mintsToCreateAtas);
+  } = await getAtasWithCreateIxnsIfMissing(connection, user, mintsToCreateAtas, mintsToCreateAtasTokenPrograms);
 
   // 2. Create borrow flash loan instruction
 
@@ -1521,19 +1557,31 @@ export const getDecreaseLeverageIxns = async (props: {
   // 1. Create atas & budget txns
   const budgetIxns = budgetAndPriorityFeeIxns || getComputeBudgetAndPriorityFeeIxns(3000000);
   let mintsToCreateAtas: PublicKey[] = [];
+  let mintsToCreateAtasTokenPrograms: PublicKey[] = [];
   if (collIsKtoken) {
     const secondTokenAta = strategy?.strategy.tokenAMint.equals(debtTokenMint)
       ? strategy?.strategy.tokenBMint!
       : strategy?.strategy.tokenAMint!;
     mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint(), secondTokenAta];
+    mintsToCreateAtasTokenPrograms = [
+      collReserve?.getLiquidityTokenProgram()!,
+      debtReserve?.getLiquidityTokenProgram()!,
+      TOKEN_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
+    ];
   } else {
     mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint()];
+    mintsToCreateAtasTokenPrograms = [
+      collReserve?.getLiquidityTokenProgram()!,
+      debtReserve?.getLiquidityTokenProgram()!,
+      TOKEN_PROGRAM_ID,
+    ];
   }
   const {
     atas: [, debtTokenAta],
     createAtasIxns,
     closeAtasIxns,
-  } = await getAtasWithCreateIxnsIfMissing(connection, user, mintsToCreateAtas);
+  } = await getAtasWithCreateIxnsIfMissing(connection, user, mintsToCreateAtas, mintsToCreateAtasTokenPrograms);
 
   // TODO: Mihai/Marius check if we can improve this logic and not convert any SOL
   // This is here so that we have enough wsol to repay in case the kAB swapped to sol after estimates is not enough
