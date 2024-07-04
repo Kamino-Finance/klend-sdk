@@ -321,7 +321,7 @@ export const getDepositWithLeverageIxns = async (props: {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
   const solTokenReserve = kaminoMarket.getReserveByMint(WRAPPED_SOL_MINT);
-  const flashLoanFee = collReserve?.getFlashLoanFee() || new Decimal(0);
+  const flashLoanFee = collReserve!.getFlashLoanFee() || new Decimal(0);
 
   const selectedTokenIsCollToken = selectedTokenMint.equals(collTokenMint);
   const depositTokenIsSol = !solTokenReserve ? false : selectedTokenMint.equals(solTokenReserve!.getLiquidityMint());
@@ -383,20 +383,27 @@ export const getDepositWithLeverageIxns = async (props: {
   let mintsToCreateAtasTokenPrograms: PublicKey[] = [];
   if (collIsKtoken) {
     const secondTokenAta = strategy!.strategy.tokenAMint.equals(debtTokenMint)
-      ? strategy!.strategy.tokenBMint!
-      : strategy!.strategy.tokenAMint!;
+      ? strategy!.strategy.tokenBMint
+      : strategy!.strategy.tokenAMint;
+    const secondTokenTokenProgarm = strategy?.strategy.tokenAMint.equals(debtTokenMint)
+      ? strategy!.strategy.tokenBTokenProgram.equals(PublicKey.default)
+        ? TOKEN_PROGRAM_ID
+        : strategy!.strategy.tokenBTokenProgram
+      : strategy!.strategy.tokenATokenProgram.equals(PublicKey.default)
+      ? TOKEN_PROGRAM_ID
+      : strategy!.strategy.tokenATokenProgram;
     mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint(), secondTokenAta];
     mintsToCreateAtasTokenPrograms = [
-      collReserve?.getLiquidityTokenProgram()!,
-      debtReserve?.getLiquidityTokenProgram()!,
+      collReserve!.getLiquidityTokenProgram(),
+      debtReserve!.getLiquidityTokenProgram(),
       TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
+      secondTokenTokenProgarm,
     ];
   } else {
     mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint()];
     mintsToCreateAtasTokenPrograms = [
-      collReserve?.getLiquidityTokenProgram()!,
-      debtReserve?.getLiquidityTokenProgram()!,
+      collReserve!.getLiquidityTokenProgram(),
+      debtReserve!.getLiquidityTokenProgram(),
       TOKEN_PROGRAM_ID,
     ];
   }
@@ -822,21 +829,28 @@ export const getWithdrawWithLeverageIxns = async (props: {
   let mintsToCreateAtas: PublicKey[] = [];
   let mintsToCreateAtasTokenPrograms: PublicKey[] = [];
   if (collIsKtoken) {
-    const secondTokenAta = strategy?.strategy.tokenAMint.equals(debtTokenMint)
-      ? strategy?.strategy.tokenBMint!
-      : strategy?.strategy.tokenAMint!;
+    const secondTokenAta = strategy!.strategy.tokenAMint.equals(debtTokenMint)
+      ? strategy!.strategy.tokenBMint
+      : strategy!.strategy.tokenAMint;
+    const secondTokenTokenProgarm = strategy?.strategy.tokenAMint.equals(debtTokenMint)
+      ? strategy!.strategy.tokenBTokenProgram.equals(PublicKey.default)
+        ? TOKEN_PROGRAM_ID
+        : strategy!.strategy.tokenBTokenProgram
+      : strategy!.strategy.tokenATokenProgram.equals(PublicKey.default)
+      ? TOKEN_PROGRAM_ID
+      : strategy!.strategy.tokenATokenProgram;
     mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint(), secondTokenAta];
     mintsToCreateAtasTokenPrograms = [
-      collReserve?.getLiquidityTokenProgram()!,
-      debtReserve?.getLiquidityTokenProgram()!,
+      collReserve!.getLiquidityTokenProgram(),
+      debtReserve!.getLiquidityTokenProgram(),
       TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
+      secondTokenTokenProgarm,
     ];
   } else {
     mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint()];
     mintsToCreateAtasTokenPrograms = [
-      collReserve?.getLiquidityTokenProgram()!,
-      debtReserve?.getLiquidityTokenProgram()!,
+      collReserve!.getLiquidityTokenProgram(),
+      debtReserve!.getLiquidityTokenProgram(),
       TOKEN_PROGRAM_ID,
     ];
   }
@@ -1130,9 +1144,9 @@ export const getAdjustLeverageIxns = async (props: {
 
   let flashLoanFee = new Decimal(0);
   if (isDepositViaLeverage) {
-    flashLoanFee = collReserve?.getFlashLoanFee() || new Decimal(0);
+    flashLoanFee = collReserve!.getFlashLoanFee() || new Decimal(0);
   } else {
-    flashLoanFee = debtReserve?.getFlashLoanFee() || new Decimal(0);
+    flashLoanFee = debtReserve!.getFlashLoanFee() || new Decimal(0);
   }
 
   const { adjustDepositPosition, adjustBorrowPosition } = calcAdjustAmounts({
@@ -1266,7 +1280,7 @@ export const getIncreaseLeverageIxns = async (props: {
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
   const collIsKtoken = await isKtoken(collTokenMint);
 
-  const flashLoanFee = collReserve?.getFlashLoanFee() || new Decimal(0);
+  const flashLoanFee = collReserve!.getFlashLoanFee() || new Decimal(0);
 
   if (!priceDebtToColl || !priceCollToDebt) {
     throw new Error('Price is not loaded. Please, reload the page and try again');
@@ -1280,21 +1294,28 @@ export const getIncreaseLeverageIxns = async (props: {
   let mintsToCreateAtas: PublicKey[] = [];
   let mintsToCreateAtasTokenPrograms: PublicKey[] = [];
   if (collIsKtoken) {
-    const secondTokenAta = strategy?.strategy.tokenAMint.equals(debtTokenMint)
-      ? strategy?.strategy.tokenBMint!
-      : strategy?.strategy.tokenAMint!;
+    const secondTokenAta = strategy!.strategy.tokenAMint.equals(debtTokenMint)
+      ? strategy!.strategy.tokenBMint
+      : strategy!.strategy.tokenAMint;
+    const secondTokenTokenProgarm = strategy?.strategy.tokenAMint.equals(debtTokenMint)
+      ? strategy!.strategy.tokenBTokenProgram.equals(PublicKey.default)
+        ? TOKEN_PROGRAM_ID
+        : strategy!.strategy.tokenBTokenProgram
+      : strategy!.strategy.tokenATokenProgram.equals(PublicKey.default)
+      ? TOKEN_PROGRAM_ID
+      : strategy!.strategy.tokenATokenProgram;
     mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint(), secondTokenAta];
     mintsToCreateAtasTokenPrograms = [
-      collReserve?.getLiquidityTokenProgram()!,
-      debtReserve?.getLiquidityTokenProgram()!,
+      collReserve!.getLiquidityTokenProgram(),
+      debtReserve!.getLiquidityTokenProgram(),
       TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
+      secondTokenTokenProgarm,
     ];
   } else {
     mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint()];
     mintsToCreateAtasTokenPrograms = [
-      collReserve?.getLiquidityTokenProgram()!,
-      debtReserve?.getLiquidityTokenProgram()!,
+      collReserve!.getLiquidityTokenProgram(),
+      debtReserve!.getLiquidityTokenProgram(),
       TOKEN_PROGRAM_ID,
     ];
   }
@@ -1559,21 +1580,28 @@ export const getDecreaseLeverageIxns = async (props: {
   let mintsToCreateAtas: PublicKey[] = [];
   let mintsToCreateAtasTokenPrograms: PublicKey[] = [];
   if (collIsKtoken) {
-    const secondTokenAta = strategy?.strategy.tokenAMint.equals(debtTokenMint)
-      ? strategy?.strategy.tokenBMint!
-      : strategy?.strategy.tokenAMint!;
+    const secondTokenAta = strategy!.strategy.tokenAMint.equals(debtTokenMint)
+      ? strategy!.strategy.tokenBMint
+      : strategy!.strategy.tokenAMint;
+    const secondTokenTokenProgarm = strategy?.strategy.tokenAMint.equals(debtTokenMint)
+      ? strategy!.strategy.tokenBTokenProgram.equals(PublicKey.default)
+        ? TOKEN_PROGRAM_ID
+        : strategy!.strategy.tokenBTokenProgram
+      : strategy!.strategy.tokenATokenProgram.equals(PublicKey.default)
+      ? TOKEN_PROGRAM_ID
+      : strategy!.strategy.tokenATokenProgram;
     mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint(), secondTokenAta];
     mintsToCreateAtasTokenPrograms = [
-      collReserve?.getLiquidityTokenProgram()!,
-      debtReserve?.getLiquidityTokenProgram()!,
+      collReserve!.getLiquidityTokenProgram(),
+      debtReserve!.getLiquidityTokenProgram(),
       TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
+      secondTokenTokenProgarm,
     ];
   } else {
     mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint()];
     mintsToCreateAtasTokenPrograms = [
-      collReserve?.getLiquidityTokenProgram()!,
-      debtReserve?.getLiquidityTokenProgram()!,
+      collReserve!.getLiquidityTokenProgram(),
+      debtReserve!.getLiquidityTokenProgram(),
       TOKEN_PROGRAM_ID,
     ];
   }
