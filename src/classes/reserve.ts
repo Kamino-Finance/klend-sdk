@@ -462,17 +462,17 @@ export class KaminoReserve {
     }
   }
 
-  getMaxBorrowAmountWithDebtReserve(market: KaminoMarket, debtReserve: KaminoReserve, slot: number): Decimal {
-    const groupsColl = this.state.config.elevationGroups;
-    const groupsDebt = debtReserve.state.config.elevationGroups;
+  getMaxBorrowAmountWithCollReserve(market: KaminoMarket, collReserve: KaminoReserve, slot: number): Decimal {
+    const groupsColl = collReserve.state.config.elevationGroups;
+    const groupsDebt = this.state.config.elevationGroups;
     const groups = market.state.elevationGroups;
     const commonElevationGroups = [...groupsColl].filter(
-      (item) => groupsDebt.includes(item) && item !== 0 && groups[item - 1].debtReserve.equals(debtReserve.address)
+      (item) => groupsDebt.includes(item) && item !== 0 && groups[item - 1].debtReserve.equals(this.address)
     );
 
     let eModeGroup = 0;
 
-    if (commonElevationGroups.length === 0) {
+    if (commonElevationGroups.length !== 0) {
       const eModeGroupWithMaxLtvAndDebtReserve = commonElevationGroups.reduce((prev, curr) => {
         const prevGroup = groups.find((group) => group.id === prev);
         const currGroup = groups.find((group) => group.id === curr);
