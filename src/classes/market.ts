@@ -325,6 +325,20 @@ export class KaminoMarket {
     return KaminoObligation.load(this, obligationAddress);
   }
 
+  /**
+   * @returns The max borrowable amount for leverage positions
+   */
+  async getMaxLeverageBorrowableAmount(
+    collReserve: KaminoReserve,
+    debtReserve: KaminoReserve,
+    slot: number,
+    obligation?: KaminoObligation
+  ): Promise<Decimal> {
+    return obligation
+      ? obligation.getMaxBorrowAmount(this, collReserve.getLiquidityMint(), slot)
+      : collReserve.getMaxBorrowAmountWithDebtReserve(this, debtReserve, slot);
+  }
+
   async loadReserves() {
     const addresses = [...this.reserves.keys()];
     const reserveAccounts = await this.connection.getMultipleAccountsInfo(addresses, 'processed');
