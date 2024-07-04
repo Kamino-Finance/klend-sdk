@@ -335,8 +335,8 @@ export class KaminoMarket {
     obligation?: KaminoObligation
   ): Promise<Decimal> {
     return obligation
-      ? obligation.getMaxBorrowAmount(this, collReserve.getLiquidityMint(), slot)
-      : collReserve.getMaxBorrowAmountWithDebtReserve(this, debtReserve, slot);
+      ? obligation.getMaxBorrowAmount(this, debtReserve.getLiquidityMint(), slot)
+      : debtReserve.getMaxBorrowAmountWithCollReserve(this, collReserve, slot);
   }
 
   async loadReserves() {
