@@ -473,8 +473,6 @@ export class KaminoReserve {
     let eModeGroup = 0;
 
     if (commonElevationGroups.length === 0) {
-      console.log('No common elevation groups found, staying with default');
-    } else {
       const eModeGroupWithMaxLtvAndDebtReserve = commonElevationGroups.reduce((prev, curr) => {
         const prevGroup = groups.find((group) => group.id === prev);
         const currGroup = groups.find((group) => group.id === curr);
