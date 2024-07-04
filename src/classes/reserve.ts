@@ -350,6 +350,14 @@ export class KaminoReserve {
     return currentUtilization * borrowAPR * protocolTakeRatePct;
   }
 
+  calculateEstimatedSupplyAPR(slot: number, referralFeeBps: number) {
+    const estimatedCurrentUtilization = this.getEstimatedUtilizationRatio(slot, referralFeeBps);
+
+    const borrowAPR = this.calculateEstimatedBorrowAPR(slot, referralFeeBps);
+    const protocolTakeRatePct = 1 - this.state.config.protocolTakeRatePct / 100;
+    return estimatedCurrentUtilization * borrowAPR * protocolTakeRatePct;
+  }
+
   getEstimatedDebtAndSupply(slot: number, referralFeeBps: number): { totalBorrow: Decimal; totalSupply: Decimal } {
     const slotsElapsed = Math.max(slot - this.state.lastUpdate.slot.toNumber(), 0);
     let totalBorrow: Decimal;
@@ -401,6 +409,18 @@ export class KaminoReserve {
       return 0;
     }
     return totalBorrows.dividedBy(totalSupply).toNumber();
+  }
+
+  getEstimatedUtilizationRatio(slot: number, referralFeeBps: number) {
+    const { totalBorrow: estimatedTotalBorrowed, totalSupply: estimatedTotalSupply } = this.getEstimatedDebtAndSupply(
+      slot,
+      referralFeeBps
+    );
+    if (estimatedTotalSupply.eq(0)) {
+      return 0;
+    }
+
+    return estimatedTotalBorrowed.dividedBy(estimatedTotalSupply).toNumber();
   }
 
   calcSimulatedUtilizationRatio(
@@ -574,6 +594,13 @@ export class KaminoReserve {
     const currentUtilization = this.calculateUtilizationRatio();
     const curve = truncateBorrowCurve(this.state.config.borrowRateCurve.points);
     return getBorrowRate(currentUtilization, curve) * slotAdjustmentFactor;
+  }
+
+  calculateEstimatedBorrowAPR(slot: number, referralFeeBps: number) {
+    const slotAdjustmentFactor = this.slotAdjustmentFactor();
+    const estimatedCurrentUtilization = this.getEstimatedUtilizationRatio(slot, referralFeeBps);
+    const curve = truncateBorrowCurve(this.state.config.borrowRateCurve.points);
+    return getBorrowRate(estimatedCurrentUtilization, curve) * slotAdjustmentFactor;
   }
 
   /**
