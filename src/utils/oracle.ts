@@ -36,6 +36,11 @@ export type CandidatePrice = {
   valid: boolean;
 };
 
+export type ScopeRefresh = {
+  includeScopeRefresh: boolean;
+  scopeFeed: string;
+};
+
 // TODO: Add freshness of the latest price to match sc logic
 export async function getTokenOracleData(
   connection: Connection,

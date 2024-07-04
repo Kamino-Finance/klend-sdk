@@ -58,6 +58,7 @@ import {
   PublicKeySet,
   WRAPPED_SOL_MINT,
   getAssociatedTokenAddress,
+  ScopeRefresh,
 } from '../utils';
 import { KaminoMarket } from './market';
 import { KaminoObligation } from './obligation';
@@ -416,7 +417,7 @@ export class KaminoAction {
     includeUserMetadata: boolean = true, // if true it includes user metadata
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
-    scopeFeed: string = 'hubble'
+    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
   ) {
     const axn = await KaminoAction.initialize(
       'deposit',
@@ -441,8 +442,8 @@ export class KaminoAction {
     ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
-    if (tokenIds.length > 0) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
     }
     await axn.addSupportIxs(
       'deposit',
@@ -507,7 +508,7 @@ export class KaminoAction {
     includeUserMetadata: boolean = true, // if true it includes user metadata
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
-    scopeFeed: string = 'hubble'
+    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
   ) {
     const axn = await KaminoAction.initialize(
       'borrow',
@@ -531,8 +532,8 @@ export class KaminoAction {
     ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
-    if (tokenIds.length > 0) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
     }
 
     await axn.addSupportIxs(
@@ -560,7 +561,7 @@ export class KaminoAction {
     includeUserMetadata: boolean = true, // if true it includes user metadata
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
-    scopeFeed: string = 'hubble'
+    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
   ) {
     const axn = await KaminoAction.initialize(
       'mint',
@@ -585,8 +586,8 @@ export class KaminoAction {
     ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
-    if (tokenIds.length > 0) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
     }
 
     await axn.addSupportIxs(
@@ -613,7 +614,7 @@ export class KaminoAction {
     includeUserMetadata: boolean = true, // if true it includes user metadata,
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
-    scopeFeed: string = 'hubble'
+    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
   ) {
     const axn = await KaminoAction.initialize(
       'redeem',
@@ -638,8 +639,8 @@ export class KaminoAction {
     ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
-    if (tokenIds.length > 0) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
     }
 
     await axn.addSupportIxs(
@@ -666,7 +667,7 @@ export class KaminoAction {
     includeUserMetadata: boolean = true, // if true it includes user metadata
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
-    scopeFeed: string = 'hubble'
+    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
   ) {
     const axn = await KaminoAction.initialize(
       'depositCollateral',
@@ -691,8 +692,8 @@ export class KaminoAction {
     ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
-    if (tokenIds.length > 0) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
     }
 
     await axn.addSupportIxs(
@@ -721,7 +722,7 @@ export class KaminoAction {
     includeUserMetadata: boolean = true, // if true it includes user metadata,
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
-    scopeFeed: string = 'hubble'
+    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
   ) {
     const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
@@ -752,8 +753,8 @@ export class KaminoAction {
     ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
-    if (tokenIds.length > 0) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
     }
 
     await axn.addSupportIxs(
@@ -790,7 +791,7 @@ export class KaminoAction {
     includeUserMetadata: boolean = true, // if true it includes user metadata,
     isClosingPosition: boolean = false,
     referrer: PublicKey = PublicKey.default,
-    scopeFeed: string = 'hubble'
+    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
   ) {
     const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
@@ -820,8 +821,8 @@ export class KaminoAction {
     ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
-    if (tokenIds.length > 0) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
     }
 
     await axn.addSupportIxs(
@@ -856,7 +857,7 @@ export class KaminoAction {
     includeUserMetadata: boolean = true, // if true it includes user metadata
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
-    scopeFeed: string = 'hubble'
+    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
   ) {
     const axn = await KaminoAction.initialize(
       'withdraw',
@@ -881,8 +882,8 @@ export class KaminoAction {
     ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
-    if (tokenIds.length > 0) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
     }
 
     await axn.addSupportIxs(
@@ -926,7 +927,7 @@ export class KaminoAction {
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true,
     referrer: PublicKey = PublicKey.default,
-    scopeFeed: string = 'hubble'
+    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
   ) {
     const axn = await KaminoAction.initialize(
       'repay',
@@ -952,8 +953,8 @@ export class KaminoAction {
     ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
-    if (tokenIds.length > 0) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
     }
 
     await axn.addSupportIxs(
@@ -985,7 +986,7 @@ export class KaminoAction {
     referrer: PublicKey = PublicKey.default,
     maxAllowedLtvOverridePercent: number = 0,
     currentSlot: number = 0,
-    scopeFeed: string = 'hubble'
+    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
   ) {
     const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
@@ -1014,8 +1015,8 @@ export class KaminoAction {
     ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
-    if (tokenIds.length > 0) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeFeed);
+    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
+      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
     }
 
     await axn.addSupportIxs(

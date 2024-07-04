@@ -465,7 +465,7 @@ export const getDepositWithLeverageIxns = async (props: {
     false, // to be checked and created in a setup tx in the UI
     referrer,
     currentSlot,
-    scopeFeed
+    { includeScopeRefresh: true, scopeFeed: scopeFeed! }
   );
 
   console.log(
@@ -881,7 +881,7 @@ export const getWithdrawWithLeverageIxns = async (props: {
     false, // to be checked and created in a setup tx in the UI (won't be the case for withdraw anyway as this would be created in deposit)
     isClosingPosition,
     referrer,
-    scopeFeed
+    { includeScopeRefresh: true, scopeFeed: scopeFeed! }
   );
 
   const klendIxns = [
@@ -1330,7 +1330,7 @@ export const getIncreaseLeverageIxns = async (props: {
     false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     referrer,
     currentSlot,
-    scopeFeed
+    { includeScopeRefresh: true, scopeFeed: scopeFeed! }
   );
 
   // 4. Get swap estimations to understand how much we need to borrow from borrow reserve
@@ -1354,7 +1354,7 @@ export const getIncreaseLeverageIxns = async (props: {
     false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     referrer,
     currentSlot,
-    scopeFeed
+    { includeScopeRefresh: true, scopeFeed: scopeFeed! }
   );
 
   const klendIxns = [
@@ -1607,7 +1607,7 @@ export const getDecreaseLeverageIxns = async (props: {
     false,
     false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     referrer,
-    scopeFeed
+    { includeScopeRefresh: true, scopeFeed: scopeFeed! }
   );
 
   // 6. Withdraw collateral (a little bit more to be able to pay for the slippage on swap)
@@ -1627,7 +1627,7 @@ export const getDecreaseLeverageIxns = async (props: {
     false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     referrer,
     currentSlot,
-    scopeFeed
+    { includeScopeRefresh: true, scopeFeed: scopeFeed! }
   );
 
   const klendIxns = [
