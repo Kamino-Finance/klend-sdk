@@ -2552,9 +2552,12 @@ export class KaminoAction {
       throw new Error(`Reserve ${mint} not found in market ${kaminoMarket.getAddress().toBase58()}`);
     }
 
-    const { atas, createAtasIxns } = await getAtasWithCreateIxnsIfMissing(kaminoMarket.getConnection(), owner, [
-      reserve.getLiquidityMint(),
-    ]);
+    const { atas, createAtasIxns } = await getAtasWithCreateIxnsIfMissing(
+      kaminoMarket.getConnection(),
+      owner,
+      [reserve.getLiquidityMint()],
+      [reserve.getLiquidityTokenProgram()]
+    );
 
     const userTokenAccountAddress = atas[0];
 

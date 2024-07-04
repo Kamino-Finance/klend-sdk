@@ -57,8 +57,13 @@ export function getAssociatedTokenAddress(
   return address;
 }
 
-export const getAtasWithCreateIxnsIfMissing = async (connection: Connection, user: PublicKey, mints: PublicKey[]) => {
-  const requests = mints.map((x) => createAtaIfMissing(connection, user, x));
+export const getAtasWithCreateIxnsIfMissing = async (
+  connection: Connection,
+  user: PublicKey,
+  mints: PublicKey[],
+  tokenProgramId: PublicKey[]
+) => {
+  const requests = mints.map((x, index) => createAtaIfMissing(connection, user, x, tokenProgramId[index]));
   const result = await Promise.all(requests);
 
   const atas = result.map((res) => res.ata);

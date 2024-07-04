@@ -1,4 +1,3 @@
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY } from '@solana/web3.js';
 import { KaminoReserve } from '../classes';
 import {
@@ -92,7 +91,7 @@ export const getBorrowFlashLoanInstruction = ({
     referrerTokenState: referrerTokenState,
     reserveLiquidityFeeReceiver: reserve.state.liquidity.feeVault,
     sysvarInfo: SYSVAR_INSTRUCTIONS_PUBKEY,
-    tokenProgram: TOKEN_PROGRAM_ID,
+    tokenProgram: reserve.getLiquidityTokenProgram(),
   };
 
   return flashBorrowReserveLiquidity(args, accounts, programId);
@@ -138,7 +137,7 @@ export const getRepayFlashLoanInstruction = ({
     referrerTokenState: referrerTokenState,
     reserveLiquidityFeeReceiver: reserve.state.liquidity.feeVault,
     sysvarInfo: SYSVAR_INSTRUCTIONS_PUBKEY,
-    tokenProgram: TOKEN_PROGRAM_ID,
+    tokenProgram: reserve.getLiquidityTokenProgram(),
   };
 
   return flashRepayReserveLiquidity(args, accounts, programId);
