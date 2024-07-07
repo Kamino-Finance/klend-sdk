@@ -98,7 +98,13 @@ export async function addRewardToFarm(
   const reserveState: Reserve = (await Reserve.fetch(env.provider.connection, reserve))!!;
   const farmAddress = kind === 'Collateral' ? reserveState.farmCollateral : reserveState.farmDebt;
   const tokenProgram = (await env.provider.connection.getAccountInfo(rewardMint))!.owner;
-  const ix = await farmsClient.addRewardToFarmIx(env.admin.publicKey, farmsGlobalConfig, farmAddress, rewardMint, tokenProgram);
+  const ix = await farmsClient.addRewardToFarmIx(
+    env.admin.publicKey,
+    farmsGlobalConfig,
+    farmAddress,
+    rewardMint,
+    tokenProgram
+  );
   const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [ix]);
   const sig = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
   return sig;

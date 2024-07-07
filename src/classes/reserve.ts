@@ -17,6 +17,7 @@ import { calculateAPYFromAPR, getBorrowRate, parseTokenSymbol } from './utils';
 import { Fraction } from './fraction';
 import BN from 'bn.js';
 import { ActionType } from './action';
+import { KaminoMarket } from './market';
 
 export const DEFAULT_RECENT_SLOT_DURATION_MS = 450;
 
@@ -459,6 +460,82 @@ export class KaminoReserve {
       default:
         throw Error(`Invalid action type ${action} for simulatedUtilizationRatio`);
     }
+  }
+
+  getMaxBorrowAmountWithCollReserve(market: KaminoMarket, collReserve: KaminoReserve, slot: number): Decimal {
+    const groupsColl = collReserve.state.config.elevationGroups;
+    const groupsDebt = this.state.config.elevationGroups;
+    const groups = market.state.elevationGroups;
+    const commonElevationGroups = [...groupsColl].filter(
+      (item) => groupsDebt.includes(item) && item !== 0 && groups[item - 1].debtReserve.equals(this.address)
+    );
+
+    let eModeGroup = 0;
+
+    if (commonElevationGroups.length !== 0) {
+      const eModeGroupWithMaxLtvAndDebtReserve = commonElevationGroups.reduce((prev, curr) => {
+        const prevGroup = groups.find((group) => group.id === prev);
+        const currGroup = groups.find((group) => group.id === curr);
+        return prevGroup!.ltvPct > currGroup!.ltvPct ? prev : curr;
+      });
+
+      eModeGroup = groups.find((group) => group.id === eModeGroupWithMaxLtvAndDebtReserve)!.id;
+    }
+
+    const elevationGroupActivated = this.state.config.elevationGroups.includes(eModeGroup) && eModeGroup !== 0;
+
+    const reserveAvailableAmount = this.getLiquidityAvailableAmount();
+    const reserveBorrowCapRemained = this.stats.reserveBorrowLimit.sub(this.getBorrowedAmount());
+
+    let maxBorrowAmount = Decimal.min(reserveAvailableAmount, reserveBorrowCapRemained);
+
+    const debtWithdrawalCap = this.getDebtWithdrawalCapCapacity().sub(this.getDebtWithdrawalCapCurrent(slot));
+    maxBorrowAmount = this.getDebtWithdrawalCapCapacity().gt(0)
+      ? Decimal.min(maxBorrowAmount, debtWithdrawalCap)
+      : maxBorrowAmount;
+
+    let originationFeeRate = this.getBorrowFee();
+
+    // Inclusive fee rate
+    originationFeeRate = originationFeeRate.div(originationFeeRate.add(new Decimal(1)));
+    const borrowFee = maxBorrowAmount.mul(originationFeeRate);
+
+    maxBorrowAmount = maxBorrowAmount.sub(borrowFee);
+
+    const utilizationRatioLimit = this.state.config.utilizationLimitBlockBorrowingAbove / 100;
+    const currentUtilizationRatio = this.calculateUtilizationRatio();
+
+    if (utilizationRatioLimit > 0 && currentUtilizationRatio > utilizationRatioLimit) {
+      return new Decimal(0);
+    } else if (utilizationRatioLimit > 0 && currentUtilizationRatio < utilizationRatioLimit) {
+      const maxBorrowBasedOnUtilization = new Decimal(utilizationRatioLimit - currentUtilizationRatio).mul(
+        this.getTotalSupply()
+      );
+      maxBorrowAmount = Decimal.min(maxBorrowAmount, maxBorrowBasedOnUtilization);
+    }
+
+    let borrowLimitDependentOnElevationGroup = new Decimal(U64_MAX);
+
+    if (!elevationGroupActivated) {
+      borrowLimitDependentOnElevationGroup = this.getBorrowLimitOutsideElevationGroup().sub(
+        this.getBorrowedAmountOutsideElevationGroup()
+      );
+    } else {
+      let maxDebtTakenAgainstCollaterals = new Decimal(U64_MAX);
+      const maxDebtAllowedAgainstCollateral = this.getBorrowLimitAgainstCollateralInElevationGroup(eModeGroup - 1).sub(
+        this.getBorrowedAmountAgainstCollateralInElevationGroup(eModeGroup - 1)
+      );
+
+      maxDebtTakenAgainstCollaterals = Decimal.max(
+        new Decimal(0),
+        Decimal.min(maxDebtAllowedAgainstCollateral, maxDebtTakenAgainstCollaterals)
+      );
+      borrowLimitDependentOnElevationGroup = maxDebtTakenAgainstCollaterals;
+    }
+
+    maxBorrowAmount = Decimal.min(maxBorrowAmount, borrowLimitDependentOnElevationGroup);
+
+    return Decimal.max(new Decimal(0), maxBorrowAmount);
   }
 
   calcSimulatedBorrowAPR(
