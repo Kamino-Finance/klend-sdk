@@ -156,7 +156,7 @@ const createRewardsScenario = async (env: Env, kind: string, deposit: number, bo
         .map((key) => key.pubkey)
     );
     await sleep(2000);
-    await sendTransactionsFromAction(env, depositAction, [], [depositSetupLut]);
+    await sendTransactionsFromAction(env, depositAction, env.admin, [], [depositSetupLut]);
     await sleep(2000);
   }
 
@@ -170,7 +170,7 @@ const createRewardsScenario = async (env: Env, kind: string, deposit: number, bo
       1_000_000,
       true
     );
-    await sendTransactionsFromAction(env, borrowAction);
+    await sendTransactionsFromAction(env, borrowAction, env.admin);
     await sleep(2000);
   }
 

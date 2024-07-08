@@ -309,7 +309,11 @@ export function getOracleConfigs(priceFeed: PriceFeed): {
       });
       break;
     }
-    case new OracleType.KToken().kind: {
+    case new OracleType.KToken().kind:
+    case new OracleType.JupiterLpCompute().kind:
+    case new OracleType.JupiterLpScope().kind:
+    case new OracleType.JupiterLpFetch().kind:
+    case new OracleType.SplStake().kind: {
       scopeConfiguration = new ScopeConfiguration({
         ...scopeConfiguration,
         priceFeed: price,
@@ -433,18 +437,19 @@ const encodeTokenName = (tokenName: string): number[] => {
 export const sendTransactionsFromAction = async (
   env: Env,
   kaminoAction: KaminoAction,
+  payer: Keypair,
   signers: Array<Keypair> = [],
   loookupTables: Array<PublicKey> = []
 ): Promise<TransactionSignature> => {
   if (kaminoAction.preTxnIxs.length > 0) {
-    const preTxn = await buildVersionedTransaction(
-      env.provider.connection,
-      env.admin.publicKey,
-      kaminoAction.preTxnIxs
-    );
+    const preTxn = await buildVersionedTransaction(env.provider.connection, payer.publicKey, kaminoAction.preTxnIxs);
     console.log('PreTxnIxns:', kaminoAction.preTxnIxsLabels);
-    const txHash = await buildAndSendTxnWithLogs(env.provider.connection, preTxn, env.admin, signers);
-    console.log(`PreTxnIxns hash: ${txHash}`);
+    try {
+      const txHash = await buildAndSendTxnWithLogs(env.provider.connection, preTxn, payer, signers);
+      console.log(`PreTxnIxns hash: ${txHash}`);
+    } catch (e) {
+      console.log('PreTxnIxns error:', e);
+    }
     await sleep(2000);
   }
 
@@ -502,7 +507,7 @@ export const createMarketWithLoan = async (deposit: BN, borrow: BN) => {
       1_000_000,
       true
     );
-    await sendTransactionsFromAction(env, depositAction);
+    await sendTransactionsFromAction(env, depositAction, env.admin);
     await sleep(2000);
   }
   if (borrow.gt(new BN(0))) {
@@ -515,7 +520,7 @@ export const createMarketWithLoan = async (deposit: BN, borrow: BN) => {
       1_000_000,
       true
     );
-    await sendTransactionsFromAction(env, borrowAction);
+    await sendTransactionsFromAction(env, borrowAction, env.admin);
     await sleep(2000);
   }
 
@@ -539,6 +544,9 @@ export const createMarketWithTwoReserves = async (
     typeof firstReserve === 'string' ? { symbol: firstReserve, tokenProgram: TOKEN_PROGRAM_ID } : firstReserve;
   const secondReserveSpec =
     typeof secondReserve === 'string' ? { symbol: secondReserve, tokenProgram: TOKEN_PROGRAM_ID } : secondReserve;
+
+  const scope = new Scope('localnet', env.provider.connection);
+  await createScopeFeed(env, scope);
 
   const [createMarketSig, lendingMarket] = await createMarket(env);
   console.log(createMarketSig);
@@ -1266,9 +1274,14 @@ export async function createMintAndReserve(
       initialDepositor.publicKey,
       new VanillaObligation(PROGRAM_ID),
       1_000_000,
-      true
+      true,
+      false,
+      true,
+      PublicKey.default,
+      0,
+      env.testCase
     );
-    await sendTransactionsFromAction(env, depositAction, [initialDepositor]);
+    await sendTransactionsFromAction(env, depositAction, initialDepositor, [initialDepositor]);
   }
 
   return [mint, reserve.publicKey, config];

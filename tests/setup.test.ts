@@ -109,7 +109,7 @@ describe('setup_lending_market', function () {
 
     console.log('User obligation', depositAction.getObligationPda().toString());
 
-    await sendTransactionsFromAction(env, depositAction);
+    await sendTransactionsFromAction(env, depositAction, env.admin);
   });
 
   it('withdraw', async function () {
@@ -150,7 +150,7 @@ describe('setup_lending_market', function () {
       true
     );
 
-    await sendTransactionsFromAction(env, depositAction);
+    await sendTransactionsFromAction(env, depositAction, env.admin);
     await sleep(2000);
 
     const withdrawAction = await KaminoAction.buildWithdrawTxns(
@@ -163,7 +163,7 @@ describe('setup_lending_market', function () {
       true
     );
 
-    await sendTransactionsFromAction(env, withdrawAction);
+    await sendTransactionsFromAction(env, withdrawAction, env.admin);
   });
 
   it('borrow', async function () {
@@ -204,7 +204,7 @@ describe('setup_lending_market', function () {
       true
     );
 
-    await sendTransactionsFromAction(env, depositAction);
+    await sendTransactionsFromAction(env, depositAction, env.admin);
     await sleep(2000);
 
     const borrowAction = await KaminoAction.buildBorrowTxns(
@@ -217,7 +217,7 @@ describe('setup_lending_market', function () {
       true
     );
 
-    await sendTransactionsFromAction(env, borrowAction);
+    await sendTransactionsFromAction(env, borrowAction, env.admin);
   });
 
   it('repay', async function () {
@@ -258,7 +258,7 @@ describe('setup_lending_market', function () {
       true
     );
 
-    await sendTransactionsFromAction(env, depositAction);
+    await sendTransactionsFromAction(env, depositAction, env.admin);
     await sleep(2000);
 
     const borrowAction = await KaminoAction.buildBorrowTxns(
@@ -274,7 +274,7 @@ describe('setup_lending_market', function () {
       PublicKey.default
     );
 
-    await sendTransactionsFromAction(env, borrowAction);
+    await sendTransactionsFromAction(env, borrowAction, env.admin);
     await sleep(2000);
 
     const repayAction = await KaminoAction.buildRepayTxns(
@@ -292,7 +292,7 @@ describe('setup_lending_market', function () {
       PublicKey.default
     );
 
-    await sendTransactionsFromAction(env, repayAction);
+    await sendTransactionsFromAction(env, repayAction, env.admin);
   });
 
   it('permissionless_repay', async function () {
@@ -333,7 +333,7 @@ describe('setup_lending_market', function () {
       true
     );
 
-    await sendTransactionsFromAction(env, depositAction);
+    await sendTransactionsFromAction(env, depositAction, env.admin);
     await sleep(2000);
 
     const borrowAction = await KaminoAction.buildBorrowTxns(
@@ -349,7 +349,7 @@ describe('setup_lending_market', function () {
       PublicKey.default
     );
 
-    await sendTransactionsFromAction(env, borrowAction);
+    await sendTransactionsFromAction(env, borrowAction, env.admin);
     await sleep(2000);
 
     const repayer = await newUser(env, kaminoMarket!, [['USDH', new Decimal('500000')]]);
@@ -369,6 +369,6 @@ describe('setup_lending_market', function () {
       PublicKey.default
     );
 
-    await sendTransactionsFromAction(env, repayAction, [repayer]);
+    await sendTransactionsFromAction(env, repayAction, repayer, [repayer]);
   });
 });

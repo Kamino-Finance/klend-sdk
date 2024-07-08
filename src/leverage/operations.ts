@@ -290,6 +290,7 @@ export const getDepositWithLeverageIxns = async (props: {
   obligation: KaminoObligation | null;
   currentSlot: number;
   getTotalKlendAccountsOnly: boolean;
+  scopeFeed: string | undefined;
 }): Promise<{
   ixns: TransactionInstruction[];
   lookupTablesAddresses: PublicKey[];
@@ -317,6 +318,7 @@ export const getDepositWithLeverageIxns = async (props: {
     obligation,
     currentSlot,
     getTotalKlendAccountsOnly,
+    scopeFeed,
   } = props;
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
@@ -378,7 +380,7 @@ export const getDepositWithLeverageIxns = async (props: {
     })
   );
 
-  // // 1. Create atas & budget txns
+  // 1. Create atas & budget txns
   let mintsToCreateAtas: PublicKey[] = [];
   let mintsToCreateAtasTokenPrograms: PublicKey[] = [];
   if (collIsKtoken) {
@@ -481,7 +483,8 @@ export const getDepositWithLeverageIxns = async (props: {
     true, // emode
     false, // to be checked and created in a setup tx in the UI
     referrer,
-    currentSlot
+    currentSlot,
+    { includeScopeRefresh: true, scopeFeed: scopeFeed! }
   );
 
   console.log(
@@ -721,6 +724,7 @@ export const getWithdrawWithLeverageIxns = async (props: {
   obligation: KaminoObligation | null;
   currentSlot: number;
   getTotalKlendAccountsOnly: boolean;
+  scopeFeed: string | undefined;
 }): Promise<{
   ixns: TransactionInstruction[];
   lookupTablesAddresses: PublicKey[];
@@ -749,6 +753,7 @@ export const getWithdrawWithLeverageIxns = async (props: {
     obligation,
     currentSlot,
     getTotalKlendAccountsOnly,
+    scopeFeed,
   } = props;
 
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
@@ -913,7 +918,8 @@ export const getWithdrawWithLeverageIxns = async (props: {
     false,
     false, // to be checked and created in a setup tx in the UI (won't be the case for withdraw anyway as this would be created in deposit)
     isClosingPosition,
-    referrer
+    referrer,
+    { includeScopeRefresh: true, scopeFeed: scopeFeed! }
   );
 
   const klendIxns = [
@@ -1102,6 +1108,7 @@ export const getAdjustLeverageIxns = async (props: {
   obligation: KaminoObligation | null;
   currentSlot: number;
   getTotalKlendAccountsOnly: boolean;
+  scopeFeed: string | undefined;
 }) => {
   const {
     connection,
@@ -1125,6 +1132,7 @@ export const getAdjustLeverageIxns = async (props: {
     obligation,
     currentSlot,
     getTotalKlendAccountsOnly,
+    scopeFeed,
   } = props;
 
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
@@ -1191,6 +1199,7 @@ export const getAdjustLeverageIxns = async (props: {
       obligation: userObligation,
       currentSlot,
       getTotalKlendAccountsOnly,
+      scopeFeed,
     });
     ixns = res.ixns;
     lookupTablesAddresses = res.lookupTablesAddresses;
@@ -1216,6 +1225,7 @@ export const getAdjustLeverageIxns = async (props: {
       obligation: userObligation,
       currentSlot,
       getTotalKlendAccountsOnly,
+      scopeFeed,
     });
     ixns = res.ixns;
     lookupTablesAddresses = res.lookupTablesAddresses;
@@ -1254,6 +1264,7 @@ export const getIncreaseLeverageIxns = async (props: {
   obligation: KaminoObligation | null;
   currentSlot: number;
   getTotalKlendAccountsOnly: boolean;
+  scopeFeed: string | undefined;
 }) => {
   const {
     connection,
@@ -1275,6 +1286,7 @@ export const getIncreaseLeverageIxns = async (props: {
     obligation,
     currentSlot,
     getTotalKlendAccountsOnly,
+    scopeFeed,
   } = props;
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
@@ -1374,7 +1386,8 @@ export const getIncreaseLeverageIxns = async (props: {
     false,
     false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     referrer,
-    currentSlot
+    currentSlot,
+    { includeScopeRefresh: true, scopeFeed: scopeFeed! }
   );
 
   // 4. Get swap estimations to understand how much we need to borrow from borrow reserve
@@ -1398,7 +1411,7 @@ export const getIncreaseLeverageIxns = async (props: {
     false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     referrer,
     currentSlot,
-    debtTokenAta
+    { includeScopeRefresh: true, scopeFeed: scopeFeed! }
   );
 
   const klendIxns = [
@@ -1542,6 +1555,7 @@ export const getDecreaseLeverageIxns = async (props: {
   obligation: KaminoObligation | null;
   currentSlot: number;
   getTotalKlendAccountsOnly: boolean;
+  scopeFeed: string | undefined;
 }) => {
   const {
     connection,
@@ -1561,6 +1575,7 @@ export const getDecreaseLeverageIxns = async (props: {
     obligation,
     currentSlot,
     getTotalKlendAccountsOnly,
+    scopeFeed,
   } = props;
 
   console.log(
@@ -1667,14 +1682,14 @@ export const getDecreaseLeverageIxns = async (props: {
     false,
     false,
     false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
-    referrer
+    referrer,
+    { includeScopeRefresh: true, scopeFeed: scopeFeed! }
   );
 
   // 6. Withdraw collateral (a little bit more to be able to pay for the slippage on swap)
   const withdrawAmountWithSlippageAndFlashLoanFee = withdrawAmount
     .mul(new Decimal(1).plus(flashLoanFee))
     .mul(1 + slippagePct / 100);
-  const _debtTokenExpectedSwapOut = repayAmount.mul(new Decimal(1).plus(flashLoanFee));
 
   const withdrawAction = await KaminoAction.buildWithdrawTxns(
     kaminoMarket,
@@ -1687,7 +1702,8 @@ export const getDecreaseLeverageIxns = async (props: {
     false,
     false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     referrer,
-    currentSlot
+    currentSlot,
+    { includeScopeRefresh: true, scopeFeed: scopeFeed! }
   );
 
   const klendIxns = [

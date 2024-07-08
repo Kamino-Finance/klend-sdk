@@ -43,7 +43,7 @@ describe('init_and_refresh_farm_separate_deposit_tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, depositReserveLiquidityAction, [borrower]);
+    await sendTransactionsFromAction(env, depositReserveLiquidityAction, borrower, [borrower]);
 
     const obligationBeforeDeposit = (await kaminoMarket.getUserObligationsByTag(
       VanillaObligation.tag,
@@ -64,7 +64,7 @@ describe('init_and_refresh_farm_separate_deposit_tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, depositObligationCollateralAction, [borrower]);
+    await sendTransactionsFromAction(env, depositObligationCollateralAction, borrower, [borrower]);
 
     const obligationAfterDeposit = (await kaminoMarket.getUserObligationsByTag(
       VanillaObligation.tag,
@@ -117,7 +117,7 @@ describe('init_and_refresh_farm_separate_deposit_tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, depositReserveLiquidityAction, [borrower]);
+    await sendTransactionsFromAction(env, depositReserveLiquidityAction, borrower, [borrower]);
 
     const obligationBeforeDeposit = (await kaminoMarket.getUserObligationsByTag(
       VanillaObligation.tag,
@@ -138,7 +138,7 @@ describe('init_and_refresh_farm_separate_deposit_tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, depositObligationCollateralAction, [borrower]);
+    await sendTransactionsFromAction(env, depositObligationCollateralAction, borrower, [borrower]);
 
     const obligationAfterDeposit = (await kaminoMarket.getUserObligationsByTag(
       VanillaObligation.tag,
@@ -187,7 +187,7 @@ describe('init_and_refresh_farm_separate_deposit_tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, depositReserveLiquidityAction, [borrower]);
+    await sendTransactionsFromAction(env, depositReserveLiquidityAction, borrower, [borrower]);
 
     const obligationBeforeDeposit = (await kaminoMarket.getUserObligationsByTag(
       VanillaObligation.tag,
@@ -208,7 +208,7 @@ describe('init_and_refresh_farm_separate_deposit_tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, depositObligationCollateralAction, [borrower]);
+    await sendTransactionsFromAction(env, depositObligationCollateralAction, borrower, [borrower]);
 
     const obligationAfterDeposit = (await kaminoMarket.getUserObligationsByTag(
       VanillaObligation.tag,
@@ -260,7 +260,7 @@ describe('init_and_refresh_farm_separate_deposit_tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, depositReserveLiquidityAction, [borrower]);
+    await sendTransactionsFromAction(env, depositReserveLiquidityAction, borrower, [borrower]);
 
     const obligationBeforeDeposit = (await kaminoMarket.getUserObligationsByTag(
       VanillaObligation.tag,
@@ -281,7 +281,7 @@ describe('init_and_refresh_farm_separate_deposit_tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, depositObligationCollateralAction, [borrower]);
+    await sendTransactionsFromAction(env, depositObligationCollateralAction, borrower, [borrower]);
 
     const obligationAfterDeposit = (await kaminoMarket.getUserObligationsByTag(
       VanillaObligation.tag,
@@ -333,7 +333,7 @@ describe('init_and_refresh_farm_separate_deposit_tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, depositReserveLiquidityAction, [borrower]);
+    await sendTransactionsFromAction(env, depositReserveLiquidityAction, borrower, [borrower]);
 
     const obligationBeforeDeposit = (await kaminoMarket.getUserObligationsByTag(
       VanillaObligation.tag,
@@ -354,7 +354,7 @@ describe('init_and_refresh_farm_separate_deposit_tests', function () {
       new VanillaObligation(PROGRAM_ID)
     );
 
-    await sendTransactionsFromAction(env, depositObligationCollateralAction, [borrower]);
+    await sendTransactionsFromAction(env, depositObligationCollateralAction, borrower, [borrower]);
 
     const obligationAfterDeposit = (await kaminoMarket.getUserObligationsByTag(
       VanillaObligation.tag,
