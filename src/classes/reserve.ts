@@ -176,9 +176,8 @@ export class KaminoReserve {
    */
   getCumulativeBorrowRate(): Decimal {
     let accSf = new BN(0);
-    for (const value of this.state.liquidity.cumulativeBorrowRateBsf.value.reverse()) {
-      accSf = accSf.add(value);
-      accSf.shrn(64);
+    for (const [i, value] of this.state.liquidity.cumulativeBorrowRateBsf.value.entries()) {
+      accSf = accSf.add(value.shln(i * 64));
     }
     return new Fraction(accSf).toDecimal();
   }
