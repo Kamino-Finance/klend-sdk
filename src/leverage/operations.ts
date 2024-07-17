@@ -290,7 +290,7 @@ export const getDepositWithLeverageIxns = async (props: {
   obligation: KaminoObligation | null;
   currentSlot: number;
   getTotalKlendAccountsOnly: boolean;
-  scopeFeed: string | undefined;
+  scopeFeed?: string;
 }): Promise<{
   ixns: TransactionInstruction[];
   lookupTablesAddresses: PublicKey[];
@@ -726,7 +726,7 @@ export const getWithdrawWithLeverageIxns = async (props: {
   obligation: KaminoObligation | null;
   currentSlot: number;
   getTotalKlendAccountsOnly: boolean;
-  scopeFeed: string | undefined;
+  scopeFeed?: string;
 }): Promise<{
   ixns: TransactionInstruction[];
   lookupTablesAddresses: PublicKey[];
