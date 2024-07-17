@@ -1351,7 +1351,7 @@ export class KaminoAction {
           this.outflowReserve.address,
           this.kaminoMarket.programId
         )[0],
-        tokenProgram: this.reserve.getLiquidityTokenProgram(),
+        tokenProgram: this.outflowReserve.getLiquidityTokenProgram(),
         instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
       },
       this.kaminoMarket.programId
@@ -1431,7 +1431,7 @@ export class KaminoAction {
           userDestinationLiquidity: this.additionalTokenAccountAddress,
           placeholderUserDestinationCollateral: this.kaminoMarket.programId,
           collateralTokenProgram: TOKEN_PROGRAM_ID,
-          liquidityTokenProgram: this.reserve.getLiquidityTokenProgram(),
+          liquidityTokenProgram: this.outflowReserve.getLiquidityTokenProgram(),
           instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
         },
         this.kaminoMarket.programId
