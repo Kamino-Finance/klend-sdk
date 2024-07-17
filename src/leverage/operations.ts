@@ -466,6 +466,8 @@ export const getDepositWithLeverageIxns = async (props: {
     throw Error('Obligation type tag not supported for leverage, please use 1 - multiply or 3 - leverage');
   }
 
+  const scopeRefresh = scopeFeed ? { includeScopeRefresh: true, scopeFeed: scopeFeed } : undefined;
+
   const kaminoDepositAndBorrowAction = await KaminoAction.buildDepositAndBorrowTxns(
     kaminoMarket,
     toLamports(!collIsKtoken ? calcs.collTokenToDeposit : calcsKtoken.collTokenToDeposit, collReserve!.stats.decimals)
@@ -484,7 +486,7 @@ export const getDepositWithLeverageIxns = async (props: {
     false, // to be checked and created in a setup tx in the UI
     referrer,
     currentSlot,
-    { includeScopeRefresh: true, scopeFeed: scopeFeed! }
+    scopeRefresh
   );
 
   console.log(
@@ -1670,6 +1672,8 @@ export const getDecreaseLeverageIxns = async (props: {
     throw Error('Obligation type tag not supported for leverage, please use 1 - multiply or 3 - leverage');
   }
 
+  const scopeRefresh = scopeFeed ? { includeScopeRefresh: true, scopeFeed: scopeFeed } : undefined;
+
   const repayAction = await KaminoAction.buildRepayTxns(
     kaminoMarket,
     toLamports(repayAmount, debtReserve!.stats.decimals).floor().toString(),
@@ -1683,7 +1687,7 @@ export const getDecreaseLeverageIxns = async (props: {
     false,
     false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     referrer,
-    { includeScopeRefresh: true, scopeFeed: scopeFeed! }
+    scopeRefresh
   );
 
   // 6. Withdraw collateral (a little bit more to be able to pay for the slippage on swap)
