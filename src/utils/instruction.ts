@@ -115,6 +115,10 @@ export function buildComputeBudgetIx(units: number): TransactionInstruction {
   return ComputeBudgetProgram.setComputeUnitLimit({ units });
 }
 
+export function buildPriorityFeeIx(microLamports: number | bigint): TransactionInstruction {
+  return ComputeBudgetProgram.setComputeUnitPrice({ microLamports });
+}
+
 /**
  * Send a transaction with optional address lookup tables
  * Translates anchor errors into anchor error types

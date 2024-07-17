@@ -215,6 +215,7 @@ export const getRepayWithCollIxns = async (props: {
     currentSlot,
     obligation,
     0,
+    0,
     false,
     undefined,
     undefined,

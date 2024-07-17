@@ -45,6 +45,7 @@ import {
 } from '../idl_codegen/instructions';
 import {
   buildComputeBudgetIx,
+  buildPriorityFeeIx,
   createAssociatedTokenAccountIdempotentInstruction,
   ObligationType,
   syncNative,
@@ -338,6 +339,7 @@ export class KaminoAction {
     payer: PublicKey,
     obligation: KaminoObligation,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
+    priorityFee: number | bigint = 0,
     currentSlot: number = 0
   ) {
     //  placeholder for action initialization
@@ -361,6 +363,10 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
+    if (priorityFee > 0) {
+      axn.addPriorityFeeIxn(priorityFee);
+    }
+
     axn.addRefreshObligation(payer);
 
     return axn;
@@ -372,6 +378,7 @@ export class KaminoAction {
     obligation: KaminoObligation,
     elevationGroup: number,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
+    priorityFee: number | bigint = 0,
     currentSlot: number = 0
   ) {
     const firstReserve = obligation.state.deposits[0].depositReserve;
@@ -394,6 +401,10 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
+    if (priorityFee > 0) {
+      axn.addPriorityFeeIxn(priorityFee);
+    }
+
     axn.addRefreshObligation(payer);
     axn.addRequestElevationIx(elevationGroup, true);
 
@@ -407,6 +418,7 @@ export class KaminoAction {
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
+    priorityFee: number | bigint = 0,
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
@@ -428,6 +440,10 @@ export class KaminoAction {
 
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
+    }
+
+    if (priorityFee > 0) {
+      axn.addPriorityFeeIxn(priorityFee);
     }
 
     const allReserves = new PublicKeySet<PublicKey>([
@@ -498,6 +514,7 @@ export class KaminoAction {
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
+    priorityFee: number | bigint = 0,
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
@@ -518,6 +535,10 @@ export class KaminoAction {
     const addInitObligationForFarm = true;
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
+    }
+
+    if (priorityFee > 0) {
+      axn.addPriorityFeeIxn(priorityFee);
     }
 
     const allReserves = new PublicKeySet<PublicKey>([
@@ -551,6 +572,7 @@ export class KaminoAction {
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
+    priorityFee: number | bigint = 0,
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
@@ -572,6 +594,10 @@ export class KaminoAction {
 
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
+    }
+
+    if (priorityFee > 0) {
+      axn.addPriorityFeeIxn(priorityFee);
     }
 
     const allReserves = new PublicKeySet<PublicKey>([
@@ -604,6 +630,7 @@ export class KaminoAction {
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
+    priorityFee: number | bigint = 0,
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata,
@@ -625,6 +652,10 @@ export class KaminoAction {
 
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
+    }
+
+    if (priorityFee > 0) {
+      axn.addPriorityFeeIxn(priorityFee);
     }
 
     const allReserves = new PublicKeySet<PublicKey>([
@@ -657,6 +688,7 @@ export class KaminoAction {
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
+    priorityFee: number | bigint = 0,
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
@@ -678,6 +710,10 @@ export class KaminoAction {
 
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
+    }
+
+    if (priorityFee > 0) {
+      axn.addPriorityFeeIxn(priorityFee);
     }
 
     const allReserves = new PublicKeySet<PublicKey>([
@@ -712,6 +748,7 @@ export class KaminoAction {
     payer: PublicKey,
     obligation: KaminoObligation | ObligationType,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
+    priorityFee: number | bigint = 0,
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata,
@@ -738,6 +775,10 @@ export class KaminoAction {
 
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
+    }
+
+    if (priorityFee > 0) {
+      axn.addPriorityFeeIxn(priorityFee);
     }
 
     const allReserves = new PublicKeySet<PublicKey>([
@@ -781,6 +822,7 @@ export class KaminoAction {
     currentSlot: number,
     obligation: KaminoObligation | ObligationType,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
+    priorityFee: number | bigint = 0,
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata,
@@ -806,6 +848,10 @@ export class KaminoAction {
     const twoTokenAction = true;
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
+    }
+
+    if (priorityFee > 0) {
+      axn.addPriorityFeeIxn(priorityFee);
     }
 
     const allReserves = new PublicKeySet<PublicKey>([
@@ -847,6 +893,7 @@ export class KaminoAction {
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
+    priorityFee: number | bigint = 0,
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
@@ -868,6 +915,10 @@ export class KaminoAction {
 
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
+    }
+
+    if (priorityFee > 0) {
+      axn.addPriorityFeeIxn(priorityFee);
     }
 
     const allReserves = new PublicKeySet<PublicKey>([
@@ -918,6 +969,7 @@ export class KaminoAction {
     currentSlot: number,
     payer: PublicKey | undefined = undefined,
     extraComputeBudget: number = 1_000_000,
+    priorityFee: number | bigint = 0,
     includeAtaIxns: boolean = true,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true,
@@ -939,6 +991,10 @@ export class KaminoAction {
 
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
+    }
+
+    if (priorityFee > 0) {
+      axn.addPriorityFeeIxn(priorityFee);
     }
 
     const allReserves = new PublicKeySet<PublicKey>([
@@ -975,6 +1031,7 @@ export class KaminoAction {
     obligationOwner: PublicKey,
     obligation: KaminoObligation | ObligationType,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
+    priorityFee: number | bigint = 0,
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas, and creates all other token atas if they don't exist
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
@@ -1000,6 +1057,10 @@ export class KaminoAction {
 
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
+    }
+
+    if (priorityFee > 0) {
+      axn.addPriorityFeeIxn(priorityFee);
     }
 
     const allReserves = new PublicKeySet<PublicKey>([
@@ -2348,6 +2409,11 @@ export class KaminoAction {
   private addComputeBudgetIxn(units: number) {
     this.setupIxs.push(buildComputeBudgetIx(units));
     this.setupIxsLabels.push(`AddComputeBudget[${units}]`);
+  }
+
+  private addPriorityFeeIxn(microLamports: number | bigint) {
+    this.setupIxs.push(buildPriorityFeeIx(microLamports));
+    this.setupIxsLabels.push(`AddPriorityFee[${microLamports}]`);
   }
 
   private async addAtaIxs(action: ActionType) {
