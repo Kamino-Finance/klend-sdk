@@ -175,11 +175,8 @@ export class KaminoReserve {
    * @returns the stale cumulative borrow rate of the reserve from the last refresh
    */
   getCumulativeBorrowRate(): Decimal {
-    let accSf = new BN(0);
-    for (const value of this.state.liquidity.cumulativeBorrowRateBsf.value.reverse()) {
-      accSf = accSf.add(value);
-      accSf.shrn(64);
-    }
+    const cumulativeBorrowRateBsf = this.state.liquidity.cumulativeBorrowRateBsf.value;
+    const accSf = cumulativeBorrowRateBsf.reduce((prev, curr, i) => prev.add(curr.shln(i * 64)), new BN(0));
     return new Fraction(accSf).toDecimal();
   }
 
