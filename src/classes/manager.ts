@@ -18,6 +18,7 @@ import {
   NULL_PUBKEY,
   parseForChangesReserveConfigAndGetIxns,
   Reserve,
+  ReserveWithAddress,
   updateEntireReserveConfigIxn,
 } from '../lib';
 import { PROGRAM_ID } from '../idl_codegen/programId';
@@ -39,7 +40,6 @@ import {
 } from '../idl_codegen/types';
 import { numberToLamportsDecimal } from './utils';
 import Decimal from 'decimal.js';
-import { ReserveWithAddress } from '../../dist/classes/reserve';
 
 /**
  * KaminoVaultClient is a class that provides a high-level interface to interact with the Kamino Vault program.

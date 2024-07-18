@@ -36,9 +36,7 @@ import {
 import { Fraction } from './classes/fraction';
 import Decimal from 'decimal.js';
 import { BN } from '@coral-xyz/anchor';
-import { PythConfiguration } from './idl_codegen_kamino_vault/types';
-import { SwitchboardConfiguration } from '../dist/idl_codegen/types';
-import { ScopeConfiguration } from '../dist/idl_codegen_kamino_vault/types';
+import { PythConfiguration, ScopeConfiguration, SwitchboardConfiguration } from './idl_codegen_kamino_vault/types';
 import * as fs from 'fs';
 import { AssetReserveConfigCli } from './classes/manager';
 
