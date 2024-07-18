@@ -183,8 +183,8 @@ export class KaminoReserve {
   /**
    * @Returns estimated cumulative borrow rate of the reserve
    */
-  getEstimatedCumulativeBorrowRate(currentSlot: number): Decimal {
-    const currentBorrowRate = new Decimal(this.calculateBorrowAPR());
+  getEstimatedCumulativeBorrowRate(currentSlot: number, referralFeeBps: number): Decimal {
+    const currentBorrowRate = new Decimal(this.calculateBorrowAPR(currentSlot, referralFeeBps));
     const slotsElapsed = Math.max(currentSlot - this.state.lastUpdate.slot.toNumber(), 0);
 
     const compoundInterest = this.approximateCompoundedInterest(currentBorrowRate, slotsElapsed);
@@ -339,20 +339,12 @@ export class KaminoReserve {
     return new Decimal(this.state.config.borrowFactorPct.toString()).div(100);
   }
 
-  calculateSupplyAPR() {
+  calculateSupplyAPR(slot: number, referralFeeBps: number) {
     const currentUtilization = this.calculateUtilizationRatio();
 
-    const borrowAPR = this.calculateBorrowAPR();
+    const borrowRate = this.calculateEstimatedBorrowRate(slot, referralFeeBps);
     const protocolTakeRatePct = 1 - this.state.config.protocolTakeRatePct / 100;
-    return currentUtilization * borrowAPR * protocolTakeRatePct;
-  }
-
-  calculateEstimatedSupplyAPR(slot: number, referralFeeBps: number) {
-    const estimatedCurrentUtilization = this.getEstimatedUtilizationRatio(slot, referralFeeBps);
-
-    const borrowAPR = this.calculateEstimatedBorrowAPR(slot, referralFeeBps);
-    const protocolTakeRatePct = 1 - this.state.config.protocolTakeRatePct / 100;
-    return estimatedCurrentUtilization * borrowAPR * protocolTakeRatePct;
+    return currentUtilization * borrowRate * protocolTakeRatePct;
   }
 
   getEstimatedDebtAndSupply(slot: number, referralFeeBps: number): { totalBorrow: Decimal; totalSupply: Decimal } {
@@ -586,18 +578,24 @@ export class KaminoReserve {
     return 1000 / SLOTS_PER_SECOND / this.recentSlotDurationMs;
   }
 
-  calculateBorrowAPR() {
+  calculateBorrowRate() {
     const slotAdjustmentFactor = this.slotAdjustmentFactor();
     const currentUtilization = this.calculateUtilizationRatio();
     const curve = truncateBorrowCurve(this.state.config.borrowRateCurve.points);
+
     return getBorrowRate(currentUtilization, curve) * slotAdjustmentFactor;
   }
 
-  calculateEstimatedBorrowAPR(slot: number, referralFeeBps: number) {
+  calculateEstimatedBorrowRate(slot: number, referralFeeBps: number) {
     const slotAdjustmentFactor = this.slotAdjustmentFactor();
     const estimatedCurrentUtilization = this.getEstimatedUtilizationRatio(slot, referralFeeBps);
     const curve = truncateBorrowCurve(this.state.config.borrowRateCurve.points);
     return getBorrowRate(estimatedCurrentUtilization, curve) * slotAdjustmentFactor;
+  }
+
+  calculateBorrowAPR(slot: number, referralFeeBps: number) {
+    const borrowRate = this.calculateEstimatedBorrowRate(slot, referralFeeBps);
+    return borrowRate + this.getFixedHostInterestRate().toNumber();
   }
 
   /**
@@ -643,32 +641,22 @@ export class KaminoReserve {
     this.stats = this.formatReserveData(parsedData);
   }
 
-  totalSupplyAPY() {
+  totalSupplyAPY(currentSlot: number) {
     const { stats } = this;
     if (!stats) {
       throw Error('KaminoMarket must call loadRewards.');
     }
 
-    const totalAPY = new Decimal(stats.supplyInterestAPY).toNumber();
-
-    return {
-      interestAPY: stats.supplyInterestAPY,
-      totalAPY,
-    };
+    return calculateAPYFromAPR(this.calculateSupplyAPR(currentSlot, 0));
   }
 
-  totalBorrowAPY() {
+  totalBorrowAPY(currentSlot: number) {
     const { stats } = this;
     if (!stats) {
       throw Error('KaminoMarket must call loadRewards.');
     }
 
-    const totalAPY = new Decimal(stats.borrowInterestAPY).toNumber();
-
-    return {
-      interestAPY: stats.borrowInterestAPY,
-      totalAPY,
-    };
+    return calculateAPYFromAPR(this.calculateBorrowAPR(currentSlot, 0));
   }
 
   private formatReserveData(parsedData: ReserveFields): ReserveDataType {
@@ -702,8 +690,6 @@ export class KaminoReserve {
       // Reserve info
       symbol: parseTokenSymbol(parsedData.config.tokenInfo.name),
       decimals: this.state.liquidity.mintDecimals.toNumber(),
-      supplyInterestAPY: calculateAPYFromAPR(this.calculateSupplyAPR()),
-      borrowInterestAPY: calculateAPYFromAPR(this.calculateBorrowAPR()),
       accumulatedProtocolFees: this.getAccumulatedProtocolFees().div(this.getMintFactor()),
       mintTotalSupply,
       depositLimitCrossedSlot: parsedData.liquidity.depositLimitCrossedSlot.toNumber(),
@@ -737,7 +723,7 @@ export class KaminoReserve {
     newAccProtocolFees: Decimal;
     pendingReferralFees: Decimal;
   } {
-    const currentBorrowRate = this.calculateBorrowAPR();
+    const currentBorrowRate = this.calculateBorrowRate();
     const protocolTakeRate = new Decimal(this.state.config.protocolTakeRatePct).div(100);
     const referralRate = new Decimal(referralFeeBps).div(10_000);
     const fixedHostInterestRate = this.getFixedHostInterestRate();
