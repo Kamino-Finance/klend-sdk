@@ -1,4 +1,4 @@
-import { NATIVE_MINT } from '@solana/spl-token';
+import { NATIVE_MINT, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import {
   AssetReserveConfig,
   buildAndSendTxn,
@@ -61,6 +61,7 @@ export async function createMarketWithTwoAssets(
     ? solConfigOverride
     : new AssetReserveConfig({
         mint: NATIVE_MINT,
+        mintTokenProgram: TOKEN_PROGRAM_ID,
         tokenName: 'SOL',
         mintDecimals: 9,
         priceFeed: {
@@ -78,6 +79,7 @@ export async function createMarketWithTwoAssets(
     ? usdcConfigOverride
     : new AssetReserveConfig({
         mint: mintUSDC,
+        mintTokenProgram: TOKEN_PROGRAM_ID,
         tokenName: 'USDC',
         mintDecimals: 6,
         priceFeed: {

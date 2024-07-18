@@ -1,3 +1,4 @@
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { KaminoAction, KaminoMarket, KaminoObligation, numberToLamportsDecimal } from '../classes';
 import { SwapInputs, SwapIxnsProvider, getFlashLoanInstructions, toJson } from '../leverage';
 import {
@@ -174,13 +175,18 @@ export const getRepayWithCollIxns = async (props: {
 
   // // 1. Create atas & budget txns
   const mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint()];
+  const mintsToCreateAtasTokenPrograms = [
+    collReserve?.getLiquidityTokenProgram()!,
+    debtReserve?.getLiquidityTokenProgram()!,
+    TOKEN_PROGRAM_ID,
+  ];
 
   const budgetIxns = budgetAndPriorityFeeIxns || getComputeBudgetAndPriorityFeeIxns(3000000);
   const {
     atas: [, debtTokenAta],
     createAtasIxns,
     closeAtasIxns,
-  } = await getAtasWithCreateIxnsIfMissing(connection, owner, mintsToCreateAtas);
+  } = await getAtasWithCreateIxnsIfMissing(connection, owner, mintsToCreateAtas, mintsToCreateAtasTokenPrograms);
 
   // 1. Flash borrow & repay the debt to repay amount needed
   const { flashBorrowIxn, flashRepayIxn } = getFlashLoanInstructions({

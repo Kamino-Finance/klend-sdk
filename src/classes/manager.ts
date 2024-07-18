@@ -240,6 +240,7 @@ export interface AssetConfig {
   readonly mint: PublicKey;
   readonly tokenName: string;
   readonly mintDecimals: number;
+  readonly mintTokenProgram: PublicKey;
   assetReserveConfigParams: AssetReserveConfigParams;
 
   setAssetConfigParams(assetReserveConfigParams: AssetReserveConfigParams): void;
@@ -250,10 +251,12 @@ export class AssetReserveConfig implements AssetConfig {
   readonly mint: PublicKey;
   readonly tokenName: string;
   readonly mintDecimals: number;
+  readonly mintTokenProgram: PublicKey;
   assetReserveConfigParams: AssetReserveConfigParams;
 
   constructor(fields: {
     mint: PublicKey;
+    mintTokenProgram: PublicKey;
     tokenName: string;
     mintDecimals: number;
     priceFeed: PriceFeed;
@@ -266,6 +269,7 @@ export class AssetReserveConfig implements AssetConfig {
     this.mint = fields.mint;
     this.tokenName = fields.tokenName;
     this.mintDecimals = fields.mintDecimals;
+    this.mintTokenProgram = fields.mintTokenProgram;
 
     // TODO: verify defaults and ensure opinionated
     this.assetReserveConfigParams = DefaultConfigParams;
@@ -294,15 +298,17 @@ export class AssetReserveConfigCli implements AssetConfig {
   readonly mint: PublicKey;
   readonly tokenName: string;
   readonly mintDecimals: number;
+  readonly mintTokenProgram: PublicKey;
   private reserveConfig: ReserveConfig | undefined;
   assetReserveConfigParams: AssetReserveConfigParams;
 
-  constructor(mint: PublicKey, reserveConfig: ReserveConfig) {
+  constructor(mint: PublicKey, mintTokenProgram: PublicKey, reserveConfig: ReserveConfig) {
     this.reserveConfig = reserveConfig;
     this.tokenName = '';
     this.mintDecimals = 0;
     this.assetReserveConfigParams = DefaultConfigParams;
     this.mint = mint;
+    this.mintTokenProgram = mintTokenProgram;
   }
 
   setAssetConfigParams(assetReserveConfigParams: AssetReserveConfigParams): void {
@@ -328,10 +334,12 @@ export class CollateralConfig implements AssetConfig {
   readonly mint: PublicKey;
   readonly tokenName: string;
   readonly mintDecimals: number;
+  readonly mintTokenProgram: PublicKey;
   assetReserveConfigParams: AssetReserveConfigParams;
 
   constructor(fields: {
     mint: PublicKey;
+    mintTokenProgram: PublicKey;
     tokenName: string;
     mintDecimals: number;
     priceFeed: PriceFeed;
@@ -341,6 +349,7 @@ export class CollateralConfig implements AssetConfig {
     this.mint = fields.mint;
     this.tokenName = fields.tokenName;
     this.mintDecimals = fields.mintDecimals;
+    this.mintTokenProgram = fields.mintTokenProgram;
 
     // TODO: verify defaults and ensure opinionated
     this.assetReserveConfigParams = DefaultConfigParams;
@@ -367,10 +376,12 @@ export class DebtConfig implements AssetConfig {
   readonly mint: PublicKey;
   readonly tokenName: string;
   readonly mintDecimals: number;
+  readonly mintTokenProgram: PublicKey;
   assetReserveConfigParams: AssetReserveConfigParams;
 
   constructor(fields: {
     mint: PublicKey;
+    mintTokenProgram: PublicKey;
     tokenName: string;
     mintDecimals: number;
     priceFeed: PriceFeed;
@@ -379,6 +390,7 @@ export class DebtConfig implements AssetConfig {
     this.mint = fields.mint;
     this.tokenName = fields.tokenName;
     this.mintDecimals = fields.mintDecimals;
+    this.mintTokenProgram = fields.mintTokenProgram;
 
     // TODO: verify defaults and ensure opinionated
     this.assetReserveConfigParams = DefaultConfigParams;
@@ -521,8 +533,10 @@ function buildReserveConfig(fields: {
     multiplierTagBoost: Array(8).fill(1),
     disableUsageAsCollOutsideEmode: 0,
     utilizationLimitBlockBorrowingAbove: 0,
-    reserved0: Array(2).fill(0),
-    reserved1: Array(4).fill(0),
+    hostFixedInterestRateBps: 0,
+    borrowLimitOutsideElevationGroup: new BN(0),
+    borrowLimitAgainstThisCollateralInElevationGroup: Array(32).fill(new BN(0)),
+    reserved1: Array(2).fill(0),
   };
 
   return new ReserveConfig(reserveConfigFields);

@@ -9,9 +9,10 @@ import {
 } from './setup_utils';
 import Decimal from 'decimal.js';
 import * as assert from 'assert';
-import { MultiplyObligation, fuzzyEq, sleep } from '../src';
+import { MultiplyObligation, sleep } from '../src';
 
 import {
+  U64_MAX,
   getAdjustLeverageSwapInputs,
   getDepositWithLeverageSwapInputs,
   getWithdrawWithLeverageSwapInputs,
@@ -25,6 +26,10 @@ import {
 } from './leverage_utils';
 import { assertSwapInputsMatch } from './assert';
 import { lamportsToNumberDecimal } from '../src/classes/utils';
+import { updateReserveSingleValue } from './setup_operations';
+import { UpdateConfigMode } from '../src/idl_codegen/types';
+import { collToLamportsDecimal } from '@hubbleprotocol/kamino-sdk';
+import { fuzzyEq } from '../src/leverage/calcs';
 
 // TODO: test with sol and wrapped sol
 // - [x] test when the one of the tokens is 0 entirely
@@ -1909,6 +1914,18 @@ describe('Leverage SDK tests', function () {
       requestElevationGroup
     );
 
+    const collReserve = kaminoMarket.getReserveBySymbol(collToken);
+
+    const buffer = Buffer.alloc(8 * 32);
+    buffer.writeBigUint64LE(BigInt(U64_MAX), 0);
+
+    await updateReserveSingleValue(
+      env,
+      collReserve!,
+      buffer,
+      UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.discriminator + 1 // discriminator + 1 matches the enum
+    );
+
     console.log('Creating user ===');
     const borrower = await newUser(env, kaminoMarket, [
       [collToken, new Decimal(10)],
@@ -1956,5 +1973,78 @@ describe('Leverage SDK tests', function () {
     );
 
     assert.ok(fuzzyEq(leverage, targetLeverage.toNumber(), 0.006));
+  });
+
+  it('deposit first time with leverage debt token, check maxBorrowable', async function () {
+    const [collToken, debtToken] = ['MSOL', 'USDC'];
+    const depositToken = debtToken;
+    const getPrice = (a: string, b: string) => getPriceMock(kaminoMarket, a, b);
+    const slippagePct = 0.01;
+    const depositAmountFirst = new Decimal(5);
+    const targetLeverage = new Decimal(3);
+
+    console.log('Setting up market ===');
+    const { env, kaminoMarket } = await createMarketWithTwoReservesToppedUp(
+      [collToken, new Decimal(1000.05)],
+      [debtToken, new Decimal(1000.05)]
+    );
+
+    console.log('Creating user ===');
+    const borrower = await newUser(env, kaminoMarket, [
+      [collToken, new Decimal(20)],
+      [debtToken, new Decimal(20)],
+    ]);
+
+    const maxBorrowableNoObligaton = await kaminoMarket.getMaxLeverageBorrowableAmount(
+      kaminoMarket.getReserveBySymbol(collToken)!,
+      kaminoMarket.getReserveBySymbol(debtToken)!,
+      await env.provider.connection.getSlot()
+    );
+    console.log('Max borrowable no obligation ===', maxBorrowableNoObligaton);
+    assert.ok(
+      maxBorrowableNoObligaton.eq(
+        collToLamportsDecimal(
+          new Decimal(1000.05),
+          kaminoMarket.getReserveBySymbol(debtToken)!.state.liquidity.mintDecimals.toNumber()
+        )
+      )
+    );
+
+    console.log('Depositing with leverage ===');
+    await depositLeverageTestAdapter(
+      env,
+      borrower,
+      kaminoMarket,
+      depositToken,
+      collToken,
+      debtToken,
+      depositAmountFirst,
+      targetLeverage,
+      slippagePct,
+      getPrice
+    );
+
+    const obligation = (await kaminoMarket.getUserObligationsByTag(MultiplyObligation.tag, borrower.publicKey))[0];
+    const [leverage, _ltv] = [obligation.refreshedStats.leverage, obligation.loanToValue()];
+    assert.ok(fuzzyEq(leverage, 3, 0.001));
+
+    const maxBorrowableWithObligaton = await kaminoMarket.getMaxLeverageBorrowableAmount(
+      kaminoMarket.getReserveBySymbol(collToken)!,
+      kaminoMarket.getReserveBySymbol(debtToken)!,
+      await env.provider.connection.getSlot(),
+      obligation
+    );
+
+    console.log('Max borrowable with obligation ===', maxBorrowableWithObligaton);
+    assert.ok(
+      fuzzyEq(
+        lamportsToNumberDecimal(
+          maxBorrowableWithObligaton,
+          kaminoMarket.getReserveBySymbol(debtToken)!.state.liquidity.mintDecimals.toNumber()
+        ),
+        new Decimal(1.24),
+        0.01
+      )
+    );
   });
 });

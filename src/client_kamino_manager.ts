@@ -79,13 +79,15 @@ async function main() {
     .command('add-asset-to-market')
     .requiredOption('--market <string>', 'Market addres to add asset to')
     .requiredOption('--mint <string>', 'Reserve liquidity token mint')
+    .requiredOption('--mint-program-id <string>', 'Reserve liquidity token mint program id')
     .requiredOption('--reserve-config-path <string>', 'Path for the reserve config')
     .option(`--bs58`, 'If true, will print a bs58 txn instead of executing')
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--multisig <string>`, 'If using bs58 this is required, otherwise will be ignored')
-    .action(async ({ market, mint, reserveConfigPath, bs58, staging, multisig }) => {
+    .action(async ({ market, mint, mintProgramId, reserveConfigPath, bs58, staging, multisig }) => {
       const env = initializeClient(bs58, staging);
       const tokenMint = new PublicKey(mint);
+      const tokenMintProgramId = new PublicKey(mintProgramId);
       const marketAddress = new PublicKey(market);
 
       if (bs58 && !multisig) {
@@ -98,7 +100,7 @@ async function main() {
       const farmConfigFromFile = JSON.parse(fs.readFileSync(reserveConfigPath, 'utf8'));
 
       const reserveConfig = parseReserveConfigFromFile(farmConfigFromFile);
-      const assetConfig = new AssetReserveConfigCli(tokenMint, reserveConfig);
+      const assetConfig = new AssetReserveConfigCli(tokenMint, tokenMintProgramId, reserveConfig);
 
       const { reserve, txnIxns } = await kaminoManager.addAssetToMarket({
         admin: bs58 ? multisigPk : env.payer.publicKey,
@@ -379,8 +381,10 @@ function parseReserveConfigFromFile(farmConfigFromFile: any): ReserveConfig {
     multiplierTagBoost: farmConfigFromFile.multiplier_tag_boost,
     disableUsageAsCollOutsideEmode: farmConfigFromFile.disable_usage_as_coll_outside_emode,
     utilizationLimitBlockBorrowingAbove: farmConfigFromFile.utilization_limit_block_borrowing_above,
-    reserved0: Array(2).fill(0),
-    reserved1: Array(4).fill(0),
+    hostFixedInterestRateBps: farmConfigFromFile.host_fixed_interest_rate_bps,
+    borrowLimitOutsideElevationGroup: farmConfigFromFile.borrow_limit_outside_elevation_group,
+    borrowLimitAgainstThisCollateralInElevationGroup: parseReserveBorrowLimitAgainstCollInEmode(farmConfigFromFile),
+    reserved1: Array(2).fill(0),
   };
 
   return new ReserveConfig(reserveConfigFields);
@@ -437,4 +441,14 @@ function parseBorrowRateCurve(farmConfigFromFile: any): BorrowRateCurve {
   const borrowRateCurve = new BorrowRateCurve({ points: finalCruvePoints });
 
   return borrowRateCurve;
+}
+
+function parseReserveBorrowLimitAgainstCollInEmode(farmConfigFromFile: any): BN[] {
+  const reserveBorrowLimitAgainstCollInEmode = Array(32).fill(new BN(0));
+
+  farmConfigFromFile.reserve_borrow_limit_against_coll_in_emode.forEach((limit: any, index: number) =>
+    reserveBorrowLimitAgainstCollInEmode[index] = new BN(limit)
+  );
+
+  return reserveBorrowLimitAgainstCollInEmode;
 }

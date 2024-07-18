@@ -134,6 +134,7 @@ export const depositLeverageTestAdapter = async (
     obligation,
     currentSlot,
     getTotalKlendAccountsOnly: false,
+    scopeFeed: env.testCase,
   });
 
   // Create lookup table
@@ -250,6 +251,7 @@ export const withdrawLeverageTestAdapter = async (
     obligation,
     currentSlot,
     getTotalKlendAccountsOnly: false,
+    scopeFeed: env.testCase,
   });
 
   // Create lookup table
@@ -355,6 +357,7 @@ export const adjustLeverageTestAdapter = async (
     obligation,
     currentSlot,
     getTotalKlendAccountsOnly: false,
+    scopeFeed: env.testCase,
   });
 
   // Create lookup table
@@ -423,10 +426,8 @@ export const getPriceMock = async (
     throw Error('Price is not loaded.');
   }
 
-  console.log('aPrice', aPrice);
-  console.log('bPrice', bPrice);
-  console.log('tokenA', tokenA);
-  console.log('tokenB', tokenB);
+  console.log(`A px ${aPrice}, mint ${tokenA.toString()}`);
+  console.log(`B px ${bPrice}, mint ${tokenB.toString()}`);
 
   return aPrice && bPrice ? aPrice / bPrice : 0;
 };

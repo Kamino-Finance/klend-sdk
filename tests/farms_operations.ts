@@ -6,17 +6,8 @@ import {
   TransactionSignature,
   VersionedTransaction,
 } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { Env } from './setup_utils';
-import {
-  initFarmsForReserve,
-  InitFarmsForReserveAccounts,
-  KaminoObligation,
-  LendingMarket,
-  lendingMarketAuthPda,
-  Reserve,
-  sleep,
-} from '../src';
+import { initFarmsForReserve, KaminoObligation, LendingMarket, lendingMarketAuthPda, Reserve, sleep } from '../src';
 import { ReserveFarmKind } from '../src/idl_codegen/types';
 import { buildAndSendTxnWithLogs, buildVersionedTransaction } from '../src/utils';
 import Decimal from 'decimal.js';
@@ -63,9 +54,8 @@ export async function initializeFarmsForReserve(
       farmState: farmState.publicKey,
       farmsVaultAuthority: getFarmAuthorityPDA(farmsId, farmState.publicKey),
       rent: SYSVAR_RENT_PUBKEY,
-      tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
-    } as InitFarmsForReserveAccounts
+    }
   );
 
   const tx = await buildVersionedTransaction(env.provider.connection, lendingMarketOwner, [createFarmIx, ix]);
@@ -107,8 +97,14 @@ export async function addRewardToFarm(
   const farmsClient = new Farms(env.provider.connection);
   const reserveState: Reserve = (await Reserve.fetch(env.provider.connection, reserve))!!;
   const farmAddress = kind === 'Collateral' ? reserveState.farmCollateral : reserveState.farmDebt;
-
-  const ix = await farmsClient.addRewardToFarmIx(env.admin.publicKey, farmsGlobalConfig, farmAddress, rewardMint);
+  const tokenProgram = (await env.provider.connection.getAccountInfo(rewardMint))!.owner;
+  const ix = await farmsClient.addRewardToFarmIx(
+    env.admin.publicKey,
+    farmsGlobalConfig,
+    farmAddress,
+    rewardMint,
+    tokenProgram
+  );
   const tx = await buildVersionedTransaction(env.provider.connection, env.admin.publicKey, [ix]);
   const sig = await buildAndSendTxnWithLogs(env.provider.connection, tx, env.admin, []);
   return sig;
@@ -143,7 +139,7 @@ export async function updateRps(
   await sleep(3000);
   const reserveState: Reserve = (await Reserve.fetch(env.provider.connection, reserve))!!;
   const farmAddress = kind === 'Collateral' ? reserveState.farmCollateral : reserveState.farmDebt;
-  const ix = await farmsClient.updateRewardToFarmIx(
+  const ix = await farmsClient.updateFarmConfigIx(
     env.admin.publicKey,
     farmAddress,
     rewardMint,

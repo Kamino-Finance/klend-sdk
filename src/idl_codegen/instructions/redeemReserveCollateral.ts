@@ -13,11 +13,13 @@ export interface RedeemReserveCollateralAccounts {
   lendingMarket: PublicKey
   reserve: PublicKey
   lendingMarketAuthority: PublicKey
+  reserveLiquidityMint: PublicKey
   reserveCollateralMint: PublicKey
   reserveLiquiditySupply: PublicKey
   userSourceCollateral: PublicKey
   userDestinationLiquidity: PublicKey
-  tokenProgram: PublicKey
+  collateralTokenProgram: PublicKey
+  liquidityTokenProgram: PublicKey
   instructionSysvarAccount: PublicKey
 }
 
@@ -36,6 +38,11 @@ export function redeemReserveCollateral(
       pubkey: accounts.lendingMarketAuthority,
       isSigner: false,
       isWritable: false,
+    },
+    {
+      pubkey: accounts.reserveLiquidityMint,
+      isSigner: false,
+      isWritable: true,
     },
     {
       pubkey: accounts.reserveCollateralMint,
@@ -57,7 +64,16 @@ export function redeemReserveCollateral(
       isSigner: false,
       isWritable: true,
     },
-    { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
+    {
+      pubkey: accounts.collateralTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.liquidityTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
     {
       pubkey: accounts.instructionSysvarAccount,
       isSigner: false,

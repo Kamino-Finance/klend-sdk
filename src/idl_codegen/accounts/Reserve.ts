@@ -22,6 +22,12 @@ export interface ReserveFields {
   /** Reserve configuration values */
   config: types.ReserveConfigFields
   configPadding: Array<BN>
+  borrowedAmountOutsideElevationGroup: BN
+  /**
+   * Amount of token borrowed in lamport of debt asset in the given
+   * elevation group when this reserve is part of the collaterals.
+   */
+  borrowedAmountsAgainstThisReserveInElevationGroups: Array<BN>
   padding: Array<BN>
 }
 
@@ -43,6 +49,12 @@ export interface ReserveJSON {
   /** Reserve configuration values */
   config: types.ReserveConfigJSON
   configPadding: Array<string>
+  borrowedAmountOutsideElevationGroup: string
+  /**
+   * Amount of token borrowed in lamport of debt asset in the given
+   * elevation group when this reserve is part of the collaterals.
+   */
+  borrowedAmountsAgainstThisReserveInElevationGroups: Array<string>
   padding: Array<string>
 }
 
@@ -64,6 +76,12 @@ export class Reserve {
   /** Reserve configuration values */
   readonly config: types.ReserveConfig
   readonly configPadding: Array<BN>
+  readonly borrowedAmountOutsideElevationGroup: BN
+  /**
+   * Amount of token borrowed in lamport of debt asset in the given
+   * elevation group when this reserve is part of the collaterals.
+   */
+  readonly borrowedAmountsAgainstThisReserveInElevationGroups: Array<BN>
   readonly padding: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -81,8 +99,14 @@ export class Reserve {
     types.ReserveCollateral.layout("collateral"),
     borsh.array(borsh.u64(), 150, "reserveCollateralPadding"),
     types.ReserveConfig.layout("config"),
-    borsh.array(borsh.u64(), 150, "configPadding"),
-    borsh.array(borsh.u64(), 240, "padding"),
+    borsh.array(borsh.u64(), 117, "configPadding"),
+    borsh.u64("borrowedAmountOutsideElevationGroup"),
+    borsh.array(
+      borsh.u64(),
+      32,
+      "borrowedAmountsAgainstThisReserveInElevationGroups"
+    ),
+    borsh.array(borsh.u64(), 207, "padding"),
   ])
 
   constructor(fields: ReserveFields) {
@@ -97,6 +121,10 @@ export class Reserve {
     this.reserveCollateralPadding = fields.reserveCollateralPadding
     this.config = new types.ReserveConfig({ ...fields.config })
     this.configPadding = fields.configPadding
+    this.borrowedAmountOutsideElevationGroup =
+      fields.borrowedAmountOutsideElevationGroup
+    this.borrowedAmountsAgainstThisReserveInElevationGroups =
+      fields.borrowedAmountsAgainstThisReserveInElevationGroups
     this.padding = fields.padding
   }
 
@@ -155,6 +183,10 @@ export class Reserve {
       reserveCollateralPadding: dec.reserveCollateralPadding,
       config: types.ReserveConfig.fromDecoded(dec.config),
       configPadding: dec.configPadding,
+      borrowedAmountOutsideElevationGroup:
+        dec.borrowedAmountOutsideElevationGroup,
+      borrowedAmountsAgainstThisReserveInElevationGroups:
+        dec.borrowedAmountsAgainstThisReserveInElevationGroups,
       padding: dec.padding,
     })
   }
@@ -176,6 +208,12 @@ export class Reserve {
       ),
       config: this.config.toJSON(),
       configPadding: this.configPadding.map((item) => item.toString()),
+      borrowedAmountOutsideElevationGroup:
+        this.borrowedAmountOutsideElevationGroup.toString(),
+      borrowedAmountsAgainstThisReserveInElevationGroups:
+        this.borrowedAmountsAgainstThisReserveInElevationGroups.map((item) =>
+          item.toString()
+        ),
       padding: this.padding.map((item) => item.toString()),
     }
   }
@@ -197,6 +235,13 @@ export class Reserve {
       ),
       config: types.ReserveConfig.fromJSON(obj.config),
       configPadding: obj.configPadding.map((item) => new BN(item)),
+      borrowedAmountOutsideElevationGroup: new BN(
+        obj.borrowedAmountOutsideElevationGroup
+      ),
+      borrowedAmountsAgainstThisReserveInElevationGroups:
+        obj.borrowedAmountsAgainstThisReserveInElevationGroups.map(
+          (item) => new BN(item)
+        ),
       padding: obj.padding.map((item) => new BN(item)),
     })
   }

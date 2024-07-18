@@ -1,6 +1,7 @@
 {
   "status": 0,
   "asset_tier": 0,
+  "host_fixed_interest_rate_bps": 0,
   "multiplier_side_boost": [1, 1],
   "multiplier_tag_boost": [1, 1, 1, 1, 1, 1, 1, 1],
   "protocol_take_rate_pct": 11,

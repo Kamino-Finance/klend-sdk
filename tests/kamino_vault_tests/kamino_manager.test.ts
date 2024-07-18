@@ -11,7 +11,7 @@ import {
 } from '../../src/lib';
 import { KaminoVault, KaminoVaultConfig, ReserveAllocationConfig } from '../../src/classes/vault';
 import { createMint } from '../token_utils';
-import { NATIVE_MINT } from '@solana/spl-token';
+import { NATIVE_MINT, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { OracleType } from '@hubbleprotocol/scope-sdk';
 import {
   createMarketWithTwoAssets,
@@ -61,6 +61,7 @@ describe('Kamino Manager Tests', function () {
     // Create Asset Configs and add them to the market
     const solConfig = new CollateralConfig({
       mint: NATIVE_MINT,
+      mintTokenProgram: TOKEN_PROGRAM_ID,
       tokenName: 'SOL',
       mintDecimals: 9,
       priceFeed: {
@@ -73,6 +74,7 @@ describe('Kamino Manager Tests', function () {
 
     const usdcConfig = new DebtConfig({
       mint: mintUSDC,
+      mintTokenProgram: TOKEN_PROGRAM_ID,
       tokenName: 'USDC',
       mintDecimals: 6,
       priceFeed: {

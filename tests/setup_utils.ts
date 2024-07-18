@@ -4,6 +4,7 @@ import Decimal from 'decimal.js';
 
 import {
   AddressLookupTableProgram,
+  Connection,
   ConnectionConfig,
   Keypair,
   LAMPORTS_PER_SOL,
@@ -26,20 +27,25 @@ import {
   initReferrerTokenState,
   KaminoAction,
   KaminoMarket,
+  KaminoReserve,
   lamportsToNumberDecimal,
   NULL_PUBKEY,
   numberToLamportsDecimal,
   ObligationType,
   PROGRAM_ID,
   referrerTokenStatePda,
+  Reserve,
+  ReserveFields,
   sleep,
   toJson,
+  U64_MAX,
   VanillaObligation,
 } from '../src';
 import {
   BorrowRateCurve,
   BorrowRateCurveFields,
   CurvePoint,
+  CurvePointFields,
   PriceHeuristic,
   PythConfiguration,
   ReserveConfig,
@@ -57,7 +63,12 @@ import {
   updateReserve,
 } from './setup_operations';
 import { createAta, createMint, getBurnFromIx, getMintToIx, mintTo } from './token_utils';
-import { TOKEN_PROGRAM_ID, Token } from '@solana/spl-token';
+import {
+  TOKEN_PROGRAM_ID,
+  createTransferCheckedInstruction,
+  getMint,
+  createCloseAccountInstruction,
+} from '@solana/spl-token';
 import { Price, PriceFeed, getPriceAcc } from './kamino/price';
 import { AssetQuantityTuple, isKToken } from './kamino/utils';
 import {
@@ -191,6 +202,7 @@ export const makeReserveConfig = (tokenName: string, params: ConfigParams = Defa
     USDH: pythUsdcPrice,
     USDT: pythUsdcPrice,
     UXD: pythUsdcPrice,
+    PYUSD: pythUsdcPrice,
   };
 
   const priceFeed = params.priceFeed
@@ -258,9 +270,11 @@ export const makeReserveConfig = (tokenName: string, params: ConfigParams = Defa
     deleveragingThresholdSlotsPerBps: new BN(7200), // 0.01% per hour
     multiplierTagBoost: Array(8).fill(1),
     disableUsageAsCollOutsideEmode: 0,
+    borrowLimitOutsideElevationGroup: new BN(U64_MAX),
+    borrowLimitAgainstThisCollateralInElevationGroup: [...Array(32)].map(() => new BN(0)),
     utilizationLimitBlockBorrowingAbove: 0,
-    reserved0: Array(2).fill(0),
-    reserved1: Array(4).fill(0),
+    hostFixedInterestRateBps: 0,
+    reserved1: Array(3).fill(0),
   };
   return new ReserveConfig(reserveConfig);
 };
@@ -297,7 +311,11 @@ export function getOracleConfigs(priceFeed: PriceFeed): {
       });
       break;
     }
-    case new OracleType.KToken().kind: {
+    case new OracleType.KToken().kind:
+    case new OracleType.JupiterLpCompute().kind:
+    case new OracleType.JupiterLpScope().kind:
+    case new OracleType.JupiterLpFetch().kind:
+    case new OracleType.SplStake().kind: {
       scopeConfiguration = new ScopeConfiguration({
         ...scopeConfiguration,
         priceFeed: price,
@@ -391,13 +409,15 @@ export const makeMockOracleConfig = (tokenName: string, params: ConfigParams = D
     }),
     deleveragingMarginCallPeriodSecs: new BN(259200), // 3 days
     borrowFactorPct: new BN(100),
-    elevationGroups: [0, 0, 0, 0, 0],
+    elevationGroups: [...Array(20)].map(() => 0),
     utilizationLimitBlockBorrowingAbove: 0,
     deleveragingThresholdSlotsPerBps: new BN(7200), // 0.01% per hour
     multiplierTagBoost: Array(8).fill(0),
     disableUsageAsCollOutsideEmode: 0,
-    reserved0: Array(2).fill(0),
-    reserved1: Array(4).fill(0),
+    borrowLimitOutsideElevationGroup: new BN(10_000_000_000_000),
+    borrowLimitAgainstThisCollateralInElevationGroup: [...Array(32)].map(() => new BN(0)),
+    hostFixedInterestRateBps: 0,
+    reserved1: Array(3).fill(0),
   };
   return new ReserveConfig(reserveConfig);
 };
@@ -419,18 +439,19 @@ const encodeTokenName = (tokenName: string): number[] => {
 export const sendTransactionsFromAction = async (
   env: Env,
   kaminoAction: KaminoAction,
+  payer: Keypair,
   signers: Array<Keypair> = [],
   loookupTables: Array<PublicKey> = []
 ): Promise<TransactionSignature> => {
   if (kaminoAction.preTxnIxs.length > 0) {
-    const preTxn = await buildVersionedTransaction(
-      env.provider.connection,
-      env.admin.publicKey,
-      kaminoAction.preTxnIxs
-    );
+    const preTxn = await buildVersionedTransaction(env.provider.connection, payer.publicKey, kaminoAction.preTxnIxs);
     console.log('PreTxnIxns:', kaminoAction.preTxnIxsLabels);
-    const txHash = await buildAndSendTxnWithLogs(env.provider.connection, preTxn, env.admin, signers);
-    console.log(`PreTxnIxns hash: ${txHash}`);
+    try {
+      const txHash = await buildAndSendTxnWithLogs(env.provider.connection, preTxn, payer, signers);
+      console.log(`PreTxnIxns hash: ${txHash}`);
+    } catch (e) {
+      console.log('PreTxnIxns error:', e);
+    }
     await sleep(2000);
   }
 
@@ -488,7 +509,7 @@ export const createMarketWithLoan = async (deposit: BN, borrow: BN) => {
       1_000_000,
       true
     );
-    await sendTransactionsFromAction(env, depositAction);
+    await sendTransactionsFromAction(env, depositAction, env.admin);
     await sleep(2000);
   }
   if (borrow.gt(new BN(0))) {
@@ -501,7 +522,7 @@ export const createMarketWithLoan = async (deposit: BN, borrow: BN) => {
       1_000_000,
       true
     );
-    await sendTransactionsFromAction(env, borrowAction);
+    await sendTransactionsFromAction(env, borrowAction, env.admin);
     await sleep(2000);
   }
 
@@ -510,33 +531,49 @@ export const createMarketWithLoan = async (deposit: BN, borrow: BN) => {
   return { env, reserve, kaminoMarket, obligation };
 };
 
+export type ReserveSpec = {
+  symbol: string;
+  tokenProgram: PublicKey;
+};
+
 export const createMarketWithTwoReserves = async (
-  firstSymbol: string,
-  secondSymbol: string,
+  firstReserve: string | ReserveSpec,
+  secondReserve: string | ReserveSpec,
   requestElevationGroup: boolean
 ) => {
   const env = await initEnv('localnet');
+  const firstReserveSpec =
+    typeof firstReserve === 'string' ? { symbol: firstReserve, tokenProgram: TOKEN_PROGRAM_ID } : firstReserve;
+  const secondReserveSpec =
+    typeof secondReserve === 'string' ? { symbol: secondReserve, tokenProgram: TOKEN_PROGRAM_ID } : secondReserve;
+
+  const scope = new Scope('localnet', env.provider.connection);
+  await createScopeFeed(env, scope);
 
   const [createMarketSig, lendingMarket] = await createMarket(env);
   console.log(createMarketSig);
 
-  if (requestElevationGroup) {
-    await sleep(1000);
-    await updateMarketElevationGroup(env, lendingMarket.publicKey);
-  }
-
   await updateMarketMultiplierPoints(env, lendingMarket.publicKey, 1);
 
   const [firstMint, secondMint] = await Promise.all([
-    firstSymbol === 'SOL' ? WRAPPED_SOL_MINT : createMint(env, env.admin.publicKey, 6),
-    secondSymbol === 'SOL' ? WRAPPED_SOL_MINT : createMint(env, env.admin.publicKey, 6),
+    firstReserveSpec.symbol === 'SOL'
+      ? WRAPPED_SOL_MINT
+      : createMint(env, env.admin.publicKey, 6, Keypair.generate(), firstReserveSpec.tokenProgram),
+    secondReserveSpec.symbol === 'SOL'
+      ? WRAPPED_SOL_MINT
+      : createMint(env, env.admin.publicKey, 6, Keypair.generate(), secondReserveSpec.tokenProgram),
   ]);
 
   await sleep(2000);
-  const [[, firstReserve], [, secondReserve]] = await Promise.all([
-    createReserve(env, lendingMarket.publicKey, firstMint),
-    createReserve(env, lendingMarket.publicKey, secondMint),
+  const [[, firstReserveAddress], [, secondReserveAddress]] = await Promise.all([
+    createReserve(env, lendingMarket.publicKey, firstMint, firstReserveSpec.tokenProgram),
+    createReserve(env, lendingMarket.publicKey, secondMint, secondReserveSpec.tokenProgram),
   ]);
+
+  if (requestElevationGroup) {
+    await sleep(1000);
+    await updateMarketElevationGroup(env, lendingMarket.publicKey, secondReserveAddress.publicKey);
+  }
 
   const extraParams: ConfigParams = requestElevationGroup
     ? {
@@ -546,12 +583,12 @@ export const createMarketWithTwoReserves = async (
     : {
         ...DefaultConfigParams,
       };
-  const firstReserveConfig = makeReserveConfig(firstSymbol, extraParams);
-  const secondReserveConfig = makeReserveConfig(secondSymbol, extraParams);
+  const firstReserveConfig = makeReserveConfig(firstReserveSpec.symbol, extraParams);
+  const secondReserveConfig = makeReserveConfig(secondReserveSpec.symbol, extraParams);
 
   await Promise.all([
-    updateReserve(env, firstReserve.publicKey, firstReserveConfig),
-    updateReserve(env, secondReserve.publicKey, secondReserveConfig),
+    updateReserve(env, firstReserveAddress.publicKey, firstReserveConfig),
+    updateReserve(env, secondReserveAddress.publicKey, secondReserveConfig),
   ]);
   await sleep(1000);
 
@@ -680,10 +717,11 @@ export const newUser = async (
       console.log('reserve.getLiquidityMint()', reserve.getLiquidityMint());
 
       if (mint.equals(WRAPPED_SOL_MINT)) {
-        const [ata, ix] = await createAssociatedTokenAccountIdempotentInstruction(
+        const [ata, ix] = createAssociatedTokenAccountIdempotentInstruction(
           depositor.publicKey,
           mint,
-          depositor.publicKey
+          depositor.publicKey,
+          TOKEN_PROGRAM_ID
         );
         const lamports = amount.toNumber() * LAMPORTS_PER_SOL;
         await env.provider.connection.requestAirdrop(depositor.publicKey, lamports);
@@ -721,10 +759,11 @@ export const newUser = async (
         };
         await crankStrategyScopePrices(env, kamino!, kaminoMarket.scope, strategy!, symbol, priceFeed);
       } else {
-        const [ata, ix] = await createAssociatedTokenAccountIdempotentInstruction(
+        const [ata, ix] = createAssociatedTokenAccountIdempotentInstruction(
           depositor.publicKey,
           mint,
-          env.admin.publicKey
+          env.admin.publicKey,
+          reserve.getLiquidityTokenProgram()
         );
         await mintTo(env, mint, ata, amount.toNumber() * 10 ** reserve.state.liquidity.mintDecimals.toNumber(), [ix]);
       }
@@ -754,7 +793,7 @@ export const balance = async (
     return balance;
   }
 
-  const ata = await getAssociatedTokenAddress(mint, user.publicKey);
+  const ata = getAssociatedTokenAddress(mint, user.publicKey);
   if (await checkIfAccountExists(env.provider.connection, ata)) {
     const balance = await env.provider.connection.getTokenAccountBalance(ata);
     return balance.value.uiAmount;
@@ -842,15 +881,15 @@ export async function getLocalSwapIxs(
   tokenBMint: PublicKey,
   user: PublicKey
 ): Promise<[TransactionInstruction[], PublicKey[]]> {
-  const tokenAAta = await getAssociatedTokenAddress(tokenAMint, user);
-  const tokenBAta = await getAssociatedTokenAddress(tokenBMint, user);
+  const tokenAAta = getAssociatedTokenAddress(tokenAMint, user);
+  const tokenBAta = getAssociatedTokenAddress(tokenBMint, user);
   console.log('inputMintAmount', inputMintAmount.toString());
   console.log('outputMintAmount', outputMintAmount.toString());
 
-  const inputMint = new Token(env.provider.connection, tokenAMint, TOKEN_PROGRAM_ID, env.admin);
-  const outputMint = new Token(env.provider.connection, tokenBMint, TOKEN_PROGRAM_ID, env.admin);
-  const inputMintDecimals = (await inputMint.getMintInfo()).decimals;
-  const outputMintDecimals = (await outputMint.getMintInfo()).decimals;
+  const inputMint = await getMint(env.provider.connection, tokenAMint);
+  const outputMint = await getMint(env.provider.connection, tokenBMint);
+  const inputMintDecimals = inputMint.decimals;
+  const outputMintDecimals = outputMint.decimals;
 
   const aToBurn = inputMintAmount.mul(new Decimal(10).pow(inputMintDecimals));
   const bToMint = outputMintAmount.mul(new Decimal(10).pow(outputMintDecimals));
@@ -862,29 +901,30 @@ export async function getLocalSwapIxs(
     // therefore burn == send that amount to a new random user newly created
     // If we're 'selling' 'sol' it means we actually need to transfer wsols to the admin
     const sourceWsolAta = await getAssociatedTokenAddress(WRAPPED_SOL_MINT, user, false);
-    const [wsolAtaForAdmin, createWSOLAccountIx] = await createAssociatedTokenAccountIdempotentInstruction(
+    const [wsolAtaForAdmin, createWSOLAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
       env.admin.publicKey,
       WRAPPED_SOL_MINT,
-      env.admin.publicKey
+      env.admin.publicKey,
+      TOKEN_PROGRAM_ID
     );
 
-    const transferIx = Token.createTransferCheckedInstruction(
-      TOKEN_PROGRAM_ID,
+    const transferIx = createTransferCheckedInstruction(
       sourceWsolAta,
       WRAPPED_SOL_MINT,
       wsolAtaForAdmin,
       user,
-      [],
       aToBurn.floor().toNumber(),
-      9
+      9,
+      [],
+      TOKEN_PROGRAM_ID
     );
 
-    const closeWSOLAccountIx = Token.createCloseAccountInstruction(
-      TOKEN_PROGRAM_ID,
+    const closeWSOLAccountIx = createCloseAccountInstruction(
       wsolAtaForAdmin,
       env.admin.publicKey,
       env.admin.publicKey,
-      []
+      [],
+      TOKEN_PROGRAM_ID
     );
 
     console.log('Swapping in', tokenAMint.toString(), 'as wsol', aToBurn.floor().toNumber());
@@ -905,31 +945,32 @@ export async function getLocalSwapIxs(
     const userWsolAta = await getAssociatedTokenAddress(WRAPPED_SOL_MINT, user, false);
 
     // create wsol ata for admin
-    const [wsolAtaForAdmin, createWSOLAccountIx] = await createAssociatedTokenAccountIdempotentInstruction(
+    const [wsolAtaForAdmin, createWSOLAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
       env.admin.publicKey,
       WRAPPED_SOL_MINT,
-      env.admin.publicKey
+      env.admin.publicKey,
+      TOKEN_PROGRAM_ID
     );
 
-    const closeWSOLAccountIx = Token.createCloseAccountInstruction(
-      TOKEN_PROGRAM_ID,
+    const closeWSOLAccountIx = createCloseAccountInstruction(
       wsolAtaForAdmin,
       env.admin.publicKey,
       env.admin.publicKey,
-      []
+      [],
+      TOKEN_PROGRAM_ID
     );
 
     const depositIntoWsolAta = getDepositWsolIxns(env.admin.publicKey, wsolAtaForAdmin, bToMint.ceil());
 
-    const transferIx = Token.createTransferCheckedInstruction(
-      TOKEN_PROGRAM_ID,
+    const transferIx = createTransferCheckedInstruction(
       wsolAtaForAdmin,
       WRAPPED_SOL_MINT,
       userWsolAta,
       env.admin.publicKey,
-      [],
       bToMint.floor().toNumber(),
-      9
+      9,
+      [],
+      TOKEN_PROGRAM_ID
     );
 
     console.log(
@@ -980,10 +1021,8 @@ export const getLocalKaminoSwapper = async (env: Env) => {
     _slippage: Decimal,
     _allKeys: PublicKey[]
   ) => {
-    const aDecimals = (await new Token(env.provider.connection, tokenAMint, TOKEN_PROGRAM_ID, env.admin).getMintInfo())
-      .decimals;
-    const bDecimals = (await new Token(env.provider.connection, tokenBMint, TOKEN_PROGRAM_ID, env.admin).getMintInfo())
-      .decimals;
+    const aDecimals = (await getMint(env.provider.connection, tokenAMint)).decimals;
+    const bDecimals = (await getMint(env.provider.connection, tokenBMint)).decimals;
 
     console.log(
       'Calling getLocalKaminoSwapper',
@@ -1303,9 +1342,14 @@ export async function createMintAndReserve(
       initialDepositor.publicKey,
       new VanillaObligation(PROGRAM_ID),
       1_000_000,
-      true
+      true,
+      false,
+      true,
+      PublicKey.default,
+      0,
+      env.testCase
     );
-    await sendTransactionsFromAction(env, depositAction, [initialDepositor]);
+    await sendTransactionsFromAction(env, depositAction, initialDepositor, [initialDepositor]);
   }
 
   return [mint, reserve.publicKey, config];
@@ -1331,4 +1375,212 @@ export interface SwapperIxBuilder {
     slippage: Decimal,
     allKeys: PublicKey[]
   ): Promise<[TransactionInstruction[], PublicKey[]]>;
+}
+
+export function testKaminoReserve(args: TestReserveFields): KaminoReserve {
+  const state = testReserve(args);
+  return new KaminoReserve(
+    state,
+    PublicKey.default,
+    {
+      price: new Decimal(args.price ? args.price : 1),
+      timestamp: BigInt(0),
+      decimals: new Decimal(0),
+      mintAddress: PublicKey.default,
+      valid: true,
+    },
+    new Connection(endpointFromCluster('localnet')),
+    DEFAULT_RECENT_SLOT_DURATION_MS
+  );
+}
+
+function testReserve({
+  lastUpdateSlot,
+  collTotalSupply,
+  liquidityAvailableAmount,
+  borrowedAmount,
+  accumulatedProtocolFees,
+  accumulatedReferrerFeesSf,
+  pendingReferrerFeesSf,
+  borrowRateCurve,
+  protocolTakeRatePct,
+  hostFixedInterestRateBps,
+}: TestReserveFields): Reserve {
+  const r = getDefaultReserveFields();
+  r.lastUpdate.slot = lastUpdateSlot ? new BN(lastUpdateSlot) : r.lastUpdate.slot;
+  r.collateral.mintTotalSupply = collTotalSupply || r.collateral.mintTotalSupply;
+  r.liquidity.availableAmount = liquidityAvailableAmount || r.liquidity.availableAmount;
+  r.liquidity.borrowedAmountSf = borrowedAmount || r.liquidity.borrowedAmountSf;
+  r.liquidity.accumulatedProtocolFeesSf = accumulatedProtocolFees || r.liquidity.accumulatedProtocolFeesSf;
+  r.liquidity.accumulatedReferrerFeesSf = accumulatedReferrerFeesSf || r.liquidity.accumulatedReferrerFeesSf;
+  r.liquidity.pendingReferrerFeesSf = pendingReferrerFeesSf || r.liquidity.pendingReferrerFeesSf;
+  r.config.borrowRateCurve.points = borrowRateCurve || r.config.borrowRateCurve.points;
+  r.config.protocolTakeRatePct = protocolTakeRatePct || r.config.protocolTakeRatePct;
+  r.config.hostFixedInterestRateBps = hostFixedInterestRateBps || r.config.hostFixedInterestRateBps;
+  return new Reserve(r);
+}
+
+type TestReserveFields = {
+  lastUpdateSlot?: number;
+  collTotalSupply?: BN;
+  liquidityAvailableAmount?: BN;
+  borrowedAmount?: BN;
+  accumulatedProtocolFees?: BN;
+  accumulatedReferrerFeesSf?: BN;
+  pendingReferrerFeesSf?: BN;
+  borrowRateCurve?: Array<CurvePointFields>;
+  protocolTakeRatePct?: number;
+  hostFixedInterestRateBps?: number;
+  price?: number;
+};
+
+function getDefaultReserveFields(): ReserveFields {
+  return {
+    collateral: {
+      mintPubkey: PublicKey.default,
+      mintTotalSupply: new BN(0),
+      padding1: [],
+      padding2: [],
+      supplyVault: PublicKey.default,
+    },
+    config: {
+      assetTier: 0,
+      badDebtLiquidationBonusBps: 0,
+      borrowFactorPct: new BN(0),
+      borrowLimit: new BN(0),
+      borrowRateCurve: {
+        points: [],
+      },
+      debtWithdrawalCap: {
+        configCapacity: new BN(0),
+        configIntervalLengthSeconds: new BN(0),
+        currentTotal: new BN(0),
+        lastIntervalStartTimestamp: new BN(0),
+      },
+      deleveragingMarginCallPeriodSecs: new BN(0),
+      deleveragingThresholdSlotsPerBps: new BN(0),
+      depositLimit: new BN(0),
+      depositWithdrawalCap: {
+        configCapacity: new BN(0),
+        configIntervalLengthSeconds: new BN(0),
+        currentTotal: new BN(0),
+        lastIntervalStartTimestamp: new BN(0),
+      },
+      elevationGroups: [],
+      fees: {
+        borrowFeeSf: new BN(0),
+        flashLoanFeeSf: new BN(0),
+        padding: [],
+      },
+      disableUsageAsCollOutsideEmode: 0,
+      liquidationThresholdPct: 0,
+      loanToValuePct: 0,
+      maxLiquidationBonusBps: 0,
+      minLiquidationBonusBps: 0,
+      multiplierSideBoost: [],
+      multiplierTagBoost: [],
+      protocolLiquidationFeePct: 0,
+      protocolTakeRatePct: 0,
+      reserved1: [],
+      hostFixedInterestRateBps: 0,
+      utilizationLimitBlockBorrowingAbove: 0,
+      borrowLimitOutsideElevationGroup: new BN(0),
+      borrowLimitAgainstThisCollateralInElevationGroup: new Array(32).fill(new BN(0)),
+      status: 0,
+      tokenInfo: {
+        heuristic: {
+          exp: new BN(0),
+          lower: new BN(0),
+          upper: new BN(0),
+        },
+        maxAgePriceSeconds: new BN(0),
+        maxAgeTwapSeconds: new BN(0),
+        maxTwapDivergenceBps: new BN(0),
+        name: [],
+        padding: [],
+        pythConfiguration: {
+          price: PublicKey.default,
+        },
+        scopeConfiguration: {
+          priceChain: [],
+          priceFeed: PublicKey.default,
+          twapChain: [],
+        },
+        switchboardConfiguration: {
+          priceAggregator: PublicKey.default,
+          twapAggregator: PublicKey.default,
+        },
+        blockPriceUsage: 0,
+        reserved: [],
+      },
+    },
+    configPadding: [],
+    farmCollateral: PublicKey.default,
+    farmDebt: PublicKey.default,
+    lastUpdate: {
+      placeholder: [],
+      priceStatus: 0,
+      slot: new BN(0),
+      stale: 0,
+    },
+    lendingMarket: PublicKey.default,
+    liquidity: {
+      absoluteReferralRateSf: new BN(0),
+      accumulatedProtocolFeesSf: new BN(0),
+      accumulatedReferrerFeesSf: new BN(0),
+      availableAmount: new BN(0),
+      borrowLimitCrossedSlot: new BN(0),
+      borrowedAmountSf: new BN(0),
+      cumulativeBorrowRateBsf: {
+        padding: [],
+        value: [],
+      },
+      depositLimitCrossedSlot: new BN(0),
+      feeVault: PublicKey.default,
+      marketPriceLastUpdatedTs: new BN(0),
+      marketPriceSf: new BN(0),
+      mintDecimals: new BN(6),
+      mintPubkey: PublicKey.default,
+      padding2: [],
+      padding3: [],
+      pendingReferrerFeesSf: new BN(0),
+      supplyVault: PublicKey.default,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    },
+    padding: [],
+    reserveCollateralPadding: [],
+    reserveLiquidityPadding: [],
+    version: new BN(0),
+    borrowedAmountOutsideElevationGroup: new BN(0),
+    borrowedAmountsAgainstThisReserveInElevationGroups: new Array(32).fill(new BN(0)),
+  };
+}
+
+export function testCurve(): Array<CurvePointFields> {
+  return [
+    {
+      utilizationRateBps: 0,
+      borrowRateBps: 1,
+    },
+    {
+      utilizationRateBps: 8000,
+      borrowRateBps: 300,
+    },
+    {
+      utilizationRateBps: 8500,
+      borrowRateBps: 670,
+    },
+    {
+      utilizationRateBps: 9000,
+      borrowRateBps: 1500,
+    },
+    {
+      utilizationRateBps: 9500,
+      borrowRateBps: 3354,
+    },
+    {
+      utilizationRateBps: 10000,
+      borrowRateBps: 7500,
+    },
+  ];
 }

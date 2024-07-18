@@ -6,6 +6,7 @@ import { PROGRAM_ID } from "../programId"
 
 export interface RedeemFeesAccounts {
   reserve: PublicKey
+  reserveLiquidityMint: PublicKey
   reserveLiquidityFeeReceiver: PublicKey
   reserveSupplyLiquidity: PublicKey
   lendingMarket: PublicKey
@@ -19,6 +20,11 @@ export function redeemFees(
 ) {
   const keys: Array<AccountMeta> = [
     { pubkey: accounts.reserve, isSigner: false, isWritable: true },
+    {
+      pubkey: accounts.reserveLiquidityMint,
+      isSigner: false,
+      isWritable: true,
+    },
     {
       pubkey: accounts.reserveLiquidityFeeReceiver,
       isSigner: false,

@@ -30,13 +30,32 @@ function print_args {
   echo "--account 1111111QLbz7JHiBTspS962RLKV8GndWFwiEaqKM deps/prices/sol-1usd.json"
   echo "--account 111111193m4hAxmCcGXMfnjVPfNhWSjb69sDgffKu deps/prices/stsol-20usd.json"
   echo "--account EFzHrtRNoeLiAwd6rRWfeMuEup19UC9UB4rcky8kXsgV deps/prices/usdc-1usd.json"
+  echo "--account JBu1AL4obBcCMqKBBxhpWCNUt136ijcuMZLFvTP7iWdB deps/prices/eth_usd.json"
+  echo "--account GVXRSBjFk6e6J3NbVPXohDJetcTjaeeuykUpbQF8UoMU deps/prices/btc_usd.json"
+  echo "--account 3vxLXJqLqF3JG5TCbYycbKWRBbCJQLxQmBGCkyqEEefL deps/prices/usdt_usd.json"
 
   # farms
   echo "--account 6UodrBjL2ZreDy7QdR4YV1oxqMBjVYSEyrFpctqqwGwL deps/farms/6UodrBjL2ZreDy7QdR4YV1oxqMBjVYSEyrFpctqqwGwL.json"
   echo "--account Ey7rZRLbKdhDqcUuSpAkApk3S3dK7RHoKPJST1RRVJAp deps/farms/idl-mainnet.json" # Add IDL to improve solana explorer ux - use the latest idl to match the dumped program
 
   # scope
-  echo "--account AWUuZ6o4ZJX2fDqjUqDaA1pfHenZ6XEbmuTamMgM911E deps/scope/idl-mainnet.json" # Add IDL to improve solana explorer ux - use the latest idl to match the dumped program
+  echo "--account AWUuZ6o4ZJX2fDqjUqDaA1pfHenZ6XEbmuTamMgM911E deps/scope/idl-mainnet.json"     # Add IDL to improve solana explorer ux - use the latest idl to match the dumped program
+  echo "--account AdTiP7QyjUyv6crF4H8z7fxJKU7Z5eCAGvJN1Y55cXxb deps/scope/hubble_config.json"   # Hubble feed config
+  echo "--account Chpu5ZgfWX5ZzVpUx9Xvv4WPM75Xd7zPJNDPsFnCpLpk deps/scope/oracle_mappings.json" # Oracle mapping
+  echo "--account GbpsVomudPRRwmqfTmo3MYQVTikPG6QXxqpzJexA1JRb deps/scope/oracle_twaps.json"    # Oracle twaps
+  echo "--account 7GPTptkZg7DXkNhTTKcEND3zADkgu8ZM31PkAMXgq1Yd deps/scope/mints_to_scope_chain.json"
+
+  # jlp
+  echo "--account 5BUwFW4nRbftYTDMbgxykoFWqWHPzahFSNAaaaJtVKsq deps/scope/jlp_pool.json"
+  echo "--account 7xS2gz2bTp3fwCC7knJvUWTEU9Tycczu6VhJYKgi1wdz deps/scope/jlp_custody_1.json"
+  echo "--account AQCGyheWPLeo6Qp9WpYS9m3Qj479t7R636N9ey1rEjEn deps/scope/jlp_custody_2.json"
+  echo "--account 5Pv3gM9JrFFH883SWAhvJC9RPYmo8UNxuFtv5bMMALkm deps/scope/jlp_custody_3.json"
+  echo "--account G18jKKXQwBbrHeiK3C9MRXhkHsLHf7XgCSisykV46EZa deps/scope/jlp_custody_4.json"
+  echo "--account 4vkNeXiYEUizLdrpdPS1eC2mccyM4NUPRtERrk6ZETkk deps/scope/jlp_custody_5.json"
+  echo "--account 27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4 deps/scope/jlp_mint.json"
+
+  #jitosol spl
+  echo "--account Jito4APyf642JPZPx3hGc6WWJ8zPKtRbRs4P815Awbb deps/scope/jitosol_spl_stake.json"
 
   # programs
   echo "--bpf-program E6qbhrt4pFmCotNUSSEh6E5cRQCEJpMcd79Z56EG9KY ./deps/programs/kamino.so" # built with localnet and integration_test features

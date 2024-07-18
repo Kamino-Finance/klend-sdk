@@ -6,7 +6,7 @@ import { PROGRAM_ID } from "../programId"
 
 export interface LiquidateObligationAndRedeemReserveCollateralArgs {
   liquidityAmount: BN
-  minAcceptableReceivedCollateralAmount: BN
+  minAcceptableReceivedLiquidityAmount: BN
   maxAllowedLtvOverridePercent: BN
 }
 
@@ -16,8 +16,10 @@ export interface LiquidateObligationAndRedeemReserveCollateralAccounts {
   lendingMarket: PublicKey
   lendingMarketAuthority: PublicKey
   repayReserve: PublicKey
+  repayReserveLiquidityMint: PublicKey
   repayReserveLiquiditySupply: PublicKey
   withdrawReserve: PublicKey
+  withdrawReserveLiquidityMint: PublicKey
   withdrawReserveCollateralMint: PublicKey
   withdrawReserveCollateralSupply: PublicKey
   withdrawReserveLiquiditySupply: PublicKey
@@ -25,13 +27,15 @@ export interface LiquidateObligationAndRedeemReserveCollateralAccounts {
   userSourceLiquidity: PublicKey
   userDestinationCollateral: PublicKey
   userDestinationLiquidity: PublicKey
-  tokenProgram: PublicKey
+  collateralTokenProgram: PublicKey
+  repayLiquidityTokenProgram: PublicKey
+  withdrawLiquidityTokenProgram: PublicKey
   instructionSysvarAccount: PublicKey
 }
 
 export const layout = borsh.struct([
   borsh.u64("liquidityAmount"),
-  borsh.u64("minAcceptableReceivedCollateralAmount"),
+  borsh.u64("minAcceptableReceivedLiquidityAmount"),
   borsh.u64("maxAllowedLtvOverridePercent"),
 ])
 
@@ -51,11 +55,21 @@ export function liquidateObligationAndRedeemReserveCollateral(
     },
     { pubkey: accounts.repayReserve, isSigner: false, isWritable: true },
     {
+      pubkey: accounts.repayReserveLiquidityMint,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
       pubkey: accounts.repayReserveLiquiditySupply,
       isSigner: false,
       isWritable: true,
     },
     { pubkey: accounts.withdrawReserve, isSigner: false, isWritable: true },
+    {
+      pubkey: accounts.withdrawReserveLiquidityMint,
+      isSigner: false,
+      isWritable: true,
+    },
     {
       pubkey: accounts.withdrawReserveCollateralMint,
       isSigner: false,
@@ -87,7 +101,21 @@ export function liquidateObligationAndRedeemReserveCollateral(
       isSigner: false,
       isWritable: true,
     },
-    { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
+    {
+      pubkey: accounts.collateralTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.repayLiquidityTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.withdrawLiquidityTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
     {
       pubkey: accounts.instructionSysvarAccount,
       isSigner: false,
@@ -99,8 +127,8 @@ export function liquidateObligationAndRedeemReserveCollateral(
   const len = layout.encode(
     {
       liquidityAmount: args.liquidityAmount,
-      minAcceptableReceivedCollateralAmount:
-        args.minAcceptableReceivedCollateralAmount,
+      minAcceptableReceivedLiquidityAmount:
+        args.minAcceptableReceivedLiquidityAmount,
       maxAllowedLtvOverridePercent: args.maxAllowedLtvOverridePercent,
     },
     buffer

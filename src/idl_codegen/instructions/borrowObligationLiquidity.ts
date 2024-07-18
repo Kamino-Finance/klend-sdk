@@ -14,6 +14,7 @@ export interface BorrowObligationLiquidityAccounts {
   lendingMarket: PublicKey
   lendingMarketAuthority: PublicKey
   borrowReserve: PublicKey
+  borrowReserveLiquidityMint: PublicKey
   reserveSourceLiquidity: PublicKey
   borrowReserveLiquidityFeeReceiver: PublicKey
   userDestinationLiquidity: PublicKey
@@ -39,6 +40,11 @@ export function borrowObligationLiquidity(
       isWritable: false,
     },
     { pubkey: accounts.borrowReserve, isSigner: false, isWritable: true },
+    {
+      pubkey: accounts.borrowReserveLiquidityMint,
+      isSigner: false,
+      isWritable: true,
+    },
     {
       pubkey: accounts.reserveSourceLiquidity,
       isSigner: false,
