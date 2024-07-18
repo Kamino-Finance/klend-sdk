@@ -119,6 +119,7 @@ describe('obligation', function () {
     await reserve.load(reserve.tokenOraclePrice);
 
     const interestRate = fetchedObligation.estimateObligationInterestRate(
+      kaminoMarket,
       reserve,
       fetchedObligation.state.borrows[0],
       await env.provider.connection.getSlot()
@@ -126,13 +127,15 @@ describe('obligation', function () {
 
     console.log('interest rate: ' + interestRate);
 
+    const currentSlot = await kaminoMarket.getConnection().getSlot();
+
     assert(interestRate.gt(1));
     assert.ok(fuzzyEq(interestRate, 1));
 
-    const reserveBorrowApr = reserve.totalBorrowAPY();
-    assert(reserveBorrowApr.totalAPY > 1);
+    const reserveBorrowApr = reserve.totalBorrowAPY(currentSlot);
+    assert(reserveBorrowApr > 1);
 
-    const reserveSupplyApr = reserve.totalSupplyAPY();
-    assert(reserveSupplyApr.totalAPY === 0);
+    const reserveSupplyApr = reserve.totalSupplyAPY(currentSlot);
+    assert(reserveSupplyApr === 0);
   });
 });

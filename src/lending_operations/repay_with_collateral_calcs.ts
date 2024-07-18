@@ -34,6 +34,7 @@ export function estimateDebtRepaymentWithColl(props: {
 
   const irSlippageBpsForDebt = obligation
     .estimateObligationInterestRate(
+      kaminoMarket,
       debtReserve,
       obligation?.state.borrows.find((borrow) => borrow.borrowReserve?.equals(debtReserve.address))!,
       currentSlot

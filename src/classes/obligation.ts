@@ -607,11 +607,15 @@ export class KaminoObligation {
   }
 
   estimateObligationInterestRate = (
+    market: KaminoMarket,
     reserve: KaminoReserve,
     borrow: ObligationLiquidity,
     currentSlot: number
   ): Decimal => {
-    const estimatedCumulativeBorrowRate = reserve.getEstimatedCumulativeBorrowRate(currentSlot);
+    const estimatedCumulativeBorrowRate = reserve.getEstimatedCumulativeBorrowRate(
+      currentSlot,
+      market.state.referralFeeBps
+    );
 
     const currentCumulativeBorrowRate = KaminoObligation.getCumulativeBorrowRate(borrow);
 
@@ -1080,7 +1084,7 @@ export class KaminoObligation {
       const borrow = obligation.borrows[i];
       if (isNotNullPubkey(borrow.borrowReserve) && !cumulativeBorrowRates.has(borrow.borrowReserve)) {
         const reserve = kaminoMarket.getReserveByAddress(borrow.borrowReserve)!;
-        const cumulativeBorrowRate = reserve.getEstimatedCumulativeBorrowRate(slot);
+        const cumulativeBorrowRate = reserve.getEstimatedCumulativeBorrowRate(slot, kaminoMarket.state.referralFeeBps);
         cumulativeBorrowRates.set(reserve.address, cumulativeBorrowRate);
       }
     }
@@ -1097,7 +1101,7 @@ export class KaminoObligation {
       const borrow = obligation.borrows[i];
       if (isNotNullPubkey(borrow.borrowReserve) && !cumulativeBorrowRates.has(borrow.borrowReserve)) {
         const reserve = kaminoMarket.getReserveByAddress(borrow.borrowReserve)!;
-        const cumulativeBorrowRate = reserve.getEstimatedCumulativeBorrowRate(slot);
+        const cumulativeBorrowRate = reserve.getEstimatedCumulativeBorrowRate(slot, kaminoMarket.state.referralFeeBps);
         cumulativeBorrowRates.set(reserve.address, cumulativeBorrowRate);
       }
     }

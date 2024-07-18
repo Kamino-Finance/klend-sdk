@@ -1066,7 +1066,10 @@ export class KaminoMarket {
   getCumulativeBorrowRatesByReserve(slot: number): Map<PublicKey, Decimal> {
     const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
     for (const reserve of this.reserves.values()) {
-      cumulativeBorrowRates.set(reserve.address, reserve.getEstimatedCumulativeBorrowRate(slot));
+      cumulativeBorrowRates.set(
+        reserve.address,
+        reserve.getEstimatedCumulativeBorrowRate(slot, this.state.referralFeeBps)
+      );
     }
     return cumulativeBorrowRates;
   }

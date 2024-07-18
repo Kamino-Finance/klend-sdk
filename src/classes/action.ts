@@ -1674,7 +1674,10 @@ export class KaminoAction {
 
               const cumulativeBorrowRateObligation = KaminoObligation.getCumulativeBorrowRate(borrow);
 
-              const cumulativeBorrowRateReserve = this.reserve.getEstimatedCumulativeBorrowRate(this.currentSlot);
+              const cumulativeBorrowRateReserve = this.reserve.getEstimatedCumulativeBorrowRate(
+                this.currentSlot,
+                this.kaminoMarket.state.referralFeeBps
+              );
               const fullRepay = KaminoObligation.getBorrowAmount(borrow)
                 .mul(cumulativeBorrowRateReserve)
                 .div(cumulativeBorrowRateObligation);
@@ -2523,7 +2526,10 @@ export class KaminoAction {
       }
 
       const cumulativeBorrowRateObligation = KaminoObligation.getCumulativeBorrowRate(borrow);
-      const cumulativeBorrowRateReserve = this.reserve.getEstimatedCumulativeBorrowRate(this.currentSlot);
+      const cumulativeBorrowRateReserve = this.reserve.getEstimatedCumulativeBorrowRate(
+        this.currentSlot,
+        this.kaminoMarket.state.referralFeeBps
+      );
       // TODO: shouldn't this calc be added to all other stuff as well?
       safeRepay = new BN(
         Math.floor(
