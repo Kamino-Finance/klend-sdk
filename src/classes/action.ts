@@ -374,7 +374,9 @@ export class KaminoAction {
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     currentSlot: number = 0
   ) {
-    const firstReserve = obligation.state.deposits[0].depositReserve;
+    const firstReserve = obligation.state.deposits.find(
+      (x) => !x.depositReserve.equals(PublicKey.default)
+    )!.depositReserve;
     const firstKaminoReserve = kaminoMarket.getReserveByAddress(firstReserve);
     if (!firstKaminoReserve) {
       throw new Error(`Reserve ${firstReserve.toBase58()} not found`);
