@@ -677,7 +677,7 @@ export const getWithdrawWithLeverageSwapInputs = (props: {
       });
 
   const irSlippageBpsForDebt = userObligation
-    .estimateObligationInterestRate(debtReserve!, userObligation.state.borrows[0]!, currentSlot)
+    .estimateObligationInterestRate(kaminoMarket, debtReserve!, userObligation.state.borrows[0]!, currentSlot)
     .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
 
   const repayAmount = initialRepayAmount
@@ -801,7 +801,7 @@ export const getWithdrawWithLeverageIxns = async (props: {
     ? obligation
     : await kaminoMarket.getObligationByAddress(obligationType.toPda(kaminoMarket.getAddress(), user));
   const irSlippageBpsForDebt = userObligation!
-    .estimateObligationInterestRate(debtReserve!, userObligation?.state.borrows[0]!, currentSlot)
+    .estimateObligationInterestRate(kaminoMarket, debtReserve!, userObligation?.state.borrows[0]!, currentSlot)
     .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
   // add 0.1 to irSlippageBpsForDebt because we don't want to estimate slightly less than SC and end up not reapying enough
   const repayAmount = initialRepayAmount

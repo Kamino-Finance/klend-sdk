@@ -73,6 +73,7 @@ export const getRepayWithCollSwapInputs = (props: {
 
   const irSlippageBpsForDebt = obligation!
     .estimateObligationInterestRate(
+      kaminoMarket,
       debtReserve!,
       obligation?.state.borrows.find((borrow) => borrow.borrowReserve?.equals(debtReserve!.address))!,
       currentSlot
@@ -154,6 +155,7 @@ export const getRepayWithCollIxns = async (props: {
 
   const irSlippageBpsForDebt = obligation!
     .estimateObligationInterestRate(
+      kaminoMarket,
       debtReserve!,
       obligation?.state.borrows.find((borrow) => borrow.borrowReserve?.equals(debtReserve!.address))!,
       currentSlot
