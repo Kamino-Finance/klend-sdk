@@ -40,6 +40,7 @@ import {
   toJson,
   U64_MAX,
   VanillaObligation,
+  WRAPPED_SOL_MINT,
 } from '../src';
 import {
   BorrowRateCurve,
@@ -84,7 +85,6 @@ import { OracleType, Scope, U16_MAX } from '@hubbleprotocol/scope-sdk';
 import { addKTokenScopePriceMapping, createScopeFeed } from './kamino/scope';
 import { Kamino } from '@hubbleprotocol/kamino-sdk';
 import { Fraction, ZERO_FRACTION } from '../src/classes/fraction';
-import { WRAPPED_SOL_MINT } from '@jup-ag/core';
 
 export type Cluster = 'localnet' | 'devnet' | 'mainnet-beta';
 
