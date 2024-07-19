@@ -11,6 +11,7 @@ import {
   VersionedTransaction,
 } from '@solana/web3.js';
 import {
+  buildComputeBudgetIx,
   Chain,
   encodeTokenName,
   KaminoManager,
@@ -39,6 +40,7 @@ import { BN } from '@coral-xyz/anchor';
 import { PythConfiguration, ScopeConfiguration, SwitchboardConfiguration } from './idl_codegen_kamino_vault/types';
 import * as fs from 'fs';
 import { AssetReserveConfigCli } from './classes/manager';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 dotenv.config({
   path: `.env${process.env.ENV ? '.' + process.env.ENV : ''}`,
@@ -112,7 +114,15 @@ async function main() {
 
       const _createReserveSig = await processTxn(env.client, env.payer, txnIxns[0], bs58, 2500, [reserve]);
 
-      const _createMarketSig = await processTxn(env.client, env.payer, txnIxns[1], bs58, 2500, []);
+      const computeBudgetIx = buildComputeBudgetIx(400_000);
+      const _updateReserveSig = await processTxn(
+        env.client,
+        env.payer,
+        [computeBudgetIx, ...txnIxns[1]],
+        bs58,
+        2500,
+        []
+      );
 
       !bs58 &&
         console.log(
@@ -143,6 +153,7 @@ async function main() {
       const kaminoVaultConfig = new KaminoVaultConfig({
         admin: bs58 ? multisigPk : env.payer.publicKey,
         tokenMint: tokenMint,
+        tokenMintProgramId: TOKEN_PROGRAM_ID,
         performanceFeeRate: new Decimal(0.0),
         managementFeeRate: new Decimal(0.0),
       });
@@ -196,6 +207,15 @@ async function main() {
 
       !bs58 && console.log('Vault allocation updated:', updateVaultAllocationSig);
     });
+
+  commands.command('get-oracle-mappings').action(async () => {
+    const env = initializeClient(false, false);
+    const kaminoManager = new KaminoManager(env.provider.connection, env.kLendProgramId, env.kVaultProgramId);
+
+    console.log('Getting  oracle mappings');
+    const oracleConfigs = await kaminoManager.getScopeOracleConfigs();
+    console.log('oracleConfigs', JSON.parse(JSON.stringify(oracleConfigs)));
+  });
 
   await commands.parseAsync();
 }
@@ -446,8 +466,8 @@ function parseBorrowRateCurve(farmConfigFromFile: any): BorrowRateCurve {
 function parseReserveBorrowLimitAgainstCollInEmode(farmConfigFromFile: any): BN[] {
   const reserveBorrowLimitAgainstCollInEmode = Array(32).fill(new BN(0));
 
-  farmConfigFromFile.reserve_borrow_limit_against_coll_in_emode.forEach((limit: any, index: number) =>
-    reserveBorrowLimitAgainstCollInEmode[index] = new BN(limit)
+  farmConfigFromFile.reserve_borrow_limit_against_coll_in_emode.forEach(
+    (limit: any, index: number) => (reserveBorrowLimitAgainstCollInEmode[index] = new BN(limit))
   );
 
   return reserveBorrowLimitAgainstCollInEmode;

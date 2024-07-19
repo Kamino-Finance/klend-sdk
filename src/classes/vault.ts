@@ -117,7 +117,7 @@ export class KaminoVaultClient {
       sharesMint,
       systemProgram: SystemProgram.programId,
       rent: SYSVAR_RENT_PUBKEY,
-      tokenProgram: TOKEN_PROGRAM_ID,
+      tokenProgram: vaultConfig.tokenMintProgramId,
     };
     const initVaultIx = initVault(initVaultAccounts, this._kaminoVaultProgramId);
 
@@ -170,7 +170,7 @@ export class KaminoVaultClient {
         atas: wsolAta,
         createAtasIxns: createWsolAtaIxns,
         closeAtasIxns: closeWsolAtaIxns,
-      } = await getAtasWithCreateIxnsIfMissing(this._connection, user, [WRAPPED_SOL_MINT]);
+      } = await getAtasWithCreateIxnsIfMissing(this._connection, user, [WRAPPED_SOL_MINT], [TOKEN_PROGRAM_ID]);
       createAtasIxns.push(...createWsolAtaIxns);
       const depositWsolixn = getDepositWsolIxns(
         user,
@@ -181,9 +181,12 @@ export class KaminoVaultClient {
       closeAtasIxns.push(...closeWsolAtaIxns);
     }
 
-    const { atas, createAtasIxns: createSharesAtaIxns } = await getAtasWithCreateIxnsIfMissing(this._connection, user, [
-      vaultState.sharesMint,
-    ]);
+    const { atas, createAtasIxns: createSharesAtaIxns } = await getAtasWithCreateIxnsIfMissing(
+      this._connection,
+      user,
+      [vaultState.sharesMint],
+      [TOKEN_PROGRAM_ID]
+    );
     createAtasIxns.push(...createSharesAtaIxns);
 
     const userSharesAta = atas[0];
@@ -226,9 +229,12 @@ export class KaminoVaultClient {
     const vaultState = await vault.getState(this._connection);
 
     const userSharesAta = await getAssociatedTokenAddress(vaultState.sharesMint, user);
-    const { atas, createAtasIxns } = await getAtasWithCreateIxnsIfMissing(this._connection, user, [
-      vaultState.tokenMint,
-    ]);
+    const { atas, createAtasIxns } = await getAtasWithCreateIxnsIfMissing(
+      this._connection,
+      user,
+      [vaultState.tokenMint],
+      [TOKEN_PROGRAM_ID]
+    );
     const userTokenAta = atas[0];
 
     const tokensToWithdraw = shareAmount.div(await this.getTokensPerShare(vault, slot));
@@ -555,6 +561,8 @@ export class KaminoVaultConfig {
   readonly admin: PublicKey;
   /** The token mint for the vault */
   readonly tokenMint: PublicKey;
+  /** The token mint program id */
+  readonly tokenMintProgramId: PublicKey;
   /** The performance fee rate of the vault, expressed as a decimal */
   readonly performanceFeeRate: Decimal;
   /** The management fee rate of the vault, expressed as a decimal */
@@ -563,6 +571,7 @@ export class KaminoVaultConfig {
   constructor(args: {
     admin: PublicKey;
     tokenMint: PublicKey;
+    tokenMintProgramId: PublicKey;
     performanceFeeRate: Decimal;
     managementFeeRate: Decimal;
   }) {
@@ -570,6 +579,7 @@ export class KaminoVaultConfig {
     this.tokenMint = args.tokenMint;
     this.performanceFeeRate = args.performanceFeeRate;
     this.managementFeeRate = args.managementFeeRate;
+    this.tokenMintProgramId = args.tokenMintProgramId;
   }
 
   getPerformanceFeeBps(): number {

@@ -23,7 +23,7 @@ import {
 } from '../lib';
 import { PROGRAM_ID } from '../idl_codegen/programId';
 import { Fraction, ZERO_FRACTION } from './fraction';
-import { OracleType, OracleTypeKind, U16_MAX } from '@hubbleprotocol/scope-sdk';
+import { OracleType, OracleTypeKind, Scope, TokenMetadatas, U16_MAX } from '@hubbleprotocol/scope-sdk';
 import BN from 'bn.js';
 import {
   BorrowRateCurve,
@@ -224,7 +224,56 @@ export class KaminoManager {
   ): Promise<TransactionInstruction> {
     return this._vaultClient.investSingleReserve(kaminoVault, reserveWithAddress);
   }
+
+  async getScopeOracleConfigs(
+    feed: string = 'hubble',
+    cluster: SolanaCluster = 'mainnet-beta'
+  ): Promise<Array<ScopeOracleConfig>> {
+    const scopeOracleConfigs: Array<ScopeOracleConfig> = [];
+
+    const scope = new Scope(cluster, this._connection);
+    const oracleMappings = await scope.getOracleMappings({ feed: feed });
+    const [, feedConfig] = await scope.getFeedConfiguration({ feed: feed });
+    const tokenMetadatas = await TokenMetadatas.fetch(this._connection, feedConfig.tokensMetadata);
+    const decoder = new TextDecoder('utf-8');
+
+    if (tokenMetadatas === null) {
+      throw new Error('TokenMetadatas not found');
+    }
+
+    for (let index = 0; index < oracleMappings.priceInfoAccounts.length; index++) {
+      // scopeOracleConfigs.push(
+      if (!oracleMappings.priceInfoAccounts[index].equals(PublicKey.default)) {
+        const name = decoder.decode(Uint8Array.from(tokenMetadatas.metadatasArray[index].name)).replace(/\0/g, '');
+        const oracleType = parseOracleType(oracleMappings.priceTypes[index]);
+
+        scopeOracleConfigs.push({
+          name: name,
+          oracleType: oracleType,
+          oracleId: index,
+          oracleAccount: oracleMappings.priceInfoAccounts[index],
+          twapEnabled: oracleMappings.twapEnabled[index] === 1,
+          twapSourceId: oracleMappings.twapSource[index],
+          max_age: tokenMetadatas.metadatasArray[index].maxAgePriceSlots.toNumber(),
+        });
+      }
+    }
+
+    return scopeOracleConfigs;
+  }
 } // KaminoManager
+
+export type SolanaCluster = 'mainnet-beta' | 'devnet' | 'localnet';
+
+export type ScopeOracleConfig = {
+  name: string;
+  oracleType: string;
+  oracleId: number;
+  oracleAccount: PublicKey;
+  twapEnabled: boolean;
+  twapSourceId: number;
+  max_age: number;
+};
 
 export type CreateKaminoMarketParams = {
   admin: PublicKey;
@@ -591,6 +640,61 @@ export function getOracleConfigs(priceFeed: PriceFeed | null): {
     switchboardConfiguration,
     scopeConfiguration,
   };
+}
+
+function parseOracleType(type: number): string {
+  switch (type) {
+    case new OracleType.Pyth().discriminator:
+      return 'Pyth';
+    case new OracleType.SwitchboardV2().discriminator:
+      return 'SwitchboardV2';
+    case new OracleType.CToken().discriminator:
+      return 'CToken';
+    case new OracleType.KToken().discriminator:
+      return 'KToken';
+    case new OracleType.SplStake().discriminator:
+      return 'SplStake';
+    case new OracleType.PythEMA().discriminator:
+      return 'PythEMA';
+    case new OracleType.DeprecatedPlaceholder1().discriminator:
+      return 'DeprecatedPlaceholder1';
+    case new OracleType.DeprecatedPlaceholder2().discriminator:
+      return 'DeprecatedPlaceholder2';
+    case new OracleType.MsolStake().discriminator:
+      return 'MsolStake';
+    case new OracleType.KTokenToTokenA().discriminator:
+      return 'KTokenToTokenA';
+    case new OracleType.KTokenToTokenB().discriminator:
+      return 'KTokenToTokenB';
+    case new OracleType.JupiterLpFetch().discriminator:
+      return 'JupiterLpFetch';
+    case new OracleType.ScopeTwap().discriminator:
+      return 'ScopeTwap';
+    case new OracleType.OrcaWhirlpoolAtoB().discriminator:
+      return 'OrcaWhirlpoolAtoB';
+    case new OracleType.OrcaWhirlpoolBtoA().discriminator:
+      return 'OrcaWhirlpoolBtoA';
+    case new OracleType.RaydiumAmmV3AtoB().discriminator:
+      return 'RaydiumAmmV3AtoB';
+    case new OracleType.RaydiumAmmV3BtoA().discriminator:
+      return 'RaydiumAmmV3BtoA';
+    case new OracleType.JupiterLpCompute().discriminator:
+      return 'JupiterLpCompute';
+    case new OracleType.MeteoraDlmmAtoB().discriminator:
+      return 'MeteoraDlmmAtoB';
+    case new OracleType.MeteoraDlmmBtoA().discriminator:
+      return 'MeteoraDlmmBtoA';
+    case new OracleType.JupiterLpScope().discriminator:
+      return 'JupiterLpScope';
+    case new OracleType.PythPullBased().discriminator:
+      return 'PythPullBased';
+    case new OracleType.PythPullBasedEMA().discriminator:
+      return 'PythPullBasedEMA';
+    case new OracleType.FixedPrice().discriminator:
+      return 'FixedPrice';
+    default:
+      return 'Unknown';
+  }
 }
 
 export type MarketWithAddress = {

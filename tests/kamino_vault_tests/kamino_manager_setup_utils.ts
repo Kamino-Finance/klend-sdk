@@ -105,16 +105,18 @@ export async function createMarketWithTwoAssets(
     createsolReserveTxnIxns[0],
     [solReserveKp],
     [],
-    'KaminoManager_CreatesolReserve'
+    'KaminoManager_CreateSolReserve'
   );
+
+  const computeBudgetIx = buildComputeBudgetIx(400_000);
 
   const _updatesolReserveSig = await buildAndSendTxn(
     env.provider.connection,
     env.admin,
-    createsolReserveTxnIxns[1],
+    [computeBudgetIx, ...createsolReserveTxnIxns[1]],
     [],
     [],
-    'KaminoManager_UpdatesolReserve'
+    'KaminoManager_UpdateSolReserve'
   );
 
   const { reserve: usdcReserveKp, txnIxns: createusdcReserveTxnIxns } = await kaminoManager.addAssetToMarket({
@@ -129,16 +131,16 @@ export async function createMarketWithTwoAssets(
     createusdcReserveTxnIxns[0],
     [usdcReserveKp],
     [],
-    'KaminoManager_CreateusdcReserve'
+    'KaminoManager_CreateUsdcReserve'
   );
 
   const _updateusdcReserveSig = await buildAndSendTxn(
     env.provider.connection,
     env.admin,
-    createusdcReserveTxnIxns[1],
+    [computeBudgetIx, ...createusdcReserveTxnIxns[1]],
     [],
     [],
-    'KaminoManager_UpdateusdcReserve'
+    'KaminoManager_UpdateUsdcReserve'
   );
 
   return {
@@ -190,6 +192,7 @@ export async function createVaultsWithTwoReservesMarketsWithTwoAssets(
   const kaminousdcVaultConfig = new KaminoVaultConfig({
     admin: env.admin.publicKey,
     tokenMint: marketSetup1.usdcReserveConfig.mint,
+    tokenMintProgramId: TOKEN_PROGRAM_ID,
     performanceFeeRate: new Decimal(0.0),
     managementFeeRate: new Decimal(0.0),
   });
@@ -197,6 +200,7 @@ export async function createVaultsWithTwoReservesMarketsWithTwoAssets(
   const kaminosolVaultConfig = new KaminoVaultConfig({
     admin: env.admin.publicKey,
     tokenMint: marketSetup1.solReserveConfig.mint,
+    tokenMintProgramId: TOKEN_PROGRAM_ID,
     performanceFeeRate: new Decimal(0.0),
     managementFeeRate: new Decimal(0.0),
   });
@@ -269,7 +273,7 @@ export async function createVaultsWithTwoReservesMarketsWithTwoAssets(
     new Decimal(50)
   );
 
-  const computeBudgetIx = buildComputeBudgetIx(300_000);
+  const computeBudgetIx = buildComputeBudgetIx(400_000);
   const ixn1 = await kaminoManager.updateVaultReserveAllocation(solVault, firstsolReserveAllocationConfig);
   const ixn2 = await kaminoManager.updateVaultReserveAllocation(solVault, secondsolReserveAllocationConfig);
 

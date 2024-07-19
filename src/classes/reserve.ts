@@ -39,7 +39,6 @@ import * as anchor from '@coral-xyz/anchor';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { UpdateBorrowRateCurve } from '../idl_codegen/types/UpdateConfigMode';
 
-
 export const DEFAULT_RECENT_SLOT_DURATION_MS = 450;
 
 export class KaminoReserve {
@@ -901,7 +900,7 @@ export function updateReserveConfigIxn(
   value: Uint8Array,
   programId: PublicKey
 ): TransactionInstruction {
-  value
+  value;
   const args: UpdateReserveConfigArgs = {
     mode: new anchor.BN(modeDiscriminator),
     value: value,

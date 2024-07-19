@@ -2,6 +2,7 @@ import { initEnv, pythMSolPrice, pythUsdcPrice } from '../setup_utils';
 import Decimal from 'decimal.js';
 import {
   buildAndSendTxn,
+  buildComputeBudgetIx,
   CollateralConfig,
   DebtConfig,
   KaminoManager,
@@ -90,22 +91,24 @@ describe('Kamino Manager Tests', function () {
       assetConfig: solConfig,
     });
 
+    const computeBudgetIx = buildComputeBudgetIx(400_000);
+
     const _createsolReserveSig = await buildAndSendTxn(
       env.provider.connection,
       env.admin,
       createsolReserveTxnIxns[0],
       [solReserveKp],
       [],
-      'KaminoManager_CreatesolReserve'
+      'KaminoManager_CreateSolReserve'
     );
 
     const _updatesolReserveSig = await buildAndSendTxn(
       env.provider.connection,
       env.admin,
-      createsolReserveTxnIxns[1],
+      [computeBudgetIx, ...createsolReserveTxnIxns[1]],
       [],
       [],
-      'KaminoManager_CreatesolReserve'
+      'KaminoManager_UpdateSolReserve'
     );
 
     const { reserve: usdcReserveKp, txnIxns: createusdcReserveTxnIxns } = await kaminoManager.addAssetToMarket({
@@ -120,16 +123,16 @@ describe('Kamino Manager Tests', function () {
       createusdcReserveTxnIxns[0],
       [usdcReserveKp],
       [],
-      'KaminoManager_CreateusdcReserve'
+      'KaminoManager_CreateUsdcReserve'
     );
 
     const _updateusdcReserveSig = await buildAndSendTxn(
       env.provider.connection,
       env.admin,
-      createusdcReserveTxnIxns[1],
+      [computeBudgetIx, ...createusdcReserveTxnIxns[1]],
       [],
       [],
-      'KaminoManager_CreateusdcReserve'
+      'KaminoManager_UpdateUsdcReserve'
     );
   });
 
@@ -143,6 +146,7 @@ describe('Kamino Manager Tests', function () {
     const kaminoVaultConfig = new KaminoVaultConfig({
       admin: env.admin.publicKey,
       tokenMint: marketAccounts.usdcReserveConfig.mint,
+      tokenMintProgramId: TOKEN_PROGRAM_ID,
       performanceFeeRate: new Decimal(0.0),
       managementFeeRate: new Decimal(0.0),
     });
@@ -161,6 +165,7 @@ describe('Kamino Manager Tests', function () {
     const kaminoVaultConfig = new KaminoVaultConfig({
       admin: env.admin.publicKey,
       tokenMint: marketAccounts1.usdcReserveConfig.mint,
+      tokenMintProgramId: TOKEN_PROGRAM_ID,
       performanceFeeRate: new Decimal(0.0),
       managementFeeRate: new Decimal(0.0),
     });
