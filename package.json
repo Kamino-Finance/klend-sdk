@@ -44,7 +44,7 @@
     "@coral-xyz/anchor": "^0.28.0",
     "@coral-xyz/borsh": "^0.28.0",
     "@hubbleprotocol/farms-sdk": "^0.5.0",
-    "@hubbleprotocol/kamino-sdk": "^5.1.0",
+    "@hubbleprotocol/kamino-sdk": "^5.2.0",
     "@hubbleprotocol/scope-sdk": "^5.0.20",
     "@pythnetwork/client": "^2.5.1",
     "@solana/buffer-layout": "^4.0.0",
@@ -60,9 +60,8 @@
     "exponential-backoff": "^3.1.1"
   },
   "devDependencies": {
-    "@jup-ag/core": "=3.0.0-beta.18",
     "@orca-so/sdk": "^1.2.25",
-    "@orca-so/whirlpool-sdk": "=0.4.2",
+    "@orca-so/whirlpool-sdk": "^0.4.2",
     "@raydium-io/raydium-sdk": "^1.3.1-beta.54",
     "@types/bn.js": "^5.1.1",
     "@types/bs58": "^4.0.1",
@@ -92,5 +91,10 @@
     "typedoc": "^0.22.10",
     "typescript": "^5.4.5",
     "typescript-eslint": "^0.0.1-alpha.0"
-  }
+  },
+  "resolutions": {
+      "@hubbleprotocol/kamino-sdk": "^5.2.0",
+      "@hubbleprotocol/farms-sdk": "^0.5.0"
+  },
+  "packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610"
 }
