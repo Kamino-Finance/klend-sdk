@@ -373,7 +373,7 @@ describe('Main lending market instruction tests', function () {
     const obligation = await kaminoMarket.getObligationByWallet(env.admin.publicKey, new VanillaObligation(PROGRAM_ID));
     assert.equal(obligation?.state.elevationGroup, 1);
     assert.equal(obligation?.getNumberOfPositions(), 2);
-    assert.deepEqual(obligation?.refreshedStats.potentialElevationGroupUpdate, [1]);
+    assert.equal(obligation?.refreshedStats.potentialElevationGroupUpdate, 0);
 
     const prevStats = obligation!.refreshedStats;
 

@@ -1280,9 +1280,10 @@ export class KaminoAction {
       },
       this.kaminoMarket.programId
     );
-    borrowIx.keys = this.obligation?.state.elevationGroup
-      ? borrowIx.keys.concat([...depositReserveAccountMetas])
-      : borrowIx.keys;
+    borrowIx.keys =
+      this.obligation!.state.elevationGroup > 0 || this.obligation!.refreshedStats.potentialElevationGroupUpdate > 0
+        ? borrowIx.keys.concat([...depositReserveAccountMetas])
+        : borrowIx.keys;
     this.lendingIxs.push(borrowIx);
   }
 
@@ -1508,7 +1509,7 @@ export class KaminoAction {
     );
 
     repayIx.keys =
-      this.obligation?.state.elevationGroup !== 0 ? repayIx.keys.concat([...depositReserveAccountMetas]) : repayIx.keys;
+      this.obligation!.state.elevationGroup > 0 ? repayIx.keys.concat([...depositReserveAccountMetas]) : repayIx.keys;
 
     this.lendingIxs.push(repayIx);
   }
@@ -1559,7 +1560,7 @@ export class KaminoAction {
       this.kaminoMarket.programId
     );
     liquidateIx.keys =
-      this.obligation?.state.elevationGroup !== 0
+      this.obligation!.state.elevationGroup > 0
         ? liquidateIx.keys.concat([...depositReserveAccountMetas])
         : liquidateIx.keys;
     this.lendingIxs.push(liquidateIx);
@@ -1794,20 +1795,31 @@ export class KaminoAction {
         }
       }
 
-      if (action === 'depositAndBorrow' && requestElevationGroup) {
-        const groupsColl = this.reserve.state.config.elevationGroups;
-        const groupsDebt = this.outflowReserve!.state.config.elevationGroups;
+      if ((action === 'depositAndBorrow' || action === 'borrow') && requestElevationGroup) {
+        let emodeGroupsDebt = this.reserve.state.config.elevationGroups;
+        let emodeGroupsColl = this.reserve.state.config.elevationGroups;
+        let debtReserve = this.reserve.address;
+
+        if (action === 'depositAndBorrow') {
+          emodeGroupsDebt = this.outflowReserve!.state.config.elevationGroups;
+          debtReserve = this.outflowReserve!.address;
+        } else if (action === 'borrow') {
+          const depositReserve = this.obligation!.state.deposits.find(
+            (x) => !x.depositReserve.equals(PublicKey.default)
+          )!.depositReserve;
+          const collReserve = this.kaminoMarket.getReserveByAddress(depositReserve);
+          emodeGroupsColl = collReserve!.state.config.elevationGroups;
+        }
         const groups = this.kaminoMarket.state.elevationGroups;
-        const commonElevationGroups = [...groupsColl].filter(
-          (item) =>
-            groupsDebt.includes(item) && item !== 0 && groups[item - 1].debtReserve.equals(this.outflowReserve!.address)
+        const commonElevationGroups = [...emodeGroupsColl].filter(
+          (item) => emodeGroupsDebt.includes(item) && item !== 0 && groups[item - 1].debtReserve.equals(debtReserve)
         );
 
         console.log(
           'Groups of coll reserve',
-          groupsColl,
+          emodeGroupsColl,
           'Groups of debt reserve',
-          groupsDebt,
+          emodeGroupsDebt,
           'Common groups',
           commonElevationGroups
         );
@@ -1824,8 +1836,13 @@ export class KaminoAction {
           const eModeGroup = groups.find((group) => group.id === eModeGroupWithMaxLtvAndDebtReserve)!.id;
           console.log('Setting eModeGroup to', eModeGroup);
 
+          let addToSetupIxs = false;
           if (eModeGroup !== 0 && eModeGroup !== this.obligation?.state.elevationGroup) {
-            this.addRequestElevationIx(eModeGroup, false);
+            if (action === 'borrow') {
+              this.obligation!.refreshedStats.potentialElevationGroupUpdate = eModeGroup;
+              addToSetupIxs = true;
+            }
+            this.addRequestElevationIx(eModeGroup, addToSetupIxs);
             this.addRefreshReserveIxs(allReservesExcludingCurrent, addToSetupIxs);
             this.addRefreshReserveIxs(currentReserveAddresses.toArray(), addToSetupIxs);
             this.addRefreshObligationIx(addToSetupIxs);
