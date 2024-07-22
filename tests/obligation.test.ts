@@ -166,6 +166,13 @@ describe('obligation', function () {
       UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.discriminator + 1 // discriminator + 1 matches the enum
     );
 
+    const obligationBefore = (await kaminoMarket.getObligationByWallet(
+      user1.publicKey,
+      new VanillaObligation(PROGRAM_ID)
+    ))!;
+
+    const liquidationLtvBefore = obligationBefore.refreshedStats.liquidationLtv;
+
     const borrowAction = await KaminoAction.buildBorrowTxns(
       kaminoMarket,
       '1000',
@@ -178,5 +185,14 @@ describe('obligation', function () {
     );
 
     await sendTransactionsFromAction(env, borrowAction, user1, [user1]);
+
+    const obligationAfter = (await kaminoMarket.getObligationByWallet(
+      user1.publicKey,
+      new VanillaObligation(PROGRAM_ID)
+    ))!;
+
+    const liquidationLtvAfter = obligationAfter.refreshedStats.liquidationLtv;
+
+    assert(liquidationLtvAfter > liquidationLtvBefore);
   });
 });
