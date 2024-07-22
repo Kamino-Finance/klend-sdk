@@ -5,6 +5,7 @@ import {
   createMarketWithTwoReservesToppedUp,
   newUser,
   deposit,
+  sendTransactionsFromAction,
 } from './setup_utils';
 import { assert, expect } from 'chai';
 import { BN } from '@coral-xyz/anchor';
@@ -12,6 +13,7 @@ import {
   fuzzyEq,
   initObligation,
   initUserMetadata,
+  KaminoAction,
   PROGRAM_ID,
   sendTransactionV0,
   userMetadataPda,
@@ -19,9 +21,10 @@ import {
 } from '../src';
 import { PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY } from '@solana/web3.js';
 import { sleep } from '@hubbleprotocol/farms-sdk';
-import { updateReserve } from './setup_operations';
+import { updateReserve, updateReserveSingleValue } from './setup_operations';
 import Decimal from 'decimal.js';
 import { waitUntilMatches } from './assert';
+import { UpdateConfigMode } from '../src/idl_codegen/types';
 
 describe('obligation', function () {
   it('retrieve_a_fresh_obligation', async function () {
@@ -137,5 +140,59 @@ describe('obligation', function () {
 
     const reserveSupplyApr = reserve.totalSupplyAPY(currentSlot);
     assert(reserveSupplyApr === 0);
+  });
+
+  it('request_elevation_group_update_on_borrow', async function () {
+    const [usdh, usdc] = ['USDH', 'USDC'];
+
+    const { env, secondMint, kaminoMarket } = await createMarketWithTwoReservesToppedUp(
+      [usdh, new Decimal(5000.05)],
+      [usdc, new Decimal(5000.05)],
+      true
+    );
+
+    const user1 = await newUser(env, kaminoMarket, [[usdh, new Decimal(2000)]]);
+    await deposit(env, kaminoMarket, user1, usdh, new Decimal(2000));
+
+    const buffer = Buffer.alloc(8 * 32);
+    buffer.writeBigUint64LE(BigInt(10_000), 0);
+
+    const collReserve = kaminoMarket.getReserveBySymbol(usdh);
+
+    await updateReserveSingleValue(
+      env,
+      collReserve!,
+      buffer,
+      UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.discriminator + 1 // discriminator + 1 matches the enum
+    );
+
+    const obligationBefore = (await kaminoMarket.getObligationByWallet(
+      user1.publicKey,
+      new VanillaObligation(PROGRAM_ID)
+    ))!;
+
+    const liquidationLtvBefore = obligationBefore.refreshedStats.liquidationLtv;
+
+    const borrowAction = await KaminoAction.buildBorrowTxns(
+      kaminoMarket,
+      '1000',
+      secondMint,
+      user1.publicKey,
+      new VanillaObligation(PROGRAM_ID),
+      300_000,
+      true,
+      true
+    );
+
+    await sendTransactionsFromAction(env, borrowAction, user1, [user1]);
+
+    const obligationAfter = (await kaminoMarket.getObligationByWallet(
+      user1.publicKey,
+      new VanillaObligation(PROGRAM_ID)
+    ))!;
+
+    const liquidationLtvAfter = obligationAfter.refreshedStats.liquidationLtv;
+
+    assert(liquidationLtvAfter > liquidationLtvBefore);
   });
 });
