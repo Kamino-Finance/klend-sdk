@@ -14,7 +14,6 @@ import {
   ReserveWithAddress,
 } from '../../src';
 import { Env, pythMSolPrice, pythUsdcPrice } from '../setup_utils';
-import { OracleType } from '@hubbleprotocol/scope-sdk';
 import { createMint } from '../token_utils';
 import { PublicKey } from '@solana/web3.js';
 import Decimal from 'decimal.js';

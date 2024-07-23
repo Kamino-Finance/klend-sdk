@@ -5,7 +5,6 @@ import {
   buildComputeBudgetIx,
   CollateralConfig,
   DebtConfig,
-  getReserveOracleConfigs,
   KaminoManager,
   LendingMarket,
   MarketWithAddress,
@@ -16,16 +15,12 @@ import {
 import { KaminoVault, KaminoVaultConfig, ReserveAllocationConfig } from '../../src/classes/vault';
 import { createMint } from '../token_utils';
 import { NATIVE_MINT, TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { OracleType } from '@hubbleprotocol/scope-sdk';
 import {
   createMarketWithTwoAssets,
   createTwoMarketsWithTwoAssets,
   createVaultsWithTwoReservesMarketsWithTwoAssets,
 } from './kamino_manager_setup_utils';
-import { Keypair, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
-import { updateReserveConfig } from '../../src/idl_codegen/instructions/updateReserveConfig';
-import { updateSingleReserveConfig } from '../../src/idl_codegen/instructions/updateSingleReserveConfig';
-import { ReserveConfig } from '../../src/idl_codegen/types';
+import { Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js';
 
 describe('Kamino Manager Tests', function () {
   it('kamino_manager_init_market', async function () {
@@ -162,7 +157,6 @@ describe('Kamino Manager Tests', function () {
   it('kamino_manager_update_reserve_oracle', async function () {
     const env = await initEnv('localnet');
     const kaminoManager = new KaminoManager(env.provider.connection);
-
     const marketAccounts = await createMarketWithTwoAssets(env, kaminoManager);
 
     const marketWithAddress: MarketWithAddress = {
@@ -170,21 +164,21 @@ describe('Kamino Manager Tests', function () {
       state: (await LendingMarket.fetch(env.provider.connection, marketAccounts.marketAddress))!,
     };
 
-    const solReserveConfig = await kaminoManager.getReserveConfig(marketAccounts.solReserve);
-    const newReserveConfig = new ReserveConfig({
-      ...solReserveConfig,
-      tokenInfo: {
-        ...solReserveConfig.tokenInfo,
-        ...getReserveOracleConfigs({
-          scopePriceConfigAddress: new PublicKey("3NJYftD5sjVfxSnUdZ1wVML8f3aC6mp1CXCL6L7TnU8C"),
-          scopeChain: [0],
-          scopeTwapChain: [52],
-        }),
-      }
-    });
+    const solReserveWithAddress: ReserveWithAddress = {
+      address: marketAccounts.solReserve,
+      state: (await Reserve.fetch(env.provider.connection, marketAccounts.solReserve))!,
+    };
 
-    console.log(newReserveConfig.tokenInfo.scopeConfiguration);
-    const updateReserveIx = await kaminoManager.updateReserveIx(marketWithAddress, marketAccounts.solReserve, newReserveConfig);
+    // Get oracle configs
+    const oracleConfigs = await kaminoManager.getScopeOracleConfigs();
+
+    // Update using oracle configs (0 for SOL/USD and 52 for SOL/USD twap)
+    const updateReserveIx = await kaminoManager.updateReserveScopeOracleConfiguration(
+      marketWithAddress,
+      solReserveWithAddress,
+      oracleConfigs[0],
+      oracleConfigs[52]
+    );
     await buildAndSendTxn(env.provider.connection, env.admin, updateReserveIx, [], [], 'UpdateReserveScopeFeed');
   });
 

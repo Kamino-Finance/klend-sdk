@@ -19,12 +19,11 @@ import {
   parseForChangesReserveConfigAndGetIxns,
   Reserve,
   ReserveWithAddress,
-  U64_MAX,
   updateEntireReserveConfigIxn,
 } from '../lib';
 import { PROGRAM_ID } from '../idl_codegen/programId';
 import { Fraction, ZERO_FRACTION } from './fraction';
-import { OracleType, OracleTypeKind, Scope, TokenMetadatas, U16_MAX } from '@hubbleprotocol/scope-sdk';
+import { OracleType, Scope, TokenMetadatas, U16_MAX } from '@hubbleprotocol/scope-sdk';
 import BN from 'bn.js';
 import {
   BorrowRateCurve,
@@ -159,9 +158,7 @@ export class KaminoManager {
     return this._vaultClient.updateReserveAllocation(vault, reserveAllocationConfig);
   }
 
-  async getReserveConfig(
-    reserve: PublicKey,
-  ): Promise<ReserveConfig> {
+  async getReserveConfig(reserve: PublicKey): Promise<ReserveConfig> {
     const reserveState = await Reserve.fetch(this._connection, reserve);
     if (!reserveState) {
       throw new Error('Reserve not found');
@@ -169,15 +166,59 @@ export class KaminoManager {
     return reserveState.config;
   }
 
+  async updateReserveScopeOracleConfiguration(
+    marketWithAddress: MarketWithAddress,
+    reserve: ReserveWithAddress,
+    scopeOracleConfig: ScopeOracleConfig,
+    scopeTwapConfig?: ScopeOracleConfig,
+    maxAgeBufferSeconds: number = 20
+  ): Promise<TransactionInstruction[]> {
+    const reserveConfig = reserve.state.config;
+
+    let scopeTwapId = U16_MAX;
+    if (scopeTwapConfig) {
+      scopeTwapId = scopeTwapConfig.oracleId;
+
+      // if(scopeTwapConfig.twapSourceId !== scopeOracleConfig.oracleId) {
+      //   throw new Error('Twap source id must match oracle id');
+      // }
+    }
+
+    const { scopeConfiguration } = getReserveOracleConfigs({
+      scopePriceConfigAddress: scopeOracleConfig.scopePriceConfigAddress,
+      scopeChain: [scopeOracleConfig.oracleId],
+      scopeTwapChain: [scopeTwapId],
+    });
+
+    const newReserveConfig = new ReserveConfig({
+      ...reserveConfig,
+      tokenInfo: {
+        ...reserveConfig.tokenInfo,
+        scopeConfiguration: scopeConfiguration,
+        // TODO: Decide if we want to keep this maxAge override for twap & price
+        maxAgeTwapSeconds: scopeTwapConfig
+          ? new BN(scopeTwapConfig.max_age + maxAgeBufferSeconds)
+          : reserveConfig.tokenInfo.maxAgeTwapSeconds,
+        maxAgePriceSeconds: new BN(scopeOracleConfig.max_age + maxAgeBufferSeconds),
+      },
+    });
+
+    return this.updateReserveIx(marketWithAddress, reserve.address, newReserveConfig, reserve.state);
+  }
+
   async updateReserveIx(
     marketWithAddress: MarketWithAddress,
     reserve: PublicKey,
-    config: ReserveConfig
+    config: ReserveConfig,
+    reserveStateOverride?: Reserve,
+    updateEntireConfig: boolean = false
   ): Promise<TransactionInstruction[]> {
-    const reserveState = await Reserve.fetch(this._connection, reserve, this._kaminoLendProgramId);
+    const reserveState = reserveStateOverride
+      ? reserveStateOverride
+      : (await Reserve.fetch(this._connection, reserve, this._kaminoLendProgramId))!;
     const ixns: TransactionInstruction[] = [];
 
-    if (!reserveState) {
+    if (!reserveState || updateEntireConfig) {
       ixns.push(updateEntireReserveConfigIxn(marketWithAddress, reserve, config, this._kaminoLendProgramId));
     } else {
       ixns.push(
@@ -248,6 +289,8 @@ export class KaminoManager {
     const tokenMetadatas = await TokenMetadatas.fetch(this._connection, feedConfig.tokensMetadata);
     const decoder = new TextDecoder('utf-8');
 
+    console.log('feedConfig.tokensMetadata', feedConfig.tokensMetadata);
+
     if (tokenMetadatas === null) {
       throw new Error('TokenMetadatas not found');
     }
@@ -259,6 +302,7 @@ export class KaminoManager {
         const oracleType = parseOracleType(oracleMappings.priceTypes[index]);
 
         scopeOracleConfigs.push({
+          scopePriceConfigAddress: feedConfig.oraclePrices,
           name: name,
           oracleType: oracleType,
           oracleId: index,
@@ -277,6 +321,7 @@ export class KaminoManager {
 export type SolanaCluster = 'mainnet-beta' | 'devnet' | 'localnet';
 
 export type ScopeOracleConfig = {
+  scopePriceConfigAddress: PublicKey;
   name: string;
   oracleType: string;
   oracleId: number;
@@ -624,11 +669,8 @@ export function getReserveOracleConfigs(priceFeed: PriceFeed | null): {
   });
 
   if (priceFeed) {
-    const { scopePriceConfigAddress, scopeChain,
-      scopeTwapChain,
-      pythPrice,
-      switchboardPrice,
-      switchboardTwapPrice } = priceFeed;
+    const { scopePriceConfigAddress, scopeChain, scopeTwapChain, pythPrice, switchboardPrice, switchboardTwapPrice } =
+      priceFeed;
     if (pythPrice) {
       pythConfiguration = new PythConfiguration({ price: pythPrice });
     }
@@ -638,7 +680,7 @@ export function getReserveOracleConfigs(priceFeed: PriceFeed | null): {
         twapAggregator: switchboardTwapPrice ? switchboardTwapPrice : NULL_PUBKEY,
       });
     }
-    if(scopePriceConfigAddress) {
+    if (scopePriceConfigAddress) {
       scopeConfiguration = new ScopeConfiguration({
         priceFeed: scopePriceConfigAddress,
         priceChain: scopeChain!.concat(Array(4 - scopeChain!.length).fill(U16_MAX)),

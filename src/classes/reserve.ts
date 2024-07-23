@@ -1684,7 +1684,7 @@ export function parseForChangesReserveConfigAndGetIxns(
       updateReserveConfigIxn(
         marketWithAddress,
         reserveAddress,
-        updateReserveConfigArgs.mode,
+        updateReserveConfigArgs.mode + 1,
         updateReserveConfigArgs.value,
         programId
       )
@@ -1741,8 +1741,8 @@ export function updateReserveConfigEncodedValue(
       break;
     case UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator:
     case UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator:
-      console.log("value", value);
-      console.log("disc", discriminator);
+      console.log('value', value);
+      console.log('disc', discriminator);
       valueArray = value as number[];
       buffer = Buffer.alloc(8);
       for (let i = 0; i < valueArray.length; i++) {

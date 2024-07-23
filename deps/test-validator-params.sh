@@ -68,10 +68,11 @@ function print_args {
   echo "--bpf-program kvauTFR8qm1dhniz6pYuBZkuene3Hfrs1VQhVRgCNrr ./deps/programs/kamino_vault.so"
 
   # scope
-  echo "--clone 3NJYftD5sjVfxSnUdZ1wVML8f3aC6mp1CXCL6L7TnU8C -u m"
+  echo "--clone 3NJYftD5sjVfxSnUdZ1wVML8f3aC6mp1CXCL6L7TnU8C"
+  echo "--clone GMprgtqUv2G74GAFHhHhrH21n1cnnNZcPb6TAz5GhqU"
 
   # options
-  echo "--reset --quiet"
+  echo "--reset --quiet -u m"
 }
 
 print_args
