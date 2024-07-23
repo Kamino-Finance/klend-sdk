@@ -37,8 +37,6 @@ export type ReserveDataType = {
   borrowLimitCrossedSlot: number;
   symbol: string;
   decimals: number;
-  supplyInterestAPY: number;
-  borrowInterestAPY: number;
   protocolTakeRate: number;
   accumulatedProtocolFees: Decimal;
   mintTotalSupply: Decimal;

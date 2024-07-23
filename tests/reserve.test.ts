@@ -104,8 +104,10 @@ describe('reserve', function () {
     await fetchedReserve.load(fetchedReserve.tokenOraclePrice);
     await sleep(8000);
 
-    const borrowAPR = fetchedReserve.calculateBorrowAPR();
-    const supplyAPR = fetchedReserve.calculateSupplyAPR();
+    const slot = await kaminoMarket.getConnection().getSlot();
+
+    const borrowAPR = fetchedReserve.calculateBorrowAPR(slot, kaminoMarket.state.referralFeeBps);
+    const supplyAPR = fetchedReserve.calculateSupplyAPR(slot, kaminoMarket.state.referralFeeBps);
 
     assert(supplyAPR === borrowAPR * (1 - fetchedReserve.state.config.protocolTakeRatePct / 100));
   });

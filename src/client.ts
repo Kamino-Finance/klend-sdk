@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import {
+  DEFAULT_RECENT_SLOT_DURATION_MS,
   KaminoAction,
   KaminoMarket,
   KaminoObligation,
@@ -40,7 +41,9 @@ async function main() {
 
       const reserve = kaminoMarket.getReserveBySymbol(token);
 
-      const borrowApr = reserve!.calculateBorrowAPR();
+      const slot = await connection.getSlot();
+
+      const borrowApr = reserve!.calculateBorrowAPR(slot, kaminoMarket.state.referralFeeBps);
       const utilizationRatio = reserve!.calculateUtilizationRatio();
 
       console.log(
@@ -351,7 +354,7 @@ async function getMarket(connection: Connection, programId: PublicKey) {
   } else {
     throw new Error(`Unknown program id: ${programId.toString()}`);
   }
-  const kaminoMarket = await KaminoMarket.load(connection, marketAddress, programId);
+  const kaminoMarket = await KaminoMarket.load(connection, marketAddress, DEFAULT_RECENT_SLOT_DURATION_MS, programId);
   if (kaminoMarket === null) {
     throw new Error(`${programId.toString()} Kamino market ${marketAddress.toBase58()} not found`);
   }
