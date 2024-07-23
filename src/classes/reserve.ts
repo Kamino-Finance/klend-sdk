@@ -904,7 +904,7 @@ export function updateReserveConfigIxn(
   const args: UpdateReserveConfigArgs = {
     mode: new anchor.BN(modeDiscriminator),
     value: value,
-    skipValidation: true,
+    skipValidation: false,
   };
 
   const accounts: UpdateReserveConfigAccounts = {
@@ -1678,6 +1678,15 @@ export function parseForChangesReserveConfigAndGetIxns(
             ),
           });
         }
+        if (!reserve.config.tokenInfo.scopeConfiguration.priceFeed.equals(tokenInfo.scopeConfiguration.priceFeed)) {
+          updateReserveIxnsArgs.push({
+            mode: UpdateConfigMode.UpdateScopePriceFeed.discriminator,
+            value: updateReserveConfigEncodedValue(
+              UpdateConfigMode.UpdateScopePriceFeed.discriminator,
+              tokenInfo.scopeConfiguration.priceFeed
+            ),
+          });
+        }
       }
     }
   } // for loop
@@ -1740,8 +1749,14 @@ export function updateReserveConfigEncodedValue(
     case UpdateConfigMode.DeleveragingMarginCallPeriod.discriminator:
     case UpdateConfigMode.UpdateBorrowFactor.discriminator:
     case UpdateConfigMode.DeleveragingThresholdSlotsPerBps.discriminator:
+      value = value as number;
+      buffer = Buffer.alloc(8);
+      buffer.writeBigUint64LE(BigInt(value), 0);
+      break;
     case UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator:
     case UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator:
+      console.log("value", value);
+      console.log("disc", discriminator);
       valueArray = value as number[];
       buffer = Buffer.alloc(8);
       for (let i = 0; i < valueArray.length; i++) {

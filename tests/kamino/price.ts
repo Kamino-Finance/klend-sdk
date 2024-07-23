@@ -125,4 +125,5 @@ export type PriceFeed = {
   type: OracleTypeKind;
   price: PublicKey;
   chain?: number[];
+  twapChain?: number[];
 };

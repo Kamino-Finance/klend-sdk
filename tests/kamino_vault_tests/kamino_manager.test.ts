@@ -5,7 +5,10 @@ import {
   buildComputeBudgetIx,
   CollateralConfig,
   DebtConfig,
+  getReserveOracleConfigs,
   KaminoManager,
+  LendingMarket,
+  MarketWithAddress,
   newFlat,
   Reserve,
   ReserveWithAddress,
@@ -19,7 +22,10 @@ import {
   createTwoMarketsWithTwoAssets,
   createVaultsWithTwoReservesMarketsWithTwoAssets,
 } from './kamino_manager_setup_utils';
-import { Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { Keypair, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
+import { updateReserveConfig } from '../../src/idl_codegen/instructions/updateReserveConfig';
+import { updateSingleReserveConfig } from '../../src/idl_codegen/instructions/updateSingleReserveConfig';
+import { ReserveConfig } from '../../src/idl_codegen/types';
 
 describe('Kamino Manager Tests', function () {
   it('kamino_manager_init_market', async function () {
@@ -66,8 +72,7 @@ describe('Kamino Manager Tests', function () {
       tokenName: 'SOL',
       mintDecimals: 9,
       priceFeed: {
-        type: new OracleType.Pyth(),
-        price: pythMSolPrice,
+        pythPrice: pythMSolPrice,
       },
       loanToValuePct: 70,
       liquidationThresholdPct: 75,
@@ -79,8 +84,7 @@ describe('Kamino Manager Tests', function () {
       tokenName: 'USDC',
       mintDecimals: 6,
       priceFeed: {
-        type: new OracleType.Pyth(),
-        price: pythUsdcPrice,
+        pythPrice: pythUsdcPrice,
       },
       borrowRateCurve: newFlat(100),
     });
@@ -153,6 +157,35 @@ describe('Kamino Manager Tests', function () {
 
     const [vaultKp, instructions] = await kaminoManager.createVault(kaminoVaultConfig);
     await buildAndSendTxn(env.provider.connection, env.admin, instructions, [vaultKp], [], 'InitVault');
+  });
+
+  it('kamino_manager_update_reserve_oracle', async function () {
+    const env = await initEnv('localnet');
+    const kaminoManager = new KaminoManager(env.provider.connection);
+
+    const marketAccounts = await createMarketWithTwoAssets(env, kaminoManager);
+
+    const marketWithAddress: MarketWithAddress = {
+      address: marketAccounts.marketAddress,
+      state: (await LendingMarket.fetch(env.provider.connection, marketAccounts.marketAddress))!,
+    };
+
+    const solReserveConfig = await kaminoManager.getReserveConfig(marketAccounts.solReserve);
+    const newReserveConfig = new ReserveConfig({
+      ...solReserveConfig,
+      tokenInfo: {
+        ...solReserveConfig.tokenInfo,
+        ...getReserveOracleConfigs({
+          scopePriceConfigAddress: new PublicKey("3NJYftD5sjVfxSnUdZ1wVML8f3aC6mp1CXCL6L7TnU8C"),
+          scopeChain: [0],
+          scopeTwapChain: [52],
+        }),
+      }
+    });
+
+    console.log(newReserveConfig.tokenInfo.scopeConfiguration);
+    const updateReserveIx = await kaminoManager.updateReserveIx(marketWithAddress, marketAccounts.solReserve, newReserveConfig);
+    await buildAndSendTxn(env.provider.connection, env.admin, updateReserveIx, [], [], 'UpdateReserveScopeFeed');
   });
 
   it('kamino_manager_update_vault_allocation', async function () {

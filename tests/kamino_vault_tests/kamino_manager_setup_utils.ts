@@ -65,8 +65,7 @@ export async function createMarketWithTwoAssets(
         tokenName: 'SOL',
         mintDecimals: 9,
         priceFeed: {
-          type: new OracleType.Pyth(),
-          price: pythMSolPrice,
+          pythPrice: pythMSolPrice,
         },
         loanToValuePct: 70,
         liquidationThresholdPct: 75,
@@ -83,8 +82,7 @@ export async function createMarketWithTwoAssets(
         tokenName: 'USDC',
         mintDecimals: 6,
         priceFeed: {
-          type: new OracleType.Pyth(),
-          price: pythUsdcPrice,
+          pythPrice: pythUsdcPrice,
         },
         loanToValuePct: 0,
         liquidationThresholdPct: 0,

@@ -19,6 +19,7 @@ import {
   parseForChangesReserveConfigAndGetIxns,
   Reserve,
   ReserveWithAddress,
+  U64_MAX,
   updateEntireReserveConfigIxn,
 } from '../lib';
 import { PROGRAM_ID } from '../idl_codegen/programId';
@@ -158,7 +159,17 @@ export class KaminoManager {
     return this._vaultClient.updateReserveAllocation(vault, reserveAllocationConfig);
   }
 
-  private async updateReserveIx(
+  async getReserveConfig(
+    reserve: PublicKey,
+  ): Promise<ReserveConfig> {
+    const reserveState = await Reserve.fetch(this._connection, reserve);
+    if (!reserveState) {
+      throw new Error('Reserve not found');
+    }
+    return reserveState.config;
+  }
+
+  async updateReserveIx(
     marketWithAddress: MarketWithAddress,
     reserve: PublicKey,
     config: ReserveConfig
@@ -461,9 +472,12 @@ export class DebtConfig implements AssetConfig {
 }
 
 export type PriceFeed = {
-  type: OracleTypeKind;
-  price: PublicKey;
-  chain?: number[];
+  scopePriceConfigAddress?: PublicKey;
+  scopeChain?: number[];
+  scopeTwapChain?: number[];
+  pythPrice?: PublicKey;
+  switchboardPrice?: PublicKey;
+  switchboardTwapPrice?: PublicKey;
 };
 
 export type AssetReserveConfigParams = {
@@ -559,7 +573,7 @@ function buildReserveConfig(fields: {
       maxTwapDivergenceBps: new BN(0),
       maxAgePriceSeconds: new BN(fields.configParams.maxAgePriceSeconds),
       maxAgeTwapSeconds: new BN(fields.configParams.maxAgeTwapSeconds),
-      ...getOracleConfigs(fields.configParams.priceFeed),
+      ...getReserveOracleConfigs(fields.configParams.priceFeed),
       padding: Array(20).fill(new BN(0)),
     } as TokenInfo,
     borrowRateCurve: fields.configParams.borrowRateCurve,
@@ -591,7 +605,7 @@ function buildReserveConfig(fields: {
   return new ReserveConfig(reserveConfigFields);
 }
 
-export function getOracleConfigs(priceFeed: PriceFeed | null): {
+export function getReserveOracleConfigs(priceFeed: PriceFeed | null): {
   pythConfiguration: PythConfiguration;
   switchboardConfiguration: SwitchboardConfiguration;
   scopeConfiguration: ScopeConfiguration;
@@ -610,29 +624,26 @@ export function getOracleConfigs(priceFeed: PriceFeed | null): {
   });
 
   if (priceFeed) {
-    const { type, price, chain } = priceFeed;
-    switch (type.kind) {
-      case new OracleType.Pyth().kind: {
-        pythConfiguration = new PythConfiguration({ price });
-        break;
-      }
-      case new OracleType.SwitchboardV2().kind: {
-        switchboardConfiguration = new SwitchboardConfiguration({
-          ...switchboardConfiguration,
-          priceAggregator: price,
-        });
-        break;
-      }
-      case new OracleType.KToken().kind: {
-        scopeConfiguration = new ScopeConfiguration({
-          ...scopeConfiguration,
-          priceFeed: price,
-          priceChain: chain!.concat(Array(4 - chain!.length).fill(U16_MAX)),
-        });
-        break;
-      }
-      default:
-        throw new Error('Invalid oracle type');
+    const { scopePriceConfigAddress, scopeChain,
+      scopeTwapChain,
+      pythPrice,
+      switchboardPrice,
+      switchboardTwapPrice } = priceFeed;
+    if (pythPrice) {
+      pythConfiguration = new PythConfiguration({ price: pythPrice });
+    }
+    if (switchboardPrice) {
+      switchboardConfiguration = new SwitchboardConfiguration({
+        priceAggregator: switchboardPrice ? switchboardPrice : NULL_PUBKEY,
+        twapAggregator: switchboardTwapPrice ? switchboardTwapPrice : NULL_PUBKEY,
+      });
+    }
+    if(scopePriceConfigAddress) {
+      scopeConfiguration = new ScopeConfiguration({
+        priceFeed: scopePriceConfigAddress,
+        priceChain: scopeChain!.concat(Array(4 - scopeChain!.length).fill(U16_MAX)),
+        twapChain: scopeTwapChain!.concat(Array(4 - scopeTwapChain!.length).fill(U16_MAX)),
+      });
     }
   }
   return {
