@@ -8,41 +8,34 @@ import {
 } from '@solana/web3.js';
 import { KaminoVault, KaminoVaultClient, KaminoVaultConfig, kaminoVaultId, ReserveAllocationConfig } from './vault';
 import {
-  createReserveIx,
+  AddAssetToMarketParams,
+  CreateKaminoMarketParams,
+  createReserveIxs,
   DEFAULT_RECENT_SLOT_DURATION_MS,
+  getReserveOracleConfigs,
   initLendingMarket,
   InitLendingMarketAccounts,
   InitLendingMarketArgs,
   LendingMarket,
   lendingMarketAuthPda,
-  NULL_PUBKEY,
-  parseForChangesReserveConfigAndGetIxns,
+  MarketWithAddress,
+  parseForChangesReserveConfigAndGetIxs,
+  parseOracleType,
+  PubkeyHashMap,
   Reserve,
   ReserveWithAddress,
-  updateEntireReserveConfigIxn,
+  ScopeOracleConfig,
+  SolanaCluster,
+  updateEntireReserveConfigIx,
 } from '../lib';
 import { PROGRAM_ID } from '../idl_codegen/programId';
-import { Fraction, ZERO_FRACTION } from './fraction';
-import { OracleType, Scope, TokenMetadatas, U16_MAX } from '@hubbleprotocol/scope-sdk';
+import { Scope, TokenMetadatas, U16_MAX } from '@hubbleprotocol/scope-sdk';
 import BN from 'bn.js';
-import {
-  BorrowRateCurve,
-  BorrowRateCurveFields,
-  CurvePoint,
-  PriceHeuristic,
-  PythConfiguration,
-  ReserveConfig,
-  ReserveConfigFields,
-  ScopeConfiguration,
-  SwitchboardConfiguration,
-  TokenInfo,
-  WithdrawalCaps,
-} from '../idl_codegen/types';
-import { numberToLamportsDecimal } from './utils';
+import { ReserveConfig } from '../idl_codegen/types';
 import Decimal from 'decimal.js';
 
 /**
- * KaminoVaultClient is a class that provides a high-level interface to interact with the Kamino Vault program.
+ * KaminoManager is a class that provides a high-level interface to interact with the Kamino Lend and Kamino Vault programs, in order to create and manage a market, as well as vaults
  */
 export class KaminoManager {
   private readonly _connection: Connection;
@@ -77,7 +70,15 @@ export class KaminoManager {
     return this._kaminoVaultProgramId;
   }
 
-  async createMarket(params: CreateKaminoMarketParams): Promise<{ market: Keypair; ixns: TransactionInstruction[] }> {
+  /**
+   * This is a function that helps quickly setting up a reserve for an asset with a default config. The config can be modified later on.
+   * @param params.admin - the admin of the market
+   * @returns market keypair - keypair used for market account creation -> to be signed with when executing the transaction
+   * @returns ixns - an array of ixns for creating and initializing the market account
+   */
+  async createMarketIxs(
+    params: CreateKaminoMarketParams
+  ): Promise<{ market: Keypair; ixns: TransactionInstruction[] }> {
     const marketAccount = Keypair.generate();
     const size = LendingMarket.layout.span + 8;
     const [lendingMarketAuthority, _] = lendingMarketAuthPda(marketAccount.publicKey, this._kaminoLendProgramId);
@@ -110,11 +111,15 @@ export class KaminoManager {
     return { market: marketAccount, ixns: createMarketIxns };
   }
 
-  /***
-   * @returns reserve - keypair used for creation -> to be signed with
-   * @returns txnIxns - A list of lists of ixns -> first list for reserve creation, second for updating it with correct params
+  /**
+   * This is a function that helps quickly setting up a reserve for an asset with a default config. The config can be modified later on.
+   * @param params.admin - the admin of the reserve
+   * @param params.marketAddress - the market to create a reserve for, only the market admin can create a reserve for the market
+   * @param params.assetConfig - an object that helps generate a default reserve config with some inputs which have to be configured before calling this function
+   * @returns reserve - keypair used for reserve creation -> to be signed with when executing the transaction
+   * @returns txnIxns - an array of arrays of ixns -> first array for reserve creation, second for updating it with correct params
    */
-  async addAssetToMarket(
+  async addAssetToMarketIxs(
     params: AddAssetToMarketParams
   ): Promise<{ reserve: Keypair; txnIxns: TransactionInstruction[][] }> {
     const market = await LendingMarket.fetch(this._connection, params.marketAddress, this._kaminoLendProgramId);
@@ -125,7 +130,7 @@ export class KaminoManager {
 
     const reserveAccount = Keypair.generate();
 
-    const createReserveixns = await createReserveIx(
+    const createReserveInstructions = await createReserveIxs(
       this._connection,
       params.admin,
       params.marketAddress,
@@ -134,30 +139,47 @@ export class KaminoManager {
       this._kaminoLendProgramId
     );
 
-    const updateReserveIxns = await this.updateReserveIx(
+    const updateReserveInstructions = await this.updateReserveIxs(
       marketWithAddress,
       reserveAccount.publicKey,
       params.assetConfig.getReserveConfig()
     );
 
     const txnIxns: TransactionInstruction[][] = [];
-    txnIxns.push(createReserveixns);
-    txnIxns.push(updateReserveIxns);
+    txnIxns.push(createReserveInstructions);
+    txnIxns.push(updateReserveInstructions);
 
     return { reserve: reserveAccount, txnIxns };
   }
 
-  async createVault(vaultConfig: KaminoVaultConfig): Promise<[Keypair, TransactionInstruction[]]> {
-    return this._vaultClient.createVault(vaultConfig);
+  /**
+   * This method will create a vault with a given config. The config can be changed later on, but it is recommended to set it up correctly from the start
+   * @param vaultConfig - the config object used to create a vault
+   * @returns vault - keypair, should be used to sign the transaction which creates the vault account
+   * @returns ixns - an array of instructions to create the vault
+   */
+  async createVaultIxs(vaultConfig: KaminoVaultConfig): Promise<{ vault: Keypair; ixns: TransactionInstruction[] }> {
+    return this._vaultClient.createVaultIxs(vaultConfig);
   }
 
-  async updateVaultReserveAllocation(
+  /**
+   * This method updates the vault reserve allocation cofnig for an exiting vault reserve, or adds a new reserve to the vault if it does not exist.
+   * @param vault - vault to be updated
+   * @param reserveAllocationConfig - new reserve allocation config
+   * @returns - a list of instructions
+   */
+  async updateVaultReserveAllocationIxs(
     vault: KaminoVault,
     reserveAllocationConfig: ReserveAllocationConfig
   ): Promise<TransactionInstruction> {
-    return this._vaultClient.updateReserveAllocation(vault, reserveAllocationConfig);
+    return this._vaultClient.updateReserveAllocationIxs(vault, reserveAllocationConfig);
   }
 
+  /**
+   * This method retruns the reserve config for a given reserve
+   * @param reserve - reserve to get the config for
+   * @returns - the reserve config
+   */
   async getReserveConfig(reserve: PublicKey): Promise<ReserveConfig> {
     const reserveState = await Reserve.fetch(this._connection, reserve);
     if (!reserveState) {
@@ -166,8 +188,17 @@ export class KaminoManager {
     return reserveState.config;
   }
 
-  async updateReserveScopeOracleConfiguration(
-    marketWithAddress: MarketWithAddress,
+  /**
+   * This function enables the update of the scope oracle configuration. In order to get a list of scope prices, getScopeOracleConfigs can be used
+   * @param market - lending market which owns the reserve
+   * @param reserve - reserve which to be updated
+   * @param scopeOracleConfig - new scope oracle config
+   * @param scopeTwapConfig - new scope twap config
+   * @param maxAgeBufferSeconds - buffer to be added to onchain max_age - if oracle price is older than that, txns interacting with the reserve will fail
+   * @returns - an array of instructions used update the oracle configuration
+   */
+  async updateReserveScopeOracleConfigurationIxs(
+    market: MarketWithAddress,
     reserve: ReserveWithAddress,
     scopeOracleConfig: ScopeOracleConfig,
     scopeTwapConfig?: ScopeOracleConfig,
@@ -203,10 +234,19 @@ export class KaminoManager {
       },
     });
 
-    return this.updateReserveIx(marketWithAddress, reserve.address, newReserveConfig, reserve.state);
+    return this.updateReserveIxs(market, reserve.address, newReserveConfig, reserve.state);
   }
 
-  async updateReserveIx(
+  /**
+   * This function updates the given reserve with a new config. It can either update the entire reserve config or just update fields which differ between given reserve and existing reserve
+   * @param marketWithAddress - the market that owns the reserve to be updated
+   * @param reserve - the reserve to be updated
+   * @param config - the new reserve configuration to be used for the update
+   * @param reserveStateOverride - the reserve state, useful to provide, if already fetched outside this method, in order to avoid an extra rpc call to fetch it. Make sure the reserveConfig has not been updated since fetching the reserveState that you pass in.
+   * @param updateEntireConfig - when set to false, it will only update fields that are different between @param config and reserveState.config, set to true it will always update entire reserve config. An entire reserveConfig update might be too large for a multisig transaction
+   * @returns - an array of multiple update ixns. If there are many fields that are being updated without the updateEntireConfig=true, multiple transactions might be required to fit all ixns.
+   */
+  async updateReserveIxs(
     marketWithAddress: MarketWithAddress,
     reserve: PublicKey,
     config: ReserveConfig,
@@ -219,10 +259,10 @@ export class KaminoManager {
     const ixns: TransactionInstruction[] = [];
 
     if (!reserveState || updateEntireConfig) {
-      ixns.push(updateEntireReserveConfigIxn(marketWithAddress, reserve, config, this._kaminoLendProgramId));
+      ixns.push(updateEntireReserveConfigIx(marketWithAddress, reserve, config, this._kaminoLendProgramId));
     } else {
       ixns.push(
-        ...parseForChangesReserveConfigAndGetIxns(
+        ...parseForChangesReserveConfigAndGetIxs(
           marketWithAddress,
           reserveState,
           reserve,
@@ -236,47 +276,105 @@ export class KaminoManager {
   }
 
   /**
+   * This function creates instructions to deposit into a vault. It will also create ATA creation instructions for the vault shares that the user receives in return
    * @param user - user to deposit
    * @param vault - vault to deposit into
    * @param tokenAmount - token amount to be deposited, in decimals (will be converted in lamports)
-   * @returns
+   * @returns - an array of instructions to be used to be executed
    */
-  async depositToVault(user: PublicKey, vault: KaminoVault, tokenAmount: Decimal): Promise<TransactionInstruction[]> {
-    return this._vaultClient.deposit(user, vault, tokenAmount);
+  async depositToVaultIxs(
+    user: PublicKey,
+    vault: KaminoVault,
+    tokenAmount: Decimal
+  ): Promise<TransactionInstruction[]> {
+    return this._vaultClient.depositIxs(user, vault, tokenAmount);
   }
 
-  async withdrawFromVault(
+  /**
+   * This function will return the missing ATA creation instructions, as well as one or multiple withdraw instructions, based on how many reserves it's needed to withdraw from. This might have to be split in multiple transactions
+   * @param user - user to withdraw
+   * @param vault - vault to withdraw from
+   * @param shareAmount - share amount to withdraw, in order to withdraw everything, any value > user share amount
+   * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
+   * @returns an array of instructions to be executed
+   */
+  async withdrawFromVaultIxs(
     user: PublicKey,
     vault: KaminoVault,
     shareAmount: Decimal,
     slot: number
   ): Promise<TransactionInstruction[]> {
-    return this._vaultClient.withdraw(user, vault, shareAmount, slot);
+    return this._vaultClient.withdrawIxs(user, vault, shareAmount, slot);
   }
 
-  async getVaultTokensPerShare(vault: KaminoVault, slot: number): Promise<Decimal> {
-    return this._vaultClient.getTokensPerShare(vault, slot);
+  /**
+   * This method calculates the token per share value. This will always change based on interest earned from the vault, but calculating it requires a bunch of rpc requests. Caching this for a short duration would be optimal
+   * @param vault - vault to calculate tokensPerShare for
+   * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
+   * @returns - token per share value
+   */
+  async getTokensPerShareSingleVault(vault: KaminoVault, slot: number): Promise<Decimal> {
+    return this._vaultClient.getTokensPerShareSingleVault(vault, slot);
   }
 
-  async getUserVaultSharesBalance(user: PublicKey, vault: KaminoVault): Promise<Decimal> {
-    return this._vaultClient.getUserSharesBalance(user, vault);
+  /**
+   * This method returns the user shares balance for a given vault
+   * @param user - user to calculate the shares balance for
+   * @param vault - vault to calculate shares balance for
+   * @returns - user share balance in decimal (not lamports)
+   */
+  async getUserSharesBalanceSingleVault(user: PublicKey, vault: KaminoVault): Promise<Decimal> {
+    return this._vaultClient.getUserSharesBalanceSingleVault(user, vault);
   }
 
+  /**
+   * This method returns the user shares balance for all existing vaults
+   * @param user - user to calculate the shares balance for
+   * @param vaultsOverride - the kamino vaults if already fetched, in order to reduce rpc calls
+   * @returns - hash map with keyh as vault address and value as user share balance in decimal (not lamports)
+   */
+  async getUserSharesBalanceAllVaults(
+    user: PublicKey,
+    vaultsOverride: KaminoVault[]
+  ): Promise<PubkeyHashMap<PublicKey, Decimal>> {
+    return this._vaultClient.getUserSharesBalanceAllVaults(user, vaultsOverride);
+  }
+
+  /**
+   * @returns - the KaminoVault client
+   */
   getKaminoVaultClient(): KaminoVaultClient {
     return this._vaultClient;
   }
 
+  /**
+   * This will trigger invest by balancing, based on weights, the reserve allocations of the vault. It can either withdraw or deposit into reserves to balance them. This is a function that should be cranked
+   * @param kaminoVault - vault to invest from
+   * @returns - an array of invest instructions for each invest action required for the vault reserves
+   */
   async investAllReserves(kaminoVault: KaminoVault): Promise<TransactionInstruction[]> {
-    return this._vaultClient.investAllReserves(kaminoVault);
+    return this._vaultClient.investAllReservesIxs(kaminoVault);
   }
 
-  async investSingleReserves(
+  /**
+   * This will trigger invest by balancing, based on weights, the reserve allocation of the vault. It can either withdraw or deposit into the given reserve to balance it
+   * @param kaminoVault - vault to invest from
+   * @param reserve - reserve to invest into or disinvest from
+   * @returns - an array of invest instructions for each invest action required for the vault reserves
+   */
+  async investSingleReserve(
     kaminoVault: KaminoVault,
     reserveWithAddress: ReserveWithAddress
   ): Promise<TransactionInstruction> {
-    return this._vaultClient.investSingleReserve(kaminoVault, reserveWithAddress);
+    return this._vaultClient.investSingleReserveIxs(kaminoVault, reserveWithAddress);
   }
 
+  /**
+   * This retruns an array of scope oracle configs to be used to set the scope price and twap oracles for a reserve
+   * @param feed - scope feed to fetch prices from
+   * @param cluster - cluster to fetch from, this should be left unchanged unless working on devnet or locally
+   * @returns - an array of scope oracle configs
+   */
   async getScopeOracleConfigs(
     feed: string = 'hubble',
     cluster: SolanaCluster = 'mainnet-beta'
@@ -296,7 +394,6 @@ export class KaminoManager {
     }
 
     for (let index = 0; index < oracleMappings.priceInfoAccounts.length; index++) {
-      // scopeOracleConfigs.push(
       if (!oracleMappings.priceInfoAccounts[index].equals(PublicKey.default)) {
         const name = decoder.decode(Uint8Array.from(tokenMetadatas.metadatasArray[index].name)).replace(/\0/g, '');
         const oracleType = parseOracleType(oracleMappings.priceTypes[index]);
@@ -317,440 +414,3 @@ export class KaminoManager {
     return scopeOracleConfigs;
   }
 } // KaminoManager
-
-export type SolanaCluster = 'mainnet-beta' | 'devnet' | 'localnet';
-
-export type ScopeOracleConfig = {
-  scopePriceConfigAddress: PublicKey;
-  name: string;
-  oracleType: string;
-  oracleId: number;
-  oracleAccount: PublicKey;
-  twapEnabled: boolean;
-  twapSourceId: number;
-  max_age: number;
-};
-
-export type CreateKaminoMarketParams = {
-  admin: PublicKey;
-};
-
-export type AddAssetToMarketParams = {
-  admin: PublicKey;
-  marketAddress: PublicKey;
-  assetConfig: AssetConfig;
-};
-
-export interface AssetConfig {
-  readonly mint: PublicKey;
-  readonly tokenName: string;
-  readonly mintDecimals: number;
-  readonly mintTokenProgram: PublicKey;
-  assetReserveConfigParams: AssetReserveConfigParams;
-
-  setAssetConfigParams(assetReserveConfigParams: AssetReserveConfigParams): void;
-  getReserveConfig(): ReserveConfig;
-}
-
-export class AssetReserveConfig implements AssetConfig {
-  readonly mint: PublicKey;
-  readonly tokenName: string;
-  readonly mintDecimals: number;
-  readonly mintTokenProgram: PublicKey;
-  assetReserveConfigParams: AssetReserveConfigParams;
-
-  constructor(fields: {
-    mint: PublicKey;
-    mintTokenProgram: PublicKey;
-    tokenName: string;
-    mintDecimals: number;
-    priceFeed: PriceFeed;
-    loanToValuePct: number;
-    liquidationThresholdPct: number;
-    borrowRateCurve: BorrowRateCurve;
-    depositLimit: Decimal;
-    borrowLimit: Decimal;
-  }) {
-    this.mint = fields.mint;
-    this.tokenName = fields.tokenName;
-    this.mintDecimals = fields.mintDecimals;
-    this.mintTokenProgram = fields.mintTokenProgram;
-
-    // TODO: verify defaults and ensure opinionated
-    this.assetReserveConfigParams = DefaultConfigParams;
-    this.assetReserveConfigParams.priceFeed = fields.priceFeed;
-    this.assetReserveConfigParams.loanToValuePct = fields.loanToValuePct;
-    this.assetReserveConfigParams.liquidationThresholdPct = fields.liquidationThresholdPct;
-    this.assetReserveConfigParams.borrowRateCurve = fields.borrowRateCurve;
-    this.assetReserveConfigParams.depositLimit = fields.depositLimit;
-    this.assetReserveConfigParams.borrowLimit = fields.borrowLimit;
-  }
-
-  setAssetConfigParams(assetReserveConfigParams: AssetReserveConfigParams): void {
-    this.assetReserveConfigParams = assetReserveConfigParams;
-  }
-
-  getReserveConfig(): ReserveConfig {
-    return buildReserveConfig({
-      configParams: this.assetReserveConfigParams,
-      mintDecimals: this.mintDecimals,
-      tokenName: this.tokenName,
-    });
-  }
-}
-
-export class AssetReserveConfigCli implements AssetConfig {
-  readonly mint: PublicKey;
-  readonly tokenName: string;
-  readonly mintDecimals: number;
-  readonly mintTokenProgram: PublicKey;
-  private reserveConfig: ReserveConfig | undefined;
-  assetReserveConfigParams: AssetReserveConfigParams;
-
-  constructor(mint: PublicKey, mintTokenProgram: PublicKey, reserveConfig: ReserveConfig) {
-    this.reserveConfig = reserveConfig;
-    this.tokenName = '';
-    this.mintDecimals = 0;
-    this.assetReserveConfigParams = DefaultConfigParams;
-    this.mint = mint;
-    this.mintTokenProgram = mintTokenProgram;
-  }
-
-  setAssetConfigParams(assetReserveConfigParams: AssetReserveConfigParams): void {
-    this.assetReserveConfigParams = assetReserveConfigParams;
-  }
-
-  setReserveConfig(reserveConfig: ReserveConfig) {
-    this.reserveConfig = reserveConfig;
-  }
-
-  getReserveConfig(): ReserveConfig {
-    return this.reserveConfig
-      ? this.reserveConfig
-      : buildReserveConfig({
-          configParams: this.assetReserveConfigParams,
-          mintDecimals: this.mintDecimals,
-          tokenName: this.tokenName,
-        });
-  }
-}
-
-export class CollateralConfig implements AssetConfig {
-  readonly mint: PublicKey;
-  readonly tokenName: string;
-  readonly mintDecimals: number;
-  readonly mintTokenProgram: PublicKey;
-  assetReserveConfigParams: AssetReserveConfigParams;
-
-  constructor(fields: {
-    mint: PublicKey;
-    mintTokenProgram: PublicKey;
-    tokenName: string;
-    mintDecimals: number;
-    priceFeed: PriceFeed;
-    loanToValuePct: number;
-    liquidationThresholdPct: number;
-  }) {
-    this.mint = fields.mint;
-    this.tokenName = fields.tokenName;
-    this.mintDecimals = fields.mintDecimals;
-    this.mintTokenProgram = fields.mintTokenProgram;
-
-    // TODO: verify defaults and ensure opinionated
-    this.assetReserveConfigParams = DefaultConfigParams;
-    this.assetReserveConfigParams.priceFeed = fields.priceFeed;
-    this.assetReserveConfigParams.loanToValuePct = fields.loanToValuePct;
-    this.assetReserveConfigParams.liquidationThresholdPct = fields.liquidationThresholdPct;
-    this.assetReserveConfigParams.borrowLimit = new Decimal(0);
-  }
-
-  setAssetConfigParams(assetReserveConfigParams: AssetReserveConfigParams): void {
-    this.assetReserveConfigParams = assetReserveConfigParams;
-  }
-
-  getReserveConfig(): ReserveConfig {
-    return buildReserveConfig({
-      configParams: this.assetReserveConfigParams,
-      mintDecimals: this.mintDecimals,
-      tokenName: this.tokenName,
-    });
-  }
-}
-
-export class DebtConfig implements AssetConfig {
-  readonly mint: PublicKey;
-  readonly tokenName: string;
-  readonly mintDecimals: number;
-  readonly mintTokenProgram: PublicKey;
-  assetReserveConfigParams: AssetReserveConfigParams;
-
-  constructor(fields: {
-    mint: PublicKey;
-    mintTokenProgram: PublicKey;
-    tokenName: string;
-    mintDecimals: number;
-    priceFeed: PriceFeed;
-    borrowRateCurve: BorrowRateCurve;
-  }) {
-    this.mint = fields.mint;
-    this.tokenName = fields.tokenName;
-    this.mintDecimals = fields.mintDecimals;
-    this.mintTokenProgram = fields.mintTokenProgram;
-
-    // TODO: verify defaults and ensure opinionated
-    this.assetReserveConfigParams = DefaultConfigParams;
-    this.assetReserveConfigParams.priceFeed = fields.priceFeed;
-    this.assetReserveConfigParams.borrowRateCurve = fields.borrowRateCurve;
-  }
-
-  setAssetConfigParams(assetReserveConfigParams: AssetReserveConfigParams): void {
-    this.assetReserveConfigParams = assetReserveConfigParams;
-  }
-
-  getReserveConfig(): ReserveConfig {
-    return buildReserveConfig({
-      configParams: this.assetReserveConfigParams,
-      mintDecimals: this.mintDecimals,
-      tokenName: this.tokenName,
-    });
-  }
-}
-
-export type PriceFeed = {
-  scopePriceConfigAddress?: PublicKey;
-  scopeChain?: number[];
-  scopeTwapChain?: number[];
-  pythPrice?: PublicKey;
-  switchboardPrice?: PublicKey;
-  switchboardTwapPrice?: PublicKey;
-};
-
-export type AssetReserveConfigParams = {
-  loanToValuePct: number;
-  depositLimit: Decimal;
-  borrowLimit: Decimal;
-  maxLiquidationBonusBps: number;
-  minLiquidationBonusBps: number;
-  badDebtLiquidationBonusBps: number;
-  liquidationThresholdPct: number;
-  borrowFeeSf: Fraction;
-  flashLoanFeeSf: Fraction;
-  protocolTakeRate: number;
-  elevationGroups: number[];
-  priceFeed: PriceFeed | null;
-  maxAgePriceSeconds: number;
-  maxAgeTwapSeconds: number;
-  borrowRateCurve: BorrowRateCurve;
-};
-
-export const DefaultConfigParams: AssetReserveConfigParams = {
-  loanToValuePct: 70,
-  maxLiquidationBonusBps: 500,
-  minLiquidationBonusBps: 200,
-  badDebtLiquidationBonusBps: 10,
-  liquidationThresholdPct: 75,
-  borrowFeeSf: ZERO_FRACTION,
-  flashLoanFeeSf: ZERO_FRACTION,
-  protocolTakeRate: 0,
-  elevationGroups: [0, 0, 0, 0, 0],
-  priceFeed: null,
-  borrowLimit: new Decimal(1000.0),
-  depositLimit: new Decimal(1000.0),
-  borrowRateCurve: new BorrowRateCurve({
-    points: [
-      new CurvePoint({ utilizationRateBps: 0, borrowRateBps: 1000 }),
-      new CurvePoint({ utilizationRateBps: 10000, borrowRateBps: 1000 }),
-      ...Array(9).fill(new CurvePoint({ utilizationRateBps: 10000, borrowRateBps: 1000 })),
-    ],
-  } as BorrowRateCurveFields),
-  maxAgePriceSeconds: 180,
-  maxAgeTwapSeconds: 240,
-};
-
-export const encodeTokenName = (tokenName: string): number[] => {
-  const buffer: Buffer = Buffer.alloc(32);
-
-  const tokenNameEncoded = new Uint8Array(32);
-  const s: Uint8Array = new TextEncoder().encode(tokenName);
-  tokenNameEncoded.set(s);
-  for (let i = 0; i < tokenNameEncoded.length; i++) {
-    buffer[i] = tokenNameEncoded[i];
-  }
-
-  const result = [...buffer];
-  return result;
-};
-
-function buildReserveConfig(fields: {
-  configParams: AssetReserveConfigParams;
-  mintDecimals: number;
-  tokenName: string;
-}): ReserveConfig {
-  const reserveConfigFields: ReserveConfigFields = {
-    status: 0,
-    loanToValuePct: fields.configParams.loanToValuePct,
-    liquidationThresholdPct: fields.configParams.liquidationThresholdPct,
-    minLiquidationBonusBps: fields.configParams.minLiquidationBonusBps,
-    protocolLiquidationFeePct: 0,
-    protocolTakeRatePct: fields.configParams.protocolTakeRate,
-    assetTier: 0,
-    multiplierSideBoost: Array(2).fill(1),
-    maxLiquidationBonusBps: fields.configParams.maxLiquidationBonusBps,
-    badDebtLiquidationBonusBps: fields.configParams.badDebtLiquidationBonusBps,
-    fees: {
-      borrowFeeSf: fields.configParams.borrowFeeSf.getValue(),
-      flashLoanFeeSf: fields.configParams.flashLoanFeeSf.getValue(),
-      padding: Array(6).fill(0),
-    },
-    depositLimit: new BN(
-      numberToLamportsDecimal(fields.configParams.depositLimit, fields.mintDecimals).floor().toString()
-    ),
-    borrowLimit: new BN(
-      numberToLamportsDecimal(fields.configParams.borrowLimit, fields.mintDecimals).floor().toString()
-    ),
-    tokenInfo: {
-      name: encodeTokenName(fields.tokenName),
-      heuristic: new PriceHeuristic({
-        lower: new BN(0),
-        upper: new BN(0),
-        exp: new BN(0),
-      }),
-      maxTwapDivergenceBps: new BN(0),
-      maxAgePriceSeconds: new BN(fields.configParams.maxAgePriceSeconds),
-      maxAgeTwapSeconds: new BN(fields.configParams.maxAgeTwapSeconds),
-      ...getReserveOracleConfigs(fields.configParams.priceFeed),
-      padding: Array(20).fill(new BN(0)),
-    } as TokenInfo,
-    borrowRateCurve: fields.configParams.borrowRateCurve,
-    depositWithdrawalCap: new WithdrawalCaps({
-      configCapacity: new BN(0),
-      currentTotal: new BN(0),
-      lastIntervalStartTimestamp: new BN(0),
-      configIntervalLengthSeconds: new BN(0),
-    }),
-    debtWithdrawalCap: new WithdrawalCaps({
-      configCapacity: new BN(0),
-      currentTotal: new BN(0),
-      lastIntervalStartTimestamp: new BN(0),
-      configIntervalLengthSeconds: new BN(0),
-    }),
-    deleveragingMarginCallPeriodSecs: new BN(0),
-    borrowFactorPct: new BN(100),
-    elevationGroups: fields.configParams.elevationGroups,
-    deleveragingThresholdSlotsPerBps: new BN(7200),
-    multiplierTagBoost: Array(8).fill(1),
-    disableUsageAsCollOutsideEmode: 0,
-    utilizationLimitBlockBorrowingAbove: 0,
-    hostFixedInterestRateBps: 0,
-    borrowLimitOutsideElevationGroup: new BN(0),
-    borrowLimitAgainstThisCollateralInElevationGroup: Array(32).fill(new BN(0)),
-    reserved1: Array(2).fill(0),
-  };
-
-  return new ReserveConfig(reserveConfigFields);
-}
-
-export function getReserveOracleConfigs(priceFeed: PriceFeed | null): {
-  pythConfiguration: PythConfiguration;
-  switchboardConfiguration: SwitchboardConfiguration;
-  scopeConfiguration: ScopeConfiguration;
-} {
-  let pythConfiguration = new PythConfiguration({
-    price: NULL_PUBKEY,
-  });
-  let switchboardConfiguration = new SwitchboardConfiguration({
-    priceAggregator: NULL_PUBKEY,
-    twapAggregator: NULL_PUBKEY,
-  });
-  let scopeConfiguration = new ScopeConfiguration({
-    priceFeed: NULL_PUBKEY,
-    priceChain: [65535, 65535, 65535, 65535],
-    twapChain: [65535, 65535, 65535, 65535],
-  });
-
-  if (priceFeed) {
-    const { scopePriceConfigAddress, scopeChain, scopeTwapChain, pythPrice, switchboardPrice, switchboardTwapPrice } =
-      priceFeed;
-    if (pythPrice) {
-      pythConfiguration = new PythConfiguration({ price: pythPrice });
-    }
-    if (switchboardPrice) {
-      switchboardConfiguration = new SwitchboardConfiguration({
-        priceAggregator: switchboardPrice ? switchboardPrice : NULL_PUBKEY,
-        twapAggregator: switchboardTwapPrice ? switchboardTwapPrice : NULL_PUBKEY,
-      });
-    }
-    if (scopePriceConfigAddress) {
-      scopeConfiguration = new ScopeConfiguration({
-        priceFeed: scopePriceConfigAddress,
-        priceChain: scopeChain!.concat(Array(4 - scopeChain!.length).fill(U16_MAX)),
-        twapChain: scopeTwapChain!.concat(Array(4 - scopeTwapChain!.length).fill(U16_MAX)),
-      });
-    }
-  }
-  return {
-    pythConfiguration,
-    switchboardConfiguration,
-    scopeConfiguration,
-  };
-}
-
-function parseOracleType(type: number): string {
-  switch (type) {
-    case new OracleType.Pyth().discriminator:
-      return 'Pyth';
-    case new OracleType.SwitchboardV2().discriminator:
-      return 'SwitchboardV2';
-    case new OracleType.CToken().discriminator:
-      return 'CToken';
-    case new OracleType.KToken().discriminator:
-      return 'KToken';
-    case new OracleType.SplStake().discriminator:
-      return 'SplStake';
-    case new OracleType.PythEMA().discriminator:
-      return 'PythEMA';
-    case new OracleType.DeprecatedPlaceholder1().discriminator:
-      return 'DeprecatedPlaceholder1';
-    case new OracleType.DeprecatedPlaceholder2().discriminator:
-      return 'DeprecatedPlaceholder2';
-    case new OracleType.MsolStake().discriminator:
-      return 'MsolStake';
-    case new OracleType.KTokenToTokenA().discriminator:
-      return 'KTokenToTokenA';
-    case new OracleType.KTokenToTokenB().discriminator:
-      return 'KTokenToTokenB';
-    case new OracleType.JupiterLpFetch().discriminator:
-      return 'JupiterLpFetch';
-    case new OracleType.ScopeTwap().discriminator:
-      return 'ScopeTwap';
-    case new OracleType.OrcaWhirlpoolAtoB().discriminator:
-      return 'OrcaWhirlpoolAtoB';
-    case new OracleType.OrcaWhirlpoolBtoA().discriminator:
-      return 'OrcaWhirlpoolBtoA';
-    case new OracleType.RaydiumAmmV3AtoB().discriminator:
-      return 'RaydiumAmmV3AtoB';
-    case new OracleType.RaydiumAmmV3BtoA().discriminator:
-      return 'RaydiumAmmV3BtoA';
-    case new OracleType.JupiterLpCompute().discriminator:
-      return 'JupiterLpCompute';
-    case new OracleType.MeteoraDlmmAtoB().discriminator:
-      return 'MeteoraDlmmAtoB';
-    case new OracleType.MeteoraDlmmBtoA().discriminator:
-      return 'MeteoraDlmmBtoA';
-    case new OracleType.JupiterLpScope().discriminator:
-      return 'JupiterLpScope';
-    case new OracleType.PythPullBased().discriminator:
-      return 'PythPullBased';
-    case new OracleType.PythPullBasedEMA().discriminator:
-      return 'PythPullBasedEMA';
-    case new OracleType.FixedPrice().discriminator:
-      return 'FixedPrice';
-    default:
-      return 'Unknown';
-  }
-}
-
-export type MarketWithAddress = {
-  address: PublicKey;
-  state: LendingMarket;
-};

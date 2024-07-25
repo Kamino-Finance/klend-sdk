@@ -5,12 +5,14 @@ import {
   buildComputeBudgetIx,
   CollateralConfig,
   DebtConfig,
+  getTokenAccountBalance,
   KaminoManager,
   LendingMarket,
   MarketWithAddress,
   newFlat,
   Reserve,
   ReserveWithAddress,
+  sleep,
 } from '../../src/lib';
 import { KaminoVault, KaminoVaultConfig, ReserveAllocationConfig } from '../../src/classes/vault';
 import { createMint } from '../token_utils';
@@ -21,6 +23,7 @@ import {
   createVaultsWithTwoReservesMarketsWithTwoAssets,
 } from './kamino_manager_setup_utils';
 import { Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { assert } from 'chai';
 
 describe('Kamino Manager Tests', function () {
   it('kamino_manager_init_market', async function () {
@@ -28,7 +31,7 @@ describe('Kamino Manager Tests', function () {
     const kaminoManager = new KaminoManager(env.provider.connection);
 
     // Creating a market
-    const { market: marketKp, ixns: createMarketIxns } = await kaminoManager.createMarket({
+    const { market: marketKp, ixns: createMarketIxns } = await kaminoManager.createMarketIxs({
       admin: env.admin.publicKey,
     });
     const _createMarketSig = await buildAndSendTxn(
@@ -48,7 +51,7 @@ describe('Kamino Manager Tests', function () {
     const mintUSDC = await createMint(env, env.admin.publicKey, 6);
 
     // Creating a market
-    const { market: marketKp, ixns: createMarketIxns } = await kaminoManager.createMarket({
+    const { market: marketKp, ixns: createMarketIxns } = await kaminoManager.createMarketIxs({
       admin: env.admin.publicKey,
     });
     const _createMarketSig = await buildAndSendTxn(
@@ -84,7 +87,7 @@ describe('Kamino Manager Tests', function () {
       borrowRateCurve: newFlat(100),
     });
 
-    const { reserve: solReserveKp, txnIxns: createsolReserveTxnIxns } = await kaminoManager.addAssetToMarket({
+    const { reserve: solReserveKp, txnIxns: createsolReserveTxnIxns } = await kaminoManager.addAssetToMarketIxs({
       admin: env.admin.publicKey,
       marketAddress: marketKp.publicKey,
       assetConfig: solConfig,
@@ -110,7 +113,7 @@ describe('Kamino Manager Tests', function () {
       'KaminoManager_UpdateSolReserve'
     );
 
-    const { reserve: usdcReserveKp, txnIxns: createusdcReserveTxnIxns } = await kaminoManager.addAssetToMarket({
+    const { reserve: usdcReserveKp, txnIxns: createusdcReserveTxnIxns } = await kaminoManager.addAssetToMarketIxs({
       admin: env.admin.publicKey,
       marketAddress: marketKp.publicKey,
       assetConfig: usdcConfig,
@@ -150,7 +153,7 @@ describe('Kamino Manager Tests', function () {
       managementFeeRate: new Decimal(0.0),
     });
 
-    const [vaultKp, instructions] = await kaminoManager.createVault(kaminoVaultConfig);
+    const { vault: vaultKp, ixns: instructions } = await kaminoManager.createVaultIxs(kaminoVaultConfig);
     await buildAndSendTxn(env.provider.connection, env.admin, instructions, [vaultKp], [], 'InitVault');
   });
 
@@ -173,7 +176,7 @@ describe('Kamino Manager Tests', function () {
     const oracleConfigs = await kaminoManager.getScopeOracleConfigs();
 
     // Update using oracle configs (0 for SOL/USD and 52 for SOL/USD twap)
-    const updateReserveIx = await kaminoManager.updateReserveScopeOracleConfiguration(
+    const updateReserveIx = await kaminoManager.updateReserveScopeOracleConfigurationIxs(
       marketWithAddress,
       solReserveWithAddress,
       oracleConfigs[0],
@@ -197,7 +200,7 @@ describe('Kamino Manager Tests', function () {
       managementFeeRate: new Decimal(0.0),
     });
 
-    const [vaultKp, instructions] = await kaminoManager.createVault(kaminoVaultConfig);
+    const { vault: vaultKp, ixns: instructions } = await kaminoManager.createVaultIxs(kaminoVaultConfig);
     await buildAndSendTxn(env.provider.connection, env.admin, instructions, [vaultKp], [], 'InitVault');
 
     const vault = new KaminoVault(vaultKp.publicKey);
@@ -220,8 +223,8 @@ describe('Kamino Manager Tests', function () {
     const firstReserveAllocationConfig = new ReserveAllocationConfig(usdcReserveWithAddress1, 100, new Decimal(100));
     const secondReserveAllocationConfig = new ReserveAllocationConfig(usdcReserveWithAddress2, 200, new Decimal(50));
 
-    const ix1 = await kaminoManager.updateVaultReserveAllocation(vault, firstReserveAllocationConfig);
-    const ix2 = await kaminoManager.updateVaultReserveAllocation(vault, secondReserveAllocationConfig);
+    const ix1 = await kaminoManager.updateVaultReserveAllocationIxs(vault, firstReserveAllocationConfig);
+    const ix2 = await kaminoManager.updateVaultReserveAllocationIxs(vault, secondReserveAllocationConfig);
 
     const _updateTxSignature = await buildAndSendTxn(
       env.provider.connection,
@@ -231,6 +234,22 @@ describe('Kamino Manager Tests', function () {
       [],
       'UpdateVaultReserveAllocation'
     );
+
+    await sleep(2000);
+    const latestVaultState = await vault.reloadState(env.provider.connection);
+
+    assert.equal(latestVaultState.vaultAllocationStrategy[0].targetAllocationWeight.toNumber(), 100);
+    assert.equal(latestVaultState.vaultAllocationStrategy[1].targetAllocationWeight.toNumber(), 200);
+    assert.equal(
+      latestVaultState.vaultAllocationStrategy[0].tokenAllocationCap.toNumber(),
+      100 * 10 ** usdcReserveWithAddress1.state.liquidity.mintDecimals.toNumber()
+    );
+    assert.equal(
+      latestVaultState.vaultAllocationStrategy[1].tokenAllocationCap.toNumber(),
+      50 * 10 ** usdcReserveWithAddress2.state.liquidity.mintDecimals.toNumber()
+    );
+    assert(latestVaultState.vaultAllocationStrategy[0].reserve.equals(usdcReserveWithAddress1.address));
+    assert(latestVaultState.vaultAllocationStrategy[1].reserve.equals(usdcReserveWithAddress2.address));
   });
 
   it('kamino_manager_deposit_to_vault', async function () {
@@ -247,7 +266,7 @@ describe('Kamino Manager Tests', function () {
 
     const solVault = new KaminoVault(vaultMarketAccounts.solVaultAddress);
 
-    const depositIx = await kaminoManager.depositToVault(user.publicKey, solVault, solAmountToDeposit);
+    const depositIx = await kaminoManager.depositToVaultIxs(user.publicKey, solVault, solAmountToDeposit);
 
     const _despositTxSignature = await buildAndSendTxn(
       env.provider.connection,
@@ -257,6 +276,16 @@ describe('Kamino Manager Tests', function () {
       [],
       'DepositToVault'
     );
+
+    await sleep(2000);
+    const latestVaultState = await solVault.reloadState(env.provider.connection);
+    const vaultTokenVaultBalance = await getTokenAccountBalance(env.provider, latestVaultState.tokenVault);
+    const userSharesBalance = await kaminoManager.getUserSharesBalanceSingleVault(user.publicKey, solVault);
+
+    assert.equal(latestVaultState.tokenAvailable.toNumber(), solAmountToDeposit.toNumber() * 10 ** 9);
+    assert.equal(latestVaultState.sharesIssued.toNumber(), solAmountToDeposit.toNumber() * 10 ** 9);
+    assert.equal(vaultTokenVaultBalance, latestVaultState.tokenAvailable.toNumber());
+    assert.equal(userSharesBalance.toNumber(), latestVaultState.sharesIssued.toNumber() / 10 ** 6);
   });
 
   it('kamino_manager_withdraw_from_vault_uninvested', async function () {
@@ -274,7 +303,7 @@ describe('Kamino Manager Tests', function () {
     const solVault = new KaminoVault(vaultMarketAccounts.solVaultAddress);
 
     // Deposit to Vault
-    const depositIx = await kaminoManager.depositToVault(user.publicKey, solVault, solAmountToDeposit);
+    const depositIx = await kaminoManager.depositToVaultIxs(user.publicKey, solVault, solAmountToDeposit);
 
     const _depositTxSignature = await buildAndSendTxn(
       env.provider.connection,
@@ -285,14 +314,14 @@ describe('Kamino Manager Tests', function () {
       'DepositToVault'
     );
 
-    await solVault.reload(env.provider.connection);
+    await solVault.reloadState(env.provider.connection);
 
     // Withdraw from Vault
-    const userSharesForVault = await kaminoManager.getUserVaultSharesBalance(user.publicKey, solVault);
+    const userSharesForVault = await kaminoManager.getUserSharesBalanceSingleVault(user.publicKey, solVault);
 
     console.log('userSharesForVault: ', userSharesForVault);
 
-    const withdrawIxs = await kaminoManager.withdrawFromVault(
+    const withdrawIxs = await kaminoManager.withdrawFromVaultIxs(
       user.publicKey,
       solVault,
       userSharesForVault,
@@ -307,6 +336,15 @@ describe('Kamino Manager Tests', function () {
       [],
       'WithdrawFromVault'
     );
+
+    await sleep(2000);
+    const latestVaultState = await solVault.reloadState(env.provider.connection);
+    const vaultTokenVaultBalance = await getTokenAccountBalance(env.provider, latestVaultState.tokenVault);
+    const userSharesBalance = await kaminoManager.getUserSharesBalanceSingleVault(user.publicKey, solVault);
+
+    assert.equal(latestVaultState.tokenAvailable.toNumber(), 0);
+    assert.equal(vaultTokenVaultBalance, latestVaultState.tokenAvailable.toNumber());
+    assert.equal(userSharesBalance.toNumber(), 0);
   });
 
   it('kamino_manager_invest', async function () {
@@ -324,7 +362,7 @@ describe('Kamino Manager Tests', function () {
     const solVault = new KaminoVault(vaultMarketAccounts.solVaultAddress);
 
     // Deposit to Vault
-    const depositIx = await kaminoManager.depositToVault(user.publicKey, solVault, solAmountToDeposit);
+    const depositIx = await kaminoManager.depositToVaultIxs(user.publicKey, solVault, solAmountToDeposit);
 
     const _depositTxSignature = await buildAndSendTxn(
       env.provider.connection,
@@ -335,10 +373,10 @@ describe('Kamino Manager Tests', function () {
       'DepositToVault'
     );
 
-    await solVault.reload(env.provider.connection);
+    await solVault.reloadState(env.provider.connection);
 
     // Withdraw from Vault
-    const userSharesForVault = await kaminoManager.getUserVaultSharesBalance(user.publicKey, solVault);
+    const userSharesForVault = await kaminoManager.getUserSharesBalanceSingleVault(user.publicKey, solVault);
 
     console.log('userSharesForVault: ', userSharesForVault);
 

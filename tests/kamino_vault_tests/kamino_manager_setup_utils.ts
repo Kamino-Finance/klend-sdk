@@ -41,7 +41,7 @@ export async function createMarketWithTwoAssets(
   usdcMintOverride?: PublicKey
 ): Promise<MarketTestAccounts> {
   // Creating a market
-  const { market: marketKp, ixns: createMarketIxns } = await kaminoManager.createMarket({
+  const { market: marketKp, ixns: createMarketIxns } = await kaminoManager.createMarketIxs({
     admin: env.admin.publicKey,
   });
   const _createMarketSig = await buildAndSendTxn(
@@ -90,7 +90,7 @@ export async function createMarketWithTwoAssets(
         borrowLimit: new Decimal(750.0),
       });
 
-  const { reserve: solReserveKp, txnIxns: createsolReserveTxnIxns } = await kaminoManager.addAssetToMarket({
+  const { reserve: solReserveKp, txnIxns: createsolReserveTxnIxns } = await kaminoManager.addAssetToMarketIxs({
     admin: env.admin.publicKey,
     marketAddress: marketKp.publicKey,
     assetConfig: solConfig,
@@ -116,7 +116,7 @@ export async function createMarketWithTwoAssets(
     'KaminoManager_UpdateSolReserve'
   );
 
-  const { reserve: usdcReserveKp, txnIxns: createusdcReserveTxnIxns } = await kaminoManager.addAssetToMarket({
+  const { reserve: usdcReserveKp, txnIxns: createusdcReserveTxnIxns } = await kaminoManager.addAssetToMarketIxs({
     admin: env.admin.publicKey,
     marketAddress: marketKp.publicKey,
     assetConfig: usdcConfig,
@@ -186,7 +186,7 @@ export async function createVaultsWithTwoReservesMarketsWithTwoAssets(
   const weights = weightsOverride ? weightsOverride : [100, 200];
 
   // Create kamino vault config and add to the market
-  const kaminousdcVaultConfig = new KaminoVaultConfig({
+  const kaminoUsdcVaultConfig = new KaminoVaultConfig({
     admin: env.admin.publicKey,
     tokenMint: marketSetup1.usdcReserveConfig.mint,
     tokenMintProgramId: TOKEN_PROGRAM_ID,
@@ -194,7 +194,7 @@ export async function createVaultsWithTwoReservesMarketsWithTwoAssets(
     managementFeeRate: new Decimal(0.0),
   });
 
-  const kaminosolVaultConfig = new KaminoVaultConfig({
+  const kaminoSolVaultConfig = new KaminoVaultConfig({
     admin: env.admin.publicKey,
     tokenMint: marketSetup1.solReserveConfig.mint,
     tokenMintProgramId: TOKEN_PROGRAM_ID,
@@ -202,7 +202,9 @@ export async function createVaultsWithTwoReservesMarketsWithTwoAssets(
     managementFeeRate: new Decimal(0.0),
   });
 
-  const [usdcVaultKp, usdcVaultCreateInstructions] = await kaminoManager.createVault(kaminousdcVaultConfig);
+  const { vault: usdcVaultKp, ixns: usdcVaultCreateInstructions } = await kaminoManager.createVaultIxs(
+    kaminoUsdcVaultConfig
+  );
   await buildAndSendTxn(
     env.provider.connection,
     env.admin,
@@ -212,7 +214,9 @@ export async function createVaultsWithTwoReservesMarketsWithTwoAssets(
     'InitusdcVault'
   );
 
-  const [solVaultKp, solVaultCreateInstructions] = await kaminoManager.createVault(kaminosolVaultConfig);
+  const { vault: solVaultKp, ixns: solVaultCreateInstructions } = await kaminoManager.createVaultIxs(
+    kaminoSolVaultConfig
+  );
   await buildAndSendTxn(
     env.provider.connection,
     env.admin,
@@ -254,8 +258,8 @@ export async function createVaultsWithTwoReservesMarketsWithTwoAssets(
     new Decimal(50)
   );
 
-  const ix1 = await kaminoManager.updateVaultReserveAllocation(usdcVault, firstusdcReserveAllocationConfig);
-  const ix2 = await kaminoManager.updateVaultReserveAllocation(usdcVault, secondusdcReserveAllocationConfig);
+  const ix1 = await kaminoManager.updateVaultReserveAllocationIxs(usdcVault, firstusdcReserveAllocationConfig);
+  const ix2 = await kaminoManager.updateVaultReserveAllocationIxs(usdcVault, secondusdcReserveAllocationConfig);
 
   await buildAndSendTxn(env.provider.connection, env.admin, [ix1, ix2], [], [], 'UpdateusdcVaultReserveAllocation');
 
@@ -271,8 +275,8 @@ export async function createVaultsWithTwoReservesMarketsWithTwoAssets(
   );
 
   const computeBudgetIx = buildComputeBudgetIx(400_000);
-  const ixn1 = await kaminoManager.updateVaultReserveAllocation(solVault, firstsolReserveAllocationConfig);
-  const ixn2 = await kaminoManager.updateVaultReserveAllocation(solVault, secondsolReserveAllocationConfig);
+  const ixn1 = await kaminoManager.updateVaultReserveAllocationIxs(solVault, firstsolReserveAllocationConfig);
+  const ixn2 = await kaminoManager.updateVaultReserveAllocationIxs(solVault, secondsolReserveAllocationConfig);
 
   await buildAndSendTxn(
     env.provider.connection,

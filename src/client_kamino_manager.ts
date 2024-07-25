@@ -11,12 +11,14 @@ import {
   VersionedTransaction,
 } from '@solana/web3.js';
 import {
+  AssetReserveConfigCli,
   buildComputeBudgetIx,
   Chain,
   encodeTokenName,
   KaminoManager,
   KaminoVault,
   KaminoVaultConfig,
+  MAINNET_BETA_CHAIN_ID,
   Reserve,
   ReserveAllocationConfig,
   ReserveWithAddress,
@@ -39,13 +41,11 @@ import Decimal from 'decimal.js';
 import { BN } from '@coral-xyz/anchor';
 import { PythConfiguration, ScopeConfiguration, SwitchboardConfiguration } from './idl_codegen_kamino_vault/types';
 import * as fs from 'fs';
-import { AssetReserveConfigCli } from './classes/manager';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 dotenv.config({
   path: `.env${process.env.ENV ? '.' + process.env.ENV : ''}`,
 });
-const MAINNET_BETA_CHAIN_ID = 101;
 
 async function main() {
   const commands = new Command();
@@ -68,7 +68,7 @@ async function main() {
 
       const kaminoManager = new KaminoManager(env.provider.connection, env.kLendProgramId, env.kVaultProgramId);
 
-      const { market: marketKp, ixns: createMarketIxns } = await kaminoManager.createMarket({
+      const { market: marketKp, ixns: createMarketIxns } = await kaminoManager.createMarketIxs({
         admin: bs58 ? multisigPk : env.payer.publicKey,
       });
 
@@ -104,7 +104,7 @@ async function main() {
       const reserveConfig = parseReserveConfigFromFile(farmConfigFromFile);
       const assetConfig = new AssetReserveConfigCli(tokenMint, tokenMintProgramId, reserveConfig);
 
-      const { reserve, txnIxns } = await kaminoManager.addAssetToMarket({
+      const { reserve, txnIxns } = await kaminoManager.addAssetToMarketIxs({
         admin: bs58 ? multisigPk : env.payer.publicKey,
         marketAddress: marketAddress,
         assetConfig: assetConfig,
@@ -158,7 +158,7 @@ async function main() {
         managementFeeRate: new Decimal(0.0),
       });
 
-      const [vaultKp, instructions] = await kaminoManager.createVault(kaminoVaultConfig);
+      const { vault: vaultKp, ixns: instructions } = await kaminoManager.createVaultIxs(kaminoVaultConfig);
 
       const _createVaultSig = await processTxn(env.client, env.payer, instructions, bs58, 2500, [vaultKp]);
 
@@ -201,7 +201,10 @@ async function main() {
         allocationCapDecimal
       );
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
-      const instructions = await kaminoManager.updateVaultReserveAllocation(kaminoVault, firstReserveAllocationConfig);
+      const instructions = await kaminoManager.updateVaultReserveAllocationIxs(
+        kaminoVault,
+        firstReserveAllocationConfig
+      );
 
       const updateVaultAllocationSig = await processTxn(env.client, env.payer, [instructions], bs58, 2500, []);
 

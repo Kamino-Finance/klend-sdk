@@ -11,6 +11,7 @@ import Decimal from 'decimal.js';
 import {
   INITIAL_COLLATERAL_RATE,
   lendingMarketAuthPda,
+  MarketWithAddress,
   ONE_HUNDRED_PCT_IN_BPS,
   reservePdas,
   SLOTS_PER_DAY,
@@ -26,7 +27,6 @@ import { calculateAPYFromAPR, getBorrowRate, parseTokenSymbol } from './utils';
 import { Fraction } from './fraction';
 import BN from 'bn.js';
 import { ActionType } from './action';
-import { MarketWithAddress } from './manager';
 import { KaminoMarket } from './market';
 import {
   initReserve,
@@ -833,7 +833,7 @@ const truncateBorrowCurve = (points: CurvePointFields[]): [number, number][] => 
   return curve;
 };
 
-export async function createReserveIx(
+export async function createReserveIxs(
   connection: Connection,
   owner: PublicKey,
   lendingMarket: PublicKey,
@@ -879,7 +879,7 @@ export async function createReserveIx(
   return [createReserveIx, initReserveIx];
 }
 
-export function updateReserveConfigIxn(
+export function updateReserveConfigIx(
   marketWithAddress: MarketWithAddress,
   reserveAddress: PublicKey,
   modeDiscriminator: number,
@@ -904,7 +904,7 @@ export function updateReserveConfigIxn(
   return ix;
 }
 
-export function updateEntireReserveConfigIxn(
+export function updateEntireReserveConfigIx(
   marketWithAddress: MarketWithAddress,
   reserveAddress: PublicKey,
   reserveConfig: ReserveConfig,
@@ -932,7 +932,7 @@ export function updateEntireReserveConfigIxn(
   return ix;
 }
 
-export function parseForChangesReserveConfigAndGetIxns(
+export function parseForChangesReserveConfigAndGetIxs(
   marketWithAddress: MarketWithAddress,
   reserve: Reserve | undefined,
   reserveAddress: PublicKey,
@@ -1681,7 +1681,7 @@ export function parseForChangesReserveConfigAndGetIxns(
 
   updateReserveIxnsArgs.forEach((updateReserveConfigArgs) => {
     ixns.push(
-      updateReserveConfigIxn(
+      updateReserveConfigIx(
         marketWithAddress,
         reserveAddress,
         updateReserveConfigArgs.mode + 1,
@@ -1741,8 +1741,6 @@ export function updateReserveConfigEncodedValue(
       break;
     case UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator:
     case UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator:
-      console.log('value', value);
-      console.log('disc', discriminator);
       valueArray = value as number[];
       buffer = Buffer.alloc(8);
       for (let i = 0; i < valueArray.length; i++) {

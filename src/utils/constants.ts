@@ -9,6 +9,7 @@ const INITIAL_COLLATERAL_RATIO = 1;
 export const INITIAL_COLLATERAL_RATE = new Decimal(INITIAL_COLLATERAL_RATIO);
 
 export type ENV = 'mainnet-beta' | 'devnet' | 'localnet';
+export type SolanaCluster = 'mainnet-beta' | 'devnet' | 'localnet';
 
 export function isENV(value: any): value is ENV {
   return value === 'mainnet-beta' || value === 'devnet' || value === 'localnet';
@@ -77,3 +78,5 @@ export const WRAPPED_SOL_MINT = new PublicKey('So1111111111111111111111111111111
  * USDC Mint
  */
 export const USDC_MAINNET_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+
+export const MAINNET_BETA_CHAIN_ID = 101;
