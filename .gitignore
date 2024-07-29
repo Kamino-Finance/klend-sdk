@@ -4,3 +4,4 @@ test-ledger/
 .idea/
 keys/localnet/farms.json
 keys/localnet/owner.json
+.env

@@ -65,12 +65,14 @@ function print_args {
   echo "--bpf-program devi51mZmdwUJGU9hjN27vEz64Gps7uUefqxg27EAtH ./deps/programs/raydium.so" # taken from hubble-common
   echo "--bpf-program whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc ./deps/programs/whirlpool.so"
   echo "--bpf-program FarmsPZpWu9i7Kky8tPN37rs2TpmMrAZrC7S7vJa91Hr ./deps/programs/farms.so"
+  echo "--bpf-program kvauTFR8qm1dhniz6pYuBZkuene3Hfrs1VQhVRgCNrr ./deps/programs/kamino_vault.so"
 
   # scope
-  echo "--clone 3NJYftD5sjVfxSnUdZ1wVML8f3aC6mp1CXCL6L7TnU8C -u m"
+  echo "--clone 3NJYftD5sjVfxSnUdZ1wVML8f3aC6mp1CXCL6L7TnU8C"
+  echo "--clone GMprgtqUv2G74GAFHhHhrH21n1cnnNZcPb6TAz5GhqU"
 
   # options
-  echo "--reset --quiet"
+  echo "--reset --quiet -u m"
 }
 
 print_args

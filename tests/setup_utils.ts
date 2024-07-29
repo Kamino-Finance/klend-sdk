@@ -87,6 +87,8 @@ import { Kamino } from '@hubbleprotocol/kamino-sdk';
 import { Fraction, ZERO_FRACTION } from '../src/classes/fraction';
 
 export type Cluster = 'localnet' | 'devnet' | 'mainnet-beta';
+export const pythUsdcPrice = new PublicKey('Gnt27xtC473ZT2Mw5u8wZ68Z3gULkSTb5DuxJy7eJotD');
+export const pythMSolPrice = new PublicKey('E4v1BBgoso9s64TQvmyownAVJbhbEPGyzA3qn4n46qj9');
 
 export type Env = {
   provider: anchor.AnchorProvider;
@@ -624,6 +626,72 @@ export const createMarketWithTwoReservesToppedUp = async (
   await deposit(env, kaminoMarket, whale, secondSymbol, secondAmount);
 
   return { env, firstMint, secondMint, kaminoMarket };
+};
+
+export const createMarketWithReserve = async (
+  env: Env,
+  firstSymbol: string,
+  requestElevationGroup: boolean,
+  overrideMint?: PublicKey
+) => {
+  const [createMarketSig, lendingMarket] = await createMarket(env);
+  console.log(createMarketSig);
+
+  if (requestElevationGroup) {
+    await sleep(1000);
+    await updateMarketElevationGroup(env, lendingMarket.publicKey);
+  }
+
+  await updateMarketMultiplierPoints(env, lendingMarket.publicKey, 1);
+
+  let mint;
+  if (!overrideMint) {
+    mint = firstSymbol === 'SOL' ? WRAPPED_SOL_MINT : await createMint(env, env.admin.publicKey, 6);
+  } else {
+    mint = overrideMint;
+  }
+
+  await sleep(2000);
+  const [[, firstReserve]] = await Promise.all([createReserve(env, lendingMarket.publicKey, mint)]);
+
+  const extraParams: ConfigParams = requestElevationGroup
+    ? {
+        ...DefaultConfigParams,
+        elevationGroups: [1, 0, 0, 0, 0],
+      }
+    : {
+        ...DefaultConfigParams,
+      };
+  const firstReserveConfig = makeReserveConfig(firstSymbol, extraParams);
+
+  await Promise.all([updateReserve(env, firstReserve.publicKey, firstReserveConfig)]);
+  await sleep(1000);
+
+  const kaminoMarket = (await KaminoMarket.load(
+    env.provider.connection,
+    lendingMarket.publicKey,
+    DEFAULT_RECENT_SLOT_DURATION_MS,
+    PROGRAM_ID,
+    true
+  ))!;
+
+  return { env, mint, kaminoMarket };
+};
+
+export const createMarketWithReserveToppedUp = async (
+  env: Env,
+  symbol: string,
+  amount: Decimal,
+  requestElevationGroup: boolean = false,
+  overrideMint?: PublicKey
+) => {
+  const { mint, kaminoMarket } = await createMarketWithReserve(env, symbol, requestElevationGroup, overrideMint);
+
+  const whale = await newUser(env, kaminoMarket, [[symbol, amount]]);
+
+  await deposit(env, kaminoMarket, whale, symbol, amount);
+
+  return { mint, kaminoMarket };
 };
 
 export const newUser = async (

@@ -12,3 +12,5 @@ export * from './userMetadata';
 export * from './pubkey';
 export * from './oracle';
 export * from './lookupTable';
+export * from './sendTransactionsUtils';
+export * from './managerTypes';

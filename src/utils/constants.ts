@@ -77,3 +77,5 @@ export const WRAPPED_SOL_MINT = new PublicKey('So1111111111111111111111111111111
  * USDC Mint
  */
 export const USDC_MAINNET_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+
+export const MAINNET_BETA_CHAIN_ID = 101;
