@@ -12,12 +12,12 @@ import {
 } from '@solana/web3.js';
 import {
   AssetReserveConfigCli,
-  buildComputeBudgetIx,
   Chain,
   encodeTokenName,
   KaminoManager,
   KaminoVault,
   KaminoVaultConfig,
+  LendingMarket,
   MAINNET_BETA_CHAIN_ID,
   Reserve,
   ReserveAllocationConfig,
@@ -33,15 +33,17 @@ import {
   PriceHeuristic,
   ReserveConfig,
   ReserveConfigFields,
+  ScopeConfiguration,
   TokenInfo,
   WithdrawalCaps,
 } from './idl_codegen/types';
 import { Fraction } from './classes/fraction';
 import Decimal from 'decimal.js';
 import { BN } from '@coral-xyz/anchor';
-import { PythConfiguration, ScopeConfiguration, SwitchboardConfiguration } from './idl_codegen_kamino_vault/types';
+import { PythConfiguration, SwitchboardConfiguration } from './idl_codegen_kamino_vault/types';
 import * as fs from 'fs';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { MarketWithAddress } from './utils/managerTypes';
 
 dotenv.config({
   path: `.env${process.env.ENV ? '.' + process.env.ENV : ''}`,
@@ -99,9 +101,9 @@ async function main() {
       const multisigPk = multisig ? new PublicKey(multisig) : PublicKey.default;
       const kaminoManager = new KaminoManager(env.provider.connection, env.kLendProgramId, env.kVaultProgramId);
 
-      const farmConfigFromFile = JSON.parse(fs.readFileSync(reserveConfigPath, 'utf8'));
+      const reserveConfigFromFile = JSON.parse(fs.readFileSync(reserveConfigPath, 'utf8'));
 
-      const reserveConfig = parseReserveConfigFromFile(farmConfigFromFile);
+      const reserveConfig = parseReserveConfigFromFile(reserveConfigFromFile);
       const assetConfig = new AssetReserveConfigCli(tokenMint, tokenMintProgramId, reserveConfig);
 
       const { reserve, txnIxns } = await kaminoManager.addAssetToMarketIxs({
@@ -114,15 +116,7 @@ async function main() {
 
       const _createReserveSig = await processTxn(env.client, env.payer, txnIxns[0], bs58, 2500, [reserve]);
 
-      const computeBudgetIx = buildComputeBudgetIx(400_000);
-      const _updateReserveSig = await processTxn(
-        env.client,
-        env.payer,
-        [computeBudgetIx, ...txnIxns[1]],
-        bs58,
-        2500,
-        []
-      );
+      const _updateReserveSig = await processTxn(env.client, env.payer, txnIxns[1], bs58, 2500, [], 400_000);
 
       !bs58 &&
         console.log(
@@ -131,6 +125,79 @@ async function main() {
           'and config updated:',
           JSON.parse(JSON.stringify(reserveConfig))
         );
+    });
+
+  commands
+    .command('update-reserve-config')
+    .requiredOption('--reserve <string>', 'Reserve address')
+    .requiredOption('--reserve-config-path <string>', 'Path for the reserve config')
+    .option('--update-entire-config', 'If set, it will update entire reserve config in 1 instruction')
+    .option(`--bs58`, 'If true, will print a bs58 txn instead of executing')
+    .option(`--staging`, 'If true, will use the staging programs')
+    .action(async ({ reserve, reserveConfigPath, updateEntireConfig, bs58, staging, multisig }) => {
+      const env = initializeClient(bs58, staging);
+      const reserveAddress = new PublicKey(reserve);
+      const reserveState = await Reserve.fetch(env.provider.connection, reserveAddress, env.kLendProgramId);
+      if (!reserveState) {
+        throw new Error('Reserve not found');
+      }
+
+      const marketAddress = reserveState.lendingMarket;
+      const marketState = await LendingMarket.fetch(env.provider.connection, marketAddress, env.kLendProgramId);
+      if (!marketState) {
+        throw new Error('Market not found');
+      }
+      const marketWithAddress: MarketWithAddress = {
+        address: marketAddress,
+        state: marketState,
+      };
+
+      if (bs58 && !multisig) {
+        throw new Error('If using bs58, multisig is required');
+      }
+
+      const kaminoManager = new KaminoManager(env.provider.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const reserveConfigFromFile = JSON.parse(fs.readFileSync(reserveConfigPath, 'utf8'));
+
+      const reserveConfig = parseReserveConfigFromFile(reserveConfigFromFile);
+
+      const ixns = await kaminoManager.updateReserveIxs(
+        marketWithAddress,
+        reserveAddress,
+        reserveConfig,
+        reserveState,
+        updateEntireConfig
+      );
+
+      const _updateReserveSig = await processTxn(env.client, env.payer, ixns, bs58, 2500, [], 400_000);
+
+      !bs58 && console.log('Reserve Updated with config -> ', JSON.parse(JSON.stringify(reserveConfig)));
+    });
+
+  commands
+    .command('download-reserve-config')
+    .requiredOption('--reserve <string>', 'Reserve address')
+    .option(`--staging`, 'If true, will use the staging programs')
+    .action(async ({ reserve, staging }) => {
+      const env = initializeClient(false, staging);
+      const reserveAddress = new PublicKey(reserve);
+      const reserveState = await Reserve.fetch(env.provider.connection, reserveAddress, env.kLendProgramId);
+      if (!reserveState) {
+        throw new Error('Reserve not found');
+      }
+
+      fs.mkdirSync('./configs/' + reserveState.lendingMarket.toBase58(), { recursive: true });
+
+      const decoder = new TextDecoder('utf-8');
+      const reserveName = decoder.decode(Uint8Array.from(reserveState.config.tokenInfo.name)).replace(/\0/g, '');
+
+      const reserveConfigDisplay = parseReserveConfigToFile(reserveState.config);
+
+      fs.writeFileSync(
+        './configs/' + reserveState.lendingMarket.toBase58() + '/' + reserveName + '.json',
+        JSON.stringify(reserveConfigDisplay, null, 2)
+      );
     });
 
   commands
@@ -301,7 +368,9 @@ async function processTxn(
   ixns: TransactionInstruction[],
   bs58: boolean,
   priorityFeeMultiplier: number = 2500,
-  extraSigners: Signer[]
+  extraSigners: Signer[],
+  computeUnits: number = 200_000,
+  priorityFeeLamports: number = 1000
 ): Promise<TransactionSignature> {
   if (bs58) {
     const { blockhash } = await web3Client.connection.getLatestBlockhash();
@@ -314,8 +383,7 @@ async function processTxn(
 
     return '';
   } else {
-    const microLamport = 10 ** 6; // 1 lamport
-    const computeUnits = 200_000;
+    const microLamport = priorityFeeLamports * 10 ** 6; // 1000 lamports
     const microLamportsPrioritizationFee = microLamport / computeUnits;
 
     const tx = new Transaction();
@@ -355,57 +423,58 @@ function createAddExtraComputeUnitFeeTransaction(units: number, microLamports: n
 function parseReserveConfigFromFile(farmConfigFromFile: any): ReserveConfig {
   const reserveConfigFields: ReserveConfigFields = {
     status: farmConfigFromFile.status,
-    loanToValuePct: farmConfigFromFile.loan_to_value_pct,
-    liquidationThresholdPct: farmConfigFromFile.liquidation_threshold_pct,
-    minLiquidationBonusBps: farmConfigFromFile.min_liquidation_bonus_bps,
-    protocolLiquidationFeePct: farmConfigFromFile,
-    protocolTakeRatePct: farmConfigFromFile.protocol_liquidation_fee_pct,
-    assetTier: farmConfigFromFile.asset_tier,
-    multiplierSideBoost: farmConfigFromFile.multiplier_side_boost,
-    maxLiquidationBonusBps: farmConfigFromFile.max_liquidation_bonus_bps,
-    badDebtLiquidationBonusBps: farmConfigFromFile.bad_debt_liquidation_bonus_bps,
+    loanToValuePct: farmConfigFromFile.loanToValuePct,
+    liquidationThresholdPct: farmConfigFromFile.liquidationThresholdPct,
+    minLiquidationBonusBps: farmConfigFromFile.minLiquidationBonusBps,
+    protocolLiquidationFeePct: farmConfigFromFile.protocolLiquidationFeePct,
+    protocolTakeRatePct: farmConfigFromFile.protocolLiquidationFeePct,
+    assetTier: farmConfigFromFile.assetTier,
+    multiplierSideBoost: farmConfigFromFile.multiplierSideBoost,
+    maxLiquidationBonusBps: farmConfigFromFile.maxLiquidationBonusBps,
+    badDebtLiquidationBonusBps: farmConfigFromFile.badDebtLiquidationBonusBps,
     fees: {
-      borrowFeeSf: Fraction.fromDecimal(new Decimal(farmConfigFromFile.fees.borrow_fee)).valueSf,
-      flashLoanFeeSf: Fraction.fromDecimal(new Decimal(farmConfigFromFile.fees.flash_loan_fee)).valueSf,
-      padding: Array(6).fill(0),
+      borrowFeeSf: Fraction.fromDecimal(new Decimal(farmConfigFromFile.fees.borrowFee)).valueSf,
+      flashLoanFeeSf: Fraction.fromDecimal(new Decimal(farmConfigFromFile.fees.flashLoanFee)).valueSf,
+      padding: Array(8).fill(0),
     },
-    depositLimit: new BN(farmConfigFromFile.deposit_limit),
-    borrowLimit: new BN(farmConfigFromFile.borrow_limit),
+    depositLimit: new BN(farmConfigFromFile.depositLimit),
+    borrowLimit: new BN(farmConfigFromFile.borrowLimit),
     tokenInfo: {
-      name: encodeTokenName(farmConfigFromFile.token_info.name),
+      name: encodeTokenName(farmConfigFromFile.tokenInfo.name),
       heuristic: new PriceHeuristic({
-        lower: new BN(farmConfigFromFile.token_info.heuristic.lower),
-        upper: new BN(farmConfigFromFile.token_info.heuristic.upper),
-        exp: new BN(farmConfigFromFile.token_info.heuristic.exp),
+        lower: new BN(farmConfigFromFile.tokenInfo.heuristic.lower),
+        upper: new BN(farmConfigFromFile.tokenInfo.heuristic.upper),
+        exp: new BN(farmConfigFromFile.tokenInfo.heuristic.exp),
       }),
-      maxTwapDivergenceBps: new BN(farmConfigFromFile.token_info.max_twap_divergence_bps),
-      maxAgePriceSeconds: new BN(farmConfigFromFile.token_info.max_age_price_seconds),
-      maxAgeTwapSeconds: new BN(farmConfigFromFile.token_info.max_age_twap_seconds),
+      maxTwapDivergenceBps: new BN(farmConfigFromFile.tokenInfo.maxTwapDivergenceBps),
+      maxAgePriceSeconds: new BN(farmConfigFromFile.tokenInfo.maxAgePriceSeconds),
+      maxAgeTwapSeconds: new BN(farmConfigFromFile.tokenInfo.maxAgeTwapSeconds),
       ...parseOracleConfiguration(farmConfigFromFile),
-      padding: Array(20).fill(new BN(0)),
+      reserved: Array(7).fill(0),
+      padding: Array(19).fill(new BN(0)),
     } as TokenInfo,
     borrowRateCurve: parseBorrowRateCurve(farmConfigFromFile),
     depositWithdrawalCap: new WithdrawalCaps({
-      configCapacity: new BN(farmConfigFromFile.deposit_withdrawal_cap.config_capacity),
+      configCapacity: new BN(farmConfigFromFile.depositWithdrawalCap.configCapacity),
       currentTotal: new BN(0),
       lastIntervalStartTimestamp: new BN(0),
-      configIntervalLengthSeconds: new BN(farmConfigFromFile.deposit_withdrawal_cap.config_interval_length_seconds),
+      configIntervalLengthSeconds: new BN(farmConfigFromFile.depositWithdrawalCap.configIntervalLengthSeconds),
     }),
     debtWithdrawalCap: new WithdrawalCaps({
-      configCapacity: new BN(farmConfigFromFile.debt_withdrawal_cap.config_capacity),
+      configCapacity: new BN(farmConfigFromFile.debtWithdrawalCap.configCapacity),
       currentTotal: new BN(0),
       lastIntervalStartTimestamp: new BN(0),
-      configIntervalLengthSeconds: new BN(farmConfigFromFile.debt_withdrawal_cap.config_interval_length_seconds),
+      configIntervalLengthSeconds: new BN(farmConfigFromFile.debtWithdrawalCap.configIntervalLengthSeconds),
     }),
-    deleveragingMarginCallPeriodSecs: new BN(farmConfigFromFile.deleveraging_margin_call_period_secs),
-    borrowFactorPct: new BN(farmConfigFromFile.borrow_factor_pct),
-    elevationGroups: farmConfigFromFile.elevation_groups,
-    deleveragingThresholdSlotsPerBps: new BN(farmConfigFromFile.deleveraging_threshold_slots_per_bps),
-    multiplierTagBoost: farmConfigFromFile.multiplier_tag_boost,
-    disableUsageAsCollOutsideEmode: farmConfigFromFile.disable_usage_as_coll_outside_emode,
-    utilizationLimitBlockBorrowingAbove: farmConfigFromFile.utilization_limit_block_borrowing_above,
-    hostFixedInterestRateBps: farmConfigFromFile.host_fixed_interest_rate_bps,
-    borrowLimitOutsideElevationGroup: farmConfigFromFile.borrow_limit_outside_elevation_group,
+    deleveragingMarginCallPeriodSecs: new BN(farmConfigFromFile.deleveragingMarginCallPeriodSecs),
+    borrowFactorPct: new BN(farmConfigFromFile.borrowFactorPct),
+    elevationGroups: farmConfigFromFile.elevationGroups,
+    deleveragingThresholdSlotsPerBps: new BN(farmConfigFromFile.deleveragingThresholdSlotsPerBps),
+    multiplierTagBoost: farmConfigFromFile.multiplierTagBoost,
+    disableUsageAsCollOutsideEmode: farmConfigFromFile.disableUsageAsCollOutsideEmode,
+    utilizationLimitBlockBorrowingAbove: farmConfigFromFile.utilizationLimitBlockBorrowingAbove,
+    hostFixedInterestRateBps: farmConfigFromFile.hostFixedInterestRateBps,
+    borrowLimitOutsideElevationGroup: new BN(farmConfigFromFile.borrowLimitOutsideElevationGroup),
     borrowLimitAgainstThisCollateralInElevationGroup: parseReserveBorrowLimitAgainstCollInEmode(farmConfigFromFile),
     reserved1: Array(2).fill(0),
   };
@@ -419,23 +488,23 @@ function parseOracleConfiguration(farmConfigFromFile: any): {
   scopeConfiguration: ScopeConfiguration;
 } {
   const pythConfiguration = new PythConfiguration({
-    price: new PublicKey(farmConfigFromFile.token_info.pyth_configuration.price),
+    price: new PublicKey(farmConfigFromFile.tokenInfo.pythConfiguration.price),
   });
   const switchboardConfiguration = new SwitchboardConfiguration({
-    priceAggregator: new PublicKey(farmConfigFromFile.token_info.switchboard_configuration.price_aggregator),
-    twapAggregator: new PublicKey(farmConfigFromFile.token_info.switchboard_configuration.twap_aggregator),
+    priceAggregator: new PublicKey(farmConfigFromFile.tokenInfo.switchboardConfiguration.priceAggregator),
+    twapAggregator: new PublicKey(farmConfigFromFile.tokenInfo.switchboardConfiguration.twapAggregator),
   });
   const priceChain = [65535, 65535, 65535, 65535];
   const twapChain = [65535, 65535, 65535, 65535];
 
-  const priceChainFromFile: number[] = farmConfigFromFile.token_info.scope_configuration.price_chain;
-  const twapChainFromFile: number[] = farmConfigFromFile.token_info.scope_configuration.twap_chain;
+  const priceChainFromFile: number[] = farmConfigFromFile.tokenInfo.scopeConfiguration.priceChain;
+  const twapChainFromFile: number[] = farmConfigFromFile.tokenInfo.scopeConfiguration.twapChain;
 
   priceChainFromFile.forEach((value, index) => (priceChain[index] = value));
   twapChainFromFile.forEach((value, index) => (twapChain[index] = value));
 
   const scopeConfiguration = new ScopeConfiguration({
-    priceFeed: new PublicKey(farmConfigFromFile.token_info.scope_configuration.price_feed),
+    priceFeed: new PublicKey(farmConfigFromFile.tokenInfo.scopeConfiguration.priceFeed),
     priceChain: priceChain,
     twapChain: twapChain,
   });
@@ -450,10 +519,10 @@ function parseOracleConfiguration(farmConfigFromFile: any): {
 function parseBorrowRateCurve(farmConfigFromFile: any): BorrowRateCurve {
   const curvePoints: CurvePointFields[] = [];
 
-  farmConfigFromFile.borrow_rate_curve.forEach((curvePoint: { utilization_rate_bps: any; borrow_rate_bps: any }) =>
+  farmConfigFromFile.borrowRateCurve.points.forEach((curvePoint: { utilizationRateBps: any; borrowRateBps: any }) =>
     curvePoints.push({
-      utilizationRateBps: curvePoint.utilization_rate_bps,
-      borrowRateBps: curvePoint.borrow_rate_bps,
+      utilizationRateBps: curvePoint.utilizationRateBps,
+      borrowRateBps: curvePoint.borrowRateBps,
     })
   );
 
@@ -467,11 +536,65 @@ function parseBorrowRateCurve(farmConfigFromFile: any): BorrowRateCurve {
 }
 
 function parseReserveBorrowLimitAgainstCollInEmode(farmConfigFromFile: any): BN[] {
-  const reserveBorrowLimitAgainstCollInEmode = Array(32).fill(new BN(0));
+  const reserveBorrowLimitAgainstCollInEmode: BN[] = Array(32).fill(new BN(0));
 
-  farmConfigFromFile.reserve_borrow_limit_against_coll_in_emode.forEach(
+  farmConfigFromFile.borrowLimitAgainstThisCollateralInElevationGroup.forEach(
     (limit: any, index: number) => (reserveBorrowLimitAgainstCollInEmode[index] = new BN(limit))
   );
 
   return reserveBorrowLimitAgainstCollInEmode;
+}
+
+function parseReserveConfigToFile(reserveConfig: ReserveConfig) {
+  const decoder = new TextDecoder('utf-8');
+
+  return {
+    status: reserveConfig.status,
+    loanToValuePct: reserveConfig.loanToValuePct,
+    liquidationThresholdPct: reserveConfig.liquidationThresholdPct,
+    minLiquidationBonusBps: reserveConfig.minLiquidationBonusBps,
+    protocolLiquidationFeePct: reserveConfig.protocolLiquidationFeePct,
+    protocolTakeRatePct: reserveConfig.protocolLiquidationFeePct,
+    assetTier: reserveConfig.assetTier,
+    multiplierSideBoost: reserveConfig.multiplierSideBoost,
+    maxLiquidationBonusBps: reserveConfig.maxLiquidationBonusBps,
+    badDebtLiquidationBonusBps: reserveConfig.badDebtLiquidationBonusBps,
+    fees: {
+      borrowFee: new Fraction(reserveConfig.fees.borrowFeeSf).toDecimal().toString(),
+      flashLoanFee: new Fraction(reserveConfig.fees.flashLoanFeeSf).toDecimal().toString(),
+      padding: Array(8).fill(0),
+    },
+    depositLimit: reserveConfig.depositLimit.toString(),
+    borrowLimit: reserveConfig.borrowLimit.toString(),
+    tokenInfo: {
+      name: decoder.decode(Uint8Array.from(reserveConfig.tokenInfo.name)).replace(/\0/g, ''),
+      heuristic: {
+        exp: reserveConfig.tokenInfo.heuristic.exp.toString(),
+        lower: reserveConfig.tokenInfo.heuristic.lower.toString(),
+        upper: reserveConfig.tokenInfo.heuristic.upper.toString(),
+      },
+      maxTwapDivergenceBps: reserveConfig.tokenInfo.maxTwapDivergenceBps.toString(),
+      maxAgePriceSeconds: reserveConfig.tokenInfo.maxAgePriceSeconds.toString(),
+      maxAgeTwapSeconds: reserveConfig.tokenInfo.maxAgeTwapSeconds.toString(),
+      scopeConfiguration: reserveConfig.tokenInfo.scopeConfiguration,
+      switchboardConfiguration: reserveConfig.tokenInfo.switchboardConfiguration,
+      pythConfiguration: reserveConfig.tokenInfo.pythConfiguration,
+      blockPriceUsage: reserveConfig.tokenInfo.blockPriceUsage,
+    },
+    borrowRateCurve: reserveConfig.borrowRateCurve,
+    depositWithdrawalCap: reserveConfig.depositWithdrawalCap,
+    debtWithdrawalCap: reserveConfig.debtWithdrawalCap,
+    deleveragingMarginCallPeriodSecs: reserveConfig.deleveragingMarginCallPeriodSecs.toString(),
+    borrowFactorPct: reserveConfig.borrowFactorPct.toString(),
+    elevationGroups: reserveConfig.elevationGroups,
+    deleveragingThresholdSlotsPerBps: reserveConfig.deleveragingThresholdSlotsPerBps.toString(),
+    multiplierTagBoost: reserveConfig.multiplierTagBoost,
+    disableUsageAsCollOutsideEmode: reserveConfig.disableUsageAsCollOutsideEmode,
+    utilizationLimitBlockBorrowingAbove: reserveConfig.utilizationLimitBlockBorrowingAbove,
+    hostFixedInterestRateBps: reserveConfig.hostFixedInterestRateBps,
+    borrowLimitOutsideElevationGroup: reserveConfig.borrowLimitOutsideElevationGroup.toString(),
+    borrowLimitAgainstThisCollateralInElevationGroup:
+      reserveConfig.borrowLimitAgainstThisCollateralInElevationGroup.map((entry) => entry.toString()),
+    reserved1: Array(2).fill(0),
+  };
 }

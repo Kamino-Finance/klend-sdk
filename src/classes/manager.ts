@@ -142,7 +142,9 @@ export class KaminoManager {
     const updateReserveInstructions = await this.updateReserveIxs(
       marketWithAddress,
       reserveAccount.publicKey,
-      params.assetConfig.getReserveConfig()
+      params.assetConfig.getReserveConfig(),
+      undefined,
+      true
     );
 
     const txnIxns: TransactionInstruction[][] = [];

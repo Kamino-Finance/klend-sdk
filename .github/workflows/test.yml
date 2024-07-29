@@ -184,4 +184,4 @@ jobs:
         run: |
           echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
           yarn start-validator &
-          npx ts-mocha tests/kamino_vault_tests/**/*.test.ts --exit --parallel
+          npx ts-mocha tests/kamino_manager_tests/**/*.test.ts --exit --parallel
