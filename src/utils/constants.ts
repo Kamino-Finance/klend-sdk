@@ -9,7 +9,6 @@ const INITIAL_COLLATERAL_RATIO = 1;
 export const INITIAL_COLLATERAL_RATE = new Decimal(INITIAL_COLLATERAL_RATIO);
 
 export type ENV = 'mainnet-beta' | 'devnet' | 'localnet';
-export type SolanaCluster = 'mainnet-beta' | 'devnet' | 'localnet';
 
 export function isENV(value: any): value is ENV {
   return value === 'mainnet-beta' || value === 'devnet' || value === 'localnet';

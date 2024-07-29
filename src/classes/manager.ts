@@ -12,6 +12,7 @@ import {
   CreateKaminoMarketParams,
   createReserveIxs,
   DEFAULT_RECENT_SLOT_DURATION_MS,
+  ENV,
   getReserveOracleConfigs,
   initLendingMarket,
   InitLendingMarketAccounts,
@@ -25,7 +26,6 @@ import {
   Reserve,
   ReserveWithAddress,
   ScopeOracleConfig,
-  SolanaCluster,
   updateEntireReserveConfigIx,
 } from '../lib';
 import { PROGRAM_ID } from '../idl_codegen/programId';
@@ -379,7 +379,7 @@ export class KaminoManager {
    */
   async getScopeOracleConfigs(
     feed: string = 'hubble',
-    cluster: SolanaCluster = 'mainnet-beta'
+    cluster: ENV = 'mainnet-beta'
   ): Promise<Array<ScopeOracleConfig>> {
     const scopeOracleConfigs: Array<ScopeOracleConfig> = [];
 
