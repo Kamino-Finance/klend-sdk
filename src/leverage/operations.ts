@@ -20,7 +20,12 @@ import {
 } from '../utils';
 import { calcAdjustAmounts, calcWithdrawAmounts, simulateMintKToken, toJson } from './calcs';
 import { TOKEN_PROGRAM_ID, createCloseAccountInstruction } from '@solana/spl-token';
-import { Kamino, InstructionsWithLookupTables, StrategyWithAddress, TokenAmounts } from '@hubbleprotocol/kamino-sdk';
+import {
+  Kamino,
+  InstructionsWithLookupTables,
+  StrategyWithAddress,
+  TokenAmounts,
+} from '@kamino-finance/kliquidity-sdk';
 import { getExpectedTokenBalanceAfterBorrow, getKtokenToTokenSwapper, getTokenToKtokenSwapper } from './utils';
 
 export type SwapIxnsProvider = (

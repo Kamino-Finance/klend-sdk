@@ -7,24 +7,24 @@ import {
   sleep,
   StrategyWithAddress,
   TOKEN_PROGRAM_ID,
-} from '@hubbleprotocol/kamino-sdk';
+} from '@kamino-finance/kliquidity-sdk';
 import { Keypair, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
-import * as KaminoInstructions from '@hubbleprotocol/kamino-sdk/dist/kamino-client/instructions';
-import { PROGRAM_ID_CLI as WHIRLPOOL_PROGRAM_ID } from '@hubbleprotocol/kamino-sdk/dist/whirpools-client/programId';
+import * as KaminoInstructions from '@kamino-finance/kliquidity-sdk/dist/kamino-client/instructions';
+import { PROGRAM_ID_CLI as WHIRLPOOL_PROGRAM_ID } from '@kamino-finance/kliquidity-sdk/dist/whirlpools-client/programId';
 
 import {
   GlobalConfigOption,
   GlobalConfigOptionKind,
   UpdateCollateralInfoMode,
-} from '@hubbleprotocol/kamino-sdk/dist/kamino-client/types';
-import { GlobalConfig } from '@hubbleprotocol/kamino-sdk/dist/kamino-client/accounts';
+} from '@kamino-finance/kliquidity-sdk/dist/kamino-client/types';
+import { GlobalConfig } from '@kamino-finance/kliquidity-sdk/dist/kamino-client/accounts';
 import * as anchor from '@coral-xyz/anchor';
 import {
   AllowDepositWithoutInvest,
   UpdateDepositCap,
   UpdateDepositCapIxn,
   UpdateMaxDeviationBps,
-} from '@hubbleprotocol/kamino-sdk/dist/kamino-client/types/StrategyConfigOption';
+} from '@kamino-finance/kliquidity-sdk/dist/kamino-client/types/StrategyConfigOption';
 import Decimal from 'decimal.js';
 import {
   DEFAULT_MAX_PRICE_AGE,

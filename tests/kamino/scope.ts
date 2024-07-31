@@ -1,6 +1,6 @@
 import { OracleType, Scope, U16_MAX } from '@hubbleprotocol/scope-sdk';
 import { PublicKey } from '@solana/web3.js';
-import { StrategyWithAddress } from '@hubbleprotocol/kamino-sdk';
+import { StrategyWithAddress } from '@kamino-finance/kliquidity-sdk';
 import Decimal from 'decimal.js';
 import { getPriceAcc, Price, PriceFeed } from './price';
 import { Env } from '../setup_utils';

@@ -20,10 +20,10 @@ import {
 } from './leverage_utils';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { assertFuzzyEq } from './assert';
-import { Kamino, StrategyWithAddress, TokenAmounts } from '@hubbleprotocol/kamino-sdk';
-import { WhirlpoolStrategy } from '@hubbleprotocol/kamino-sdk/dist/kamino-client/accounts';
+import { Kamino, StrategyWithAddress, TokenAmounts } from '@kamino-finance/kliquidity-sdk';
+import { WhirlpoolStrategy } from '@kamino-finance/kliquidity-sdk/dist/kamino-client/accounts';
 import { BN } from 'bn.js';
-import { WhirlpoolStrategyFields } from '@hubbleprotocol/kamino-sdk/src/kamino-client/accounts/WhirlpoolStrategy';
+import { WhirlpoolStrategyFields } from '@kamino-finance/kliquidity-sdk/src/kamino-client/accounts/WhirlpoolStrategy';
 
 describe('Leverage calculation tests', function () {
   it('calculate_given_deposit_and_leverage_in_debt_token', async function () {

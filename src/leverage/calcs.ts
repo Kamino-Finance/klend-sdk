@@ -1,6 +1,6 @@
 import { PublicKey } from '@solana/web3.js';
 import Decimal from 'decimal.js';
-import { Kamino, StrategyWithAddress, TokenAmounts } from '@hubbleprotocol/kamino-sdk';
+import { Kamino, StrategyWithAddress, TokenAmounts } from '@kamino-finance/kliquidity-sdk';
 
 export const toJson = (object: any): string => {
   return JSON.stringify(object, null, 2);

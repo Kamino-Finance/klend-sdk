@@ -2,10 +2,10 @@ import { PublicKey, Connection, Transaction, TransactionInstruction, Keypair } f
 import * as anchor from '@coral-xyz/anchor';
 import Decimal from 'decimal.js';
 import { getStartTickIndex, priceToSqrtX64 } from '@orca-so/whirlpool-sdk';
-import * as WhirlpoolInstructions from '@hubbleprotocol/kamino-sdk/dist/whirpools-client/instructions';
-import { sendTransactionWithLogs, TOKEN_PROGRAM_ID, Kamino } from '@hubbleprotocol/kamino-sdk';
-import { PROGRAM_ID_CLI as WHIRLPOOL_PROGRAM_ID } from '@hubbleprotocol/kamino-sdk/dist/whirpools-client/programId';
-import { Whirlpool } from '@hubbleprotocol/kamino-sdk/dist/whirpools-client/accounts';
+import * as WhirlpoolInstructions from '@kamino-finance/kliquidity-sdk/dist/whirlpools-client/instructions';
+import { sendTransactionWithLogs, TOKEN_PROGRAM_ID, Kamino } from '@kamino-finance/kliquidity-sdk';
+import { PROGRAM_ID_CLI as WHIRLPOOL_PROGRAM_ID } from '@kamino-finance/kliquidity-sdk/dist/whirlpools-client/programId';
+import { Whirlpool } from '@kamino-finance/kliquidity-sdk/dist/whirlpools-client/accounts';
 import { orderMints, DeployedPool, range, getMintDecimals } from './utils';
 import { Env } from '../setup_utils';
 

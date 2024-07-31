@@ -1,12 +1,12 @@
-import { PROGRAM_ID as RAYDIUM_PROGRAM_ID } from '@hubbleprotocol/kamino-sdk/dist/raydium_client/programId';
-import { PoolState } from '@hubbleprotocol/kamino-sdk/dist/raydium_client/accounts';
+import { PROGRAM_ID as RAYDIUM_PROGRAM_ID } from '@kamino-finance/kliquidity-sdk/dist/raydium_client/programId';
+import { PoolState } from '@kamino-finance/kliquidity-sdk/dist/raydium_client/accounts';
 import * as anchor from '@coral-xyz/anchor';
 import { PublicKey, Connection, SystemProgram, Transaction, Keypair } from '@solana/web3.js';
-import * as RaydiumInstructions from '@hubbleprotocol/kamino-sdk/dist/raydium_client/instructions';
+import * as RaydiumInstructions from '@kamino-finance/kliquidity-sdk/dist/raydium_client/instructions';
 import { SqrtPriceMath, i32ToBytes, TickUtils } from '@raydium-io/raydium-sdk';
 import Decimal from 'decimal.js';
 import { BN } from 'bn.js';
-import { sendTransactionWithLogs } from '@hubbleprotocol/kamino-sdk';
+import { sendTransactionWithLogs } from '@kamino-finance/kliquidity-sdk';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { accountExist, DeployedPool, orderMints } from './utils';
 import { Env } from '../setup_utils';

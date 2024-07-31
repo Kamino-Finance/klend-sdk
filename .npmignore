@@ -2,4 +2,6 @@ client.ts
 node_modules
 tests
 deps
-test_ledger
+test-ledger
+.idea
+.github
