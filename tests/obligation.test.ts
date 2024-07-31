@@ -16,6 +16,7 @@ import {
   KaminoAction,
   PROGRAM_ID,
   sendTransactionV0,
+  U64_MAX,
   userMetadataPda,
   VanillaObligation,
 } from '../src';
@@ -142,7 +143,7 @@ describe('obligation', function () {
     assert(reserveSupplyApr === 0);
   });
 
-  it('request_elevation_group_update_on_borrow', async function () {
+  it('request_elevation_group_update_on_borrow_close_on_repay', async function () {
     const [usdh, usdc] = ['USDH', 'USDC'];
 
     const { env, secondMint, kaminoMarket } = await createMarketWithTwoReservesToppedUp(
@@ -151,7 +152,10 @@ describe('obligation', function () {
       true
     );
 
-    const user1 = await newUser(env, kaminoMarket, [[usdh, new Decimal(2000)]]);
+    const user1 = await newUser(env, kaminoMarket, [
+      [usdh, new Decimal(2000)],
+      [usdc, new Decimal(1)],
+    ]);
     await deposit(env, kaminoMarket, user1, usdh, new Decimal(2000));
 
     const buffer = Buffer.alloc(8 * 32);
@@ -185,6 +189,7 @@ describe('obligation', function () {
     );
 
     await sendTransactionsFromAction(env, borrowAction, user1, [user1]);
+    await sleep(5000);
 
     const obligationAfter = (await kaminoMarket.getObligationByWallet(
       user1.publicKey,
@@ -194,5 +199,30 @@ describe('obligation', function () {
     const liquidationLtvAfter = obligationAfter.refreshedStats.liquidationLtv;
 
     assert(liquidationLtvAfter > liquidationLtvBefore);
+    assert(obligationAfter.state.elevationGroup === 1);
+
+    const currentSlot = await kaminoMarket.getConnection().getSlot();
+
+    const repayAction = await KaminoAction.buildRepayTxns(
+      kaminoMarket,
+      U64_MAX,
+      secondMint,
+      user1.publicKey,
+      new VanillaObligation(PROGRAM_ID),
+      currentSlot,
+      user1.publicKey,
+      300_000,
+      true,
+      true
+    );
+
+    await sendTransactionsFromAction(env, repayAction, user1, [user1]);
+
+    const obligationFinal = (await kaminoMarket.getObligationByWallet(
+      user1.publicKey,
+      new VanillaObligation(PROGRAM_ID)
+    ))!;
+
+    assert(obligationFinal.state.elevationGroup === 0);
   });
 });

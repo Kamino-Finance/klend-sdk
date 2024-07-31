@@ -91,6 +91,8 @@ export type ActionType =
   | 'requestElevationGroup'
   | 'withdrawReferrerFees';
 
+export type AuxiliaryIx = 'setup' | 'inBetween' | 'cleanup';
+
 export class KaminoAction {
   kaminoMarket: KaminoMarket;
 
@@ -397,7 +399,7 @@ export class KaminoAction {
     }
 
     axn.addRefreshObligation(payer);
-    axn.addRequestElevationIx(elevationGroup, true);
+    axn.addRequestElevationIx(elevationGroup, 'setup');
 
     return axn;
   }
@@ -1576,7 +1578,7 @@ export class KaminoAction {
     await this.addSupportIxsWithoutInitObligation(
       action,
       includeAtaIxns,
-      false,
+      'inBetween',
       requestElevationGroup,
       addInitObligationForFarm,
       isClosingPosition
@@ -1586,7 +1588,7 @@ export class KaminoAction {
   addRefreshObligation(crank: PublicKey) {
     const uniqueReserveAddresses = new PublicKeySet(this.depositReserves.concat(this.borrowReserves)).toArray();
 
-    const addAllToSetupIxns = true;
+    const addAllToSetupIxns = 'setup';
     // Union of addresses
     const allReservesExcludingCurrent = [...uniqueReserveAddresses];
 
@@ -1609,7 +1611,7 @@ export class KaminoAction {
   async addSupportIxsWithoutInitObligation(
     action: ActionType,
     includeAtaIxns: boolean,
-    addToSetupIxs: boolean = true,
+    addAsSupportIx: AuxiliaryIx = 'setup',
     requestElevationGroup: boolean = false,
     addInitObligationForFarm: boolean = false,
     isClosingPosition: boolean = false,
@@ -1710,54 +1712,54 @@ export class KaminoAction {
         (address) => !currentReserveAddresses.contains(address)
       );
 
-      this.addRefreshReserveIxs(allReservesExcludingCurrent, addToSetupIxs);
+      this.addRefreshReserveIxs(allReservesExcludingCurrent, addAsSupportIx);
       if (addInitObligationForFarm) {
         if (action === 'liquidate') {
-          await this.addInitObligationForFarm(this.reserve, ReserveFarmKind.Debt, addToSetupIxs);
-          await this.addInitObligationForFarm(this.outflowReserve!, ReserveFarmKind.Collateral, addToSetupIxs);
+          await this.addInitObligationForFarm(this.reserve, ReserveFarmKind.Debt, addAsSupportIx);
+          await this.addInitObligationForFarm(this.outflowReserve!, ReserveFarmKind.Collateral, addAsSupportIx);
         } else if (
           action === 'depositAndBorrow' ||
           action === 'depositCollateral' ||
           action === 'withdraw' ||
           action === 'deposit'
         ) {
-          await this.addInitObligationForFarm(this.reserve, ReserveFarmKind.Collateral, addToSetupIxs);
+          await this.addInitObligationForFarm(this.reserve, ReserveFarmKind.Collateral, addAsSupportIx);
           if (this.outflowReserve) {
-            await this.addInitObligationForFarm(this.outflowReserve, ReserveFarmKind.Debt, addToSetupIxs);
+            await this.addInitObligationForFarm(this.outflowReserve, ReserveFarmKind.Debt, addAsSupportIx);
           }
         } else if (action === 'repayAndWithdraw' || action === 'borrow' || action === 'repay') {
           // todo - probably don't need to add both debt and collateral for everything here
-          await this.addInitObligationForFarm(this.reserve, ReserveFarmKind.Debt, addToSetupIxs);
+          await this.addInitObligationForFarm(this.reserve, ReserveFarmKind.Debt, addAsSupportIx);
           if (this.outflowReserve) {
-            await this.addInitObligationForFarm(this.outflowReserve, ReserveFarmKind.Collateral, addToSetupIxs);
+            await this.addInitObligationForFarm(this.outflowReserve, ReserveFarmKind.Collateral, addAsSupportIx);
           }
         } else {
-          await this.addInitObligationForFarm(this.reserve, ReserveFarmKind.Collateral, addToSetupIxs);
-          await this.addInitObligationForFarm(this.reserve, ReserveFarmKind.Debt, addToSetupIxs);
+          await this.addInitObligationForFarm(this.reserve, ReserveFarmKind.Collateral, addAsSupportIx);
+          await this.addInitObligationForFarm(this.reserve, ReserveFarmKind.Debt, addAsSupportIx);
           if (this.outflowReserve) {
-            await this.addInitObligationForFarm(this.outflowReserve, ReserveFarmKind.Collateral, addToSetupIxs);
-            await this.addInitObligationForFarm(this.outflowReserve, ReserveFarmKind.Debt, addToSetupIxs);
+            await this.addInitObligationForFarm(this.outflowReserve, ReserveFarmKind.Collateral, addAsSupportIx);
+            await this.addInitObligationForFarm(this.outflowReserve, ReserveFarmKind.Debt, addAsSupportIx);
           }
         }
       }
-      this.addRefreshReserveIxs(currentReserveAddresses.toArray(), addToSetupIxs);
+      this.addRefreshReserveIxs(currentReserveAddresses.toArray(), addAsSupportIx);
 
-      if (action === 'repayAndWithdraw' && !addToSetupIxs && isClosingPosition) {
+      if (action === 'repayAndWithdraw' && !addAsSupportIx && isClosingPosition) {
         // addToSetupIxs === addInBetween (same thing)
         // If this is a repay and withdraw, and it's not the first action, and it's closing a position
         // we don't need to include the repay reserve in the refresh obligation
         // I am ashamed of this code, we need to rewrite this entire thing
-        this.addRefreshObligationIx(addToSetupIxs, true);
+        this.addRefreshObligationIx(addAsSupportIx, true);
       } else {
-        this.addRefreshObligationIx(addToSetupIxs, false);
+        this.addRefreshObligationIx(addAsSupportIx, false);
       }
 
-      if (addToSetupIxs) {
+      if (addAsSupportIx) {
         // If this is an setup ixn (therefore not an in-between), it means it's either a one off action
         // or the first of a two-token-action
         if (action === 'liquidate') {
-          this.addRefreshFarmsForReserve([this.outflowReserve!], addToSetupIxs, ReserveFarmKind.Collateral);
-          this.addRefreshFarmsForReserve([this.reserve], addToSetupIxs, ReserveFarmKind.Debt);
+          this.addRefreshFarmsForReserve([this.outflowReserve!], addAsSupportIx, ReserveFarmKind.Collateral);
+          this.addRefreshFarmsForReserve([this.reserve], addAsSupportIx, ReserveFarmKind.Debt);
         } else if (
           action === 'depositAndBorrow' ||
           action === 'depositCollateral' ||
@@ -1766,7 +1768,7 @@ export class KaminoAction {
         ) {
           this.addRefreshFarmsForReserve(
             currentReserves,
-            addToSetupIxs,
+            addAsSupportIx,
             ReserveFarmKind.Collateral,
             undefined,
             twoTokenAction
@@ -1774,7 +1776,7 @@ export class KaminoAction {
         } else if (action === 'repayAndWithdraw' || action === 'borrow' || action === 'repay') {
           this.addRefreshFarmsForReserve(
             currentReserves,
-            addToSetupIxs,
+            addAsSupportIx,
             ReserveFarmKind.Debt,
             undefined,
             twoTokenAction
@@ -1787,11 +1789,29 @@ export class KaminoAction {
         // so we skip the refresh farm obligation of the first reserve as that operation already happened
         // add added to 'setup' ixns
         if (action === 'depositAndBorrow') {
-          this.addRefreshFarmsForReserve([this.outflowReserve!], addToSetupIxs, ReserveFarmKind.Debt);
+          this.addRefreshFarmsForReserve([this.outflowReserve!], addAsSupportIx, ReserveFarmKind.Debt);
         } else if (action === 'repayAndWithdraw') {
-          this.addRefreshFarmsForReserve([this.outflowReserve!], addToSetupIxs, ReserveFarmKind.Collateral);
+          this.addRefreshFarmsForReserve([this.outflowReserve!], addAsSupportIx, ReserveFarmKind.Collateral);
         } else {
           throw new Error(`Could not decide on refresh farm for action ${action}`);
+        }
+      }
+
+      if (action === 'repay' && requestElevationGroup) {
+        const repayObligationLiquidity = this.obligation!.borrows.get(this.reserve.address);
+
+        if (!repayObligationLiquidity) {
+          throw new Error(`Could not find debt reserve ${this.reserve.address} in obligation`);
+        }
+
+        if (
+          new Decimal(repayObligationLiquidity.amount).lte(new Decimal(this.amount.toString())) &&
+          this.obligation!.borrows.size === 1
+        ) {
+          this.addRefreshReserveIxs(allReservesExcludingCurrent, 'cleanup');
+          // Skip the borrow reserve, since we repay in the same tx
+          this.addRefreshObligationIx('cleanup', true);
+          this.addRequestElevationIx(0, 'cleanup', true);
         }
       }
 
@@ -1836,16 +1856,16 @@ export class KaminoAction {
           const eModeGroup = groups.find((group) => group.id === eModeGroupWithMaxLtvAndDebtReserve)!.id;
           console.log('Setting eModeGroup to', eModeGroup);
 
-          let addToSetupIxs = false;
+          let addAsSupportIx: AuxiliaryIx = 'inBetween';
           if (eModeGroup !== 0 && eModeGroup !== this.obligation?.state.elevationGroup) {
             if (action === 'borrow') {
               this.obligation!.refreshedStats.potentialElevationGroupUpdate = eModeGroup;
-              addToSetupIxs = true;
+              addAsSupportIx = 'setup';
             }
-            this.addRequestElevationIx(eModeGroup, addToSetupIxs);
-            this.addRefreshReserveIxs(allReservesExcludingCurrent, addToSetupIxs);
-            this.addRefreshReserveIxs(currentReserveAddresses.toArray(), addToSetupIxs);
-            this.addRefreshObligationIx(addToSetupIxs);
+            this.addRequestElevationIx(eModeGroup, addAsSupportIx);
+            this.addRefreshReserveIxs(allReservesExcludingCurrent, addAsSupportIx);
+            this.addRefreshReserveIxs(currentReserveAddresses.toArray(), addAsSupportIx);
+            this.addRefreshObligationIx(addAsSupportIx);
           }
         }
       }
@@ -1873,7 +1893,7 @@ export class KaminoAction {
     await this.addSupportIxsWithoutInitObligation(
       action,
       includeAtaIxns,
-      true,
+      'setup',
       requestElevationGroup,
       addInitObligationForFarm,
       false,
@@ -1889,7 +1909,7 @@ export class KaminoAction {
     }
   }
 
-  private addRefreshReserveIxs(reserves: PublicKey[], addToSetupIxs: boolean = true) {
+  private addRefreshReserveIxs(reserves: PublicKey[], addAsSupportIx: AuxiliaryIx = 'setup') {
     reserves.forEach((reserveAddress) => {
       const foundReserve = this.kaminoMarket.getReserveByAddress(reserveAddress);
       if (!foundReserve) {
@@ -1922,12 +1942,15 @@ export class KaminoAction {
         this.kaminoMarket.programId
       );
 
-      if (addToSetupIxs) {
+      if (addAsSupportIx === 'setup') {
         this.setupIxs.push(refreshReserveIx);
         this.setupIxsLabels.push(`RefreshReserve[${reserveAddress}]`);
-      } else {
+      } else if (addAsSupportIx === 'inBetween') {
         this.inBetweenIxs.push(refreshReserveIx);
         this.inBetweenIxsLabels.push(`RefreshReserve[${reserveAddress}]`);
+      } else {
+        this.cleanupIxs.push(refreshReserveIx);
+        this.cleanupIxsLabels.push(`RefreshReserve[${reserveAddress}]`);
       }
     });
   }
@@ -1963,7 +1986,7 @@ export class KaminoAction {
     });
   }
 
-  private addRefreshObligationIx(addToSetupIxs: boolean = true, skipBorrowObligations: boolean = false) {
+  private addRefreshObligationIx(addAsSupportIx: AuxiliaryIx = 'setup', skipBorrowObligations: boolean = false) {
     const marketAddress = this.kaminoMarket.getAddress();
     const obligationPda = this.getObligationPda();
     const refreshObligationIx = refreshObligation(
@@ -2004,16 +2027,23 @@ export class KaminoAction {
       ...(skipBorrowObligations ? [] : [...borrowReserveAccountMetas, ...borrowReservesReferrerTokenStates]),
     ]);
 
-    if (addToSetupIxs) {
+    if (addAsSupportIx === 'setup') {
       this.setupIxs.push(refreshObligationIx);
       this.setupIxsLabels.push(`RefreshObligation[${obligationPda.toString()}]`);
-    } else {
+    } else if (addAsSupportIx === 'inBetween') {
       this.inBetweenIxs.push(refreshObligationIx);
       this.inBetweenIxsLabels.push(`RefreshObligation[${obligationPda.toString()}]`);
+    } else {
+      this.cleanupIxs.push(refreshObligationIx);
+      this.cleanupIxsLabels.push(`RefreshObligation[${obligationPda.toString()}]`);
     }
   }
 
-  private addRequestElevationIx(elevationGroup: number, addToSetupIxs: boolean) {
+  private addRequestElevationIx(
+    elevationGroup: number,
+    addAsSupportIx: AuxiliaryIx,
+    skipBorrowObligations: boolean = false
+  ) {
     const obligationPda = this.getObligationPda();
     const args: RequestElevationGroupArgs = {
       elevationGroup,
@@ -2058,22 +2088,24 @@ export class KaminoAction {
 
     requestElevationGroupIx.keys = requestElevationGroupIx.keys.concat([
       ...depositReserveAccountMetas,
-      ...borrowReserveAccountMetas,
-      ...borrowReservesReferrerTokenStates,
+      ...(skipBorrowObligations ? [] : [...borrowReserveAccountMetas, ...borrowReservesReferrerTokenStates]),
     ]);
 
-    if (addToSetupIxs) {
+    if (addAsSupportIx === 'setup') {
       this.setupIxs.push(requestElevationGroupIx);
       this.setupIxsLabels.push(`RequestElevation[${obligationPda}], elevation_group:${elevationGroup}`);
-    } else {
+    } else if (addAsSupportIx === 'inBetween') {
       this.inBetweenIxs.push(requestElevationGroupIx);
       this.inBetweenIxsLabels.push(`RequestElevation[${obligationPda}], elevation_group:${elevationGroup}`);
+    } else {
+      this.cleanupIxs.push(requestElevationGroupIx);
+      this.cleanupIxsLabels.push(`RequestElevation[${obligationPda}], elevation_group:${elevationGroup}`);
     }
   }
 
   private addRefreshFarmsForReserve(
     reserves: KaminoReserve[],
-    addToSetupIxs: boolean = true,
+    addAsSupportIx: AuxiliaryIx = 'setup',
     mode: typeof ReserveFarmKind.Collateral | typeof ReserveFarmKind.Debt,
     crank: PublicKey = this.payer,
     twoTokenAction: boolean = false
@@ -2132,7 +2164,7 @@ export class KaminoAction {
           this.kaminoMarket.programId
         );
 
-        if (addToSetupIxs) {
+        if (addAsSupportIx === 'setup') {
           this.setupIxs.push(refreshFarmForObligationix);
           this.setupIxsLabels.push(
             `RefreshFarmForObligation[${
@@ -2155,7 +2187,7 @@ export class KaminoAction {
               }, res=${arg[3].address.toString()}, obl=${this.getObligationPda().toString()}]`
             );
           }
-        } else {
+        } else if (addAsSupportIx === 'inBetween') {
           this.inBetweenIxs.push(refreshFarmForObligationix);
           this.inBetweenIxsLabels.push(
             `RefreshFarmForObligation[${
@@ -2182,7 +2214,7 @@ export class KaminoAction {
   private async addInitObligationForFarm(
     reserve: KaminoReserve,
     mode: typeof ReserveFarmKind.Collateral | typeof ReserveFarmKind.Debt,
-    addToSetupIxs: boolean = true
+    addAsSupportIx: AuxiliaryIx = 'setup'
   ): Promise<void> {
     const BASE_SEED_USER_STATE = Buffer.from('user');
     const getPda = (farm: PublicKey) =>
@@ -2225,12 +2257,12 @@ export class KaminoAction {
         systemProgram: SystemProgram.programId,
       };
       const initObligationForFarm = initObligationFarmsForReserve(args, accounts, this.kaminoMarket.programId);
-      if (addToSetupIxs) {
+      if (addAsSupportIx === 'setup') {
         this.setupIxs.push(initObligationForFarm);
         this.setupIxsLabels.push(
           `InitObligationForFarm[${reserve.address.toString()}, ${this.getObligationPda().toString()}]`
         );
-      } else {
+      } else if (addAsSupportIx === 'inBetween') {
         this.inBetweenIxs.push(initObligationForFarm);
         this.inBetweenIxsLabels.push(
           `InitObligationForFarm[${reserve.address.toString()}, ${this.getObligationPda().toString()}]`
