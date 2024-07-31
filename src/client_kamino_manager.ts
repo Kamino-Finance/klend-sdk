@@ -56,14 +56,17 @@ async function main() {
 
   commands
     .command('create-market')
-    .option(`--bs58`, 'If true, will print a bs58 txn instead of executing')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
     .option(`--staging`, 'If true, will use the staging programs')
-    .option(`--multisig <string>`, 'If using bs58 this is required, otherwise will be ignored')
-    .action(async ({ bs58, staging, multisig }) => {
-      const env = initializeClient(bs58, staging);
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
 
-      if (bs58 && !multisig) {
-        throw new Error('If using bs58, multisig is required');
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig pubkey is required');
       }
 
       const multisigPk = multisig ? new PublicKey(multisig) : PublicKey.default;
@@ -71,12 +74,12 @@ async function main() {
       const kaminoManager = new KaminoManager(env.provider.connection, env.kLendProgramId, env.kVaultProgramId);
 
       const { market: marketKp, ixns: createMarketIxns } = await kaminoManager.createMarketIxs({
-        admin: bs58 ? multisigPk : env.payer.publicKey,
+        admin: mode === 'multisig' ? multisigPk : env.payer.publicKey,
       });
 
-      const _createMarketSig = await processTxn(env.client, env.payer, createMarketIxns, bs58, 2500, [marketKp]);
+      const _createMarketSig = await processTxn(env.client, env.payer, createMarketIxns, mode, 2500, [marketKp]);
 
-      !bs58 && console.log('Market created:', marketKp.publicKey.toBase58());
+      mode === 'execute' && console.log('Market created:', marketKp.publicKey.toBase58());
     });
 
   commands
@@ -85,17 +88,20 @@ async function main() {
     .requiredOption('--mint <string>', 'Reserve liquidity token mint')
     .requiredOption('--mint-program-id <string>', 'Reserve liquidity token mint program id')
     .requiredOption('--reserve-config-path <string>', 'Path for the reserve config')
-    .option(`--bs58`, 'If true, will print a bs58 txn instead of executing')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
     .option(`--staging`, 'If true, will use the staging programs')
-    .option(`--multisig <string>`, 'If using bs58 this is required, otherwise will be ignored')
-    .action(async ({ market, mint, mintProgramId, reserveConfigPath, bs58, staging, multisig }) => {
-      const env = initializeClient(bs58, staging);
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ market, mint, mintProgramId, reserveConfigPath, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
       const tokenMint = new PublicKey(mint);
       const tokenMintProgramId = new PublicKey(mintProgramId);
       const marketAddress = new PublicKey(market);
 
-      if (bs58 && !multisig) {
-        throw new Error('If using bs58, multisig is required');
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
       }
 
       const multisigPk = multisig ? new PublicKey(multisig) : PublicKey.default;
@@ -107,23 +113,23 @@ async function main() {
       const assetConfig = new AssetReserveConfigCli(tokenMint, tokenMintProgramId, reserveConfig);
 
       const { reserve, txnIxns } = await kaminoManager.addAssetToMarketIxs({
-        admin: bs58 ? multisigPk : env.payer.publicKey,
+        admin: mode === 'multisig' ? multisigPk : env.payer.publicKey,
         marketAddress: marketAddress,
         assetConfig: assetConfig,
       });
 
       console.log('reserve: ', reserve.publicKey);
 
-      const _createReserveSig = await processTxn(env.client, env.payer, txnIxns[0], bs58, 2500, [reserve]);
+      const _createReserveSig = await processTxn(env.client, env.payer, txnIxns[0], mode, 2500, [reserve]);
 
-      const _updateReserveSig = await processTxn(env.client, env.payer, txnIxns[1], bs58, 2500, [], 400_000);
+      const _updateReserveSig = await processTxn(env.client, env.payer, txnIxns[1], mode, 2500, [], 400_000);
 
-      !bs58 &&
+      mode === 'execute' &&
         console.log(
-          'Reserve Created',
-          reserve.publicKey,
-          'and config updated:',
-          JSON.parse(JSON.stringify(reserveConfig))
+          'Reserve Created with config:',
+          JSON.parse(JSON.stringify(reserveConfig)),
+          '\nreserve address:',
+          reserve.publicKey.toBase58()
         );
     });
 
@@ -131,11 +137,14 @@ async function main() {
     .command('update-reserve-config')
     .requiredOption('--reserve <string>', 'Reserve address')
     .requiredOption('--reserve-config-path <string>', 'Path for the reserve config')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
     .option('--update-entire-config', 'If set, it will update entire reserve config in 1 instruction')
-    .option(`--bs58`, 'If true, will print a bs58 txn instead of executing')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ reserve, reserveConfigPath, updateEntireConfig, bs58, staging, multisig }) => {
-      const env = initializeClient(bs58, staging);
+    .action(async ({ reserve, reserveConfigPath, mode, updateEntireConfig, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
       const reserveAddress = new PublicKey(reserve);
       const reserveState = await Reserve.fetch(env.provider.connection, reserveAddress, env.kLendProgramId);
       if (!reserveState) {
@@ -152,8 +161,8 @@ async function main() {
         state: marketState,
       };
 
-      if (bs58 && !multisig) {
-        throw new Error('If using bs58, multisig is required');
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
       }
 
       const kaminoManager = new KaminoManager(env.provider.connection, env.kLendProgramId, env.kVaultProgramId);
@@ -170,9 +179,9 @@ async function main() {
         updateEntireConfig
       );
 
-      const _updateReserveSig = await processTxn(env.client, env.payer, ixns, bs58, 2500, [], 400_000);
+      const _updateReserveSig = await processTxn(env.client, env.payer, ixns, mode, 2500, [], 400_000);
 
-      !bs58 && console.log('Reserve Updated with config -> ', JSON.parse(JSON.stringify(reserveConfig)));
+      mode === 'execute' && console.log('Reserve Updated with config -> ', JSON.parse(JSON.stringify(reserveConfig)));
     });
 
   commands
@@ -203,22 +212,25 @@ async function main() {
   commands
     .command('create-vault')
     .requiredOption('--mint <string>', 'Vault token mint')
-    .option(`--bs58`, 'If true, will print a bs58 txn instead of executing')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
     .option(`--staging`, 'If true, will use the staging programs')
-    .option(`--multisig <string>`, 'If using bs58 this is required, otherwise will be ignored')
-    .action(async ({ mint, bs58, staging, multisig }) => {
-      const env = initializeClient(bs58, staging);
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ mint, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
       const tokenMint = new PublicKey(mint);
 
-      if (bs58 && !multisig) {
-        throw new Error('If using bs58, multisig is required');
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
       }
 
       const multisigPk = multisig ? new PublicKey(multisig) : PublicKey.default;
       const kaminoManager = new KaminoManager(env.provider.connection, env.kLendProgramId, env.kVaultProgramId);
 
       const kaminoVaultConfig = new KaminoVaultConfig({
-        admin: bs58 ? multisigPk : env.payer.publicKey,
+        admin: mode === 'multisig' ? multisigPk : env.payer.publicKey,
         tokenMint: tokenMint,
         tokenMintProgramId: TOKEN_PROGRAM_ID,
         performanceFeeRate: new Decimal(0.0),
@@ -227,9 +239,9 @@ async function main() {
 
       const { vault: vaultKp, ixns: instructions } = await kaminoManager.createVaultIxs(kaminoVaultConfig);
 
-      const _createVaultSig = await processTxn(env.client, env.payer, instructions, bs58, 2500, [vaultKp]);
+      const _createVaultSig = await processTxn(env.client, env.payer, instructions, mode, 2500, [vaultKp]);
 
-      !bs58 && console.log('Vault created:', vaultKp.publicKey.toBase58());
+      mode === 'execute' && console.log('Vault created:', vaultKp.publicKey.toBase58());
     });
 
   commands
@@ -238,18 +250,21 @@ async function main() {
     .requiredOption('--reserve <string>', 'Reserve address')
     .requiredOption('--allocation-weight <number>', 'Allocation weight')
     .requiredOption('--allocation-cap <string>', 'Allocation cap decimal value')
-    .option(`--bs58`, 'If true, will print a bs58 txn instead of executing')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
     .option(`--staging`, 'If true, will use the staging programs')
-    .option(`--multisig <string>`, 'If using bs58 this is required, otherwise will be ignored')
-    .action(async ({ vault, reserve, allocationWeight, allocationCap, bs58, staging, multisig }) => {
-      const env = initializeClient(bs58, staging);
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ vault, reserve, allocationWeight, allocationCap, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
       const reserveAddress = new PublicKey(reserve);
       const vaultAddress = new PublicKey(vault);
       const allocationWeightValue = Number(allocationWeight);
       const allocationCapDecimal = new Decimal(allocationCap);
 
-      if (bs58 && !multisig) {
-        throw new Error('If using bs58, multisig is required');
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
       }
 
       const kaminoManager = new KaminoManager(env.provider.connection, env.kLendProgramId, env.kVaultProgramId);
@@ -273,9 +288,9 @@ async function main() {
         firstReserveAllocationConfig
       );
 
-      const updateVaultAllocationSig = await processTxn(env.client, env.payer, [instructions], bs58, 2500, []);
+      const updateVaultAllocationSig = await processTxn(env.client, env.payer, [instructions], mode, 2500, []);
 
-      !bs58 && console.log('Vault allocation updated:', updateVaultAllocationSig);
+      mode === 'execute' && console.log('Vault allocation updated:', updateVaultAllocationSig);
     });
 
   commands.command('get-oracle-mappings').action(async () => {
@@ -303,7 +318,7 @@ export function parseKeypairFile(file: string): Keypair {
   return Keypair.fromSecretKey(Buffer.from(JSON.parse(require('fs').readFileSync(file))));
 }
 
-function initializeClient(bs58: boolean, staging: boolean): Env {
+function initializeClient(multisig: boolean, staging: boolean): Env {
   const admin = process.env.ADMIN!;
   const rpc = process.env.RPC!;
   const kLendProgramId = staging ? process.env.KLEND_PROGRAM_ID_STAGING! : process.env.KLEND_PROGRAM_ID_MAINNET!;
@@ -317,11 +332,11 @@ function initializeClient(bs58: boolean, staging: boolean): Env {
     kVaultProgramId: new PublicKey(kVaultProgramId),
   });
 
-  !bs58 && console.log('\nSettings ⚙️');
-  !bs58 && console.log('Admin:', admin);
-  !bs58 && console.log('Rpc:', rpc);
-  !bs58 && console.log('kLendProgramId:', kLendProgramId);
-  !bs58 && console.log('kVaultProgramId:', kVaultProgramId);
+  !multisig && console.log('\nSettings ⚙️');
+  !multisig && console.log('Admin:', admin);
+  !multisig && console.log('Rpc:', rpc);
+  !multisig && console.log('kLendProgramId:', kLendProgramId);
+  !multisig && console.log('kVaultProgramId:', kVaultProgramId);
 
   return env;
 }
@@ -366,13 +381,16 @@ async function processTxn(
   web3Client: Web3Client,
   admin: Keypair,
   ixns: TransactionInstruction[],
-  bs58: boolean,
+  mode: string,
   priorityFeeMultiplier: number = 2500,
   extraSigners: Signer[],
   computeUnits: number = 200_000,
   priorityFeeLamports: number = 1000
 ): Promise<TransactionSignature> {
-  if (bs58) {
+  if (mode !== 'inspect' && mode !== 'simulate' && mode !== 'execute' && mode !== 'multisig') {
+    throw new Error('Invalid mode: ' + mode + '. Must be one of: inspect/simulate/execute/multisig');
+  }
+  if (mode === 'multisig') {
     const { blockhash } = await web3Client.connection.getLatestBlockhash();
     const txn = new Transaction();
     txn.add(...ixns);
@@ -399,17 +417,32 @@ async function processTxn(
     tx.feePayer = admin.publicKey;
     tx.add(...ixns);
 
-    return await signSendAndConfirmRawTransactionWithRetry({
-      mainConnection: web3Client.sendConnection,
-      extraConnections: [],
-      tx: new VersionedTransaction(tx.compileMessage()),
-      signers: [admin, ...extraSigners],
-      commitment: 'confirmed',
-      sendTransactionOptions: {
-        skipPreflight: true,
-        preflightCommitment: 'confirmed',
-      },
-    });
+    if (mode === 'execute') {
+      return await signSendAndConfirmRawTransactionWithRetry({
+        mainConnection: web3Client.sendConnection,
+        extraConnections: [],
+        tx: new VersionedTransaction(tx.compileMessage()),
+        signers: [admin, ...extraSigners],
+        commitment: 'confirmed',
+        sendTransactionOptions: {
+          skipPreflight: true,
+          preflightCommitment: 'confirmed',
+        },
+      });
+    } else if (mode === 'simulate') {
+      const simulation = await web3Client.sendConnection.simulateTransaction(
+        new VersionedTransaction(tx.compileMessage())
+      );
+      console.log('Simulation: \n' + simulation.value.logs);
+    } else if (mode === 'inspect') {
+      console.log(
+        'Tx in B64',
+        `https://explorer.solana.com/tx/inspector?message=${encodeURIComponent(
+          tx.serializeMessage().toString('base64')
+        )}`
+      );
+    }
+    return '';
   }
 }
 
@@ -450,6 +483,7 @@ function parseReserveConfigFromFile(farmConfigFromFile: any): ReserveConfig {
       maxAgePriceSeconds: new BN(farmConfigFromFile.tokenInfo.maxAgePriceSeconds),
       maxAgeTwapSeconds: new BN(farmConfigFromFile.tokenInfo.maxAgeTwapSeconds),
       ...parseOracleConfiguration(farmConfigFromFile),
+      blockPriceUsage: farmConfigFromFile.tokenInfo.blockPriceUsage,
       reserved: Array(7).fill(0),
       padding: Array(19).fill(new BN(0)),
     } as TokenInfo,

@@ -1751,7 +1751,7 @@ export function updateReserveConfigEncodedValue(
       valueArray = value as number[];
       buffer = Buffer.alloc(32);
       for (let i = 0; i < valueArray.length; i++) {
-        buffer.writeBigUint64LE(BigInt(valueArray[i]), 8 * i);
+        buffer.writeUIntLE(valueArray[i], i, 1);
       }
       break;
     case UpdateConfigMode.UpdateScopePriceFeed.discriminator:

@@ -38,7 +38,8 @@
     "codegen-jupiter-perps": "yarn anchor-client-gen src/jupiter_perps_idl.json ./src/idl_codegen_jupiter_perps/ --program-id PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu",
     "start-validator": "solana-test-validator $(./deps/test-validator-params.sh)",
     "start-validator-and-test": "yarn start-server-and-test 'yarn start-validator' http://127.0.0.1:8899/health test",
-    "dump-programs": "./deps/dump-from-mainnet.sh"
+    "dump-programs": "./deps/dump-from-mainnet.sh",
+    "kamino-manager": "ts-node src/client_kamino_manager.ts"
   },
   "dependencies": {
     "@bokuweb/zstd-wasm": "^0.0.20",

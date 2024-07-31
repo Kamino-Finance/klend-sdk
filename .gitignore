@@ -5,3 +5,4 @@ test-ledger/
 keys/localnet/farms.json
 keys/localnet/owner.json
 .env
+configs/**/*.json
