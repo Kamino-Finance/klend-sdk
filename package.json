@@ -44,7 +44,7 @@
     "@bokuweb/zstd-wasm": "^0.0.20",
     "@coral-xyz/anchor": "^0.28.0",
     "@coral-xyz/borsh": "^0.28.0",
-    "@hubbleprotocol/farms-sdk": "^0.5.0",
+    "@hubbleprotocol/farms-sdk": "^0.11.0",
     "@hubbleprotocol/scope-sdk": "^5.0.20",
     "@kamino-finance/kliquidity-sdk": "^6.1.0",
     "@pythnetwork/client": "^2.5.1",
@@ -94,8 +94,8 @@
     "typescript-eslint": "^0.0.1-alpha.0"
   },
   "resolutions": {
-    "@hubbleprotocol/kamino-sdk": "^5.2.0",
-    "@hubbleprotocol/farms-sdk": "^0.5.0"
+    "@kamino-finance/kliquidity-sdk": "^6.1.0",
+    "@hubbleprotocol/farms-sdk": "^0.11.0"
   },
   "packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610"
 }

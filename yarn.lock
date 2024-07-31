@@ -136,10 +136,12 @@
     js-tokens "^4.0.0"
     picocolors "^1.0.0"
 
-"@babel/parser@^7.1.0", "@babel/parser@^7.14.7", "@babel/parser@^7.20.7", "@babel/parser@^7.25.0":
-  version "7.25.0"
-  resolved "https://registry.yarnpkg.com/@babel/parser/-/parser-7.25.0.tgz#9fdc9237504d797b6e7b8f66e78ea7f570d256ad"
-  integrity sha512-CzdIU9jdP0dg7HdyB+bHvDJGagUv+qtzZt5rYCWwW6tITNqV9odjp6Qu41gkG0ca5UfdDUWrKkiAnHHdGRnOrA==
+"@babel/parser@^7.1.0", "@babel/parser@^7.14.7", "@babel/parser@^7.20.7", "@babel/parser@^7.25.0", "@babel/parser@^7.25.3":
+  version "7.25.3"
+  resolved "https://registry.yarnpkg.com/@babel/parser/-/parser-7.25.3.tgz#91fb126768d944966263f0657ab222a642b82065"
+  integrity sha512-iLTJKDbJ4hMvFPgQwwsVoxtHyWpKKPBrxkANrSYewDPaPpT5py5yeVkgPIJ7XYXhndxJpaA3PyALSXQ7u8e/Dw==
+  dependencies:
+    "@babel/types" "^7.25.2"
 
 "@babel/plugin-syntax-async-generators@^7.8.4":
   version "7.8.4"
@@ -249,13 +251,13 @@
     "@babel/types" "^7.25.0"
 
 "@babel/traverse@^7.24.7", "@babel/traverse@^7.25.2", "@babel/traverse@^7.7.2":
-  version "7.25.2"
-  resolved "https://registry.yarnpkg.com/@babel/traverse/-/traverse-7.25.2.tgz#1a0a4aef53177bead359ccd0c89f4426c805b2ae"
-  integrity sha512-s4/r+a7xTnny2O6FcZzqgT6nE4/GHEdcqj4qAeglbUOh0TeglEfmNJFAd/OLoVtGd6ZhAO8GCVvCNUO5t/VJVQ==
+  version "7.25.3"
+  resolved "https://registry.yarnpkg.com/@babel/traverse/-/traverse-7.25.3.tgz#f1b901951c83eda2f3e29450ce92743783373490"
+  integrity sha512-HefgyP1x754oGCsKmV5reSmtV7IXj/kpaE1XYY+D9G5PvKKoFfSbiS4M77MdjuwlZKDIKFCffq9rPU+H/s3ZdQ==
   dependencies:
     "@babel/code-frame" "^7.24.7"
     "@babel/generator" "^7.25.0"
-    "@babel/parser" "^7.25.0"
+    "@babel/parser" "^7.25.3"
     "@babel/template" "^7.25.0"
     "@babel/types" "^7.25.2"
     debug "^4.3.1"
@@ -531,16 +533,16 @@
   dependencies:
     "@hapi/hoek" "^9.0.0"
 
-"@hubbleprotocol/farms-sdk@^0.5.0":
-  version "0.5.2"
-  resolved "https://registry.yarnpkg.com/@hubbleprotocol/farms-sdk/-/farms-sdk-0.5.2.tgz#c36e248b3a1c98d825aab89146cab2ca6152b1d0"
-  integrity sha512-u/creeG0NCF3gPgF1F4ZC/hZKmgS8GVIKYjK+8XcNiIy0ji68bAsQ35mKUatu4DU5S+tdRZqf8f2MpOSs7PkRA==
+"@hubbleprotocol/farms-sdk@^0.11.0", "@hubbleprotocol/farms-sdk@^0.5.0":
+  version "0.11.0"
+  resolved "https://registry.yarnpkg.com/@hubbleprotocol/farms-sdk/-/farms-sdk-0.11.0.tgz#5573475f0ba589520fe45f4b95fff8e467081d30"
+  integrity sha512-S1NBoLjopKqGZ03X6zblqR8c1jNPI5t6G+uRZIUT/EGMEmi0mnHgK/w4BOFUWhywOfN41KxsLXNVzXCqqhBbRw==
   dependencies:
     "@coral-xyz/anchor" "^0.28.0"
     "@coral-xyz/borsh" "^0.28.0"
-    "@hubbleprotocol/kamino-sdk" "^5.2.0"
     "@hubbleprotocol/scope-sdk" "^5.0.20"
-    "@kamino-finance/klend-sdk" "^2.13.0"
+    "@kamino-finance/klend-sdk" "^3.1.0"
+    "@kamino-finance/kliquidity-sdk" "^6.1.0"
     "@project-serum/serum" "^0.13.61"
     "@solana/spl-token" "^0.1.8"
     "@solana/web3.js" "^1.93.2"
@@ -560,34 +562,6 @@
   version "5.0.0"
   resolved "https://registry.yarnpkg.com/@hubbleprotocol/hubble-config/-/hubble-config-5.0.0.tgz#cf95bae0165b853cdb9ebd053ea2d749b23993ca"
   integrity sha512-oLdS2SwdYN8sggZhIesN+Kk8KQXGrbYn0kvnvTnk5Wh4pck1kR458ze5gh0XrMDpRVTdgwItf4mXhqiLXvQCKQ==
-
-"@hubbleprotocol/hubble-idl@^5.0.16":
-  version "5.0.16"
-  resolved "https://registry.yarnpkg.com/@hubbleprotocol/hubble-idl/-/hubble-idl-5.0.16.tgz#cad7aa296a34845301ef78dbe56e84e98041c0f6"
-  integrity sha512-Hjo+WL2UXyqbJpOzs3nDlfrTbbQ2BMkZwCPc0TKifCPUTJ8q8OqYUVaCEpszxDBlFMibQftVS97Ut1IQRqyWvw==
-
-"@hubbleprotocol/kamino-sdk@^5.2.0":
-  version "5.2.4"
-  resolved "https://registry.yarnpkg.com/@hubbleprotocol/kamino-sdk/-/kamino-sdk-5.2.4.tgz#ff698a382dcc52f20dc5b9605a3810462aea2532"
-  integrity sha512-OgyvSpL7epoBz7KoC/d1qCsnP0PwY1+Ml94ZxFJIbkw1oga2Mlpl6RwXrDzKH49+hcMQk/HOrjTENZtar2Cueg==
-  dependencies:
-    "@coral-xyz/borsh" "^0.30.1"
-    "@hubbleprotocol/hubble-config" "^5.0.0"
-    "@hubbleprotocol/hubble-idl" "^5.0.16"
-    "@hubbleprotocol/scope-sdk" "^5.0.20"
-    "@jup-ag/api" "^6.0.1"
-    "@orca-so/sdk" "^1.2.26"
-    "@orca-so/whirlpool-client-sdk" "^0.0.8"
-    "@orca-so/whirlpool-sdk" "^0.4.2"
-    "@project-serum/anchor" "^0.21.0"
-    "@project-serum/borsh" "^0.2.5"
-    "@project-serum/serum" "^0.13.65"
-    "@raydium-io/raydium-sdk" "=1.3.1-beta.5"
-    "@solana/buffer-layout" "^4.0.1"
-    "@solana/spl-token" "^0.1.8"
-    "@types/mocha" "^10.0.1"
-    axios "^1.2.6"
-    bn.js "^5.2.1"
 
 "@hubbleprotocol/scope-sdk@^5.0.20":
   version "5.0.20"
@@ -889,22 +863,22 @@
     "@jridgewell/resolve-uri" "^3.1.0"
     "@jridgewell/sourcemap-codec" "^1.4.14"
 
-"@jup-ag/api@^6.0.1", "@jup-ag/api@^6.0.24":
+"@jup-ag/api@^6.0.24":
   version "6.0.24"
   resolved "https://registry.yarnpkg.com/@jup-ag/api/-/api-6.0.24.tgz#c311ea05c7b18a6372471c48e6508b68ad79271c"
   integrity sha512-zIX4WIPb0Kb2UnK2wNIOQBWqPJyMJq/D9dQTf/2qvPb0hfa8XdgbrQAzomHMHnAzw9StMQoybBk+JK/A76xP3w==
 
-"@kamino-finance/klend-sdk@^2.13.0":
-  version "2.13.10"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/klend-sdk/-/klend-sdk-2.13.10.tgz#ab1a702914756e6fb1e2bfead36b7512bc688548"
-  integrity sha512-Sg2CQHEUEdSVV0l8qnHtx/67Os9dunYP5uu9vwLx4/4XvQXJsfTvqmzDE75temOb3rJbOWekwtg5Wkz8FLtEEw==
+"@kamino-finance/klend-sdk@^3.1.0":
+  version "3.1.0"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/klend-sdk/-/klend-sdk-3.1.0.tgz#8a9d9f82583bfac055e63516919fbf8fdeed17be"
+  integrity sha512-OlLcGO/fJEol3cdQWW4An2tKhkMsOmC0HXsHcs9kPiMl66gxwEnK/wkfogWli+jT9KZAYAs0iT0FHyFXV2cKEw==
   dependencies:
     "@bokuweb/zstd-wasm" "^0.0.20"
     "@coral-xyz/anchor" "^0.28.0"
     "@coral-xyz/borsh" "^0.28.0"
     "@hubbleprotocol/farms-sdk" "^0.5.0"
-    "@hubbleprotocol/kamino-sdk" "^5.2.0"
     "@hubbleprotocol/scope-sdk" "^5.0.20"
+    "@kamino-finance/kliquidity-sdk" "^6.1.0"
     "@pythnetwork/client" "^2.5.1"
     "@solana/buffer-layout" "^4.0.0"
     "@solana/spl-token" "^0.3.11"
@@ -1637,7 +1611,7 @@
   resolved "https://registry.yarnpkg.com/@types/json5/-/json5-0.0.29.tgz#ee28707ae94e11d2b827bcbe5270bcea7f3e71ee"
   integrity sha512-dRLjCWHYg4oaA77cxO64oO+7JwCwnIzkZPdrrC71jQmQtlhM556pwKo5bUzqvZndkVbeFLIIi+9TC40JNF5hNQ==
 
-"@types/mocha@^10.0.1", "@types/mocha@^10.0.6":
+"@types/mocha@^10.0.6":
   version "10.0.7"
   resolved "https://registry.yarnpkg.com/@types/mocha/-/mocha-10.0.7.tgz#4c620090f28ca7f905a94b706f74dc5b57b44f2f"
   integrity sha512-GN8yJ1mNTcFcah/wKEFIJckJx9iJLoMSzWcfRRuxz/Jk+U6KQNnml+etbtxFK8lPjzOw3zp4Ha/kjSst9fsHYw==
