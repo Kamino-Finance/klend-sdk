@@ -1744,7 +1744,7 @@ export class KaminoAction {
       }
       this.addRefreshReserveIxs(currentReserveAddresses.toArray(), addAsSupportIx);
 
-      if (action === 'repayAndWithdraw' && !addAsSupportIx && isClosingPosition) {
+      if (action === 'repayAndWithdraw' && addAsSupportIx === 'inBetween' && isClosingPosition) {
         // addToSetupIxs === addInBetween (same thing)
         // If this is a repay and withdraw, and it's not the first action, and it's closing a position
         // we don't need to include the repay reserve in the refresh obligation
@@ -1754,7 +1754,7 @@ export class KaminoAction {
         this.addRefreshObligationIx(addAsSupportIx, false);
       }
 
-      if (addAsSupportIx) {
+      if (addAsSupportIx === 'setup') {
         // If this is an setup ixn (therefore not an in-between), it means it's either a one off action
         // or the first of a two-token-action
         if (action === 'liquidate') {
