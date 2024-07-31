@@ -34,7 +34,7 @@ import { Env } from './setup_utils';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { ElevationGroupFields, ReserveConfig } from '../src/idl_codegen/types';
 import { BN } from '@coral-xyz/anchor';
-import { createAddExtraComputeUnitsIx } from '@hubbleprotocol/kamino-sdk';
+import { createAddExtraComputeUnitsIx } from '@kamino-finance/kliquidity-sdk';
 
 export async function createMarket(env: Env): Promise<[TransactionSignature, Keypair]> {
   const args: InitLendingMarketArgs = {

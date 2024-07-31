@@ -1,7 +1,7 @@
 import { Keypair, PublicKey } from '@solana/web3.js';
 import Decimal from 'decimal.js';
 import { Env, createLookupTable, getLocalSwapIxs } from './setup_utils';
-import { Kamino } from '@hubbleprotocol/kamino-sdk';
+import { Kamino } from '@kamino-finance/kliquidity-sdk';
 import { MultiplyObligation, ObligationTypeTag } from '../src/utils/ObligationType';
 import { isKToken } from './kamino/utils';
 import {

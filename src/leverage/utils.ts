@@ -1,4 +1,4 @@
-import { Kamino, StrategyWithAddress } from '@hubbleprotocol/kamino-sdk';
+import { Kamino, StrategyWithAddress } from '@kamino-finance/kliquidity-sdk';
 import { KaminoMarket, KaminoReserve, lamportsToNumberDecimal } from '../classes';
 import { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
 import { PriceAinBProvider, SwapIxnsProvider } from './operations';

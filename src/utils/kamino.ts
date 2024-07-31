@@ -1,4 +1,4 @@
-import { Kamino } from '@hubbleprotocol/kamino-sdk';
+import { Kamino } from '@kamino-finance/kliquidity-sdk';
 import { getMint } from '@solana/spl-token';
 import { PublicKey } from '@solana/web3.js';
 

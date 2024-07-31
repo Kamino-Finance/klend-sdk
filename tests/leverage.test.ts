@@ -28,7 +28,7 @@ import { assertSwapInputsMatch } from './assert';
 import { lamportsToNumberDecimal } from '../src/classes/utils';
 import { updateReserveSingleValue } from './setup_operations';
 import { UpdateConfigMode } from '../src/idl_codegen/types';
-import { collToLamportsDecimal } from '@hubbleprotocol/kamino-sdk';
+import { collToLamportsDecimal } from '@kamino-finance/kliquidity-sdk';
 import { fuzzyEq } from '../src/leverage/calcs';
 
 // TODO: test with sol and wrapped sol

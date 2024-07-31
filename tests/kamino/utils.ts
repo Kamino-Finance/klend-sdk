@@ -4,8 +4,8 @@ import * as anchor from '@coral-xyz/anchor';
 import {
   StrategyConfigOptionKind,
   UpdateCollateralInfoModeKind,
-} from '@hubbleprotocol/kamino-sdk/dist/kamino-client/types';
-import * as KaminoInstructions from '@hubbleprotocol/kamino-sdk/dist/kamino-client/instructions';
+} from '@kamino-finance/kliquidity-sdk/dist/kamino-client/types';
+import * as KaminoInstructions from '@kamino-finance/kliquidity-sdk/dist/kamino-client/instructions';
 import { getMint } from '@solana/spl-token';
 
 import Decimal from 'decimal.js';
@@ -13,8 +13,13 @@ import {
   CollateralInfos,
   GlobalConfig,
   WhirlpoolStrategy,
-} from '@hubbleprotocol/kamino-sdk/dist/kamino-client/accounts';
-import { Dex, getUpdateStrategyConfigIx, sendTransactionWithLogs, TOKEN_PROGRAM_ID } from '@hubbleprotocol/kamino-sdk';
+} from '@kamino-finance/kliquidity-sdk/dist/kamino-client/accounts';
+import {
+  Dex,
+  getUpdateStrategyConfigIx,
+  sendTransactionWithLogs,
+  TOKEN_PROGRAM_ID,
+} from '@kamino-finance/kliquidity-sdk';
 import { U16_MAX } from '@hubbleprotocol/scope-sdk';
 import { CollateralToken, collateralTokenToNumber } from './token-utils';
 import { Env } from '../setup_utils';

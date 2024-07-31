@@ -29,7 +29,7 @@ import { PROGRAM_ID } from '../idl_codegen/programId';
 import bs58 from 'bs58';
 import { OraclePrices, Scope } from '@hubbleprotocol/scope-sdk';
 import { Fraction } from './fraction';
-import { chunks, KaminoPrices, MintToPriceMap } from '@hubbleprotocol/kamino-sdk';
+import { chunks, KaminoPrices, MintToPriceMap } from '@kamino-finance/kliquidity-sdk';
 import { parseTokenSymbol } from './utils';
 import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
 import { ObligationZP } from '../idl_codegen/zero_padding';

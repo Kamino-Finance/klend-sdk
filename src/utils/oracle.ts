@@ -7,7 +7,7 @@ import { isNotNullPubkey, PubkeyHashMap, PublicKeySet } from './pubkey';
 import { parseTokenSymbol } from '../classes';
 import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
 import { Reserve } from '../lib';
-import { batchFetch } from '@hubbleprotocol/kamino-sdk';
+import { batchFetch } from '@kamino-finance/kliquidity-sdk';
 import BN from 'bn.js';
 
 const SWITCHBOARD_V2_PROGRAM_ID = new PublicKey('SW1TCH7qEPTdLsDHRgPuMQjbQxKdH2aBStViMFnt64f');
