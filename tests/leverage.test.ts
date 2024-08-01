@@ -1998,7 +1998,8 @@ describe('Leverage SDK tests', function () {
     const maxBorrowableNoObligaton = await kaminoMarket.getMaxLeverageBorrowableAmount(
       kaminoMarket.getReserveBySymbol(collToken)!,
       kaminoMarket.getReserveBySymbol(debtToken)!,
-      await env.provider.connection.getSlot()
+      await env.provider.connection.getSlot(),
+      false
     );
     console.log('Max borrowable no obligation ===', maxBorrowableNoObligaton);
     assert.ok(
@@ -2032,6 +2033,7 @@ describe('Leverage SDK tests', function () {
       kaminoMarket.getReserveBySymbol(collToken)!,
       kaminoMarket.getReserveBySymbol(debtToken)!,
       await env.provider.connection.getSlot(),
+      false,
       obligation
     );
 

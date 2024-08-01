@@ -876,15 +876,17 @@ export class KaminoObligation {
       (item) => item !== 0 && groups[item - 1].debtReserve.equals(reserve.address)
     );
 
-    const eModeGroupWithMaxLtvAndDebtReserve = commonElevationGroups.reduce((prev, curr) => {
-      const prevGroup = groups.find((group) => group.id === prev);
-      const currGroup = groups.find((group) => group.id === curr);
-      return prevGroup!.ltvPct > currGroup!.ltvPct ? prev : curr;
-    });
     let elevationGroup = this.state.elevationGroup;
+    if (commonElevationGroups.length != 0) {
+      const eModeGroupWithMaxLtvAndDebtReserve = commonElevationGroups.reduce((prev, curr) => {
+        const prevGroup = groups.find((group) => group.id === prev);
+        const currGroup = groups.find((group) => group.id === curr);
+        return prevGroup!.ltvPct > currGroup!.ltvPct ? prev : curr;
+      });
 
-    if (requestElevationGroup) {
-      elevationGroup = eModeGroupWithMaxLtvAndDebtReserve;
+      if (requestElevationGroup) {
+        elevationGroup = eModeGroupWithMaxLtvAndDebtReserve;
+      }
     }
 
     const elevationGroupActivated =
