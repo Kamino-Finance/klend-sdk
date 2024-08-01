@@ -858,7 +858,12 @@ export class KaminoObligation {
     };
   }
 
-  getMaxBorrowAmount(market: KaminoMarket, tokenMint: PublicKey, slot: number): Decimal {
+  getMaxBorrowAmount(
+    market: KaminoMarket,
+    tokenMint: PublicKey,
+    slot: number,
+    elevationGroup: number = this.state.elevationGroup
+  ): Decimal {
     const reserve = market.getReserveByMint(tokenMint);
 
     if (!reserve) {
@@ -866,7 +871,7 @@ export class KaminoObligation {
     }
 
     const elevationGroupActivated =
-      reserve.state.config.elevationGroups.includes(this.state.elevationGroup) && this.state.elevationGroup !== 0;
+      reserve.state.config.elevationGroups.includes(elevationGroup) && elevationGroup !== 0;
 
     const reserveBorrowFactor = reserve.getBorrowFactor();
     const borrowFactor = elevationGroupActivated ? new Decimal(1) : reserveBorrowFactor;
@@ -932,8 +937,8 @@ export class KaminoObligation {
         }
 
         const maxDebtAllowedAgainstCollateral = depositReserve
-          .getBorrowLimitAgainstCollateralInElevationGroup(this.state.elevationGroup - 1)
-          .sub(depositReserve.getBorrowedAmountAgainstCollateralInElevationGroup(this.state.elevationGroup - 1));
+          .getBorrowLimitAgainstCollateralInElevationGroup(elevationGroup - 1)
+          .sub(depositReserve.getBorrowedAmountAgainstCollateralInElevationGroup(elevationGroup - 1));
 
         maxDebtTakenAgainstCollaterals = Decimal.max(
           new Decimal(0),
