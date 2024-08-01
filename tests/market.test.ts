@@ -377,43 +377,43 @@ describe('Main lending market instruction tests', function () {
 
     const prevStats = obligation!.refreshedStats;
 
-    const { stats: newStatsPostDeposit } = obligation!.getSimulatedObligationStats(
-      new Decimal(500),
-      'deposit',
-      WRAPPED_SOL_MINT,
-      kaminoMarket,
-      kaminoMarket.reserves
-    );
+    const { stats: newStatsPostDeposit } = obligation!.getSimulatedObligationStats({
+      amountCollateral: new Decimal(500),
+      action: 'deposit',
+      mint: WRAPPED_SOL_MINT,
+      market: kaminoMarket,
+      reserves: kaminoMarket.reserves,
+    });
 
     assert.ok(newStatsPostDeposit.loanToValue < prevStats.loanToValue);
 
-    const { stats: newStatsPostWithdraw } = obligation!.getSimulatedObligationStats(
-      new Decimal(500),
-      'withdraw',
-      WRAPPED_SOL_MINT,
-      kaminoMarket,
-      kaminoMarket.reserves
-    );
+    const { stats: newStatsPostWithdraw } = obligation!.getSimulatedObligationStats({
+      amountCollateral: new Decimal(500),
+      action: 'withdraw',
+      mint: WRAPPED_SOL_MINT,
+      market: kaminoMarket,
+      reserves: kaminoMarket.reserves,
+    });
 
     assert.ok(newStatsPostWithdraw.loanToValue > prevStats.loanToValue);
 
-    const { stats: newStatsPostBorrow } = obligation!.getSimulatedObligationStats(
-      new Decimal(500),
-      'borrow',
-      usdh,
-      kaminoMarket,
-      kaminoMarket.reserves
-    );
+    const { stats: newStatsPostBorrow } = obligation!.getSimulatedObligationStats({
+      amountDebt: new Decimal(500),
+      action: 'borrow',
+      mint: usdh,
+      market: kaminoMarket,
+      reserves: kaminoMarket.reserves,
+    });
 
     assert.ok(newStatsPostBorrow.loanToValue > prevStats.loanToValue);
 
-    const { stats: newStatsPostRepay } = obligation!.getSimulatedObligationStats(
-      new Decimal(500),
-      'repay',
-      usdh,
-      kaminoMarket,
-      kaminoMarket.reserves
-    );
+    const { stats: newStatsPostRepay } = obligation!.getSimulatedObligationStats({
+      amountDebt: new Decimal(500),
+      action: 'repay',
+      mint: usdh,
+      market: kaminoMarket,
+      reserves: kaminoMarket.reserves,
+    });
 
     assert.ok(newStatsPostRepay.loanToValue < prevStats.loanToValue);
   });
