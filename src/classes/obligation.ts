@@ -862,12 +862,29 @@ export class KaminoObligation {
     market: KaminoMarket,
     tokenMint: PublicKey,
     slot: number,
-    elevationGroup: number = this.state.elevationGroup
+    requestElevationGroup: boolean
   ): Decimal {
     const reserve = market.getReserveByMint(tokenMint);
 
     if (!reserve) {
       throw new Error('Reserve not found');
+    }
+
+    const groups = market.state.elevationGroups;
+    const emodeGroupsDebtReserve = reserve.state.config.elevationGroups;
+    const commonElevationGroups = [...emodeGroupsDebtReserve].filter(
+      (item) => item !== 0 && groups[item - 1].debtReserve.equals(reserve.address)
+    );
+
+    const eModeGroupWithMaxLtvAndDebtReserve = commonElevationGroups.reduce((prev, curr) => {
+      const prevGroup = groups.find((group) => group.id === prev);
+      const currGroup = groups.find((group) => group.id === curr);
+      return prevGroup!.ltvPct > currGroup!.ltvPct ? prev : curr;
+    });
+    let elevationGroup = this.state.elevationGroup;
+
+    if (requestElevationGroup) {
+      elevationGroup = eModeGroupWithMaxLtvAndDebtReserve;
     }
 
     const elevationGroupActivated =

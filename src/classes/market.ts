@@ -332,10 +332,11 @@ export class KaminoMarket {
     collReserve: KaminoReserve,
     debtReserve: KaminoReserve,
     slot: number,
+    requestElevationGroup: boolean,
     obligation?: KaminoObligation
   ): Promise<Decimal> {
     return obligation
-      ? obligation.getMaxBorrowAmount(this, debtReserve.getLiquidityMint(), slot)
+      ? obligation.getMaxBorrowAmount(this, debtReserve.getLiquidityMint(), slot, requestElevationGroup)
       : debtReserve.getMaxBorrowAmountWithCollReserve(this, collReserve, slot);
   }
 
