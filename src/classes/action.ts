@@ -1754,49 +1754,6 @@ export class KaminoAction {
         this.addRefreshObligationIx(addAsSupportIx, false);
       }
 
-      if (addAsSupportIx === 'setup') {
-        // If this is an setup ixn (therefore not an in-between), it means it's either a one off action
-        // or the first of a two-token-action
-        if (action === 'liquidate') {
-          this.addRefreshFarmsForReserve([this.outflowReserve!], addAsSupportIx, ReserveFarmKind.Collateral);
-          this.addRefreshFarmsForReserve([this.reserve], addAsSupportIx, ReserveFarmKind.Debt);
-        } else if (
-          action === 'depositAndBorrow' ||
-          action === 'depositCollateral' ||
-          action === 'withdraw' ||
-          action === 'deposit'
-        ) {
-          this.addRefreshFarmsForReserve(
-            currentReserves,
-            addAsSupportIx,
-            ReserveFarmKind.Collateral,
-            undefined,
-            twoTokenAction
-          );
-        } else if (action === 'repayAndWithdraw' || action === 'borrow' || action === 'repay') {
-          this.addRefreshFarmsForReserve(
-            currentReserves,
-            addAsSupportIx,
-            ReserveFarmKind.Debt,
-            undefined,
-            twoTokenAction
-          );
-        } else {
-          throw new Error(`Could not decide on refresh farm for action ${action}`);
-        }
-      } else {
-        // If this is an inbetween, it means it's part of a two-token-action
-        // so we skip the refresh farm obligation of the first reserve as that operation already happened
-        // add added to 'setup' ixns
-        if (action === 'depositAndBorrow') {
-          this.addRefreshFarmsForReserve([this.outflowReserve!], addAsSupportIx, ReserveFarmKind.Debt);
-        } else if (action === 'repayAndWithdraw') {
-          this.addRefreshFarmsForReserve([this.outflowReserve!], addAsSupportIx, ReserveFarmKind.Collateral);
-        } else {
-          throw new Error(`Could not decide on refresh farm for action ${action}`);
-        }
-      }
-
       if (action === 'repay' && requestElevationGroup) {
         const repayObligationLiquidity = this.obligation!.borrows.get(this.reserve.address);
 
@@ -1867,6 +1824,49 @@ export class KaminoAction {
             this.addRefreshReserveIxs(currentReserveAddresses.toArray(), addAsSupportIx);
             this.addRefreshObligationIx(addAsSupportIx);
           }
+        }
+      }
+
+      if (addAsSupportIx === 'setup') {
+        // If this is an setup ixn (therefore not an in-between), it means it's either a one off action
+        // or the first of a two-token-action
+        if (action === 'liquidate') {
+          this.addRefreshFarmsForReserve([this.outflowReserve!], addAsSupportIx, ReserveFarmKind.Collateral);
+          this.addRefreshFarmsForReserve([this.reserve], addAsSupportIx, ReserveFarmKind.Debt);
+        } else if (
+          action === 'depositAndBorrow' ||
+          action === 'depositCollateral' ||
+          action === 'withdraw' ||
+          action === 'deposit'
+        ) {
+          this.addRefreshFarmsForReserve(
+            currentReserves,
+            addAsSupportIx,
+            ReserveFarmKind.Collateral,
+            undefined,
+            twoTokenAction
+          );
+        } else if (action === 'repayAndWithdraw' || action === 'borrow' || action === 'repay') {
+          this.addRefreshFarmsForReserve(
+            currentReserves,
+            addAsSupportIx,
+            ReserveFarmKind.Debt,
+            undefined,
+            twoTokenAction
+          );
+        } else {
+          throw new Error(`Could not decide on refresh farm for action ${action}`);
+        }
+      } else {
+        // If this is an inbetween, it means it's part of a two-token-action
+        // so we skip the refresh farm obligation of the first reserve as that operation already happened
+        // add added to 'setup' ixns
+        if (action === 'depositAndBorrow') {
+          this.addRefreshFarmsForReserve([this.outflowReserve!], addAsSupportIx, ReserveFarmKind.Debt);
+        } else if (action === 'repayAndWithdraw') {
+          this.addRefreshFarmsForReserve([this.outflowReserve!], addAsSupportIx, ReserveFarmKind.Collateral);
+        } else {
+          throw new Error(`Could not decide on refresh farm for action ${action}`);
         }
       }
     }
