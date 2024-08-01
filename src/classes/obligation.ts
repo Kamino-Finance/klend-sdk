@@ -477,27 +477,32 @@ export class KaminoObligation {
    */
   // TODO: Elevation group problems
   // TODO: Shall we set up position limits?
-  getSimulatedObligationStats(
-    amount: Decimal,
-    action: ActionType,
-    mint: PublicKey,
-    market: KaminoMarket,
-    reserves: Map<PublicKey, KaminoReserve>
-  ): {
+  getSimulatedObligationStats(params: {
+    amountCollateral?: Decimal;
+    amountDebt?: Decimal;
+    action: ActionType;
+    mint: PublicKey;
+    market: KaminoMarket;
+    reserves: Map<PublicKey, KaminoReserve>;
+  }): {
     stats: ObligationStats;
     deposits: Map<PublicKey, Position>;
     borrows: Map<PublicKey, Position>;
   } {
+    const { amountCollateral, amountDebt, action, mint, market, reserves } = params;
     let newStats = { ...this.refreshedStats };
     let newDeposits: Map<PublicKey, Position> = new PubkeyHashMap<PublicKey, Position>([...this.deposits.entries()]);
     let newBorrows: Map<PublicKey, Position> = new PubkeyHashMap<PublicKey, Position>([...this.borrows.entries()]);
 
     switch (action) {
       case 'deposit': {
+        if (amountCollateral === undefined) {
+          throw Error('amountColl is required for deposit action');
+        }
         const { stats, deposits } = this.calculateSimulatedDeposit(
           this.refreshedStats,
           this.deposits,
-          amount,
+          amountCollateral,
           mint,
           reserves,
           market
@@ -509,10 +514,13 @@ export class KaminoObligation {
         break;
       }
       case 'borrow': {
+        if (amountDebt === undefined) {
+          throw Error('amountDebt is required for borrow action');
+        }
         const { stats, borrows } = this.calculateSimulatedBorrow(
           this.refreshedStats,
           this.borrows,
-          amount,
+          amountDebt,
           mint,
           reserves
         );
@@ -521,10 +529,13 @@ export class KaminoObligation {
         break;
       }
       case 'repay': {
+        if (amountDebt === undefined) {
+          throw Error('amountDebt is required for repay action');
+        }
         const { stats, borrows } = this.calculateSimulatedBorrow(
           this.refreshedStats,
           this.borrows,
-          new Decimal(amount).neg(),
+          new Decimal(amountDebt).neg(),
           mint,
           reserves
         );
@@ -534,10 +545,13 @@ export class KaminoObligation {
       }
 
       case 'withdraw': {
+        if (amountCollateral === undefined) {
+          throw Error('amountColl is required for withdraw action');
+        }
         const { stats, deposits } = this.calculateSimulatedDeposit(
           this.refreshedStats,
           this.deposits,
-          new Decimal(amount).neg(),
+          new Decimal(amountCollateral).neg(),
           mint,
           reserves,
           market
@@ -547,10 +561,13 @@ export class KaminoObligation {
         break;
       }
       case 'depositAndBorrow': {
+        if (amountCollateral === undefined || amountDebt === undefined) {
+          throw Error('amountColl and amountDebt are required for depositAndBorrow action');
+        }
         const { stats: statsAfterDeposit, deposits } = this.calculateSimulatedDeposit(
           this.refreshedStats,
           this.deposits,
-          amount,
+          amountCollateral,
           mint,
           reserves,
           market
@@ -558,7 +575,7 @@ export class KaminoObligation {
         const { stats, borrows } = this.calculateSimulatedBorrow(
           statsAfterDeposit,
           this.borrows,
-          amount,
+          amountDebt,
           mint,
           reserves
         );
@@ -569,17 +586,20 @@ export class KaminoObligation {
         break;
       }
       case 'repayAndWithdraw': {
+        if (amountCollateral === undefined || amountDebt === undefined) {
+          throw Error('amountColl and amountDebt are required for repayAndWithdraw action');
+        }
         const { stats: statsAfterRepay, borrows } = this.calculateSimulatedBorrow(
           this.refreshedStats,
           this.borrows,
-          new Decimal(amount).neg(),
+          new Decimal(amountDebt).neg(),
           mint,
           reserves
         );
         const { stats: statsAfterWithdraw, deposits } = this.calculateSimulatedDeposit(
           statsAfterRepay,
           this.deposits,
-          amount,
+          new Decimal(amountCollateral).neg(),
           mint,
           reserves,
           market
