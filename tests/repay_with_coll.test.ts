@@ -6,7 +6,7 @@ import {
   makeReserveConfigWithBorrowFeeAndTakeRate,
   newUser,
 } from './setup_utils';
-import { VanillaObligation, getRepayWithCollSwapInputs, sleep } from '../src';
+import { U64_MAX, VanillaObligation, getRepayWithCollSwapInputs, sleep } from '../src';
 import { repayWithCollTestAdapter } from './repay_with_coll_utils';
 import { Keypair, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { getPriceMock } from './leverage_utils';
@@ -14,7 +14,9 @@ import { assert } from 'chai';
 import { assertFuzzyEq, assertSwapInputsMatch } from './assert';
 import { Fraction } from '../src/classes/fraction';
 import { lamportsToNumberDecimal } from '../src/classes/utils';
-import { updateMarketReferralFeeBps, updateReserve } from './setup_operations';
+import { updateMarketReferralFeeBps, updateReserve, updateReserveSingleValue } from './setup_operations';
+import { UpdateConfigMode } from '../src/idl_codegen/types';
+import { initializeFarmsForReserve } from './farms_operations';
 
 describe('Repay with collateral SDK tests', function () {
   it('repay_with_coll_partial_non_sol', async function () {
@@ -613,6 +615,101 @@ describe('Repay with collateral SDK tests', function () {
     );
 
     assert(obligationAfter.loanToValue().equals(0));
+  });
+
+  it('repay_with_coll_full_sol_coll_elevation_group', async function () {
+    const [collToken, debtToken] = ['SOL', 'USDC'];
+    const amountToDeposit = new Decimal(2.5);
+    const amountToBorrow = new Decimal(15);
+    const amountToRepay = amountToBorrow;
+    const slippagePct = 0.5;
+
+    console.log('Setting up market ===');
+    const { env, kaminoMarket } = await createMarketWithTwoReservesToppedUp(
+      [collToken, new Decimal(1000.05)],
+      [debtToken, new Decimal(1000.05)],
+      true
+    );
+
+    const collReserve = kaminoMarket.getReserveBySymbol(collToken)!;
+    const debtReserve = kaminoMarket.getReserveBySymbol(debtToken)!;
+
+    await initializeFarmsForReserve(
+      env,
+      new PublicKey(kaminoMarket.address),
+      collReserve.address,
+      'Collateral',
+      false,
+      false
+    );
+    await initializeFarmsForReserve(
+      env,
+      new PublicKey(kaminoMarket.address),
+      debtReserve.address,
+      'Debt',
+      false,
+      false
+    );
+
+    const collTokenMint = collReserve.getLiquidityMint();
+    const debtTokenMint = debtReserve.getLiquidityMint();
+
+    console.log('Creating user ===');
+    const borrower = await newUser(env, kaminoMarket, [
+      [collToken, new Decimal(10)],
+      [debtToken, new Decimal(10)],
+    ]);
+
+    console.log('Depositing coll ===');
+    await sleep(1000);
+    await deposit(env, kaminoMarket, borrower, collToken, amountToDeposit);
+
+    const buffer = Buffer.alloc(8 * 32);
+    buffer.writeBigUint64LE(BigInt(U64_MAX), 0);
+
+    await updateReserveSingleValue(
+      env,
+      collReserve!,
+      buffer,
+      UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.discriminator + 1 // discriminator + 1 matches the enum
+    );
+
+    console.log('Borrowing debt ===');
+    await sleep(1000);
+    await borrow(env, kaminoMarket, borrower, debtToken, amountToBorrow, true);
+
+    console.log('Repaying with collateral ===');
+
+    await sleep(2000);
+
+    const obligationBefore = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))[0];
+
+    assert(obligationBefore.state.elevationGroup === 1);
+
+    const repayWithCollTxRes = await repayWithCollTestAdapter(
+      env,
+      borrower,
+      kaminoMarket,
+      amountToRepay.plus(1),
+      debtTokenMint,
+      collTokenMint,
+      false,
+      slippagePct,
+      obligationBefore,
+      (a: PublicKey, b: PublicKey) => getPriceMock(kaminoMarket, a, b),
+      PublicKey.default
+    );
+
+    console.log('Repay with Coll txn:', repayWithCollTxRes);
+
+    await sleep(2000);
+
+    await kaminoMarket.reload();
+
+    const obligationAfter = (await kaminoMarket.getUserObligationsByTag(VanillaObligation.tag, borrower.publicKey))[0];
+
+    assert(obligationAfter.loanToValue().equals(0));
+    assert(obligationAfter.state.elevationGroup === 0);
   });
 
   it('repay_with_coll_with_referrer_full_sol_coll', async function () {
