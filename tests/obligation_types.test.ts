@@ -44,9 +44,9 @@ describe('Obligation types tests', function () {
     await deposit(env, kaminoMarket, alice, 'MSOL', new Decimal(30), multiply);
     await deposit(env, kaminoMarket, alice, 'MSOL', new Decimal(31), leverage);
 
-    await borrow(env, kaminoMarket, alice, 'USDC', new Decimal(5), vanilla);
-    await borrow(env, kaminoMarket, alice, 'USDC', new Decimal(5), multiply);
-    await borrow(env, kaminoMarket, alice, 'USDC', new Decimal(6), leverage);
+    await borrow(env, kaminoMarket, alice, 'USDC', new Decimal(5), false, vanilla);
+    await borrow(env, kaminoMarket, alice, 'USDC', new Decimal(5), false, multiply);
+    await borrow(env, kaminoMarket, alice, 'USDC', new Decimal(6), false, leverage);
 
     // Bob
     await deposit(env, kaminoMarket, bob, 'MSOL', new Decimal(11), vanilla);
@@ -54,9 +54,9 @@ describe('Obligation types tests', function () {
     await deposit(env, kaminoMarket, bob, 'MSOL', new Decimal(32), multiply);
     await deposit(env, kaminoMarket, bob, 'MSOL', new Decimal(33), leverage);
 
-    await borrow(env, kaminoMarket, bob, 'USDC', new Decimal(5), vanilla);
-    await borrow(env, kaminoMarket, bob, 'USDC', new Decimal(6), multiply);
-    await borrow(env, kaminoMarket, bob, 'USDC', new Decimal(7), leverage);
+    await borrow(env, kaminoMarket, bob, 'USDC', new Decimal(5), false, vanilla);
+    await borrow(env, kaminoMarket, bob, 'USDC', new Decimal(6), false, multiply);
+    await borrow(env, kaminoMarket, bob, 'USDC', new Decimal(7), false, leverage);
 
     await sleep(2000);
 

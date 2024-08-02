@@ -1285,7 +1285,7 @@ export async function createMintAndReserve(
       true,
       PublicKey.default,
       0,
-      env.testCase
+      { includeScopeRefresh: false, scopeFeed: env.testCase }
     );
     await sendTransactionsFromAction(env, depositAction, initialDepositor, [initialDepositor]);
   }
