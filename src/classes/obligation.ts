@@ -872,9 +872,21 @@ export class KaminoObligation {
 
     const groups = market.state.elevationGroups;
     const emodeGroupsDebtReserve = reserve.state.config.elevationGroups;
-    const commonElevationGroups = [...emodeGroupsDebtReserve].filter(
+    let commonElevationGroups = [...emodeGroupsDebtReserve].filter(
       (item) => item !== 0 && groups[item - 1].debtReserve.equals(reserve.address)
     );
+
+    for (const [_, value] of this.deposits.entries()) {
+      const depositReserve = market.getReserveByAddress(value.reserveAddress);
+
+      if (!depositReserve) {
+        throw new Error('Reserve not found');
+      }
+
+      const depositReserveEmodeGroups = depositReserve.state.config.elevationGroups;
+
+      commonElevationGroups = commonElevationGroups.filter((item) => depositReserveEmodeGroups.includes(item));
+    }
 
     let elevationGroup = this.state.elevationGroup;
     if (commonElevationGroups.length != 0) {
