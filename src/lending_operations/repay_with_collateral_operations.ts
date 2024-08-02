@@ -123,6 +123,7 @@ export const getRepayWithCollIxns = async (props: {
   swapper: SwapIxnsProvider;
   currentSlot: number;
   getTotalKlendAccountsOnly: boolean;
+  requestElevationGroup: boolean;
 }): Promise<{
   ixns: TransactionInstruction[];
   lookupTablesAddresses: PublicKey[];
@@ -145,6 +146,7 @@ export const getRepayWithCollIxns = async (props: {
     swapper,
     currentSlot,
     getTotalKlendAccountsOnly,
+    requestElevationGroup,
   } = props;
 
   const connection = kaminoMarket.getConnection();
@@ -218,7 +220,7 @@ export const getRepayWithCollIxns = async (props: {
     obligation,
     0,
     false,
-    undefined,
+    requestElevationGroup,
     undefined,
     isClosingPosition,
     referrer
