@@ -290,7 +290,6 @@ describe('init_and_refresh_farm_repay_tests', function () {
     const amountToDeposit = new Decimal(2.5);
     const amountToBorrow = new Decimal(15);
     const amountToRepay = amountToBorrow;
-    const slippagePct = 0.5;
 
     console.log('Setting up market ===');
     const { env, kaminoMarket } = await createMarketWithTwoReservesToppedUp(
@@ -304,9 +303,6 @@ describe('init_and_refresh_farm_repay_tests', function () {
 
     await initializeFarmsForReserve(env, kaminoMarket.getAddress(), collReserve.address, 'Collateral', false, false);
     await initializeFarmsForReserve(env, kaminoMarket.getAddress(), debtReserve.address, 'Debt', false, false);
-
-    const collTokenMint = collReserve.getLiquidityMint();
-    const debtTokenMint = debtReserve.getLiquidityMint();
 
     console.log('Creating user ===');
     const borrower = await newUser(env, kaminoMarket, [
