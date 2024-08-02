@@ -551,9 +551,9 @@ export class KaminoReserve {
       );
     } else {
       let maxDebtTakenAgainstCollaterals = new Decimal(U64_MAX);
-      const maxDebtAllowedAgainstCollateral = this.getBorrowLimitAgainstCollateralInElevationGroup(eModeGroup - 1).sub(
-        this.getBorrowedAmountAgainstCollateralInElevationGroup(eModeGroup - 1)
-      );
+      const maxDebtAllowedAgainstCollateral = collReserve
+        .getBorrowLimitAgainstCollateralInElevationGroup(eModeGroup - 1)
+        .sub(collReserve.getBorrowedAmountAgainstCollateralInElevationGroup(eModeGroup - 1));
 
       maxDebtTakenAgainstCollaterals = Decimal.max(
         new Decimal(0),
