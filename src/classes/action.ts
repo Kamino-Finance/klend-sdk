@@ -1763,7 +1763,8 @@ export class KaminoAction {
 
         if (
           new Decimal(repayObligationLiquidity.amount).lte(new Decimal(this.amount.toString())) &&
-          this.obligation!.borrows.size === 1
+          this.obligation!.borrows.size === 1 &&
+          this.obligation?.state.elevationGroup !== 0
         ) {
           this.addRefreshReserveIxs(allReservesExcludingCurrent, 'cleanup');
           // Skip the borrow reserve, since we repay in the same tx

@@ -123,7 +123,6 @@ export const getRepayWithCollIxns = async (props: {
   swapper: SwapIxnsProvider;
   currentSlot: number;
   getTotalKlendAccountsOnly: boolean;
-  requestElevationGroup: boolean;
 }): Promise<{
   ixns: TransactionInstruction[];
   lookupTablesAddresses: PublicKey[];
@@ -146,7 +145,6 @@ export const getRepayWithCollIxns = async (props: {
     swapper,
     currentSlot,
     getTotalKlendAccountsOnly,
-    requestElevationGroup,
   } = props;
 
   const connection = kaminoMarket.getConnection();
@@ -205,6 +203,8 @@ export const getRepayWithCollIxns = async (props: {
     referrerTokenState: kaminoMarket.programId,
     programId: kaminoMarket.programId,
   });
+
+  const requestElevationGroup = obligation.state.elevationGroup !== 0 ? true : false;
 
   // 2. Repay using the flash borrowed funds & withdraw collateral to swap and pay the flash loan
   const repayAndWithdrawAction = await KaminoAction.buildRepayAndWithdrawTxns(
