@@ -481,7 +481,8 @@ export class KaminoObligation {
     amountCollateral?: Decimal;
     amountDebt?: Decimal;
     action: ActionType;
-    mint: PublicKey;
+    mintCollateral?: PublicKey;
+    mintDebt?: PublicKey;
     market: KaminoMarket;
     reserves: Map<PublicKey, KaminoReserve>;
   }): {
@@ -489,21 +490,21 @@ export class KaminoObligation {
     deposits: Map<PublicKey, Position>;
     borrows: Map<PublicKey, Position>;
   } {
-    const { amountCollateral, amountDebt, action, mint, market, reserves } = params;
+    const { amountCollateral, amountDebt, action, mintCollateral, mintDebt, market, reserves } = params;
     let newStats = { ...this.refreshedStats };
     let newDeposits: Map<PublicKey, Position> = new PubkeyHashMap<PublicKey, Position>([...this.deposits.entries()]);
     let newBorrows: Map<PublicKey, Position> = new PubkeyHashMap<PublicKey, Position>([...this.borrows.entries()]);
 
     switch (action) {
       case 'deposit': {
-        if (amountCollateral === undefined) {
-          throw Error('amountColl is required for deposit action');
+        if (amountCollateral === undefined || mintCollateral === undefined) {
+          throw Error('amountCollateral & mintCollateral are required for deposit action');
         }
         const { stats, deposits } = this.calculateSimulatedDeposit(
           this.refreshedStats,
           this.deposits,
           amountCollateral,
-          mint,
+          mintCollateral,
           reserves,
           market
         );
@@ -514,14 +515,14 @@ export class KaminoObligation {
         break;
       }
       case 'borrow': {
-        if (amountDebt === undefined) {
-          throw Error('amountDebt is required for borrow action');
+        if (amountDebt === undefined || mintDebt === undefined) {
+          throw Error('amountDebt & mintDebt are required for borrow action');
         }
         const { stats, borrows } = this.calculateSimulatedBorrow(
           this.refreshedStats,
           this.borrows,
           amountDebt,
-          mint,
+          mintDebt,
           reserves
         );
         newStats = stats;
@@ -529,14 +530,14 @@ export class KaminoObligation {
         break;
       }
       case 'repay': {
-        if (amountDebt === undefined) {
-          throw Error('amountDebt is required for repay action');
+        if (amountDebt === undefined || mintDebt === undefined) {
+          throw Error('amountDebt & mintDebt are required for repay action');
         }
         const { stats, borrows } = this.calculateSimulatedBorrow(
           this.refreshedStats,
           this.borrows,
           new Decimal(amountDebt).neg(),
-          mint,
+          mintDebt,
           reserves
         );
         newStats = stats;
@@ -545,14 +546,14 @@ export class KaminoObligation {
       }
 
       case 'withdraw': {
-        if (amountCollateral === undefined) {
-          throw Error('amountColl is required for withdraw action');
+        if (amountCollateral === undefined || mintCollateral === undefined) {
+          throw Error('amountCollateral & mintCollateral are required for withdraw action');
         }
         const { stats, deposits } = this.calculateSimulatedDeposit(
           this.refreshedStats,
           this.deposits,
           new Decimal(amountCollateral).neg(),
-          mint,
+          mintCollateral,
           reserves,
           market
         );
@@ -561,14 +562,19 @@ export class KaminoObligation {
         break;
       }
       case 'depositAndBorrow': {
-        if (amountCollateral === undefined || amountDebt === undefined) {
-          throw Error('amountColl and amountDebt are required for depositAndBorrow action');
+        if (
+          amountCollateral === undefined ||
+          amountDebt === undefined ||
+          mintCollateral === undefined ||
+          mintDebt === undefined
+        ) {
+          throw Error('amountColl & amountDebt & mintCollateral & mintDebt are required for depositAndBorrow action');
         }
         const { stats: statsAfterDeposit, deposits } = this.calculateSimulatedDeposit(
           this.refreshedStats,
           this.deposits,
           amountCollateral,
-          mint,
+          mintCollateral,
           reserves,
           market
         );
@@ -576,7 +582,7 @@ export class KaminoObligation {
           statsAfterDeposit,
           this.borrows,
           amountDebt,
-          mint,
+          mintDebt,
           reserves
         );
 
@@ -586,21 +592,26 @@ export class KaminoObligation {
         break;
       }
       case 'repayAndWithdraw': {
-        if (amountCollateral === undefined || amountDebt === undefined) {
-          throw Error('amountColl and amountDebt are required for repayAndWithdraw action');
+        if (
+          amountCollateral === undefined ||
+          amountDebt === undefined ||
+          mintCollateral === undefined ||
+          mintDebt === undefined
+        ) {
+          throw Error('amountColl & amountDebt & mintCollateral & mintDebt are required for repayAndWithdraw action');
         }
         const { stats: statsAfterRepay, borrows } = this.calculateSimulatedBorrow(
           this.refreshedStats,
           this.borrows,
           new Decimal(amountDebt).neg(),
-          mint,
+          mintDebt,
           reserves
         );
         const { stats: statsAfterWithdraw, deposits } = this.calculateSimulatedDeposit(
           statsAfterRepay,
           this.deposits,
           new Decimal(amountCollateral).neg(),
-          mint,
+          mintCollateral,
           reserves,
           market
         );

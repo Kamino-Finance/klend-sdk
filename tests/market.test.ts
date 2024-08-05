@@ -380,7 +380,7 @@ describe('Main lending market instruction tests', function () {
     const { stats: newStatsPostDeposit } = obligation!.getSimulatedObligationStats({
       amountCollateral: new Decimal(500),
       action: 'deposit',
-      mint: WRAPPED_SOL_MINT,
+      mintCollateral: WRAPPED_SOL_MINT,
       market: kaminoMarket,
       reserves: kaminoMarket.reserves,
     });
@@ -390,7 +390,7 @@ describe('Main lending market instruction tests', function () {
     const { stats: newStatsPostWithdraw } = obligation!.getSimulatedObligationStats({
       amountCollateral: new Decimal(500),
       action: 'withdraw',
-      mint: WRAPPED_SOL_MINT,
+      mintCollateral: WRAPPED_SOL_MINT,
       market: kaminoMarket,
       reserves: kaminoMarket.reserves,
     });
@@ -400,7 +400,7 @@ describe('Main lending market instruction tests', function () {
     const { stats: newStatsPostBorrow } = obligation!.getSimulatedObligationStats({
       amountDebt: new Decimal(500),
       action: 'borrow',
-      mint: usdh,
+      mintDebt: usdh,
       market: kaminoMarket,
       reserves: kaminoMarket.reserves,
     });
@@ -410,7 +410,7 @@ describe('Main lending market instruction tests', function () {
     const { stats: newStatsPostRepay } = obligation!.getSimulatedObligationStats({
       amountDebt: new Decimal(500),
       action: 'repay',
-      mint: usdh,
+      mintDebt: usdh,
       market: kaminoMarket,
       reserves: kaminoMarket.reserves,
     });
