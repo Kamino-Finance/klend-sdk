@@ -533,15 +533,15 @@
   dependencies:
     "@hapi/hoek" "^9.0.0"
 
-"@hubbleprotocol/farms-sdk@^0.11.0", "@hubbleprotocol/farms-sdk@^0.5.0":
-  version "0.11.0"
-  resolved "https://registry.yarnpkg.com/@hubbleprotocol/farms-sdk/-/farms-sdk-0.11.0.tgz#5573475f0ba589520fe45f4b95fff8e467081d30"
-  integrity sha512-S1NBoLjopKqGZ03X6zblqR8c1jNPI5t6G+uRZIUT/EGMEmi0mnHgK/w4BOFUWhywOfN41KxsLXNVzXCqqhBbRw==
+"@hubbleprotocol/farms-sdk@^0.11.0", "@hubbleprotocol/farms-sdk@^1.0.0":
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/@hubbleprotocol/farms-sdk/-/farms-sdk-1.0.0.tgz#1ae5fdfad95b1df648c8f3683736ecbbafdab27b"
+  integrity sha512-SylxOGMeySuXn0cNHzbr7HvOHuPjWqordjCoGPaGUCuVYsNztR+2dzK/Opcbu1xouQ0Ja/hUo5fKc18+c6gYvA==
   dependencies:
     "@coral-xyz/anchor" "^0.28.0"
     "@coral-xyz/borsh" "^0.28.0"
     "@hubbleprotocol/scope-sdk" "^5.0.20"
-    "@kamino-finance/klend-sdk" "^3.1.0"
+    "@kamino-finance/klend-sdk" "^3.2.0"
     "@kamino-finance/kliquidity-sdk" "^6.1.0"
     "@project-serum/serum" "^0.13.61"
     "@solana/spl-token" "^0.1.8"
@@ -868,15 +868,15 @@
   resolved "https://registry.yarnpkg.com/@jup-ag/api/-/api-6.0.24.tgz#c311ea05c7b18a6372471c48e6508b68ad79271c"
   integrity sha512-zIX4WIPb0Kb2UnK2wNIOQBWqPJyMJq/D9dQTf/2qvPb0hfa8XdgbrQAzomHMHnAzw9StMQoybBk+JK/A76xP3w==
 
-"@kamino-finance/klend-sdk@^3.1.0":
-  version "3.1.0"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/klend-sdk/-/klend-sdk-3.1.0.tgz#8a9d9f82583bfac055e63516919fbf8fdeed17be"
-  integrity sha512-OlLcGO/fJEol3cdQWW4An2tKhkMsOmC0HXsHcs9kPiMl66gxwEnK/wkfogWli+jT9KZAYAs0iT0FHyFXV2cKEw==
+"@kamino-finance/klend-sdk@^3.2.0":
+  version "3.2.0"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/klend-sdk/-/klend-sdk-3.2.0.tgz#10c58632092ea0c31cdb0acb0d21067ffe7ecc82"
+  integrity sha512-7FVrDEdvgyEHeYaBLku7hNIOHg3ZkSakQxZPigRE//ArRLJx53b2eshMEHAraN3yppU/SYes1jRmEi2OmOVeew==
   dependencies:
     "@bokuweb/zstd-wasm" "^0.0.20"
     "@coral-xyz/anchor" "^0.28.0"
     "@coral-xyz/borsh" "^0.28.0"
-    "@hubbleprotocol/farms-sdk" "^0.5.0"
+    "@hubbleprotocol/farms-sdk" "^0.11.0"
     "@hubbleprotocol/scope-sdk" "^5.0.20"
     "@kamino-finance/kliquidity-sdk" "^6.1.0"
     "@pythnetwork/client" "^2.5.1"
