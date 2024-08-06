@@ -5,6 +5,13 @@ import { CDN_ENDPOINT, getApiEndpoint } from '../utils';
 import { IBackOffOptions, backOff } from 'exponential-backoff';
 import { PROGRAM_ID } from '../lib';
 
+/**
+ * Fetch config from the API
+ * A good place to start to find active klend markets without expensive RPC calls
+ *
+ * @param programId - The program id to retrieve config for
+ * @param source - CDN is a json file hosted in the cloud, API is a webserver
+ */
 export async function getMarketsFromApi(
   programId: PublicKey = PROGRAM_ID,
   source: 'API' | 'CDN' = 'CDN'
@@ -15,9 +22,8 @@ export async function getMarketsFromApi(
     configs = (await backOff(() => axios.get(CDN_ENDPOINT), KAMINO_CDN_RETRY)).data[programId.toString()] as ConfigType;
   }
 
-  const API_ENDPOINT = getApiEndpoint(programId);
-
   if (!configs || isEmptyObject(configs)) {
+    const API_ENDPOINT = getApiEndpoint(programId);
     configs = (await backOff(() => axios.get(API_ENDPOINT), KAMINO_API_RETRY)).data as ConfigType;
   }
 

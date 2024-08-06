@@ -8,6 +8,7 @@ export type MarketConfigType = {
   isPrimary: boolean;
   description: string;
   lendingMarket: string;
+  lookupTable: string;
 };
 
 export type ReserveConfigResponse = {
