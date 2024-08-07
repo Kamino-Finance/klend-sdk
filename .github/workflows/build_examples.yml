@@ -28,5 +28,6 @@ jobs:
       - name: Install and build
         run: |
           cd examples
+          ls -l
           yarn install --frozen-lockfile
           yarn run build
