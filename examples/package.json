@@ -1,0 +1,38 @@
+{
+  "name": "example-klend-sdk-client",
+  "description": "Example Typescript SDK client for interacting with the Kamino Lending (klend) protocol",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "author": "Kamino Finance",
+  "homepage": "https://kamino.finance",
+  "bugs": {
+    "url": "https://github.com/Kamino-Finance/klend-sdk/issues"
+  },
+  "license": "MIT",
+  "private": false,
+  "scripts": {
+    "loan-ltv": "ts-node example_loan_ltv.ts",
+    "loan-value": "ts-node example_loan_value.ts",
+    "user-loans": "ts-node example_user_loans.ts",
+    "market-reserves": "ts-node example_market_reserves.ts",
+    "reserve-apy": "ts-node example_reserve_apy.ts",
+    "reserve-reward-apy": "ts-node example_reserve_reward_apy.ts",
+    "reserve-apy-history": "ts-node example_reserve_apy_history.ts",
+    "reserve-caps": "ts-node example_reserve_caps.ts",
+    "reserve-supply-borrow": "ts-node example_reserve_supply_and_borrow.ts",
+    "build": "rm -rf dist/; tsc"
+  },
+  "dependencies": {
+    "@kamino-finance/klend-sdk": "^3.2.8",
+    "@solana/web3.js": "^1.95.2",
+    "axios": "^1.7.3"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.1",
+    "@types/node-fetch": "^2.6.11",
+    "@types/node": "^22.1.0",
+    "typescript": "^5.5.4",
+    "ts-node": "^10.9.2",
+    "prettier": "^3.3.3"
+  }
+}

@@ -19,5 +19,5 @@
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["tests", "src/client.ts", "dist", "node_modules"]
+  "exclude": ["tests", "src/client.ts", "dist", "node_modules", "examples"]
 }

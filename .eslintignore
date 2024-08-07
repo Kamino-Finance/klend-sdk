@@ -4,3 +4,4 @@ node_modules
 **/src/idl_codegen
 **/src/idl_codegen_jupiter_perps
 **/src/idl_codegen_kamino_vault
+examples
