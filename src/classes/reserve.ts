@@ -577,7 +577,7 @@ export class KaminoReserve {
     const slotAdjustmentFactor = this.slotAdjustmentFactor();
     const newUtilization = this.calcSimulatedUtilizationRatio(amount, action, slot, referralFeeBps, outflowAmount);
     const curve = truncateBorrowCurve(this.state.config.borrowRateCurve.points);
-    return getBorrowRate(newUtilization, curve) * slotAdjustmentFactor;
+    return getBorrowRate(newUtilization, curve) * slotAdjustmentFactor + this.getFixedHostInterestRate().toNumber();
   }
 
   calcSimulatedSupplyAPR(
