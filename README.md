@@ -1,2 +1,2 @@
 # klend-sdk
-🛠️ Kamino Lending TypeScript SDK
+🛠️ Kamino Lending TypeScript SDK 
