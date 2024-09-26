@@ -1,0 +1,8 @@
+dist/
+docs/
+node_modules/
+*.md
+**/idl_codegen
+src/idl.json
+test-ledger/
+deps/
