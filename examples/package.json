@@ -11,19 +11,19 @@
   "license": "MIT",
   "private": false,
   "scripts": {
-    "loan-ltv": "ts-node example_loan_ltv.ts",
-    "loan-value": "ts-node example_loan_value.ts",
-    "user-loans": "ts-node example_user_loans.ts",
-    "market-reserves": "ts-node example_market_reserves.ts",
-    "reserve-apy": "ts-node example_reserve_apy.ts",
-    "reserve-reward-apy": "ts-node example_reserve_reward_apy.ts",
-    "reserve-apy-history": "ts-node example_reserve_apy_history.ts",
-    "reserve-caps": "ts-node example_reserve_caps.ts",
-    "reserve-supply-borrow": "ts-node example_reserve_supply_and_borrow.ts",
-    "deposit-mint-ctokens": "ts-node example_deposit_mint_ctokens.ts",
-    "deposit-in-obligation": "ts-node example_deposit_in_obligation.ts",
-    "burn-ctokens-redeem": "ts-node example_burn_ctokens_redeem_tokens.ts",
-    "harvest-farm-reward": "ts-node example_harvest_reward.ts",
+    "loan-ltv": "tsx example_loan_ltv.ts",
+    "loan-value": "tsx example_loan_value.ts",
+    "user-loans": "tsx example_user_loans.ts",
+    "market-reserves": "tsx example_market_reserves.ts",
+    "reserve-apy": "tsx example_reserve_apy.ts",
+    "reserve-reward-apy": "tsx example_reserve_reward_apy.ts",
+    "reserve-apy-history": "tsx example_reserve_apy_history.ts",
+    "reserve-caps": "tsx example_reserve_caps.ts",
+    "reserve-supply-borrow": "tsx example_reserve_supply_and_borrow.ts",
+    "deposit-mint-ctokens": "tsx example_deposit_mint_ctokens.ts",
+    "deposit-in-obligation": "tsx example_deposit_in_obligation.ts",
+    "burn-ctokens-redeem": "tsx example_burn_ctokens_redeem_tokens.ts",
+    "harvest-farm-reward": "tsx example_harvest_reward.ts",
     "build": "rm -rf dist/; tsc"
   },
   "dependencies": {
@@ -39,6 +39,7 @@
     "@types/node-fetch": "^2.6.11",
     "prettier": "^3.3.3",
     "ts-node": "^10.9.2",
+    "tsx": "^4.19.1",
     "typescript": "^5.5.4"
   }
 }

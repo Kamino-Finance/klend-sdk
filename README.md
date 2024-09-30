@@ -56,8 +56,8 @@ await sendTransactionFromAction(env, sendTransaction); // sendTransaction from w
 ## FAQ
 
 ## Client 
-* npx ts-node src/client.ts deposit --url <RPC> --owner ./keypair.json --token USDH --amount 10
-* npx ts-node src/client.ts deposit --url <RPC> --owner ./keypair.json --token SOL --amount 10
+* npx tsx src/client.ts deposit --url <RPC> --owner ./keypair.json --token USDH --amount 10
+* npx tsx src/client.ts deposit --url <RPC> --owner ./keypair.json --token SOL --amount 10
 
 ## Codegen 
 * Copy the new `idl` from the kamino-lending program to `src/idl.json`

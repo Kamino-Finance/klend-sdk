@@ -1,7 +1,4 @@
-import {
-  buildVersionedTransaction,
-  sendAndConfirmVersionedTransaction,
-} from '@kamino-finance/klend-sdk';
+import { buildVersionedTransaction, sendAndConfirmVersionedTransaction } from '@kamino-finance/klend-sdk';
 import { getConnection } from './utils/connection';
 import { getKeypair } from './utils/keypair';
 import { MAIN_MARKET, PYUSD_MINT } from './utils/constants';

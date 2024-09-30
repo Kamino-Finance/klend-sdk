@@ -15,6 +15,7 @@ import {
   NATIVE_MINT,
   TOKEN_PROGRAM_ID,
   createCloseAccountInstruction,
+  createSyncNativeInstruction,
 } from '@solana/spl-token';
 import BN from 'bn.js';
 import Decimal from 'decimal.js';
@@ -47,7 +48,6 @@ import {
   buildComputeBudgetIx,
   createAssociatedTokenAccountIdempotentInstruction,
   ObligationType,
-  syncNative,
   U64_MAX,
   referrerTokenStatePda,
   userMetadataPda,
@@ -2661,7 +2661,7 @@ export class KaminoAction {
       TOKEN_PROGRAM_ID
     );
 
-    const syncIx = syncNative(userTokenAccountAddress);
+    const syncIx = createSyncNativeInstruction(userTokenAccountAddress);
     if (userWSOLAccountInfo) {
       if (sendAction) {
         preIxs.push(syncIx);

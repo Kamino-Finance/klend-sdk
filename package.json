@@ -44,7 +44,7 @@
     "start-validator": "solana-test-validator $(./deps/test-validator-params.sh)",
     "start-validator-and-test": "yarn start-server-and-test 'yarn start-validator' http://127.0.0.1:8899/health test",
     "dump-programs": "./deps/dump-from-mainnet.sh",
-    "kamino-manager": "ts-node src/client_kamino_manager.ts"
+    "kamino-manager": "tsx src/client_kamino_manager.ts"
   },
   "dependencies": {
     "@bokuweb/zstd-wasm": "^0.0.20",
@@ -62,7 +62,6 @@
     "base58-js": "^2.0.0",
     "bn.js": "^5.2.1",
     "buffer": "^6.0.3",
-    "buffer-layout": "^1.2.2",
     "commander": "^9.3.0",
     "decimal.js": "^10.4.3",
     "exponential-backoff": "^3.1.1"
@@ -96,6 +95,7 @@
     "ts-jest": "^28.0.7",
     "ts-mocha": "^10.0.0",
     "ts-node": "^10.9.2",
+    "tsx": "^4.19.1",
     "typedoc": "^0.22.10",
     "typescript": "^5.4.5",
     "typescript-eslint": "^0.0.1-alpha.0"

@@ -35,7 +35,7 @@ export RPC_ENDPOINT=YOUR_RPC_URL_HERE
 
 #### Get loan info deposits / borrows 
 ```bash
-yarn ts-node ./example_loan_info.ts
+yarn tsx-node ./example_loan_info.ts
 ```
 
 
