@@ -306,6 +306,15 @@ export class KaminoObligation {
   }
 
   /**
+   * Get the loan to value and liquidation loan to value for a collateral token reserve as ratios, accounting for the obligation elevation group if it is active
+   * @param market
+   * @param reserve
+   */
+  public getLtvForReserve(market: KaminoMarket, reserve: KaminoReserve): { maxLtv: Decimal; liquidationLtv: Decimal } {
+    return KaminoObligation.getLtvForReserve(market, reserve, this.state.elevationGroup);
+  }
+
+  /**
    * @returns the potential elevation groups the obligation qualifies for
    */
   getElevationGroups(kaminoMarket: KaminoMarket): Array<number> {
@@ -807,12 +816,12 @@ export class KaminoObligation {
     return borrowLimit.div(userTotalDeposit);
   }
 
-  /* 
-    How much of a given token can a user borrow extra given an elevation group, 
+  /*
+    How much of a given token can a user borrow extra given an elevation group,
     regardless of caps and liquidity or assuming infinite liquidity and infinite caps,
     until it hits max LTV.
 
-    This is purely a function about the borrow power of an obligation, 
+    This is purely a function about the borrow power of an obligation,
     not a reserve-specific, caps-specific, liquidity-specific function.
 
     * @param market - The KaminoMarket instance.
@@ -890,7 +899,7 @@ export class KaminoObligation {
     return Decimal.max(new Decimal(0), maxBorrowAmount);
   }
 
-  /* 
+  /*
     How much of a given token can a user borrow extra given an elevation group,
     and a specific reserve, until it hits max LTV and given available liquidity and caps.
 
@@ -924,7 +933,7 @@ export class KaminoObligation {
     }
   }
 
-  /* 
+  /*
     Returns true if the loan is eligible for the elevation group, including for the default one.
     * @param market - The KaminoMarket object representing the market.
     * @param slot - The slot number of the loan.
@@ -979,7 +988,7 @@ export class KaminoObligation {
     return isEligibleBasedOnLtv;
   }
 
-  /* 
+  /*
     Returns all elevation groups for a given obligation, except the default one
     * @param market - The KaminoMarket instance.
     * @returns An array of ElevationGroupDescription objects representing the elevation groups for the obligation.

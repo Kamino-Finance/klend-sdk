@@ -55,3 +55,13 @@ export type ReserveFarmInfo = {
   fetched: boolean;
   farmStates: FarmState[];
 };
+
+export enum FeeCalculation {
+  Inclusive = 'Inclusive',
+  Exclusive = 'Exclusive',
+}
+
+export type Fees = {
+  protocolFees: Decimal;
+  referrerFees: Decimal;
+};

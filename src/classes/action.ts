@@ -1043,14 +1043,14 @@ export class KaminoAction {
     kaminoMarket: KaminoMarket,
     currentSlot: number = 0
   ) {
-    const { axn, createAtasIxns } = await KaminoAction.initializeWithdrawReferrerFees(
+    const { axn, createAtaIxs } = await KaminoAction.initializeWithdrawReferrerFees(
       tokenMint,
       owner,
       kaminoMarket,
       currentSlot
     );
 
-    axn.preTxnIxs.push(...createAtasIxns);
+    axn.preTxnIxs.push(...createAtaIxs);
     axn.preTxnIxsLabels.push(`createAtasIxs[${axn.userTokenAccountAddress.toString()}]`);
 
     axn.addRefreshReserveIxs([axn.reserve.address]);
@@ -2445,70 +2445,57 @@ export class KaminoAction {
     }
 
     if ((action === 'withdraw' || action === 'borrow' || action === 'redeem') && !this.mint.equals(WRAPPED_SOL_MINT)) {
-      const userTokenAccountInfo = await this.kaminoMarket.getConnection().getAccountInfo(this.userTokenAccountAddress);
+      const [, createUserTokenAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
+        this.owner,
+        this.reserve.getLiquidityMint(),
+        this.owner,
+        this.reserve.getLiquidityTokenProgram(),
+        this.userTokenAccountAddress
+      );
 
-      if (!userTokenAccountInfo) {
-        const [, createUserTokenAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
-          this.owner,
-          this.reserve.getLiquidityMint(),
-          this.owner,
-          this.reserve.getLiquidityTokenProgram(),
-          this.userTokenAccountAddress
-        );
-
-        if (this.positions === POSITION_LIMIT) {
-          this.preTxnIxs.push(createUserTokenAccountIx);
-          this.preTxnIxsLabels.push(`CreateLiquidityUserAta[${this.owner}]`);
-        } else {
-          this.setupIxs.unshift(createUserTokenAccountIx);
-          this.setupIxsLabels.unshift(`CreateLiquidityUserAta[${this.owner}]`);
-        }
+      if (this.positions === POSITION_LIMIT) {
+        this.preTxnIxs.push(createUserTokenAccountIx);
+        this.preTxnIxsLabels.push(`CreateLiquidityUserAta[${this.owner}]`);
+      } else {
+        this.setupIxs.unshift(createUserTokenAccountIx);
+        this.setupIxsLabels.unshift(`CreateLiquidityUserAta[${this.owner}]`);
       }
     }
 
     if (action === 'liquidate') {
-      const userTokenAccountInfo = await this.kaminoMarket.getConnection().getAccountInfo(this.userTokenAccountAddress);
-
       if (!this.outflowReserve) {
         throw new Error(`Outflow reserve state not found ${this.mint}`);
       }
 
-      if (!userTokenAccountInfo) {
-        const [, createUserTokenAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
-          this.owner,
-          this.outflowReserve.getLiquidityMint(),
-          this.owner,
-          this.outflowReserve.getLiquidityTokenProgram(),
-          this.userTokenAccountAddress
-        );
-        if (this.positions === POSITION_LIMIT && this.mint.equals(WRAPPED_SOL_MINT)) {
-          this.preTxnIxs.push(createUserTokenAccountIx);
-          this.preTxnIxsLabels.push(`CreateUserAta[${this.userTokenAccountAddress.toBase58()}]`);
-        } else {
-          this.setupIxs.unshift(createUserTokenAccountIx);
-          this.setupIxsLabels.unshift(`CreateUserAta[${this.userTokenAccountAddress.toBase58()}]`);
-        }
+      const [, createUserTokenAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
+        this.owner,
+        this.outflowReserve.getLiquidityMint(),
+        this.owner,
+        this.outflowReserve.getLiquidityTokenProgram(),
+        this.userTokenAccountAddress
+      );
+      if (this.positions === POSITION_LIMIT && this.mint.equals(WRAPPED_SOL_MINT)) {
+        this.preTxnIxs.push(createUserTokenAccountIx);
+        this.preTxnIxsLabels.push(`CreateUserAta[${this.userTokenAccountAddress.toBase58()}]`);
+      } else {
+        this.setupIxs.unshift(createUserTokenAccountIx);
+        this.setupIxsLabels.unshift(`CreateUserAta[${this.userTokenAccountAddress.toBase58()}]`);
       }
 
-      const userCollateralAccountInfo = await this.kaminoMarket
-        .getConnection()
-        .getAccountInfo(this.userCollateralAccountAddress);
-      if (!userCollateralAccountInfo) {
-        const [, createUserCollateralAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
-          this.owner,
-          this.outflowReserve.getCTokenMint(),
-          this.owner,
-          TOKEN_PROGRAM_ID,
-          this.userCollateralAccountAddress
-        );
+      const [, createUserCollateralAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
+        this.owner,
+        this.outflowReserve.getCTokenMint(),
+        this.owner,
+        TOKEN_PROGRAM_ID,
+        this.userCollateralAccountAddress
+      );
 
-        if (this.positions === POSITION_LIMIT && this.mint.equals(WRAPPED_SOL_MINT)) {
-          this.preTxnIxs.push(createUserCollateralAccountIx);
-          this.preTxnIxsLabels.push(`CreateCollateralUserAta[${this.userCollateralAccountAddress.toString()}]`);
-        } else {
-          this.setupIxs.unshift(createUserCollateralAccountIx);
-          this.setupIxsLabels.unshift(`CreateCollateralUserAta[${this.userCollateralAccountAddress.toString()}]`);
-        }
+      if (this.positions === POSITION_LIMIT && this.mint.equals(WRAPPED_SOL_MINT)) {
+        this.preTxnIxs.push(createUserCollateralAccountIx);
+        this.preTxnIxsLabels.push(`CreateCollateralUserAta[${this.userCollateralAccountAddress.toString()}]`);
+      } else {
+        this.setupIxs.unshift(createUserCollateralAccountIx);
+        this.setupIxsLabels.unshift(`CreateCollateralUserAta[${this.userCollateralAccountAddress.toString()}]`);
       }
 
       if (!this.additionalTokenAccountAddress) {
@@ -2547,43 +2534,32 @@ export class KaminoAction {
     }
 
     if (action === 'withdraw' || action === 'mint' || action === 'deposit' || action === 'repayAndWithdraw') {
-      const userTokenAccountInfo = await this.kaminoMarket.getConnection().getAccountInfo(this.userTokenAccountAddress);
-
-      // TODO: Might need to remove this
-      if (!userTokenAccountInfo) {
-        const [, createUserTokenAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
-          this.owner,
-          this.reserve.getLiquidityMint(),
-          this.owner,
-          this.reserve.getLiquidityTokenProgram(),
-          this.userTokenAccountAddress
-        );
-        this.preTxnIxs.push(createUserTokenAccountIx);
-        this.preTxnIxsLabels.push(`CreateUserAta[${this.userTokenAccountAddress.toBase58()}]`);
-      }
+      const [, createUserTokenAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
+        this.owner,
+        this.reserve.getLiquidityMint(),
+        this.owner,
+        this.reserve.getLiquidityTokenProgram(),
+        this.userTokenAccountAddress
+      );
+      this.preTxnIxs.push(createUserTokenAccountIx);
+      this.preTxnIxsLabels.push(`CreateUserAta[${this.userTokenAccountAddress.toBase58()}]`);
     }
     if (action === 'mint') {
-      const userCollateralAccountInfo = await this.kaminoMarket
-        .getConnection()
-        .getAccountInfo(this.userCollateralAccountAddress);
+      const collateralMintPubkey = this.reserve.getCTokenMint();
+      const [, createUserCollateralAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
+        this.owner,
+        collateralMintPubkey,
+        this.owner,
+        TOKEN_PROGRAM_ID,
+        this.userCollateralAccountAddress
+      );
 
-      if (!userCollateralAccountInfo) {
-        const collateralMintPubkey = this.reserve.getCTokenMint();
-        const [, createUserCollateralAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
-          this.owner,
-          collateralMintPubkey,
-          this.owner,
-          TOKEN_PROGRAM_ID,
-          this.userCollateralAccountAddress
-        );
-
-        if (this.positions === POSITION_LIMIT && this.mint.equals(WRAPPED_SOL_MINT)) {
-          this.preTxnIxs.push(createUserCollateralAccountIx);
-          this.preTxnIxsLabels.push(`CreateCollateralUserAta[${this.userCollateralAccountAddress.toString()}]`);
-        } else {
-          this.setupIxs.unshift(createUserCollateralAccountIx);
-          this.setupIxsLabels.unshift(`CreateCollateralUserAta[${this.userCollateralAccountAddress.toString()}]`);
-        }
+      if (this.positions === POSITION_LIMIT && this.mint.equals(WRAPPED_SOL_MINT)) {
+        this.preTxnIxs.push(createUserCollateralAccountIx);
+        this.preTxnIxsLabels.push(`CreateCollateralUserAta[${this.userCollateralAccountAddress.toString()}]`);
+      } else {
+        this.setupIxs.unshift(createUserCollateralAccountIx);
+        this.setupIxsLabels.unshift(`CreateCollateralUserAta[${this.userCollateralAccountAddress.toString()}]`);
       }
     }
   }
@@ -2801,12 +2777,12 @@ export class KaminoAction {
       throw new Error(`Reserve ${mint} not found in market ${kaminoMarket.getAddress().toBase58()}`);
     }
 
-    const { atas, createAtasIxns } = await getAtasWithCreateIxnsIfMissing(
-      kaminoMarket.getConnection(),
-      owner,
-      [reserve.getLiquidityMint()],
-      [reserve.getLiquidityTokenProgram()]
-    );
+    const { atas, createAtaIxs } = await getAtasWithCreateIxnsIfMissing(kaminoMarket.getConnection(), owner, [
+      {
+        mint: reserve.getLiquidityMint(),
+        tokenProgram: reserve.getLiquidityTokenProgram(),
+      },
+    ]);
 
     const userTokenAccountAddress = atas[0];
 
@@ -2830,7 +2806,7 @@ export class KaminoAction {
         undefined,
         undefined
       ),
-      createAtasIxns,
+      createAtaIxs,
     };
   }
 
@@ -2867,7 +2843,7 @@ export class KaminoAction {
     owner: PublicKey,
     kaminoObligation: KaminoObligation | null,
     referrer: PublicKey
-  ) {
+  ): Promise<PublicKey> {
     let referrerKey = referrer;
     if (!referrer || referrer.equals(PublicKey.default)) {
       if (kaminoObligation === null) {
@@ -2880,5 +2856,23 @@ export class KaminoAction {
       }
     }
     return referrerKey;
+  }
+
+  public static actionToIxs(action: KaminoAction): Array<TransactionInstruction> {
+    const ixs: TransactionInstruction[] = [...action.setupIxs];
+    ixs.push(...KaminoAction.actionToLendingIxs(action));
+    ixs.push(...action.cleanupIxs);
+    return ixs;
+  }
+
+  public static actionToLendingIxs(action: KaminoAction): Array<TransactionInstruction> {
+    const ixs: TransactionInstruction[] = [];
+    for (let i = 0; i < action.lendingIxs.length; i++) {
+      ixs.push(action.lendingIxs[i]);
+      if (i !== action.lendingIxs.length - 1) {
+        ixs.push(...action.inBetweenIxs);
+      }
+    }
+    return ixs;
   }
 }

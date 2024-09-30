@@ -1,4 +1,10 @@
-import { Connection, LAMPORTS_PER_SOL, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import {
+  AddressLookupTableAccount,
+  Connection,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  TransactionInstruction,
+} from '@solana/web3.js';
 import Decimal from 'decimal.js';
 import { KaminoAction, KaminoMarket, KaminoObligation, lamportsToNumberDecimal as fromLamports } from '../classes';
 import { getFlashLoanInstructions } from './instructions';
@@ -17,6 +23,7 @@ import {
   getComputeBudgetAndPriorityFeeIxns,
   getDepositWsolIxns,
   removeBudgetAndAtaIxns,
+  uniqueAccounts,
 } from '../utils';
 import { calcAdjustAmounts, calcWithdrawAmounts, simulateMintKToken, toJson } from './calcs';
 import { TOKEN_PROGRAM_ID, createCloseAccountInstruction } from '@solana/spl-token';
@@ -30,18 +37,40 @@ import { getExpectedTokenBalanceAfterBorrow, getKtokenToTokenSwapper, getTokenTo
 
 export type SwapIxnsProvider = (
   amountInLamports: number,
-  amountInMint: PublicKey,
-  amountOutMint: PublicKey,
+  inputMint: PublicKey,
+  outputMint: PublicKey,
   slippagePct: number,
   amountDebtAtaBalance?: Decimal
 ) => Promise<[TransactionInstruction[], PublicKey[]]>;
+
+export type SwapQuoteProvider<QuoteResponse> = (
+  inputs: SwapInputs,
+  klendAccounts: Array<PublicKey>
+) => Promise<SwapQuote<QuoteResponse>>;
+
+export type SwapQuoteIxsProvider<QuoteResponse> = (
+  inputs: SwapInputs,
+  klendAccounts: Array<PublicKey>,
+  quote: SwapQuote<QuoteResponse>
+) => Promise<SwapQuoteIxs>;
+
+export type SwapQuote<QuoteResponse> = {
+  priceAInB: Decimal;
+  quoteResponse?: QuoteResponse;
+};
+
+export type SwapQuoteIxs = {
+  preActionIxs: TransactionInstruction[];
+  swapIxs: TransactionInstruction[];
+  lookupTables: AddressLookupTableAccount[];
+};
 
 export type PriceAinBProvider = (mintA: PublicKey, mintB: PublicKey) => Promise<Decimal>;
 
 export type IsKtokenProvider = (token: PublicKey | string) => Promise<boolean>;
 
 export type SwapInputs = {
-  inputAmountLamports: number;
+  inputAmountLamports: Decimal;
   inputMint: PublicKey;
   outputMint: PublicKey;
 };
@@ -265,9 +294,10 @@ export const getDepositWithLeverageSwapInputs = (props: {
 
   return {
     swapInputs: {
-      inputAmountLamports: toLamports(calcs.swapDebtTokenIn, debtReserve!.state.liquidity.mintDecimals.toNumber())
-        .ceil()
-        .toNumber(),
+      inputAmountLamports: toLamports(
+        calcs.swapDebtTokenIn,
+        debtReserve!.state.liquidity.mintDecimals.toNumber()
+      ).ceil(),
       inputMint: debtTokenMint,
       outputMint: collTokenMint,
     },
@@ -386,8 +416,7 @@ export const getDepositWithLeverageIxns = async (props: {
   );
 
   // 1. Create atas & budget txns
-  let mintsToCreateAtas: PublicKey[] = [];
-  let mintsToCreateAtasTokenPrograms: PublicKey[] = [];
+  let mintsToCreateAtas: Array<{ mint: PublicKey; tokenProgram: PublicKey }>;
   if (collIsKtoken) {
     const secondTokenAta = strategy!.strategy.tokenAMint.equals(debtTokenMint)
       ? strategy!.strategy.tokenBMint
@@ -399,28 +428,46 @@ export const getDepositWithLeverageIxns = async (props: {
       : strategy!.strategy.tokenATokenProgram.equals(PublicKey.default)
       ? TOKEN_PROGRAM_ID
       : strategy!.strategy.tokenATokenProgram;
-    mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint(), secondTokenAta];
-    mintsToCreateAtasTokenPrograms = [
-      collReserve!.getLiquidityTokenProgram(),
-      debtReserve!.getLiquidityTokenProgram(),
-      TOKEN_PROGRAM_ID,
-      secondTokenTokenProgarm,
+    mintsToCreateAtas = [
+      {
+        mint: collTokenMint,
+        tokenProgram: collReserve!.getLiquidityTokenProgram(),
+      },
+      {
+        mint: debtTokenMint,
+        tokenProgram: debtReserve!.getLiquidityTokenProgram(),
+      },
+      {
+        mint: collReserve!.getCTokenMint(),
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
+      {
+        mint: secondTokenAta,
+        tokenProgram: secondTokenTokenProgarm,
+      },
     ];
   } else {
-    mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint()];
-    mintsToCreateAtasTokenPrograms = [
-      collReserve!.getLiquidityTokenProgram(),
-      debtReserve!.getLiquidityTokenProgram(),
-      TOKEN_PROGRAM_ID,
+    mintsToCreateAtas = [
+      {
+        mint: collTokenMint,
+        tokenProgram: collReserve!.getLiquidityTokenProgram(),
+      },
+      {
+        mint: debtTokenMint,
+        tokenProgram: debtReserve!.getLiquidityTokenProgram(),
+      },
+      {
+        mint: collReserve!.getCTokenMint(),
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
     ];
   }
 
   const budgetIxns = budgetAndPriorityFeeIxns || getComputeBudgetAndPriorityFeeIxns(3000000);
   const {
     atas: [collTokenAta, debtTokenAta],
-    createAtasIxns,
-    closeAtasIxns,
-  } = await getAtasWithCreateIxnsIfMissing(connection, user, mintsToCreateAtas, mintsToCreateAtasTokenPrograms);
+    createAtaIxs,
+  } = await getAtasWithCreateIxnsIfMissing(connection, user, mintsToCreateAtas);
 
   // TODO: this needs to work the other way around also
   // TODO: marius test this with shorting leverage and with leverage looping
@@ -438,7 +485,7 @@ export const getDepositWithLeverageIxns = async (props: {
   // 1. Flash borrow & repay the collateral amount needed for given leverage
   // if user deposits coll, then we borrow the diff, else we borrow the entire amount
   const { flashBorrowIxn, flashRepayIxn } = getFlashLoanInstructions({
-    borrowIxnIndex: budgetIxns.length + createAtasIxns.length + fillWsolAtaIxns.length,
+    borrowIxnIndex: budgetIxns.length + createAtaIxs.length + fillWsolAtaIxns.length,
     walletPublicKey: user,
     lendingMarketAuthority: kaminoMarket.getLendingMarketAuthority(),
     lendingMarketAddress: kaminoMarket.getAddress(),
@@ -504,7 +551,7 @@ export const getDepositWithLeverageIxns = async (props: {
 
   const ixns = [
     ...budgetIxns,
-    ...createAtasIxns,
+    ...createAtaIxs,
     ...fillWsolAtaIxns,
     ...[flashBorrowIxn],
     ...kaminoDepositAndBorrowAction.setupIxs,
@@ -513,7 +560,6 @@ export const getDepositWithLeverageIxns = async (props: {
     ...[kaminoDepositAndBorrowAction.lendingIxs[1]],
     ...kaminoDepositAndBorrowAction.cleanupIxs,
     ...[flashRepayIxn],
-    ...closeAtasIxns,
   ];
 
   const uniqueAccounts = new PublicKeySet<PublicKey>([]);
@@ -529,7 +575,11 @@ export const getDepositWithLeverageIxns = async (props: {
     return {
       ixns: [],
       lookupTablesAddresses: [],
-      swapInputs: { inputAmountLamports: 0, inputMint: PublicKey.default, outputMint: PublicKey.default },
+      swapInputs: {
+        inputAmountLamports: new Decimal('0'),
+        inputMint: PublicKey.default,
+        outputMint: PublicKey.default,
+      },
       totalKlendAccounts: totalKlendAccounts,
     };
   }
@@ -567,15 +617,13 @@ export const getDepositWithLeverageIxns = async (props: {
     inputAmountLamports: toLamports(
       !collIsKtoken ? calcs.swapDebtTokenIn : calcsKtoken!.singleSidedDeposit,
       debtReserve!.stats.decimals
-    )
-      .ceil()
-      .toNumber(),
+    ).ceil(),
     inputMint: debtTokenMint,
     outputMint: collTokenMint,
   };
 
   const [swapIxns, lookupTablesAddresses] = await depositSwapper(
-    swapInputs.inputAmountLamports,
+    swapInputs.inputAmountLamports.toNumber(),
     swapInputs.inputMint,
     swapInputs.outputMint,
     slippagePct.toNumber(),
@@ -596,7 +644,7 @@ export const getDepositWithLeverageIxns = async (props: {
     return {
       ixns: [
         ...budgetIxns,
-        ...createAtasIxns,
+        ...createAtaIxs,
         ...fillWsolAtaIxns,
         ...[flashBorrowIxn],
         ...kaminoDepositAndBorrowAction.setupIxs,
@@ -606,7 +654,6 @@ export const getDepositWithLeverageIxns = async (props: {
         ...kaminoDepositAndBorrowAction.cleanupIxs,
         ...swapInstructions,
         ...[flashRepayIxn],
-        ...closeAtasIxns,
       ],
       lookupTablesAddresses,
       swapInputs,
@@ -616,7 +663,7 @@ export const getDepositWithLeverageIxns = async (props: {
     return {
       ixns: [
         ...budgetIxns,
-        ...createAtasIxns,
+        ...createAtaIxs,
         ...fillWsolAtaIxns,
         ...[flashBorrowIxn],
         ...swapInstructions,
@@ -626,7 +673,6 @@ export const getDepositWithLeverageIxns = async (props: {
         ...[kaminoDepositAndBorrowAction.lendingIxs[1]],
         ...kaminoDepositAndBorrowAction.cleanupIxs,
         ...[flashRepayIxn],
-        ...closeAtasIxns,
       ],
       lookupTablesAddresses,
       swapInputs,
@@ -700,9 +746,7 @@ export const getWithdrawWithLeverageSwapInputs = (props: {
 
   return {
     swapInputs: {
-      inputAmountLamports: toLamports(collTokenSwapIn, collReserve!.state.liquidity.mintDecimals.toNumber())
-        .ceil()
-        .toNumber(),
+      inputAmountLamports: toLamports(collTokenSwapIn, collReserve!.state.liquidity.mintDecimals.toNumber()).ceil(),
       inputMint: collTokenMint,
       outputMint: debtTokenMint,
     },
@@ -838,47 +882,63 @@ export const getWithdrawWithLeverageIxns = async (props: {
 
   console.log('Expecting to swap', collTokenSwapIn.toString(), 'coll for', debtTokenExpectedSwapOut.toString(), 'debt');
   // 1. Create atas & budget txns & user metadata
-  let mintsToCreateAtas: PublicKey[] = [];
-  let mintsToCreateAtasTokenPrograms: PublicKey[] = [];
+  let mintsToCreateAtas: Array<{ mint: PublicKey; tokenProgram: PublicKey }>;
   if (collIsKtoken) {
     const secondTokenAta = strategy!.strategy.tokenAMint.equals(debtTokenMint)
       ? strategy!.strategy.tokenBMint
       : strategy!.strategy.tokenAMint;
-    const secondTokenTokenProgarm = strategy?.strategy.tokenAMint.equals(debtTokenMint)
+    const secondTokenTokenProgram = strategy?.strategy.tokenAMint.equals(debtTokenMint)
       ? strategy!.strategy.tokenBTokenProgram.equals(PublicKey.default)
         ? TOKEN_PROGRAM_ID
         : strategy!.strategy.tokenBTokenProgram
       : strategy!.strategy.tokenATokenProgram.equals(PublicKey.default)
       ? TOKEN_PROGRAM_ID
       : strategy!.strategy.tokenATokenProgram;
-    mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint(), secondTokenAta];
-    mintsToCreateAtasTokenPrograms = [
-      collReserve!.getLiquidityTokenProgram(),
-      debtReserve!.getLiquidityTokenProgram(),
-      TOKEN_PROGRAM_ID,
-      secondTokenTokenProgarm,
+    mintsToCreateAtas = [
+      {
+        mint: collTokenMint,
+        tokenProgram: collReserve!.getLiquidityTokenProgram(),
+      },
+      {
+        mint: debtTokenMint,
+        tokenProgram: debtReserve!.getLiquidityTokenProgram(),
+      },
+      {
+        mint: collReserve!.getCTokenMint(),
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
+      {
+        mint: secondTokenAta,
+        tokenProgram: secondTokenTokenProgram,
+      },
     ];
   } else {
-    mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint()];
-    mintsToCreateAtasTokenPrograms = [
-      collReserve!.getLiquidityTokenProgram(),
-      debtReserve!.getLiquidityTokenProgram(),
-      TOKEN_PROGRAM_ID,
+    mintsToCreateAtas = [
+      {
+        mint: collTokenMint,
+        tokenProgram: collReserve!.getLiquidityTokenProgram(),
+      },
+      {
+        mint: debtTokenMint,
+        tokenProgram: debtReserve!.getLiquidityTokenProgram(),
+      },
+      {
+        mint: collReserve!.getCTokenMint(),
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
     ];
   }
 
   const {
     atas: [, debtTokenAta],
-    createAtasIxns,
-    closeAtasIxns,
-  } = await getAtasWithCreateIxnsIfMissing(connection, user, mintsToCreateAtas, mintsToCreateAtasTokenPrograms);
+    createAtaIxs,
+  } = await getAtasWithCreateIxnsIfMissing(connection, user, mintsToCreateAtas);
 
   const closeWsolAtaIxns: TransactionInstruction[] = [];
   if (depositTokenIsSol || debtTokenMint.equals(WRAPPED_SOL_MINT)) {
     const wsolAta = getAssociatedTokenAddress(WRAPPED_SOL_MINT, user, false);
     closeWsolAtaIxns.push(createCloseAccountInstruction(wsolAta, user, user, [], TOKEN_PROGRAM_ID));
   }
-  closeAtasIxns.push(...closeWsolAtaIxns);
 
   const budgetIxns = budgetAndPriorityFeeIxns || getComputeBudgetAndPriorityFeeIxns(3000000);
 
@@ -898,7 +958,7 @@ export const getWithdrawWithLeverageIxns = async (props: {
   // and repay that + flash amount fee
 
   const { flashBorrowIxn, flashRepayIxn } = getFlashLoanInstructions({
-    borrowIxnIndex: budgetIxns.length + createAtasIxns.length + fillWsolAtaIxns.length,
+    borrowIxnIndex: budgetIxns.length + createAtaIxs.length + fillWsolAtaIxns.length,
     walletPublicKey: user,
     lendingMarketAuthority: kaminoMarket.getLendingMarketAuthority(),
     lendingMarketAddress: kaminoMarket.getAddress(),
@@ -931,7 +991,7 @@ export const getWithdrawWithLeverageIxns = async (props: {
 
   const klendIxns = [
     ...budgetIxns,
-    ...createAtasIxns,
+    ...createAtaIxs,
     ...fillWsolAtaIxns,
     ...[flashBorrowIxn],
     ...repayAndWithdrawAction.setupIxs,
@@ -940,23 +1000,22 @@ export const getWithdrawWithLeverageIxns = async (props: {
     ...[repayAndWithdrawAction.lendingIxs[1]],
     ...repayAndWithdrawAction.cleanupIxs,
     ...[flashRepayIxn],
-    ...closeAtasIxns,
+    ...closeWsolAtaIxns,
   ];
 
-  const uniqueAccounts = new PublicKeySet<PublicKey>([]);
-  klendIxns.forEach((ixn) => {
-    ixn.keys.forEach((key) => {
-      uniqueAccounts.add(key.pubkey);
-    });
-  });
-  const totalKlendAccounts = uniqueAccounts.toArray().length;
+  const uniqueAccs = uniqueAccounts(klendIxns);
+  const totalKlendAccounts = uniqueAccs.length;
 
   // return early to avoid extra swapper calls
   if (getTotalKlendAccountsOnly) {
     return {
       ixns: [],
       lookupTablesAddresses: [],
-      swapInputs: { inputAmountLamports: 0, inputMint: PublicKey.default, outputMint: PublicKey.default },
+      swapInputs: {
+        inputAmountLamports: new Decimal('0'),
+        inputMint: PublicKey.default,
+        outputMint: PublicKey.default,
+      },
       totalKlendAccounts: totalKlendAccounts,
     };
   }
@@ -973,13 +1032,13 @@ export const getWithdrawWithLeverageIxns = async (props: {
   }
 
   const swapInputs: SwapInputs = {
-    inputAmountLamports: toLamports(collTokenSwapIn, collReserve!.stats.decimals).ceil().toNumber(),
+    inputAmountLamports: toLamports(collTokenSwapIn, collReserve!.stats.decimals).ceil(),
     inputMint: collTokenMint,
     outputMint: debtTokenMint,
   };
 
   const [swapIxns, lookupTablesAddresses] = await withdrawSwapper(
-    swapInputs.inputAmountLamports,
+    swapInputs.inputAmountLamports.toNumber(),
     swapInputs.inputMint,
     swapInputs.outputMint,
     slippagePct
@@ -999,7 +1058,7 @@ export const getWithdrawWithLeverageIxns = async (props: {
 
   const ixns = [
     ...budgetIxns,
-    ...createAtasIxns,
+    ...createAtaIxs,
     ...fillWsolAtaIxns,
     ...[flashBorrowIxn],
     ...repayAndWithdrawAction.setupIxs,
@@ -1009,7 +1068,7 @@ export const getWithdrawWithLeverageIxns = async (props: {
     ...repayAndWithdrawAction.cleanupIxs,
     ...swapInstructions,
     ...[flashRepayIxn],
-    ...closeAtasIxns,
+    ...closeWsolAtaIxns,
   ];
 
   // Send ixns and lookup tables
@@ -1066,9 +1125,7 @@ export const getAdjustLeverageSwapInputs = (props: {
 
     return {
       swapInputs: {
-        inputAmountLamports: toLamports(borrowAmount, debtReserve!.state.liquidity.mintDecimals.toNumber())
-          .ceil()
-          .toNumber(),
+        inputAmountLamports: toLamports(borrowAmount, debtReserve!.state.liquidity.mintDecimals.toNumber()).ceil(),
         inputMint: debtTokenMint,
         outputMint: collTokenMint,
       },
@@ -1083,9 +1140,7 @@ export const getAdjustLeverageSwapInputs = (props: {
         inputAmountLamports: toLamports(
           withdrawAmountWithSlippageAndFlashLoanFee,
           collReserve!.state.liquidity.mintDecimals.toNumber()
-        )
-          .ceil()
-          .toNumber(),
+        ).ceil(),
         inputMint: collTokenMint,
         outputMint: debtTokenMint,
       },
@@ -1157,7 +1212,7 @@ export const getAdjustLeverageIxns = async (props: {
   const currentLeverage = userObligation!.refreshedStats.leverage;
   const isDepositViaLeverage = targetLeverage.gte(new Decimal(currentLeverage));
 
-  let flashLoanFee = new Decimal(0);
+  let flashLoanFee;
   if (isDepositViaLeverage) {
     flashLoanFee = collReserve!.getFlashLoanFee() || new Decimal(0);
   } else {
@@ -1310,8 +1365,7 @@ export const getIncreaseLeverageIxns = async (props: {
 
   // 1. Create atas & budget txns
   const budgetIxns = budgetAndPriorityFeeIxns || getComputeBudgetAndPriorityFeeIxns(3000000);
-  let mintsToCreateAtas: PublicKey[] = [];
-  let mintsToCreateAtasTokenPrograms: PublicKey[] = [];
+  let mintsToCreateAtas: Array<{ mint: PublicKey; tokenProgram: PublicKey }>;
   if (collIsKtoken) {
     const secondTokenAta = strategy!.strategy.tokenAMint.equals(debtTokenMint)
       ? strategy!.strategy.tokenBMint
@@ -1323,27 +1377,45 @@ export const getIncreaseLeverageIxns = async (props: {
       : strategy!.strategy.tokenATokenProgram.equals(PublicKey.default)
       ? TOKEN_PROGRAM_ID
       : strategy!.strategy.tokenATokenProgram;
-    mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint(), secondTokenAta];
-    mintsToCreateAtasTokenPrograms = [
-      collReserve!.getLiquidityTokenProgram(),
-      debtReserve!.getLiquidityTokenProgram(),
-      TOKEN_PROGRAM_ID,
-      secondTokenTokenProgarm,
+    mintsToCreateAtas = [
+      {
+        mint: collTokenMint,
+        tokenProgram: collReserve!.getLiquidityTokenProgram(),
+      },
+      {
+        mint: debtTokenMint,
+        tokenProgram: debtReserve!.getLiquidityTokenProgram(),
+      },
+      {
+        mint: collReserve!.getCTokenMint(),
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
+      {
+        mint: secondTokenAta,
+        tokenProgram: secondTokenTokenProgarm,
+      },
     ];
   } else {
-    mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint()];
-    mintsToCreateAtasTokenPrograms = [
-      collReserve!.getLiquidityTokenProgram(),
-      debtReserve!.getLiquidityTokenProgram(),
-      TOKEN_PROGRAM_ID,
+    mintsToCreateAtas = [
+      {
+        mint: collTokenMint,
+        tokenProgram: collReserve!.getLiquidityTokenProgram(),
+      },
+      {
+        mint: debtTokenMint,
+        tokenProgram: debtReserve!.getLiquidityTokenProgram(),
+      },
+      {
+        mint: collReserve!.getCTokenMint(),
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
     ];
   }
 
   const {
     atas: [collTokenAta, debtTokenAta],
-    createAtasIxns,
-    closeAtasIxns,
-  } = await getAtasWithCreateIxnsIfMissing(connection, user, mintsToCreateAtas, mintsToCreateAtasTokenPrograms);
+    createAtaIxs,
+  } = await getAtasWithCreateIxnsIfMissing(connection, user, mintsToCreateAtas);
 
   // 2. Create borrow flash loan instruction
 
@@ -1355,7 +1427,7 @@ export const getIncreaseLeverageIxns = async (props: {
   // .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber());
 
   const { flashBorrowIxn, flashRepayIxn } = getFlashLoanInstructions({
-    borrowIxnIndex: budgetIxns.length + createAtasIxns.length, // TODO: how about user metadata ixns
+    borrowIxnIndex: budgetIxns.length + createAtaIxs.length, // TODO: how about user metadata ixns
     walletPublicKey: user,
     lendingMarketAuthority: kaminoMarket.getLendingMarketAuthority(),
     lendingMarketAddress: kaminoMarket.getAddress(),
@@ -1423,7 +1495,7 @@ export const getIncreaseLeverageIxns = async (props: {
 
   const klendIxns = [
     ...budgetIxns,
-    ...createAtasIxns,
+    ...createAtaIxs,
     ...[flashBorrowIxn],
     ...depositAction.setupIxs,
     ...depositAction.lendingIxs,
@@ -1432,7 +1504,6 @@ export const getIncreaseLeverageIxns = async (props: {
     ...borrowAction.lendingIxs,
     ...borrowAction.cleanupIxs,
     ...[flashRepayIxn],
-    ...closeAtasIxns,
   ];
 
   const uniqueAccounts = new PublicKeySet<PublicKey>([]);
@@ -1448,7 +1519,11 @@ export const getIncreaseLeverageIxns = async (props: {
     return {
       ixns: [],
       lookupTablesAddresses: [],
-      swapInputs: { inputAmountLamports: 0, inputMint: PublicKey.default, outputMint: PublicKey.default },
+      swapInputs: {
+        inputAmountLamports: new Decimal('0'),
+        inputMint: PublicKey.default,
+        outputMint: PublicKey.default,
+      },
       totalKlendAccounts: totalKlendAccounts,
     };
   }
@@ -1474,15 +1549,16 @@ export const getIncreaseLeverageIxns = async (props: {
   }
 
   const swapInputs: SwapInputs = {
-    inputAmountLamports: toLamports(!collIsKtoken ? borrowAmount : amountToFashBorrowDebt, debtReserve!.stats.decimals)
-      .ceil()
-      .toNumber(),
+    inputAmountLamports: toLamports(
+      !collIsKtoken ? borrowAmount : amountToFashBorrowDebt,
+      debtReserve!.stats.decimals
+    ).ceil(),
     inputMint: debtTokenMint,
     outputMint: collTokenMint,
   };
 
   const [swapIxns, lookupTablesAddresses] = await depositSwapper(
-    swapInputs.inputAmountLamports,
+    swapInputs.inputAmountLamports.toNumber(),
     swapInputs.inputMint,
     swapInputs.outputMint,
     slippagePct,
@@ -1494,7 +1570,7 @@ export const getIncreaseLeverageIxns = async (props: {
   const ixns = !collIsKtoken
     ? [
         ...budgetIxns,
-        ...createAtasIxns,
+        ...createAtaIxs,
         ...[flashBorrowIxn],
         ...depositAction.setupIxs,
         ...depositAction.lendingIxs,
@@ -1504,11 +1580,10 @@ export const getIncreaseLeverageIxns = async (props: {
         ...borrowAction.cleanupIxs,
         ...swapInstructions,
         ...[flashRepayIxn],
-        ...closeAtasIxns,
       ]
     : [
         ...budgetIxns,
-        ...createAtasIxns,
+        ...createAtaIxs,
         ...[flashBorrowIxn],
         ...swapInstructions,
         ...depositAction.setupIxs,
@@ -1518,7 +1593,6 @@ export const getIncreaseLeverageIxns = async (props: {
         ...borrowAction.lendingIxs,
         ...borrowAction.cleanupIxs,
         ...[flashRepayIxn],
-        ...closeAtasIxns,
       ];
 
   ixns.forEach((ixn, i) => {
@@ -1599,8 +1673,7 @@ export const getDecreaseLeverageIxns = async (props: {
 
   // 1. Create atas & budget txns
   const budgetIxns = budgetAndPriorityFeeIxns || getComputeBudgetAndPriorityFeeIxns(3000000);
-  let mintsToCreateAtas: PublicKey[] = [];
-  let mintsToCreateAtasTokenPrograms: PublicKey[] = [];
+  let mintsToCreateAtas: Array<{ mint: PublicKey; tokenProgram: PublicKey }>;
   if (collIsKtoken) {
     const secondTokenAta = strategy!.strategy.tokenAMint.equals(debtTokenMint)
       ? strategy!.strategy.tokenBMint
@@ -1612,26 +1685,44 @@ export const getDecreaseLeverageIxns = async (props: {
       : strategy!.strategy.tokenATokenProgram.equals(PublicKey.default)
       ? TOKEN_PROGRAM_ID
       : strategy!.strategy.tokenATokenProgram;
-    mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint(), secondTokenAta];
-    mintsToCreateAtasTokenPrograms = [
-      collReserve!.getLiquidityTokenProgram(),
-      debtReserve!.getLiquidityTokenProgram(),
-      TOKEN_PROGRAM_ID,
-      secondTokenTokenProgarm,
+    mintsToCreateAtas = [
+      {
+        mint: collTokenMint,
+        tokenProgram: collReserve!.getLiquidityTokenProgram(),
+      },
+      {
+        mint: debtTokenMint,
+        tokenProgram: debtReserve!.getLiquidityTokenProgram(),
+      },
+      {
+        mint: collReserve!.getCTokenMint(),
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
+      {
+        mint: secondTokenAta,
+        tokenProgram: secondTokenTokenProgarm,
+      },
     ];
   } else {
-    mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint()];
-    mintsToCreateAtasTokenPrograms = [
-      collReserve!.getLiquidityTokenProgram(),
-      debtReserve!.getLiquidityTokenProgram(),
-      TOKEN_PROGRAM_ID,
+    mintsToCreateAtas = [
+      {
+        mint: collTokenMint,
+        tokenProgram: collReserve!.getLiquidityTokenProgram(),
+      },
+      {
+        mint: debtTokenMint,
+        tokenProgram: debtReserve!.getLiquidityTokenProgram(),
+      },
+      {
+        mint: collReserve!.getCTokenMint(),
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
     ];
   }
   const {
     atas: [, debtTokenAta],
-    createAtasIxns,
-    closeAtasIxns,
-  } = await getAtasWithCreateIxnsIfMissing(connection, user, mintsToCreateAtas, mintsToCreateAtasTokenPrograms);
+    createAtaIxs,
+  } = await getAtasWithCreateIxnsIfMissing(connection, user, mintsToCreateAtas);
 
   // TODO: Mihai/Marius check if we can improve this logic and not convert any SOL
   // This is here so that we have enough wsol to repay in case the kAB swapped to sol after estimates is not enough
@@ -1640,7 +1731,6 @@ export const getDecreaseLeverageIxns = async (props: {
     const wsolAta = await getAssociatedTokenAddress(WRAPPED_SOL_MINT, user, false);
     closeWsolAtaIxns.push(createCloseAccountInstruction(wsolAta, user, user, [], TOKEN_PROGRAM_ID));
   }
-  closeAtasIxns.push(...closeWsolAtaIxns);
 
   const fillWsolAtaIxns: TransactionInstruction[] = [];
   if (debtTokenMint.equals(WRAPPED_SOL_MINT)) {
@@ -1653,7 +1743,7 @@ export const getDecreaseLeverageIxns = async (props: {
 
   // 3. Flash borrow & repay amount to repay (debt)
   const { flashBorrowIxn, flashRepayIxn } = getFlashLoanInstructions({
-    borrowIxnIndex: budgetIxns.length + createAtasIxns.length + fillWsolAtaIxns.length,
+    borrowIxnIndex: budgetIxns.length + createAtaIxs.length + fillWsolAtaIxns.length,
     walletPublicKey: user,
     lendingMarketAuthority: kaminoMarket.getLendingMarketAuthority(),
     lendingMarketAddress: kaminoMarket.getAddress(),
@@ -1717,7 +1807,7 @@ export const getDecreaseLeverageIxns = async (props: {
 
   const klendIxns = [
     ...budgetIxns,
-    ...createAtasIxns,
+    ...createAtaIxs,
     ...fillWsolAtaIxns,
     ...[flashBorrowIxn],
     ...repayAction.setupIxs,
@@ -1727,23 +1817,22 @@ export const getDecreaseLeverageIxns = async (props: {
     ...withdrawAction.lendingIxs,
     ...withdrawAction.cleanupIxs,
     ...[flashRepayIxn],
-    ...closeAtasIxns,
+    ...closeWsolAtaIxns,
   ];
 
-  const uniqueAccounts = new PublicKeySet<PublicKey>([]);
-  klendIxns.forEach((ixn) => {
-    ixn.keys.forEach((key) => {
-      uniqueAccounts.add(key.pubkey);
-    });
-  });
-  const totalKlendAccounts = uniqueAccounts.toArray().length;
+  const uniqueAccs = uniqueAccounts(klendIxns);
+  const totalKlendAccounts = uniqueAccs.length;
 
   // return early to avoid extra swapper calls
   if (getTotalKlendAccountsOnly) {
     return {
       ixns: [],
       lookupTablesAddresses: [],
-      swapInputs: { inputAmountLamports: 0, inputMint: PublicKey.default, outputMint: PublicKey.default },
+      swapInputs: {
+        inputAmountLamports: new Decimal('0'),
+        inputMint: PublicKey.default,
+        outputMint: PublicKey.default,
+      },
       totalKlendAccounts: totalKlendAccounts,
     };
   }
@@ -1760,16 +1849,14 @@ export const getDecreaseLeverageIxns = async (props: {
   }
 
   const swapInputs: SwapInputs = {
-    inputAmountLamports: toLamports(withdrawAmountWithSlippageAndFlashLoanFee, collReserve!.stats.decimals)
-      .ceil()
-      .toNumber(),
+    inputAmountLamports: toLamports(withdrawAmountWithSlippageAndFlashLoanFee, collReserve!.stats.decimals).ceil(),
     inputMint: collTokenMint,
     outputMint: debtTokenMint,
   };
 
   // 5. Get swap ixns
   const [swapIxns, lookupTablesAddresses] = await withdrawSwapper(
-    swapInputs.inputAmountLamports,
+    swapInputs.inputAmountLamports.toNumber(),
     swapInputs.inputMint,
     swapInputs.outputMint,
     slippagePct
@@ -1779,7 +1866,7 @@ export const getDecreaseLeverageIxns = async (props: {
 
   const ixns = [
     ...budgetIxns,
-    ...createAtasIxns,
+    ...createAtaIxs,
     ...fillWsolAtaIxns,
     ...[flashBorrowIxn],
     ...repayAction.setupIxs,
@@ -1790,7 +1877,7 @@ export const getDecreaseLeverageIxns = async (props: {
     ...withdrawAction.cleanupIxs,
     ...swapInstructions,
     ...[flashRepayIxn],
-    ...closeAtasIxns,
+    ...closeWsolAtaIxns,
   ];
 
   ixns.forEach((ixn, i) => {

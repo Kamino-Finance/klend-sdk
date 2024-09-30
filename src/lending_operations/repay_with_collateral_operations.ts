@@ -1,224 +1,276 @@
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { KaminoAction, KaminoMarket, KaminoObligation, numberToLamportsDecimal } from '../classes';
-import { SwapInputs, SwapIxnsProvider, getFlashLoanInstructions, toJson } from '../leverage';
+import { KaminoAction, KaminoMarket, KaminoObligation, KaminoReserve } from '../classes';
 import {
-  PublicKeySet,
-  ScopeRefresh,
-  U64_MAX,
-  getAtasWithCreateIxnsIfMissing,
+  getFlashLoanInstructions,
+  SwapInputs,
+  SwapQuote,
+  SwapQuoteIxs,
+  SwapQuoteIxsProvider,
+  SwapQuoteProvider,
+} from '../leverage';
+import {
+  createAtasIdempotent,
   getComputeBudgetAndPriorityFeeIxns,
   removeBudgetAndAtaIxns,
+  ScopeRefresh,
+  U64_MAX,
+  uniqueAccounts,
 } from '../utils';
-import { PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { AddressLookupTableAccount, PublicKey, TransactionInstruction } from '@solana/web3.js';
 import Decimal from 'decimal.js';
+import { calcMaxWithdrawCollateral, calcRepayAmountWithSlippage } from './repay_with_collateral_calcs';
 
-export const repayWithCollCalcs = (props: {
-  repayAmount: Decimal;
-  priceDebtToColl: Decimal;
-  slippagePct: Decimal;
-  flashLoanFeePct: Decimal;
-}): {
-  repayAmount: Decimal;
-  collToSwapIn: Decimal;
-  swapDebtExpectedOut: Decimal;
-} => {
-  // Initialize local variables from the props object
-  const { repayAmount, priceDebtToColl, slippagePct, flashLoanFeePct } = props;
-
-  const slippage = slippagePct.div('100');
-  const flashLoanFee = flashLoanFeePct.div('100');
-
-  const swapDebtExpectedOut = repayAmount.mul(new Decimal(1.0).add(flashLoanFee));
-  const collToSwapIn = swapDebtExpectedOut.mul(new Decimal(1.0).add(slippage)).mul(priceDebtToColl);
-
-  return {
-    repayAmount,
-    collToSwapIn,
-    swapDebtExpectedOut,
-  };
+export type RepayWithCollIxsResponse<QuoteResponse> = {
+  ixs: TransactionInstruction[];
+  lookupTables: AddressLookupTableAccount[];
+  swapInputs: SwapInputs;
+  initialInputs: InitialInputs<QuoteResponse>;
 };
 
-export type InitialInputs = {
-  repayAmount: Decimal;
-  priceDebtToColl: Decimal;
-  slippagePct: Decimal;
+export type InitialInputs<QuoteResponse> = {
+  debtRepayAmountLamports: Decimal;
+  flashRepayAmountLamports: Decimal;
+  swapQuote: SwapQuote<QuoteResponse>;
   currentSlot: number;
+  klendAccounts: Array<PublicKey>;
 };
 
-export const getRepayWithCollSwapInputs = (props: {
-  repayAmount: Decimal;
-  priceDebtToColl: Decimal;
-  slippagePct: Decimal;
+interface RepayWithCollSwapInputsProps<QuoteResponse> {
   kaminoMarket: KaminoMarket;
   debtTokenMint: PublicKey;
   collTokenMint: PublicKey;
   obligation: KaminoObligation;
+  referrer: PublicKey;
   currentSlot: number;
-}): {
+  repayAmount: Decimal;
+  isClosingPosition: boolean;
+  budgetAndPriorityFeeIxs?: TransactionInstruction[];
+  scopeRefresh?: ScopeRefresh;
+  quoter: SwapQuoteProvider<QuoteResponse>;
+}
+
+export async function getRepayWithCollSwapInputs<QuoteResponse>({
+  collTokenMint,
+  currentSlot,
+  debtTokenMint,
+  kaminoMarket,
+  obligation,
+  quoter,
+  referrer,
+  repayAmount,
+  isClosingPosition,
+  budgetAndPriorityFeeIxs,
+  scopeRefresh,
+}: RepayWithCollSwapInputsProps<QuoteResponse>): Promise<{
   swapInputs: SwapInputs;
-  initialInputs: InitialInputs;
-} => {
-  const {
-    repayAmount,
-    priceDebtToColl,
-    slippagePct,
-    kaminoMarket,
-    debtTokenMint,
-    collTokenMint,
-    obligation,
-    currentSlot,
-  } = props;
+  initialInputs: InitialInputs<QuoteResponse>;
+}> {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
-  const flashLoanFeePct = debtReserve?.getFlashLoanFee().ceil() || new Decimal(0);
+  if (!collReserve) {
+    throw new Error(`Collateral reserve with mint ${collReserve} not found in market ${kaminoMarket.getAddress()}`);
+  }
+  if (!debtReserve) {
+    throw new Error(`Debt reserve with mint ${debtReserve} not found in market ${kaminoMarket.getAddress()}`);
+  }
 
-  const irSlippageBpsForDebt = obligation!
-    .estimateObligationInterestRate(
-      kaminoMarket,
-      debtReserve!,
-      obligation?.state.borrows.find((borrow) => borrow.borrowReserve?.equals(debtReserve!.address))!,
-      currentSlot
-    )
-    .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
-  // add 0.1% to irSlippageBpsForDebt because we don't want to estimate slightly less than SC and end up not repaying enough
-  const repayAmountIrAdjusted = repayAmount
-    .mul(irSlippageBpsForDebt.mul(new Decimal('1.001')))
-    .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
+  const { repayAmountLamports, flashRepayAmountLamports } = calcRepayAmountWithSlippage(
+    kaminoMarket,
+    debtReserve,
+    currentSlot,
+    obligation,
+    repayAmount,
+    referrer
+  );
 
-  const repayCalcs = repayWithCollCalcs({
-    repayAmount: repayAmountIrAdjusted,
-    priceDebtToColl,
-    slippagePct,
-    flashLoanFeePct: flashLoanFeePct,
-  });
+  const debtPosition = obligation.getBorrowByReserve(debtReserve.address);
+  const collPosition = obligation.getDepositByReserve(collReserve.address);
+  if (!debtPosition) {
+    throw new Error(
+      `Debt position not found for ${debtReserve.stats.symbol} reserve ${debtReserve.address} in obligation ${obligation.obligationAddress}`
+    );
+  }
+  if (!collPosition) {
+    throw new Error(
+      `Collateral position not found for ${collReserve.stats.symbol} reserve ${collReserve.address} in obligation ${obligation.obligationAddress}`
+    );
+  }
+  const { withdrawableCollLamports } = calcMaxWithdrawCollateral(
+    kaminoMarket,
+    collReserve.address,
+    debtReserve.address,
+    obligation,
+    repayAmountLamports
+  );
+
+  const swapQuoteInputs: SwapInputs = {
+    inputAmountLamports: withdrawableCollLamports,
+    inputMint: collTokenMint,
+    outputMint: debtTokenMint,
+  };
+
+  // Build the repay & withdraw collateral tx to get the number of accounts
+  const klendIxs = await buildRepayWithCollateralIxs(
+    kaminoMarket,
+    debtReserve,
+    collReserve,
+    obligation,
+    referrer,
+    currentSlot,
+    budgetAndPriorityFeeIxs,
+    scopeRefresh,
+    {
+      preActionIxs: [],
+      swapIxs: [],
+      lookupTables: [],
+    },
+    isClosingPosition,
+    repayAmountLamports,
+    withdrawableCollLamports
+  );
+  const uniqueKlendAccounts = uniqueAccounts(klendIxs);
+  const swapQuote = await quoter(swapQuoteInputs, uniqueKlendAccounts);
+
+  const swapQuotePxDebtToColl = swapQuote.priceAInB;
+  const collSwapInLamports = flashRepayAmountLamports.div(debtReserve.getMintFactor()).div(swapQuotePxDebtToColl).mul(collReserve.getMintFactor()).ceil();
 
   return {
     swapInputs: {
-      inputAmountLamports: numberToLamportsDecimal(repayCalcs.collToSwapIn, collReserve!.stats.decimals)
-        .ceil()
-        .toNumber(),
+      inputAmountLamports: collSwapInLamports,
       inputMint: collTokenMint,
       outputMint: debtTokenMint,
     },
     initialInputs: {
-      repayAmount,
-      priceDebtToColl,
-      slippagePct,
+      debtRepayAmountLamports: repayAmountLamports,
+      flashRepayAmountLamports,
+      swapQuote,
       currentSlot,
+      klendAccounts: uniqueKlendAccounts,
     },
   };
-};
+}
 
-export const getRepayWithCollIxns = async (props: {
-  kaminoMarket: KaminoMarket;
-  budgetAndPriorityFeeIxns: TransactionInstruction[];
-  amount: Decimal;
-  debtTokenMint: PublicKey;
-  collTokenMint: PublicKey;
-  owner: PublicKey;
-  priceDebtToColl: Decimal;
-  slippagePct: Decimal;
-  isClosingPosition: boolean;
-  obligation: KaminoObligation;
-  referrer: PublicKey;
-  swapper: SwapIxnsProvider;
-  currentSlot: number;
-  getTotalKlendAccountsOnly: boolean;
-  scopeRefresh: ScopeRefresh;
-}): Promise<{
-  ixns: TransactionInstruction[];
-  lookupTablesAddresses: PublicKey[];
-  swapInputs: SwapInputs;
-  totalKlendAccounts: number;
-  initialInputs: InitialInputs;
-}> => {
-  const {
-    kaminoMarket,
-    budgetAndPriorityFeeIxns,
-    amount,
-    debtTokenMint,
+interface RepayWithCollIxsProps<QuoteResponse> extends RepayWithCollSwapInputsProps<QuoteResponse> {
+  swapper: SwapQuoteIxsProvider<QuoteResponse>;
+  logger?: (msg: string, ...extra: any[]) => void;
+}
+
+export async function getRepayWithCollIxs<QuoteResponse>({
+  repayAmount,
+  isClosingPosition,
+  budgetAndPriorityFeeIxs,
+  collTokenMint,
+  currentSlot,
+  debtTokenMint,
+  kaminoMarket,
+  obligation,
+  quoter,
+  swapper,
+  referrer,
+  scopeRefresh,
+  logger = console.log,
+}: RepayWithCollIxsProps<QuoteResponse>): Promise<RepayWithCollIxsResponse<QuoteResponse>> {
+  const { swapInputs, initialInputs } = await getRepayWithCollSwapInputs({
     collTokenMint,
-    owner,
-    priceDebtToColl,
-    slippagePct,
+    currentSlot,
+    debtTokenMint,
+    kaminoMarket,
+    obligation,
+    quoter,
+    referrer,
+    repayAmount,
     isClosingPosition,
+    budgetAndPriorityFeeIxs,
+    scopeRefresh,
+  });
+  const { debtRepayAmountLamports, flashRepayAmountLamports, swapQuote } = initialInputs;
+  const { inputAmountLamports: collSwapInLamports } = swapInputs;
+
+  const collReserve = kaminoMarket.getReserveByMint(collTokenMint)!;
+  const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint)!;
+
+  logger(
+    `Expected to swap in: ${collSwapInLamports.div(collReserve.getMintFactor())} ${
+      collReserve.symbol
+    }, for: ${flashRepayAmountLamports.div(debtReserve.getMintFactor())} ${debtReserve.symbol}, quoter px: ${
+      swapQuote.priceAInB
+    } ${debtReserve.symbol}/${collReserve.symbol}`
+  );
+
+  const swapResponse = await swapper(swapInputs, initialInputs.klendAccounts, swapQuote);
+  const ixs = await buildRepayWithCollateralIxs(
+    kaminoMarket,
+    debtReserve,
+    collReserve,
     obligation,
     referrer,
-    swapper,
     currentSlot,
-    getTotalKlendAccountsOnly,
+    budgetAndPriorityFeeIxs,
     scopeRefresh,
-  } = props;
+    swapResponse,
+    isClosingPosition,
+    debtRepayAmountLamports,
+    swapInputs.inputAmountLamports
+  );
 
-  const connection = kaminoMarket.getConnection();
-  const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
-  const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
-  // const solTokenReserve = kaminoMarket.getReserveByMint(WRAPPED_SOL_MINT);
-  const flashLoanFeePct = debtReserve?.getFlashLoanFee() || new Decimal(0);
+  return {
+    ixs,
+    lookupTables: swapResponse.lookupTables,
+    swapInputs,
+    initialInputs,
+  };
+}
 
-  const irSlippageBpsForDebt = obligation!
-    .estimateObligationInterestRate(
-      kaminoMarket,
-      debtReserve!,
-      obligation?.state.borrows.find((borrow) => borrow.borrowReserve?.equals(debtReserve!.address))!,
-      currentSlot
-    )
-    .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
-  // add 0.1% to irSlippageBpsForDebt because we don't want to estimate slightly less than SC and end up not reapying enough
-  const repayAmount = amount
-    .mul(irSlippageBpsForDebt.mul(new Decimal('1.001')))
-    .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
+async function buildRepayWithCollateralIxs(
+  market: KaminoMarket,
+  debtReserve: KaminoReserve,
+  collReserve: KaminoReserve,
+  obligation: KaminoObligation,
+  referrer: PublicKey,
+  currentSlot: number,
+  budgetAndPriorityFeeIxs: TransactionInstruction[] | undefined,
+  scopeRefresh: ScopeRefresh | undefined,
+  swapQuoteIxs: SwapQuoteIxs,
+  isClosingPosition: boolean,
+  debtRepayAmountLamports: Decimal,
+  collWithdrawLamports: Decimal
+): Promise<TransactionInstruction[]> {
+  // 1. Create atas & budget txns
+  const budgetIxns = budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxns(1_400_000);
 
-  const calcs = repayWithCollCalcs({
-    repayAmount,
-    priceDebtToColl,
-    slippagePct,
-    flashLoanFeePct,
-  });
-
-  console.log('Ops Calcs', toJson(calcs));
-
-  // // 1. Create atas & budget txns
-  const mintsToCreateAtas = [collTokenMint, debtTokenMint, collReserve!.getCTokenMint()];
-  const mintsToCreateAtasTokenPrograms = [
-    collReserve?.getLiquidityTokenProgram()!,
-    debtReserve?.getLiquidityTokenProgram()!,
-    TOKEN_PROGRAM_ID,
+  const atas = [
+    { mint: collReserve.getLiquidityMint(), tokenProgram: collReserve.getLiquidityTokenProgram() },
+    { mint: debtReserve.getLiquidityMint(), tokenProgram: debtReserve.getLiquidityTokenProgram() },
+    { mint: collReserve.getCTokenMint(), tokenProgram: TOKEN_PROGRAM_ID },
   ];
 
-  const budgetIxns = budgetAndPriorityFeeIxns || getComputeBudgetAndPriorityFeeIxns(3000000);
-  const {
-    atas: [, debtTokenAta],
-    createAtasIxns,
-    closeAtasIxns,
-  } = await getAtasWithCreateIxnsIfMissing(connection, owner, mintsToCreateAtas, mintsToCreateAtasTokenPrograms);
+  const atasAndIxs = createAtasIdempotent(obligation.state.owner, atas);
+  const [, { ata: debtTokenAta }] = atasAndIxs;
 
-  // 1. Flash borrow & repay the debt to repay amount needed
+  // 2. Flash borrow & repay the debt to repay amount needed
   const { flashBorrowIxn, flashRepayIxn } = getFlashLoanInstructions({
-    borrowIxnIndex: budgetIxns.length + createAtasIxns.length,
-    walletPublicKey: owner,
-    lendingMarketAuthority: kaminoMarket.getLendingMarketAuthority(),
-    lendingMarketAddress: kaminoMarket.getAddress(),
-    reserve: debtReserve!,
-    amountLamports: numberToLamportsDecimal(repayAmount, debtReserve!.stats.decimals).floor(),
+    borrowIxnIndex: budgetIxns.length + atasAndIxs.length,
+    walletPublicKey: obligation.state.owner,
+    lendingMarketAuthority: market.getLendingMarketAuthority(),
+    lendingMarketAddress: market.getAddress(),
+    reserve: debtReserve,
+    amountLamports: debtRepayAmountLamports,
     destinationAta: debtTokenAta,
-    referrerAccount: kaminoMarket.programId,
-    referrerTokenState: kaminoMarket.programId,
-    programId: kaminoMarket.programId,
+    referrerAccount: market.programId,
+    referrerTokenState: market.programId,
+    programId: market.programId,
   });
 
-  const requestElevationGroup = obligation.state.elevationGroup !== 0 ? true : false;
+  const requestElevationGroup = !isClosingPosition && obligation.state.elevationGroup !== 0;
 
-  // 2. Repay using the flash borrowed funds & withdraw collateral to swap and pay the flash loan
+  // 3. Repay using the flash borrowed funds & withdraw collateral to swap and pay the flash loan
   const repayAndWithdrawAction = await KaminoAction.buildRepayAndWithdrawTxns(
-    kaminoMarket,
-    isClosingPosition ? U64_MAX : numberToLamportsDecimal(repayAmount, debtReserve!.stats.decimals).floor().toString(),
-    new PublicKey(debtTokenMint),
-    isClosingPosition
-      ? U64_MAX
-      : numberToLamportsDecimal(calcs.collToSwapIn, collReserve!.stats.decimals).ceil().toString(),
-    new PublicKey(collTokenMint),
-    owner,
+    market,
+    isClosingPosition ? U64_MAX : debtRepayAmountLamports.toString(),
+    debtReserve.getLiquidityMint(),
+    isClosingPosition ? U64_MAX : collWithdrawLamports.toString(),
+    collReserve.getLiquidityMint(),
+    obligation.state.owner,
     currentSlot,
     obligation,
     0,
@@ -230,89 +282,17 @@ export const getRepayWithCollIxns = async (props: {
     scopeRefresh
   );
 
-  const ixns = [
+  // 4. Swap collateral to debt to repay flash loan
+  const { preActionIxs, swapIxs } = swapQuoteIxs;
+  const swapInstructions = removeBudgetAndAtaIxns(swapIxs, []);
+
+  return [
     ...budgetIxns,
-    ...createAtasIxns,
-    ...[flashBorrowIxn],
-    ...repayAndWithdrawAction.setupIxs,
-    ...[repayAndWithdrawAction.lendingIxs[0]],
-    ...repayAndWithdrawAction.inBetweenIxs,
-    ...[repayAndWithdrawAction.lendingIxs[1]],
-    ...repayAndWithdrawAction.cleanupIxs,
-    ...[flashRepayIxn],
-    ...closeAtasIxns,
+    ...atasAndIxs.map((x) => x.createAtaIx),
+    flashBorrowIxn,
+    ...preActionIxs,
+    ...KaminoAction.actionToIxs(repayAndWithdrawAction),
+    ...swapInstructions,
+    flashRepayIxn,
   ];
-
-  const uniqueAccounts = new PublicKeySet<PublicKey>([]);
-  ixns.forEach((ixn) => {
-    ixn.keys.forEach((key) => {
-      uniqueAccounts.add(key.pubkey);
-    });
-  });
-  const totalKlendAccounts = uniqueAccounts.toArray().length;
-
-  // return early to avoid extra swapper calls
-  if (getTotalKlendAccountsOnly) {
-    return {
-      ixns: [],
-      lookupTablesAddresses: [],
-      swapInputs: { inputAmountLamports: 0, inputMint: PublicKey.default, outputMint: PublicKey.default },
-      totalKlendAccounts: totalKlendAccounts,
-      initialInputs: {
-        repayAmount,
-        priceDebtToColl,
-        slippagePct,
-        currentSlot,
-      },
-    };
-  }
-
-  console.log(
-    'Expected to swap in',
-    calcs.collToSwapIn.toString(),
-    'coll for',
-    calcs.swapDebtExpectedOut.toString(),
-    'debt'
-  );
-
-  const swapInputs: SwapInputs = {
-    inputAmountLamports: numberToLamportsDecimal(calcs.collToSwapIn, collReserve!.stats.decimals).ceil().toNumber(),
-    inputMint: collTokenMint,
-    outputMint: debtTokenMint,
-  };
-
-  // 3. Swap collateral to debt to repay flash loan
-  const [swapIxns, lookupTablesAddresses] = await swapper(
-    swapInputs.inputAmountLamports,
-    swapInputs.inputMint,
-    swapInputs.outputMint,
-    slippagePct.toNumber()
-  );
-
-  const swapInstructions = removeBudgetAndAtaIxns(swapIxns, []);
-
-  return {
-    ixns: [
-      ...budgetIxns,
-      ...createAtasIxns,
-      ...[flashBorrowIxn],
-      ...repayAndWithdrawAction.setupIxs,
-      ...[repayAndWithdrawAction.lendingIxs[0]],
-      ...repayAndWithdrawAction.inBetweenIxs,
-      ...[repayAndWithdrawAction.lendingIxs[1]],
-      ...repayAndWithdrawAction.cleanupIxs,
-      ...swapInstructions,
-      ...[flashRepayIxn],
-      ...closeAtasIxns,
-    ],
-    lookupTablesAddresses,
-    swapInputs,
-    totalKlendAccounts,
-    initialInputs: {
-      repayAmount,
-      priceDebtToColl,
-      slippagePct,
-      currentSlot,
-    },
-  };
-};
+}

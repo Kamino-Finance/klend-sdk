@@ -185,11 +185,16 @@ export class KaminoVaultClient {
     const createAtasIxns: TransactionInstruction[] = [];
     const closeAtasIxns: TransactionInstruction[] = [];
     if (vaultState.tokenMint.equals(WRAPPED_SOL_MINT)) {
-      const {
-        atas: wsolAta,
-        createAtasIxns: createWsolAtaIxns,
-        closeAtasIxns: closeWsolAtaIxns,
-      } = await getAtasWithCreateIxnsIfMissing(this._connection, user, [WRAPPED_SOL_MINT], [TOKEN_PROGRAM_ID]);
+      const { atas: wsolAta, createAtaIxs: createWsolAtaIxns } = await getAtasWithCreateIxnsIfMissing(
+        this._connection,
+        user,
+        [
+          {
+            mint: WRAPPED_SOL_MINT,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          },
+        ]
+      );
       createAtasIxns.push(...createWsolAtaIxns);
       const depositWsolixn = getDepositWsolIxns(
         user,
@@ -197,15 +202,14 @@ export class KaminoVaultClient {
         numberToLamportsDecimal(tokenAmount, vaultState.tokenMintDecimals.toNumber()).ceil()
       );
       createAtasIxns.push(...depositWsolixn);
-      closeAtasIxns.push(...closeWsolAtaIxns);
     }
 
-    const { atas, createAtasIxns: createSharesAtaIxns } = await getAtasWithCreateIxnsIfMissing(
-      this._connection,
-      user,
-      [vaultState.sharesMint],
-      [TOKEN_PROGRAM_ID]
-    );
+    const { atas, createAtaIxs: createSharesAtaIxns } = await getAtasWithCreateIxnsIfMissing(this._connection, user, [
+      {
+        mint: vaultState.sharesMint,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
+    ]);
     createAtasIxns.push(...createSharesAtaIxns);
 
     const userSharesAta = atas[0];
@@ -256,12 +260,12 @@ export class KaminoVaultClient {
     const vaultState = await vault.getState(this._connection);
 
     const userSharesAta = getAssociatedTokenAddress(vaultState.sharesMint, user);
-    const { atas, createAtasIxns } = await getAtasWithCreateIxnsIfMissing(
-      this._connection,
-      user,
-      [vaultState.tokenMint],
-      [TOKEN_PROGRAM_ID]
-    );
+    const { atas, createAtaIxs } = await getAtasWithCreateIxnsIfMissing(this._connection, user, [
+      {
+        mint: vaultState.tokenMint,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
+    ]);
     const userTokenAta = atas[0];
 
     const tokensToWithdraw = shareAmount.div(await this.getTokensPerShareSingleVault(vault, slot));
@@ -329,7 +333,7 @@ export class KaminoVaultClient {
       })
     );
 
-    return [...createAtasIxns, ...withdrawIxns];
+    return [...createAtaIxs, ...withdrawIxns];
   }
 
   /**

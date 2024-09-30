@@ -20,6 +20,7 @@ import {
 import { fromTxError } from '../idl_codegen/errors';
 import { sleep } from '../classes/utils';
 import { batchFetch } from '@kamino-finance/kliquidity-sdk';
+import { PublicKeySet } from './pubkey';
 
 export async function buildAndSendTxnWithLogs(
   c: Connection,
@@ -255,4 +256,25 @@ export function notEmpty<TValue>(value: TValue | null | undefined): value is TVa
   // eslint-disable-next-line no-unused-vars,@typescript-eslint/no-unused-vars
   const testDummy: TValue = value;
   return true;
+}
+
+export function uniqueAccounts(
+  ixs: TransactionInstruction[],
+  addressLookupTables: PublicKey[] | AddressLookupTableAccount[] = []
+): Array<PublicKey> {
+  let luts: PublicKey[];
+  if (addressLookupTables.length > 0 && addressLookupTables[0] instanceof AddressLookupTableAccount) {
+    luts = (addressLookupTables as AddressLookupTableAccount[]).map((lut) => lut.key);
+  } else {
+    luts = addressLookupTables as PublicKey[];
+  }
+
+  const uniqueAccounts = new PublicKeySet<PublicKey>(luts);
+  ixs.forEach((ixn) => {
+    ixn.keys.forEach((key) => {
+      uniqueAccounts.add(key.pubkey);
+    });
+  });
+
+  return uniqueAccounts.toArray();
 }

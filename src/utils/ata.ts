@@ -4,7 +4,6 @@ import {
   createAssociatedTokenAccountIdempotentInstruction as createAtaIx,
 } from '@solana/spl-token';
 import { ComputeBudgetProgram, Connection, PublicKey, SystemProgram, TransactionInstruction } from '@solana/web3.js';
-import { SOL_MINTS } from '../leverage';
 import Decimal from 'decimal.js';
 import { AnchorProvider } from '@coral-xyz/anchor';
 
@@ -60,70 +59,48 @@ export function getAssociatedTokenAddress(
 export const getAtasWithCreateIxnsIfMissing = async (
   connection: Connection,
   user: PublicKey,
-  mints: PublicKey[],
-  tokenProgramId: PublicKey[]
-) => {
-  const requests = mints.map((x, index) => createAtaIfMissing(connection, user, x, tokenProgramId[index]));
-  const result = await Promise.all(requests);
-
-  const atas = result.map((res) => res.ata);
-  const createAtasIxns = result.reduce((sum, item) => {
-    sum = sum.concat(item.createIxns);
-    return sum;
-  }, [] as TransactionInstruction[]);
-
-  const closeAtasIxns: TransactionInstruction[] = result.reduce((sum, item) => {
-    sum = sum.concat(item.closeIxns);
-    return sum;
-  }, [] as TransactionInstruction[]);
-
+  mints: Array<{ mint: PublicKey; tokenProgram: PublicKey }>
+): Promise<{ atas: PublicKey[]; createAtaIxs: TransactionInstruction[] }> => {
+  const atas: Array<PublicKey> = mints.map((x) => getAssociatedTokenAddress(x.mint, user, true, x.tokenProgram));
+  const accountInfos = await connection.getMultipleAccountsInfo(atas);
+  const createAtaIxs: TransactionInstruction[] = [];
+  for (let i = 0; i < atas.length; i++) {
+    if (!accountInfos[i]) {
+      const { mint, tokenProgram } = mints[i];
+      const [ata, createIxn] = createAssociatedTokenAccountIdempotentInstruction(user, mint, user, tokenProgram);
+      atas[i] = ata;
+      createAtaIxs.push(createIxn);
+    }
+  }
   return {
     atas,
-    createAtasIxns,
-    closeAtasIxns,
+    createAtaIxs,
   };
 };
 
-const createAtaIfMissing = async (
-  connection: Connection,
+export function createAtasIdempotent(
   user: PublicKey,
-  mint: PublicKey,
-  tokenProgram: PublicKey = TOKEN_PROGRAM_ID
-) => {
-  const ata = getAssociatedTokenAddress(mint, user, true, tokenProgram);
-  const doesAtaExist = Boolean(await getAtaByTokenMint(connection, user, mint));
-  const createIxns = !doesAtaExist
-    ? createAssociatedTokenAccountIdempotentInstruction(user, mint, user, tokenProgram)[1]
-    : [];
-  const closeIxns: TransactionInstruction[] = [];
-  return {
-    ata,
-    createIxns,
-    closeIxns,
-  };
-};
+  mints: Array<{ mint: PublicKey; tokenProgram: PublicKey }>
+): Array<{ ata: PublicKey; createAtaIx: TransactionInstruction }> {
+  const res: Array<{ ata: PublicKey; createAtaIx: TransactionInstruction }> = [];
+  for (const mint of mints) {
+    const [ata, createAtaIx] = createAssociatedTokenAccountIdempotentInstruction(
+      user,
+      mint.mint,
+      user,
+      mint.tokenProgram
+    );
+    res.push({
+      ata,
+      createAtaIx,
+    });
+  }
+  return res;
+}
 
 export const checkIfAccountExists = async (connection: Connection, account: PublicKey): Promise<boolean> => {
   const acc = await connection.getAccountInfo(account);
   return acc !== null;
-};
-
-const getAtaByTokenMint = async (
-  connection: Connection,
-  user: PublicKey,
-  tokenMint: PublicKey,
-  tokenProgram: PublicKey = TOKEN_PROGRAM_ID
-): Promise<PublicKey | null> => {
-  if (tokenMint.equals(SOL_MINTS[0])) {
-    return user;
-  }
-
-  const ataAddress = getAssociatedTokenAddress(tokenMint, user, true, tokenProgram);
-  if (await checkIfAccountExists(connection, ataAddress)) {
-    return ataAddress;
-  }
-
-  return null;
 };
 
 export function getDepositWsolIxns(owner: PublicKey, ata: PublicKey, amountLamports: Decimal) {
@@ -183,7 +160,7 @@ export async function getTokenAccountBalanceDecimal(
   mint: PublicKey,
   owner: PublicKey
 ): Promise<Decimal> {
-  const tokenAta = await getAssociatedTokenAddress(mint, owner);
+  const tokenAta = getAssociatedTokenAddress(mint, owner);
   const ataExists = await checkIfAccountExists(connection, tokenAta);
 
   if (!ataExists) {

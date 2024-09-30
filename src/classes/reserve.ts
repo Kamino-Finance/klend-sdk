@@ -20,7 +20,7 @@ import {
   TokenOracleData,
   U64_MAX,
 } from '../utils';
-import { ReserveDataType, ReserveFarmInfo, ReserveRewardYield, ReserveStatus } from './shared';
+import { FeeCalculation, Fees, ReserveDataType, ReserveFarmInfo, ReserveRewardYield, ReserveStatus } from './shared';
 import { Reserve, ReserveFields } from '../idl_codegen/accounts';
 import { BorrowRateCurve, CurvePointFields, ReserveConfig, UpdateConfigMode } from '../idl_codegen/types';
 import { calculateAPYFromAPR, getBorrowRate, lamportsToNumberDecimal, parseTokenSymbol, positiveOrZero } from './utils';
@@ -640,6 +640,53 @@ export class KaminoReserve {
    */
   getCTokenMint(): PublicKey {
     return this.state.collateral.mintPubkey;
+  }
+
+  calculateFees(
+    amountLamports: Decimal,
+    borrowFeeRate: Decimal,
+    feeCalculation: FeeCalculation,
+    referralFeeBps: number,
+    hasReferrer: boolean
+  ): Fees {
+    const referralFeeRate = new Decimal(referralFeeBps).div(ONE_HUNDRED_PCT_IN_BPS);
+    if (borrowFeeRate.gt('0') && amountLamports.gt('0')) {
+      const needToAssessReferralFee = referralFeeRate.gt('0') && hasReferrer;
+      const minimumFee = new Decimal('1'); // 1 token to market owner, nothing to referrer
+
+      let borrowFeeAmount: Decimal;
+      if (feeCalculation === FeeCalculation.Exclusive) {
+        borrowFeeAmount = amountLamports.mul(borrowFeeRate);
+      } else {
+        const borrowFeeFactor = borrowFeeRate.div(borrowFeeRate.add('1'));
+        borrowFeeAmount = amountLamports.mul(borrowFeeFactor);
+      }
+      const borrowFee = Decimal.max(borrowFeeAmount, minimumFee);
+      if (borrowFee.gte(amountLamports)) {
+        throw Error('Borrow amount is too small to receive liquidity after fees');
+      }
+      const referralFee = needToAssessReferralFee
+        ? referralFeeRate.eq(1)
+          ? borrowFee
+          : borrowFee.mul(referralFeeRate).floor()
+        : new Decimal(0);
+
+      const protocolFee = borrowFee.sub(referralFee);
+
+      return { protocolFees: protocolFee, referrerFees: referralFee };
+    } else {
+      return { protocolFees: new Decimal(0), referrerFees: new Decimal(0) };
+    }
+  }
+
+  calculateFlashLoanFees(flashLoanAmountLamports: Decimal, referralFeeBps: number, hasReferrer: boolean): Fees {
+    return this.calculateFees(
+      flashLoanAmountLamports,
+      this.getFlashLoanFee(),
+      FeeCalculation.Exclusive,
+      referralFeeBps,
+      hasReferrer
+    );
   }
 
   setBuffer(buffer: AccountInfo<Buffer> | null) {
