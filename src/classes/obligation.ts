@@ -366,7 +366,7 @@ export class KaminoObligation {
       if (obligationDeposits[i].depositReserve.equals(changeReserve)) {
         const coll: ObligationCollateralFields = { ...obligationDeposits[i] };
         const exchangeRate = collateralExchangeRates.get(changeReserve)!;
-        const changeInCollateral = new Decimal(changeInLamports).mul(exchangeRate);
+        const changeInCollateral = new Decimal(changeInLamports).mul(exchangeRate).toFixed(0);
         const updatedDeposit = new Decimal(obligationDeposits[i].depositedAmount.toNumber()).add(changeInCollateral);
         coll.depositedAmount = new BN(positiveOrZero(updatedDeposit).toString());
         newDeposits.push(new ObligationCollateral(coll));
@@ -927,6 +927,7 @@ export class KaminoObligation {
     if (elevationGroup === this.state.elevationGroup) {
       return Decimal.min(maxBorrowAmount, liquidityAvailable);
     } else {
+      // TODO: this is wrong, most liquidity caps are global, we should add up only the ones that are specific to this mode
       const { amount: debtThisReserve } = this.borrows.get(reserve.address) || { amount: new Decimal(0) };
       const liquidityAvailablePostMigration = Decimal.max(0, liquidityAvailable.minus(debtThisReserve));
       return Decimal.min(maxBorrowAmount, liquidityAvailablePostMigration);
