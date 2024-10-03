@@ -570,7 +570,7 @@ export class KaminoReserve {
     return Decimal.max(new Decimal(0), maxBorrowAmount);
   }
 
-  calcSimulatedBorrowAPR(
+  calcSimulatedBorrowRate(
     amount: Decimal,
     action: ActionType,
     slot: number,
@@ -580,7 +580,20 @@ export class KaminoReserve {
     const slotAdjustmentFactor = this.slotAdjustmentFactor();
     const newUtilization = this.calcSimulatedUtilizationRatio(amount, action, slot, referralFeeBps, outflowAmount);
     const curve = truncateBorrowCurve(this.state.config.borrowRateCurve.points);
-    return getBorrowRate(newUtilization, curve) * slotAdjustmentFactor + this.getFixedHostInterestRate().toNumber();
+    return getBorrowRate(newUtilization, curve) * slotAdjustmentFactor;
+  }
+
+  calcSimulatedBorrowAPR(
+    amount: Decimal,
+    action: ActionType,
+    slot: number,
+    referralFeeBps: number,
+    outflowAmount?: Decimal
+  ) {
+    return (
+      this.calcSimulatedBorrowRate(amount, action, slot, referralFeeBps, outflowAmount) +
+      this.getFixedHostInterestRate().toNumber()
+    );
   }
 
   calcSimulatedSupplyAPR(
@@ -591,7 +604,7 @@ export class KaminoReserve {
     outflowAmount?: Decimal
   ) {
     const newUtilization = this.calcSimulatedUtilizationRatio(amount, action, slot, referralFeeBps, outflowAmount);
-    const simulatedBorrowAPR = this.calcSimulatedBorrowAPR(amount, action, slot, referralFeeBps, outflowAmount);
+    const simulatedBorrowAPR = this.calcSimulatedBorrowRate(amount, action, slot, referralFeeBps, outflowAmount);
     const protocolTakeRatePct = 1 - this.state.config.protocolTakeRatePct / 100;
 
     return newUtilization * simulatedBorrowAPR * protocolTakeRatePct;

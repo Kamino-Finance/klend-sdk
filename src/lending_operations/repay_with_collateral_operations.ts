@@ -132,7 +132,11 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
   const swapQuote = await quoter(swapQuoteInputs, uniqueKlendAccounts);
 
   const swapQuotePxDebtToColl = swapQuote.priceAInB;
-  const collSwapInLamports = flashRepayAmountLamports.div(debtReserve.getMintFactor()).div(swapQuotePxDebtToColl).mul(collReserve.getMintFactor()).ceil();
+  const collSwapInLamports = flashRepayAmountLamports
+    .div(debtReserve.getMintFactor())
+    .div(swapQuotePxDebtToColl)
+    .mul(collReserve.getMintFactor())
+    .ceil();
 
   return {
     swapInputs: {

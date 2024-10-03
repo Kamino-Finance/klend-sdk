@@ -77,7 +77,11 @@ export function calcMaxWithdrawCollateral(
   const collPosition = obligation.getDepositByReserve(collReserve.address)!;
   const initialCollValue = collPosition.amount.floor().div(collReserve.getMintFactor()).mul(collOraclePx);
   const remainingDebtAmountLamports = debtPosition.amount.sub(repayAmountLamports);
-  const remainingDebtBfWeightedValue = remainingDebtAmountLamports.ceil().div(debtReserve.getMintFactor()).mul(debtBorrowFactor).mul(debtOraclePx);
+  const remainingDebtBfWeightedValue = remainingDebtAmountLamports
+    .ceil()
+    .div(debtReserve.getMintFactor())
+    .mul(debtBorrowFactor)
+    .mul(debtOraclePx);
 
   let isClosingPosition = false;
   if (remainingDebtAmountLamports.lte(new Decimal(0)) && obligation.getBorrows().length === 1) {
