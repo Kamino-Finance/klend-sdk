@@ -116,6 +116,7 @@ export type UpdateLendingMarketConfigValueKind =
   | UpdateLendingMarketConfigValue.U128
   | UpdateLendingMarketConfigValue.Pubkey
   | UpdateLendingMarketConfigValue.ElevationGroup
+  | UpdateLendingMarketConfigValue.Name
 export type UpdateLendingMarketConfigValueJSON =
   | UpdateLendingMarketConfigValue.BoolJSON
   | UpdateLendingMarketConfigValue.U8JSON
@@ -125,6 +126,7 @@ export type UpdateLendingMarketConfigValueJSON =
   | UpdateLendingMarketConfigValue.U128JSON
   | UpdateLendingMarketConfigValue.PubkeyJSON
   | UpdateLendingMarketConfigValue.ElevationGroupJSON
+  | UpdateLendingMarketConfigValue.NameJSON
 
 export { UpdateLendingMarketMode }
 
@@ -147,6 +149,7 @@ export type UpdateLendingMarketModeKind =
   | UpdateLendingMarketMode.UpdateMinNetValueObligationPostAction
   | UpdateLendingMarketMode.UpdateMinValueSkipPriorityLiqCheck
   | UpdateLendingMarketMode.UpdatePaddingFields
+  | UpdateLendingMarketMode.UpdateName
 export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateOwnerJSON
   | UpdateLendingMarketMode.UpdateEmergencyModeJSON
@@ -166,6 +169,7 @@ export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateMinNetValueObligationPostActionJSON
   | UpdateLendingMarketMode.UpdateMinValueSkipPriorityLiqCheckJSON
   | UpdateLendingMarketMode.UpdatePaddingFieldsJSON
+  | UpdateLendingMarketMode.UpdateNameJSON
 
 export { LastUpdate } from "./LastUpdate"
 export type { LastUpdateFields, LastUpdateJSON } from "./LastUpdate"

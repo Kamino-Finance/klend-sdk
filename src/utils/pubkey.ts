@@ -239,6 +239,7 @@ export class PubkeyHashMap<K extends PublicKey, V> implements Map<K, V> {
 export class HashablePublicKey extends PublicKey implements IEquality<HashablePublicKey> {
   // We only use the last 32 bits of the public key for hashing
   static MASK = new BN(1).shln(32).subn(1);
+
   constructor(value: PublicKey | string | Buffer | Uint8Array | Array<number>) {
     super(value);
   }
@@ -257,5 +258,6 @@ export class HashablePublicKey extends PublicKey implements IEquality<HashablePu
 
 interface IEquality<T extends IEquality<T>> {
   equals(other: T): boolean;
+
   hashCode(): number;
 }

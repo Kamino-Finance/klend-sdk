@@ -87,7 +87,7 @@ async function main() {
 
   commands
     .command('add-asset-to-market')
-    .requiredOption('--market <string>', 'Market addres to add asset to')
+    .requiredOption('--market <string>', 'Market address to add asset to')
     .requiredOption('--mint <string>', 'Reserve liquidity token mint')
     .requiredOption('--mint-program-id <string>', 'Reserve liquidity token mint program id')
     .requiredOption('--reserve-config-path <string>', 'Path for the reserve config')

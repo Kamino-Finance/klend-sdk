@@ -23,7 +23,14 @@ import {
 import { FeeCalculation, Fees, ReserveDataType, ReserveFarmInfo, ReserveRewardYield, ReserveStatus } from './shared';
 import { Reserve, ReserveFields } from '../idl_codegen/accounts';
 import { BorrowRateCurve, CurvePointFields, ReserveConfig, UpdateConfigMode } from '../idl_codegen/types';
-import { calculateAPYFromAPR, getBorrowRate, lamportsToNumberDecimal, parseTokenSymbol, positiveOrZero } from './utils';
+import {
+  calculateAPYFromAPR,
+  getBorrowRate,
+  lamportsToNumberDecimal,
+  parseTokenSymbol,
+  positiveOrZero,
+  sameLengthArrayEquals,
+} from './utils';
 import { Fraction } from './fraction';
 import BN from 'bn.js';
 import { ActionType } from './action';
@@ -1759,17 +1766,11 @@ export function parseForChangesReserveConfigAndGetIxs(
           ),
         });
       } else {
-        for (let i = 0; i < tokenInfo.name.length; i++) {
-          if (reserve.config.tokenInfo.name[i] !== tokenInfo.name[i]) {
-            updateReserveIxnsArgs.push({
-              mode: UpdateConfigMode.UpdateTokenInfoName.discriminator,
-              value: updateReserveConfigEncodedValue(
-                UpdateConfigMode.UpdateTokenInfoName.discriminator,
-                tokenInfo.name
-              ),
-            });
-            break;
-          }
+        if (!sameLengthArrayEquals(reserve.config.tokenInfo.name, tokenInfo.name)) {
+          updateReserveIxnsArgs.push({
+            mode: UpdateConfigMode.UpdateTokenInfoName.discriminator,
+            value: updateReserveConfigEncodedValue(UpdateConfigMode.UpdateTokenInfoName.discriminator, tokenInfo.name),
+          });
         }
         if (!reserve.config.tokenInfo.heuristic.lower.eq(tokenInfo.heuristic.lower)) {
           updateReserveIxnsArgs.push({
@@ -1825,31 +1826,33 @@ export function parseForChangesReserveConfigAndGetIxs(
             ),
           });
         }
-        for (let i = 0; i < tokenInfo.scopeConfiguration.priceChain.length; i++) {
-          if (
-            reserve.config.tokenInfo.scopeConfiguration.priceChain[i] !== tokenInfo.scopeConfiguration.priceChain[i]
-          ) {
-            updateReserveIxnsArgs.push({
-              mode: UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator,
-              value: updateReserveConfigEncodedValue(
-                UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator,
-                tokenInfo.scopeConfiguration.priceChain
-              ),
-            });
-            break;
-          }
+        if (
+          !sameLengthArrayEquals(
+            reserve.config.tokenInfo.scopeConfiguration.priceChain,
+            tokenInfo.scopeConfiguration.priceChain
+          )
+        ) {
+          updateReserveIxnsArgs.push({
+            mode: UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator,
+            value: updateReserveConfigEncodedValue(
+              UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator,
+              tokenInfo.scopeConfiguration.priceChain
+            ),
+          });
         }
-        for (let i = 0; i < tokenInfo.scopeConfiguration.twapChain.length; i++) {
-          if (reserve.config.tokenInfo.scopeConfiguration.twapChain[i] !== tokenInfo.scopeConfiguration.twapChain[i]) {
-            updateReserveIxnsArgs.push({
-              mode: UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator,
-              value: updateReserveConfigEncodedValue(
-                UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator,
-                tokenInfo.scopeConfiguration.twapChain
-              ),
-            });
-            break;
-          }
+        if (
+          !sameLengthArrayEquals(
+            reserve.config.tokenInfo.scopeConfiguration.twapChain,
+            tokenInfo.scopeConfiguration.twapChain
+          )
+        ) {
+          updateReserveIxnsArgs.push({
+            mode: UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator,
+            value: updateReserveConfigEncodedValue(
+              UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator,
+              tokenInfo.scopeConfiguration.twapChain
+            ),
+          });
         }
         if (
           !reserve.config.tokenInfo.switchboardConfiguration.priceAggregator.equals(

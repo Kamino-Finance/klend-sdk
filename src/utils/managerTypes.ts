@@ -49,6 +49,7 @@ export interface AssetConfig {
   assetReserveConfigParams: AssetReserveConfigParams;
 
   setAssetConfigParams(assetReserveConfigParams: AssetReserveConfigParams): void;
+
   getReserveConfig(): ReserveConfig;
 }
 

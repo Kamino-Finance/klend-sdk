@@ -25,6 +25,7 @@ import {
   PubkeyHashMap,
   Reserve,
   ReserveWithAddress,
+  sameLengthArrayEquals,
   ScopeOracleConfig,
   updateEntireReserveConfigIx,
   updateLendingMarket,
@@ -641,6 +642,13 @@ function parseForChangesMarketConfigAndGetIxs(
       if (elevationGroupsDiffs > 1) {
         throw new Error('Can only update 1 elevation group at a time');
       }
+    } else if (key === 'name') {
+      if (!sameLengthArrayEquals(market.name, newMarket.name)) {
+        updateLendingMarketIxnsArgs.push({
+          mode: UpdateLendingMarketMode.UpdateName.discriminator,
+          value: updateMarketConfigEncodedValue(UpdateLendingMarketMode.UpdateName.discriminator, newMarket.name),
+        });
+      }
     }
   } // for loop
 
@@ -667,6 +675,7 @@ function updateMarketConfigEncodedValue(
   let buffer: Buffer = Buffer.alloc(72);
   let pkBuffer: Buffer;
   let valueBigInt: bigint;
+  let valueArray: number[];
 
   switch (discriminator) {
     case UpdateLendingMarketMode.UpdateEmergencyMode.discriminator:
@@ -702,7 +711,11 @@ function updateMarketConfigEncodedValue(
         buffer[15 - i] = Number((valueBigInt >> BigInt(i * 8)) & BigInt(0xff));
       }
       break;
-    default:
+    case UpdateLendingMarketMode.UpdateName.discriminator:
+      valueArray = value as number[];
+      for (let i = 0; i < valueArray.length; i++) {
+        buffer.writeUIntLE(valueArray[i], i, 1);
+      }
       break;
   }
 

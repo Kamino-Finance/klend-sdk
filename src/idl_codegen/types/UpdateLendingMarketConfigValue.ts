@@ -283,6 +283,41 @@ export class ElevationGroup {
   }
 }
 
+export type NameFields = [Array<number>]
+export type NameValue = [Array<number>]
+
+export interface NameJSON {
+  kind: "Name"
+  value: [Array<number>]
+}
+
+export class Name {
+  static readonly discriminator = 8
+  static readonly kind = "Name"
+  readonly discriminator = 8
+  readonly kind = "Name"
+  readonly value: NameValue
+
+  constructor(value: NameFields) {
+    this.value = [value[0]]
+  }
+
+  toJSON(): NameJSON {
+    return {
+      kind: "Name",
+      value: [this.value[0]],
+    }
+  }
+
+  toEncodable() {
+    return {
+      Name: {
+        _0: this.value[0],
+      },
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(
   obj: any
@@ -323,6 +358,10 @@ export function fromDecoded(
     const val = obj["ElevationGroup"]
     return new ElevationGroup([types.ElevationGroup.fromDecoded(val["_0"])])
   }
+  if ("Name" in obj) {
+    const val = obj["Name"]
+    return new Name([val["_0"]])
+  }
 
   throw new Error("Invalid enum object")
 }
@@ -355,6 +394,9 @@ export function fromJSON(
     case "ElevationGroup": {
       return new ElevationGroup([types.ElevationGroup.fromJSON(obj.value[0])])
     }
+    case "Name": {
+      return new Name([obj.value[0]])
+    }
   }
 }
 
@@ -368,6 +410,7 @@ export function layout(property?: string) {
     borsh.struct([borsh.u128("_0")], "U128"),
     borsh.struct([borsh.publicKey("_0")], "Pubkey"),
     borsh.struct([types.ElevationGroup.layout("_0")], "ElevationGroup"),
+    borsh.struct([borsh.array(borsh.u8(), 32, "_0")], "Name"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

@@ -19,6 +19,7 @@ export class Fraction {
 
     this.valueSf = valueSf;
   }
+
   toDecimal(): Decimal {
     return new Decimal(this.valueSf.toString()).div(Fraction.MULTIPLIER_NUMBER);
   }
@@ -48,15 +49,19 @@ export class Fraction {
   gt(x: Fraction): boolean {
     return this.valueSf.gt(x.getValue());
   }
+
   lt(x: Fraction): boolean {
     return this.valueSf.lt(x.getValue());
   }
+
   gte(x: Fraction): boolean {
     return this.valueSf.gte(x.getValue());
   }
+
   lte(x: Fraction): boolean {
     return this.valueSf.lte(x.getValue());
   }
+
   eq(x: Fraction): boolean {
     return this.valueSf.eq(x.getValue());
   }

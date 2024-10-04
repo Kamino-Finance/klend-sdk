@@ -417,6 +417,29 @@ export class UpdatePaddingFields {
   }
 }
 
+export interface UpdateNameJSON {
+  kind: "UpdateName"
+}
+
+export class UpdateName {
+  static readonly discriminator = 18
+  static readonly kind = "UpdateName"
+  readonly discriminator = 18
+  readonly kind = "UpdateName"
+
+  toJSON(): UpdateNameJSON {
+    return {
+      kind: "UpdateName",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateName: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateLendingMarketModeKind {
   if (typeof obj !== "object") {
@@ -476,6 +499,9 @@ export function fromDecoded(obj: any): types.UpdateLendingMarketModeKind {
   }
   if ("UpdatePaddingFields" in obj) {
     return new UpdatePaddingFields()
+  }
+  if ("UpdateName" in obj) {
+    return new UpdateName()
   }
 
   throw new Error("Invalid enum object")
@@ -539,6 +565,9 @@ export function fromJSON(
     case "UpdatePaddingFields": {
       return new UpdatePaddingFields()
     }
+    case "UpdateName": {
+      return new UpdateName()
+    }
   }
 }
 
@@ -562,6 +591,7 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateMinNetValueObligationPostAction"),
     borsh.struct([], "UpdateMinValueSkipPriorityLiqCheck"),
     borsh.struct([], "UpdatePaddingFields"),
+    borsh.struct([], "UpdateName"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

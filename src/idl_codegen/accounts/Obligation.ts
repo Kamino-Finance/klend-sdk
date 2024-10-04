@@ -13,10 +13,7 @@ export interface ObligationFields {
   lendingMarket: PublicKey
   /** Owner authority which can borrow liquidity */
   owner: PublicKey
-  /**
-   * TODO: Does this break the stack size when copied onto the stack, if too big?
-   * Deposited collateral for the obligation, unique by deposit reserve address
-   */
+  /** Deposited collateral for the obligation, unique by deposit reserve address */
   deposits: Array<types.ObligationCollateralFields>
   /** Worst LTV for the collaterals backing the loan, represented as a percentage */
   lowestReserveDepositLiquidationLtv: BN
@@ -60,10 +57,7 @@ export interface ObligationJSON {
   lendingMarket: string
   /** Owner authority which can borrow liquidity */
   owner: string
-  /**
-   * TODO: Does this break the stack size when copied onto the stack, if too big?
-   * Deposited collateral for the obligation, unique by deposit reserve address
-   */
+  /** Deposited collateral for the obligation, unique by deposit reserve address */
   deposits: Array<types.ObligationCollateralJSON>
   /** Worst LTV for the collaterals backing the loan, represented as a percentage */
   lowestReserveDepositLiquidationLtv: string
@@ -108,10 +102,7 @@ export class Obligation {
   readonly lendingMarket: PublicKey
   /** Owner authority which can borrow liquidity */
   readonly owner: PublicKey
-  /**
-   * TODO: Does this break the stack size when copied onto the stack, if too big?
-   * Deposited collateral for the obligation, unique by deposit reserve address
-   */
+  /** Deposited collateral for the obligation, unique by deposit reserve address */
   readonly deposits: Array<types.ObligationCollateral>
   /** Worst LTV for the collaterals backing the loan, represented as a percentage */
   readonly lowestReserveDepositLiquidationLtv: BN

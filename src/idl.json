@@ -2048,11 +2048,23 @@
             "type": "u64"
           },
           {
+            "name": "name",
+            "docs": [
+              "Market name, zero-padded."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
             "name": "padding1",
             "type": {
               "array": [
                 "u64",
-                177
+                173
               ]
             }
           }
@@ -2100,7 +2112,6 @@
           {
             "name": "deposits",
             "docs": [
-              "TODO: Does this break the stack size when copied onto the stack, if too big?",
               "Deposited collateral for the obligation, unique by deposit reserve address"
             ],
             "type": {
@@ -2725,6 +2736,17 @@
                 "defined": "ElevationGroup"
               }
             ]
+          },
+          {
+            "name": "Name",
+            "fields": [
+              {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            ]
           }
         ]
       }
@@ -2787,6 +2809,9 @@
           },
           {
             "name": "UpdatePaddingFields"
+          },
+          {
+            "name": "UpdateName"
           }
         ]
       }

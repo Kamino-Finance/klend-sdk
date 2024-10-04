@@ -24,6 +24,7 @@ export class VanillaObligation {
   constructor(programId: PublicKey) {
     this.programId = programId;
   }
+
   toArgs() {
     const initObligationArgs: InitObligationArgsModel = {
       tag: VanillaObligation.tag,
@@ -34,6 +35,7 @@ export class VanillaObligation {
 
     return initObligationArgs;
   }
+
   toPda(market: PublicKey, user: PublicKey) {
     return getObligationPdaWithArgs(market, user, this.toArgs(), this.programId);
   }
@@ -61,6 +63,7 @@ export class MultiplyObligation {
 
     return initObligationArgs;
   }
+
   toPda(market: PublicKey, user: PublicKey) {
     return getObligationPdaWithArgs(market, user, this.toArgs(), this.programId);
   }
@@ -88,6 +91,7 @@ export class LeverageObligation {
 
     return initObligationArgs;
   }
+
   toPda(market: PublicKey, user: PublicKey) {
     return getObligationPdaWithArgs(market, user, this.toArgs(), this.programId);
   }
@@ -102,6 +106,7 @@ export class LendingObligation {
     this.token = token;
     this.programId = programId;
   }
+
   toArgs() {
     const initObligationArgs: InitObligationArgsModel = {
       tag: LendingObligation.tag,
@@ -112,6 +117,7 @@ export class LendingObligation {
 
     return initObligationArgs;
   }
+
   toPda(market: PublicKey, user: PublicKey) {
     return getObligationPdaWithArgs(market, user, this.toArgs(), this.programId);
   }

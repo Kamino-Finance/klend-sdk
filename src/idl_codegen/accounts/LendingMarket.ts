@@ -51,6 +51,8 @@ export interface LendingMarketFields {
   /** Min net value accepted to be found in a position after any lending action in an obligation (scaled by quote currency decimals) */
   minNetValueInObligationSf: BN
   minValueSkipLiquidationLtvBfChecks: BN
+  /** Market name, zero-padded. */
+  name: Array<number>
   padding1: Array<BN>
 }
 
@@ -101,6 +103,8 @@ export interface LendingMarketJSON {
   /** Min net value accepted to be found in a position after any lending action in an obligation (scaled by quote currency decimals) */
   minNetValueInObligationSf: string
   minValueSkipLiquidationLtvBfChecks: string
+  /** Market name, zero-padded. */
+  name: Array<number>
   padding1: Array<string>
 }
 
@@ -151,6 +155,8 @@ export class LendingMarket {
   /** Min net value accepted to be found in a position after any lending action in an obligation (scaled by quote currency decimals) */
   readonly minNetValueInObligationSf: BN
   readonly minValueSkipLiquidationLtvBfChecks: BN
+  /** Market name, zero-padded. */
+  readonly name: Array<number>
   readonly padding1: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -180,7 +186,8 @@ export class LendingMarket {
     borsh.array(borsh.u64(), 90, "elevationGroupPadding"),
     borsh.u128("minNetValueInObligationSf"),
     borsh.u64("minValueSkipLiquidationLtvBfChecks"),
-    borsh.array(borsh.u64(), 177, "padding1"),
+    borsh.array(borsh.u8(), 32, "name"),
+    borsh.array(borsh.u64(), 173, "padding1"),
   ])
 
   constructor(fields: LendingMarketFields) {
@@ -212,6 +219,7 @@ export class LendingMarket {
     this.minNetValueInObligationSf = fields.minNetValueInObligationSf
     this.minValueSkipLiquidationLtvBfChecks =
       fields.minValueSkipLiquidationLtvBfChecks
+    this.name = fields.name
     this.padding1 = fields.padding1
   }
 
@@ -287,6 +295,7 @@ export class LendingMarket {
       minNetValueInObligationSf: dec.minNetValueInObligationSf,
       minValueSkipLiquidationLtvBfChecks:
         dec.minValueSkipLiquidationLtvBfChecks,
+      name: dec.name,
       padding1: dec.padding1,
     })
   }
@@ -320,6 +329,7 @@ export class LendingMarket {
       minNetValueInObligationSf: this.minNetValueInObligationSf.toString(),
       minValueSkipLiquidationLtvBfChecks:
         this.minValueSkipLiquidationLtvBfChecks.toString(),
+      name: this.name,
       padding1: this.padding1.map((item) => item.toString()),
     }
   }
@@ -358,6 +368,7 @@ export class LendingMarket {
       minValueSkipLiquidationLtvBfChecks: new BN(
         obj.minValueSkipLiquidationLtvBfChecks
       ),
+      name: obj.name,
       padding1: obj.padding1.map((item) => new BN(item)),
     })
   }

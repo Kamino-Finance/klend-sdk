@@ -142,6 +142,29 @@ export const parseTokenSymbol = (tokenSymbol: number[]): string => {
   return String.fromCharCode(...tokenSymbol.filter((x) => x > 0));
 };
 
+export function parseZeroPaddedUtf8(utf8Array: number[]): string {
+  for (let last = utf8Array.length - 1; last >= 0; last--) {
+    const trailing_zero = utf8Array[last];
+    if (trailing_zero != 0) {
+      const encoding = new Uint8Array(last + 1);
+      for (let i = 0; i <= last; i++) {
+        encoding[i] = utf8Array[i];
+      }
+      break;
+    }
+  }
+  return new TextDecoder().decode();
+}
+
+export function renderZeroPaddedUtf8(str: string, utf8ArrayLength: number): number[] {
+  const encoding = new TextEncoder().encode(str);
+  const result = new Array<number>(utf8ArrayLength);
+  for (let i = 0; i < result.length; i++) {
+    result[i] = i < encoding.length ? encoding[i] : 0;
+  }
+  return result;
+}
+
 export function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -189,4 +212,11 @@ export function calculateAPRFromAPY(apy: Decimal.Value) {
     .pow(1 / SLOTS_PER_YEAR)
     .minus(1)
     .times(SLOTS_PER_YEAR);
+}
+
+export function sameLengthArrayEquals(left: Array<number>, right: Array<number>): boolean {
+  if (left.length != right.length) {
+    throw new Error(`Not same length: ${left.length} != ${left.length}`);
+  }
+  return left.every((value, index) => value === right[index]);
 }

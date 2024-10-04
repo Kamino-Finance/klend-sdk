@@ -10,6 +10,7 @@ import {
 import { Buffer } from 'buffer';
 import axios from 'axios';
 import { init, decompress } from '@bokuweb/zstd-wasm';
+
 (async () => {
   await init();
 })();

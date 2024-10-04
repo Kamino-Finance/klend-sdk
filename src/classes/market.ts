@@ -31,7 +31,7 @@ import bs58 from 'bs58';
 import { OraclePrices, Scope } from '@kamino-finance/scope-sdk';
 import { Fraction } from './fraction';
 import { chunks, KaminoPrices, MintToPriceMap } from '@kamino-finance/kliquidity-sdk';
-import { parseTokenSymbol } from './utils';
+import { parseTokenSymbol, parseZeroPaddedUtf8 } from './utils';
 import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
 import { ObligationZP } from '../idl_codegen/zero_padding';
 
@@ -173,6 +173,10 @@ export class KaminoMarket {
    */
   getLendingMarketAuthority(): PublicKey {
     return lendingMarketAuthPda(this.getAddress(), this.programId)[0];
+  }
+
+  getName(): string {
+    return parseZeroPaddedUtf8(this.state.name);
   }
 
   async getObligationDepositByWallet(
