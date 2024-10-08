@@ -1,31 +1,40 @@
-import { TransactionInstruction, PublicKey, AccountMeta } from '@solana/web3.js'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import BN from 'bn.js'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import * as borsh from '@coral-xyz/borsh'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import * as types from '../types'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import { PROGRAM_ID } from '../programId';
+import { TransactionInstruction, PublicKey, AccountMeta } from "@solana/web3.js" // eslint-disable-line @typescript-eslint/no-unused-vars
+import BN from "bn.js" // eslint-disable-line @typescript-eslint/no-unused-vars
+import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-eslint/no-unused-vars
+import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
+import { PROGRAM_ID } from "../programId"
 
 export interface InvestAccounts {
-  adminAuthority: PublicKey;
-  vaultState: PublicKey;
-  tokenVault: PublicKey;
-  baseVaultAuthority: PublicKey;
-  ctokenVault: PublicKey;
-  reserve: PublicKey;
+  payer: PublicKey
+  payerTokenAccount: PublicKey
+  vaultState: PublicKey
+  tokenVault: PublicKey
+  tokenMint: PublicKey
+  baseVaultAuthority: PublicKey
+  ctokenVault: PublicKey
+  reserve: PublicKey
   /** CPI accounts */
-  lendingMarket: PublicKey;
-  lendingMarketAuthority: PublicKey;
-  reserveLiquiditySupply: PublicKey;
-  reserveCollateralMint: PublicKey;
-  klendProgram: PublicKey;
-  instructionSysvarAccount: PublicKey;
-  tokenProgram: PublicKey;
+  lendingMarket: PublicKey
+  lendingMarketAuthority: PublicKey
+  reserveLiquiditySupply: PublicKey
+  reserveCollateralMint: PublicKey
+  reserveCollateralTokenProgram: PublicKey
+  klendProgram: PublicKey
+  instructionSysvarAccount: PublicKey
+  tokenProgram: PublicKey
+  sharesTokenProgram: PublicKey
 }
 
-export function invest(accounts: InvestAccounts, programId: PublicKey = PROGRAM_ID) {
+export function invest(
+  accounts: InvestAccounts,
+  programId: PublicKey = PROGRAM_ID
+) {
   const keys: Array<AccountMeta> = [
-    { pubkey: accounts.adminAuthority, isSigner: true, isWritable: true },
+    { pubkey: accounts.payer, isSigner: true, isWritable: true },
+    { pubkey: accounts.payerTokenAccount, isSigner: false, isWritable: true },
     { pubkey: accounts.vaultState, isSigner: false, isWritable: true },
     { pubkey: accounts.tokenVault, isSigner: false, isWritable: true },
+    { pubkey: accounts.tokenMint, isSigner: false, isWritable: true },
     { pubkey: accounts.baseVaultAuthority, isSigner: false, isWritable: true },
     { pubkey: accounts.ctokenVault, isSigner: false, isWritable: true },
     { pubkey: accounts.reserve, isSigner: false, isWritable: true },
@@ -45,6 +54,11 @@ export function invest(accounts: InvestAccounts, programId: PublicKey = PROGRAM_
       isSigner: false,
       isWritable: true,
     },
+    {
+      pubkey: accounts.reserveCollateralTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
     { pubkey: accounts.klendProgram, isSigner: false, isWritable: false },
     {
       pubkey: accounts.instructionSysvarAccount,
@@ -52,9 +66,10 @@ export function invest(accounts: InvestAccounts, programId: PublicKey = PROGRAM_
       isWritable: false,
     },
     { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
-  ];
-  const identifier = Buffer.from([13, 245, 180, 103, 254, 182, 121, 4]);
-  const data = identifier;
-  const ix = new TransactionInstruction({ keys, programId, data });
-  return ix;
+    { pubkey: accounts.sharesTokenProgram, isSigner: false, isWritable: false },
+  ]
+  const identifier = Buffer.from([13, 245, 180, 103, 254, 182, 121, 4])
+  const data = identifier
+  const ix = new TransactionInstruction({ keys, programId, data })
+  return ix
 }

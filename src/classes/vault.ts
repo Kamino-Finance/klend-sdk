@@ -23,6 +23,8 @@ import {
   WRAPPED_SOL_MINT,
 } from '../lib';
 import {
+  // closeVault,
+  // CloseVaultAccounts,
   DepositAccounts,
   DepositArgs,
   initVault,
@@ -124,6 +126,7 @@ export class KaminoVaultClient {
       systemProgram: SystemProgram.programId,
       rent: SYSVAR_RENT_PUBKEY,
       tokenProgram: vaultConfig.tokenMintProgramId,
+      sharesTokenProgram: TOKEN_PROGRAM_ID,
     };
     const initVaultIx = initVault(initVaultAccounts, this._kaminoVaultProgramId);
 
@@ -145,7 +148,11 @@ export class KaminoVaultClient {
     const vaultState: VaultState = await vault.getState(this.getConnection());
     const reserveState: Reserve = reserveAllocationConfig.getReserveState();
 
-    const cTokenVault = getCTokenVaultPda(reserveAllocationConfig.getReserveAddress(), this._kaminoVaultProgramId);
+    const cTokenVault = getCTokenVaultPda(
+      vault.address,
+      reserveAllocationConfig.getReserveAddress(),
+      this._kaminoVaultProgramId
+    );
 
     const updateReserveAllocationAccounts: UpdateReserveAllocationAccounts = {
       adminAuthority: vaultState.adminAuthority,
@@ -170,6 +177,17 @@ export class KaminoVaultClient {
       this._kaminoVaultProgramId
     );
   }
+
+  // async closeVaultIx(vault: KaminoVault): Promise<TransactionInstruction> {
+  //   const vaultState: VaultState = await vault.getState(this.getConnection());
+
+  //   const closeVaultAccounts: CloseVaultAccounts = {
+  //     adminAuthority: vaultState.adminAuthority,
+  //     vaultState: vault.address,
+  //   };
+
+  //   return closeVault(closeVaultAccounts, this._kaminoVaultProgramId);
+  // }
 
   /**
    * This function creates instructions to deposit into a vault. It will also create ATA creation instructions for the vault shares that the user receives in return
@@ -225,6 +243,8 @@ export class KaminoVaultClient {
       userSharesAta: userSharesAta,
       tokenProgram: TOKEN_PROGRAM_ID,
       instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
+      klendProgram: this._kaminoLendProgramId,
+      sharesTokenProgram: TOKEN_PROGRAM_ID,
     };
 
     const depositArgs: DepositArgs = {
@@ -235,10 +255,24 @@ export class KaminoVaultClient {
 
     const vaultReserves = this.getVaultReserves(vaultState);
 
-    const vaultReservesAccountMetas: AccountMeta[] = vaultReserves.map((reserve) => {
-      return { pubkey: reserve, isSigner: false, isWritable: false };
+    const vaultReservesState = await this.loadVaultReserves(vaultState);
+
+    let vaultReservesAccountMetas: AccountMeta[] = [];
+    let vaultReservesLendingMarkets: AccountMeta[] = [];
+    vaultReserves.forEach((reserve) => {
+      const reserveState = vaultReservesState.get(reserve);
+      if (reserveState === undefined) {
+        throw new Error(`Reserve ${reserve.toBase58()} not found`);
+      }
+      vaultReservesAccountMetas = vaultReservesAccountMetas.concat([
+        { pubkey: reserve, isSigner: false, isWritable: true },
+      ]);
+      vaultReservesLendingMarkets = vaultReservesLendingMarkets.concat([
+        { pubkey: reserveState.state.lendingMarket, isSigner: false, isWritable: false },
+      ]);
     });
     depositIx.keys = depositIx.keys.concat(vaultReservesAccountMetas);
+    depositIx.keys = depositIx.keys.concat(vaultReservesLendingMarkets);
 
     return [...createAtasIxns, depositIx, ...closeAtasIxns];
   }
@@ -341,7 +375,7 @@ export class KaminoVaultClient {
    * @param kaminoVault - vault to invest from
    * @returns - an array of invest instructions for each invest action required for the vault reserves
    */
-  async investAllReservesIxs(vault: KaminoVault): Promise<TransactionInstruction[]> {
+  async investAllReservesIxs(payer: PublicKey, vault: KaminoVault): Promise<TransactionInstruction[]> {
     //TODO: Order invest ixns by - invest that removes first, then invest that adds
 
     const vaultState = await vault.getState(this._connection);
@@ -352,7 +386,7 @@ export class KaminoVaultClient {
       if (reserveState === null) {
         throw new Error(`Reserve ${reserve.toBase58()} not found`);
       }
-      investIxns.push(await this.investSingleReserveIxs(vault, { address: reserve, state: reserveState }));
+      investIxns.push(await this.investSingleReserveIxs(payer, vault, { address: reserve, state: reserveState }));
     }
 
     return investIxns;
@@ -364,14 +398,20 @@ export class KaminoVaultClient {
    * @param reserve - reserve to invest into or disinvest from
    * @returns - an array of invest instructions for each invest action required for the vault reserves
    */
-  async investSingleReserveIxs(vault: KaminoVault, reserve: ReserveWithAddress): Promise<TransactionInstruction> {
+  async investSingleReserveIxs(
+    payer: PublicKey,
+    vault: KaminoVault,
+    reserve: ReserveWithAddress
+  ): Promise<TransactionInstruction> {
     const vaultState = await vault.getState(this._connection);
 
-    const cTokenVault = getCTokenVaultPda(reserve.address, this._kaminoVaultProgramId);
+    const cTokenVault = getCTokenVaultPda(vault.address, reserve.address, this._kaminoVaultProgramId);
     const lendingMarketAuth = lendingMarketAuthPda(reserve.state.lendingMarket, this._kaminoLendProgramId)[0];
 
+    const payerTokenAta = getAssociatedTokenAddress(vaultState.tokenMint, payer);
+
     const investAccounts: InvestAccounts = {
-      adminAuthority: vaultState.adminAuthority,
+      payer,
       vaultState: vault.address,
       tokenVault: vaultState.tokenVault,
       baseVaultAuthority: vaultState.baseVaultAuthority,
@@ -385,6 +425,10 @@ export class KaminoVaultClient {
       klendProgram: this._kaminoLendProgramId,
       instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
       tokenProgram: TOKEN_PROGRAM_ID,
+      payerTokenAccount: payerTokenAta,
+      tokenMint: vaultState.tokenMint,
+      reserveCollateralTokenProgram: TOKEN_PROGRAM_ID,
+      sharesTokenProgram: TOKEN_PROGRAM_ID,
     };
 
     const investIx = invest(investAccounts, this._kaminoVaultProgramId);
@@ -398,7 +442,7 @@ export class KaminoVaultClient {
     return investIx;
   }
 
-  private withdrawIxn(
+  private async withdrawIxn(
     user: PublicKey,
     vault: KaminoVault,
     vaultState: VaultState,
@@ -407,7 +451,7 @@ export class KaminoVaultClient {
     userSharesAta: PublicKey,
     userTokenAta: PublicKey,
     shareAmountLamports: Decimal
-  ): TransactionInstruction {
+  ): Promise<TransactionInstruction> {
     const lendingMarketAuth = lendingMarketAuthPda(marketWithAddress.address, this._kaminoLendProgramId)[0];
 
     const withdrawAccounts: WithdrawAccounts = {
@@ -422,13 +466,15 @@ export class KaminoVaultClient {
       tokenProgram: TOKEN_PROGRAM_ID,
       instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
       reserve: reserve.address,
-      ctokenVault: getCTokenVaultPda(reserve.address, this._kaminoVaultProgramId),
+      ctokenVault: getCTokenVaultPda(vault.address, reserve.address, this._kaminoVaultProgramId),
       /** CPI accounts */
       lendingMarket: marketWithAddress.address,
       lendingMarketAuthority: lendingMarketAuth,
       reserveLiquiditySupply: reserve.state.liquidity.supplyVault,
       reserveCollateralMint: reserve.state.collateral.mintPubkey,
       klendProgram: this._kaminoLendProgramId,
+      reserveCollateralTokenProgram: TOKEN_PROGRAM_ID,
+      sharesTokenProgram: TOKEN_PROGRAM_ID,
     };
 
     const withdrawArgs: WithdrawArgs = {
@@ -438,10 +484,26 @@ export class KaminoVaultClient {
     const withdrawIxn = withdraw(withdrawArgs, withdrawAccounts, this._kaminoVaultProgramId);
 
     const vaultReserves = this.getVaultReserves(vaultState);
-    const vaultReservesAccountMetas: AccountMeta[] = vaultReserves.map((reserve) => {
-      return { pubkey: reserve, isSigner: false, isWritable: false };
+    const vaultReservesState = await this.loadVaultReserves(vaultState);
+
+    let vaultReservesAccountMetas: AccountMeta[] = [];
+    let vaultReservesLendingMarkets: AccountMeta[] = [];
+
+    vaultReserves.forEach((reserve) => {
+      const reserveState = vaultReservesState.get(reserve);
+      if (reserveState === undefined) {
+        throw new Error(`Reserve ${reserve.toBase58()} not found`);
+      }
+
+      vaultReservesAccountMetas = vaultReservesAccountMetas.concat([
+        { pubkey: reserve, isSigner: false, isWritable: true },
+      ]);
+      vaultReservesLendingMarkets = vaultReservesLendingMarkets.concat([
+        { pubkey: reserveState.state.lendingMarket, isSigner: false, isWritable: false },
+      ]);
     });
     withdrawIxn.keys = withdrawIxn.keys.concat(vaultReservesAccountMetas);
+    withdrawIxn.keys = withdrawIxn.keys.concat(vaultReservesLendingMarkets);
 
     return withdrawIxn;
   }
@@ -804,9 +866,9 @@ export class ReserveAllocationConfig {
   }
 }
 
-export function getCTokenVaultPda(reserveAddress: PublicKey, kaminoVaultProgramId: PublicKey) {
+export function getCTokenVaultPda(vaultAddress: PublicKey, reserveAddress: PublicKey, kaminoVaultProgramId: PublicKey) {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from(CTOKEN_VAULT_SEED), reserveAddress.toBytes()],
+    [Buffer.from(CTOKEN_VAULT_SEED), vaultAddress.toBytes(), reserveAddress.toBytes()],
     kaminoVaultProgramId
   )[0];
 }

@@ -4,12 +4,8 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
 
-export interface WithdrawArgs {
-  sharesAmount: BN
-}
-
-export interface WithdrawAccounts {
-  user: PublicKey
+export interface WithdrawPendingFeesAccounts {
+  adminAuthority: PublicKey
   vaultState: PublicKey
   reserve: PublicKey
   tokenVault: PublicKey
@@ -17,8 +13,6 @@ export interface WithdrawAccounts {
   baseVaultAuthority: PublicKey
   tokenAta: PublicKey
   tokenMint: PublicKey
-  userSharesAta: PublicKey
-  sharesMint: PublicKey
   tokenProgram: PublicKey
   /** CPI accounts */
   lendingMarket: PublicKey
@@ -31,15 +25,12 @@ export interface WithdrawAccounts {
   sharesTokenProgram: PublicKey
 }
 
-export const layout = borsh.struct([borsh.u64("sharesAmount")])
-
-export function withdraw(
-  args: WithdrawArgs,
-  accounts: WithdrawAccounts,
+export function withdrawPendingFees(
+  accounts: WithdrawPendingFeesAccounts,
   programId: PublicKey = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta> = [
-    { pubkey: accounts.user, isSigner: true, isWritable: true },
+    { pubkey: accounts.adminAuthority, isSigner: true, isWritable: true },
     { pubkey: accounts.vaultState, isSigner: false, isWritable: true },
     { pubkey: accounts.reserve, isSigner: false, isWritable: true },
     { pubkey: accounts.tokenVault, isSigner: false, isWritable: true },
@@ -47,8 +38,6 @@ export function withdraw(
     { pubkey: accounts.baseVaultAuthority, isSigner: false, isWritable: true },
     { pubkey: accounts.tokenAta, isSigner: false, isWritable: true },
     { pubkey: accounts.tokenMint, isSigner: false, isWritable: true },
-    { pubkey: accounts.userSharesAta, isSigner: false, isWritable: true },
-    { pubkey: accounts.sharesMint, isSigner: false, isWritable: true },
     { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
     { pubkey: accounts.lendingMarket, isSigner: false, isWritable: false },
     {
@@ -79,15 +68,8 @@ export function withdraw(
     },
     { pubkey: accounts.sharesTokenProgram, isSigner: false, isWritable: false },
   ]
-  const identifier = Buffer.from([183, 18, 70, 156, 148, 109, 161, 34])
-  const buffer = Buffer.alloc(1000)
-  const len = layout.encode(
-    {
-      sharesAmount: args.sharesAmount,
-    },
-    buffer
-  )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
+  const identifier = Buffer.from([131, 194, 200, 140, 175, 244, 217, 183])
+  const data = identifier
   const ix = new TransactionInstruction({ keys, programId, data })
   return ix
 }

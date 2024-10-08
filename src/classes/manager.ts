@@ -184,6 +184,10 @@ export class KaminoManager {
     return this._vaultClient.updateReserveAllocationIxs(vault, reserveAllocationConfig);
   }
 
+  // async closeVault(vault: KaminoVault): Promise<TransactionInstruction> {
+  //   return this._vaultClient.closeVaultIx(vault);
+  // }
+
   /**
    * This method retruns the reserve config for a given reserve
    * @param reserve - reserve to get the config for
@@ -361,8 +365,8 @@ export class KaminoManager {
    * @param kaminoVault - vault to invest from
    * @returns - an array of invest instructions for each invest action required for the vault reserves
    */
-  async investAllReserves(kaminoVault: KaminoVault): Promise<TransactionInstruction[]> {
-    return this._vaultClient.investAllReservesIxs(kaminoVault);
+  async investAllReserves(payer: PublicKey, kaminoVault: KaminoVault): Promise<TransactionInstruction[]> {
+    return this._vaultClient.investAllReservesIxs(payer, kaminoVault);
   }
 
   /**
@@ -372,10 +376,11 @@ export class KaminoManager {
    * @returns - an array of invest instructions for each invest action required for the vault reserves
    */
   async investSingleReserve(
+    payer: PublicKey,
     kaminoVault: KaminoVault,
     reserveWithAddress: ReserveWithAddress
   ): Promise<TransactionInstruction> {
-    return this._vaultClient.investSingleReserveIxs(kaminoVault, reserveWithAddress);
+    return this._vaultClient.investSingleReserveIxs(payer, kaminoVault, reserveWithAddress);
   }
 
   /**

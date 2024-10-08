@@ -296,6 +296,24 @@ async function main() {
       mode === 'execute' && console.log('Vault allocation updated:', updateVaultAllocationSig);
     });
 
+  // commands
+  //   .command('close-vault')
+  //   .requiredOption('--vault <string>', 'Vault address')
+  //   .option(`--staging`, 'If true, will use the staging programs')
+  //   .action(async ({vault, staging}) => {
+  //     console.log("silviuuuu vault", vault);
+  //     const env = initializeClient(false, staging);
+  //     const vaultAddress = new PublicKey(vault);
+
+  //     const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+  //     const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
+  //     const instructions = await kaminoManager.closeVault(kaminoVault);
+
+  //     const closeVaultSig = await processTxn(env.client, env.payer, [instructions], 'execute', 2500, []);
+  //     console.log('Vault closed:', closeVaultSig);
+  //   });
+
   commands.command('get-oracle-mappings').action(async () => {
     const env = initializeClient(false, false);
     const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);

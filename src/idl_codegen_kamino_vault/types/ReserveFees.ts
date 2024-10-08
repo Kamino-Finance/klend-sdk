@@ -1,7 +1,7 @@
-import { PublicKey } from '@solana/web3.js'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import BN from 'bn.js'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import * as types from '../types'; // eslint-disable-line @typescript-eslint/no-unused-vars
-import * as borsh from '@coral-xyz/borsh';
+import { PublicKey } from "@solana/web3.js" // eslint-disable-line @typescript-eslint/no-unused-vars
+import BN from "bn.js" // eslint-disable-line @typescript-eslint/no-unused-vars
+import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
+import * as borsh from "@coral-xyz/borsh"
 
 export interface ReserveFeesFields {
   /**
@@ -12,14 +12,14 @@ export interface ReserveFeesFields {
    * 0.01% (1 basis point) = 115292150460685
    * 0.00001% (Aave borrow fee) = 115292150461
    */
-  borrowFeeSf: BN;
+  borrowFeeSf: BN
   /**
    * Fee for flash loan, expressed as scaled fraction.
    * 0.3% (Aave flash loan fee) = 0.003 * 2^60 = 3458764513820541
    */
-  flashLoanFeeSf: BN;
+  flashLoanFeeSf: BN
   /** Used for allignment */
-  padding: Array<number>;
+  padding: Array<number>
 }
 
 export interface ReserveFeesJSON {
@@ -31,14 +31,14 @@ export interface ReserveFeesJSON {
    * 0.01% (1 basis point) = 115292150460685
    * 0.00001% (Aave borrow fee) = 115292150461
    */
-  borrowFeeSf: string;
+  borrowFeeSf: string
   /**
    * Fee for flash loan, expressed as scaled fraction.
    * 0.3% (Aave flash loan fee) = 0.003 * 2^60 = 3458764513820541
    */
-  flashLoanFeeSf: string;
+  flashLoanFeeSf: string
   /** Used for allignment */
-  padding: Array<number>;
+  padding: Array<number>
 }
 
 /**
@@ -57,26 +57,30 @@ export class ReserveFees {
    * 0.01% (1 basis point) = 115292150460685
    * 0.00001% (Aave borrow fee) = 115292150461
    */
-  readonly borrowFeeSf: BN;
+  readonly borrowFeeSf: BN
   /**
    * Fee for flash loan, expressed as scaled fraction.
    * 0.3% (Aave flash loan fee) = 0.003 * 2^60 = 3458764513820541
    */
-  readonly flashLoanFeeSf: BN;
+  readonly flashLoanFeeSf: BN
   /** Used for allignment */
-  readonly padding: Array<number>;
+  readonly padding: Array<number>
 
   constructor(fields: ReserveFeesFields) {
-    this.borrowFeeSf = fields.borrowFeeSf;
-    this.flashLoanFeeSf = fields.flashLoanFeeSf;
-    this.padding = fields.padding;
+    this.borrowFeeSf = fields.borrowFeeSf
+    this.flashLoanFeeSf = fields.flashLoanFeeSf
+    this.padding = fields.padding
   }
 
   static layout(property?: string) {
     return borsh.struct(
-      [borsh.u64('borrowFeeSf'), borsh.u64('flashLoanFeeSf'), borsh.array(borsh.u8(), 8, 'padding')],
+      [
+        borsh.u64("borrowFeeSf"),
+        borsh.u64("flashLoanFeeSf"),
+        borsh.array(borsh.u8(), 8, "padding"),
+      ],
       property
-    );
+    )
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -85,7 +89,7 @@ export class ReserveFees {
       borrowFeeSf: obj.borrowFeeSf,
       flashLoanFeeSf: obj.flashLoanFeeSf,
       padding: obj.padding,
-    });
+    })
   }
 
   static toEncodable(fields: ReserveFeesFields) {
@@ -93,7 +97,7 @@ export class ReserveFees {
       borrowFeeSf: fields.borrowFeeSf,
       flashLoanFeeSf: fields.flashLoanFeeSf,
       padding: fields.padding,
-    };
+    }
   }
 
   toJSON(): ReserveFeesJSON {
@@ -101,7 +105,7 @@ export class ReserveFees {
       borrowFeeSf: this.borrowFeeSf.toString(),
       flashLoanFeeSf: this.flashLoanFeeSf.toString(),
       padding: this.padding,
-    };
+    }
   }
 
   static fromJSON(obj: ReserveFeesJSON): ReserveFees {
@@ -109,10 +113,10 @@ export class ReserveFees {
       borrowFeeSf: new BN(obj.borrowFeeSf),
       flashLoanFeeSf: new BN(obj.flashLoanFeeSf),
       padding: obj.padding,
-    });
+    })
   }
 
   toEncodable() {
-    return ReserveFees.toEncodable(this);
+    return ReserveFees.toEncodable(this)
   }
 }
