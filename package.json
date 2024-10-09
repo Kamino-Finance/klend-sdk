@@ -1,6 +1,6 @@
 {
   "name": "@kamino-finance/klend-sdk",
-  "version": "5.0.4",
+  "version": "5.0.5",
   "description": "Typescript SDK for interacting with the Kamino Lending (klend) protocol",
   "repository": {
     "type": "git",
@@ -61,11 +61,11 @@
     "axios": "^1.6.8",
     "base58-js": "^2.0.0",
     "bn.js": "^5.2.1",
+    "bs58": "^6.0.0",
     "buffer": "^6.0.3",
     "commander": "^9.3.0",
     "decimal.js": "^10.4.3",
-    "exponential-backoff": "^3.1.1",
-    "bs58": "^6.0.0"
+    "exponential-backoff": "^3.1.1"
   },
   "devDependencies": {
     "@orca-so/sdk": "^1.2.25",
