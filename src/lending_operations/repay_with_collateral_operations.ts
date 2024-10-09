@@ -107,6 +107,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
     inputAmountLamports: withdrawableCollLamports,
     inputMint: collTokenMint,
     outputMint: debtTokenMint,
+    amountDebtAtaBalance: new Decimal(0), // only used for kTokens
   };
 
   // Build the repay & withdraw collateral tx to get the number of accounts
@@ -143,6 +144,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
       inputAmountLamports: collSwapInLamports,
       inputMint: collTokenMint,
       outputMint: debtTokenMint,
+      amountDebtAtaBalance: new Decimal(0), // only used for kTokens
     },
     initialInputs: {
       debtRepayAmountLamports: repayAmountLamports,

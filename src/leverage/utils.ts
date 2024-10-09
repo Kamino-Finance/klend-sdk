@@ -1,11 +1,11 @@
 import { Kamino, StrategyWithAddress } from '@kamino-finance/kliquidity-sdk';
 import { KaminoMarket, KaminoReserve, lamportsToNumberDecimal } from '../classes';
 import { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
-import { PriceAinBProvider, SwapIxnsProvider } from './operations';
 import Decimal from 'decimal.js';
-import { getTokenAccountBalanceDecimal } from '../utils';
+import { getLookupTableAccounts, getTokenAccountBalanceDecimal } from '../utils';
 import { numberToLamportsDecimal } from '../classes/utils';
 import BN from 'bn.js';
+import { PriceAinBProvider, SwapInputs, SwapQuote, SwapQuoteIxs, SwapQuoteIxsProvider } from './types';
 
 export interface KaminoSwapperIxBuilder {
   (
@@ -25,48 +25,55 @@ export interface DepositAmountsForSwap {
   tokenBToSwapAmount: Decimal;
 }
 
-export const getTokenToKtokenSwapper = async (
-  connection: Connection,
+export async function getTokenToKtokenSwapper<QuoteResponse>(
   kaminoMarket: KaminoMarket,
   kamino: Kamino,
   depositor: PublicKey,
-  swapper: SwapIxnsProvider,
+  slippagePct: Decimal,
+  swapper: SwapQuoteIxsProvider<QuoteResponse>,
   priceAinB: PriceAinBProvider,
   includeAtaIxns: boolean = true
-): Promise<SwapIxnsProvider> => {
+): Promise<SwapQuoteIxsProvider<QuoteResponse>> {
   return async (
-    amountInLamports: number,
-    amountInMint: PublicKey,
-    amountOutMint: PublicKey,
-    slippage: number,
-    amountDebtAtaBalance?: Decimal
-  ) => {
-    const slippageBps = new Decimal(slippage).mul('100');
-    const mintInDecimals = kaminoMarket.getReserveByMint(amountInMint)!.state.liquidity.mintDecimals.toNumber();
-    const amountIn = lamportsToNumberDecimal(amountInLamports, mintInDecimals);
-    console.debug('Depositing token', amountInMint.toString(), ' for ', amountOutMint.toString(), 'ktoken');
-    if (amountDebtAtaBalance === undefined) {
+    inputs: SwapInputs,
+    klendAccounts: Array<PublicKey>,
+    quote: SwapQuote<QuoteResponse>
+  ): Promise<SwapQuoteIxs> => {
+    const slippageBps = new Decimal(slippagePct).mul('100');
+    const mintInDecimals = kaminoMarket.getReserveByMint(inputs.inputMint)!.state.liquidity.mintDecimals.toNumber();
+    const amountIn = lamportsToNumberDecimal(inputs.inputAmountLamports, mintInDecimals);
+    console.debug('Depositing token', inputs.inputMint.toString(), ' for ', inputs.outputMint.toString(), 'ktoken');
+    if (inputs.amountDebtAtaBalance === undefined) {
       throw Error('Amount in debt ATA balance is undefined for leverage ktoken deposit');
     }
 
     const ixWithLookup = (await getKtokenDepositIxs(
-      connection,
+      kaminoMarket.getConnection(),
       kamino,
       depositor,
-      amountInMint,
-      amountOutMint,
+      inputs.inputMint,
+      inputs.outputMint,
       amountIn,
       slippageBps,
-      amountDebtAtaBalance,
+      inputs.amountDebtAtaBalance,
       swapper,
       priceAinB,
-      includeAtaIxns
+      includeAtaIxns,
+      klendAccounts,
+      quote
     ))!;
-    return [ixWithLookup.instructions, ixWithLookup.lookupTablesAddresses];
-  };
-};
 
-export async function getKtokenDepositIxs(
+    const luts = await getLookupTableAccounts(kaminoMarket.getConnection(), ixWithLookup.lookupTablesAddresses);
+
+    return {
+      preActionIxs: [],
+      swapIxs: ixWithLookup.instructions,
+      lookupTables: luts,
+    };
+  };
+}
+
+export async function getKtokenDepositIxs<QuoteResponse>(
   connection: Connection,
   kamino: Kamino,
   depositor: PublicKey,
@@ -75,9 +82,11 @@ export async function getKtokenDepositIxs(
   amountToDeposit: Decimal,
   slippageBps: Decimal,
   amountExpectedDepositAtaBalance: Decimal,
-  swapper: SwapIxnsProvider,
+  swapper: SwapQuoteIxsProvider<QuoteResponse>,
   priceAinB: PriceAinBProvider,
-  includeAtaIxns: boolean = true
+  includeAtaIxns: boolean = true,
+  klendAccounts: Array<PublicKey>,
+  quote: SwapQuote<QuoteResponse>
 ) {
   const kaminoStrategy = await kamino.getStrategyByKTokenMint(ktokenMint);
   const tokenAMint = kaminoStrategy?.strategy.tokenAMint!;
@@ -94,7 +103,7 @@ export async function getKtokenDepositIxs(
       depositor,
       slippageBps,
       undefined,
-      swapProviderToKaminoSwapProvider(swapper),
+      swapProviderToKaminoSwapProvider(swapper, klendAccounts, quote),
       tokensBalances,
       priceAinBDecimal,
       includeAtaIxns
@@ -108,7 +117,7 @@ export async function getKtokenDepositIxs(
       depositor,
       slippageBps,
       undefined,
-      swapProviderToKaminoSwapProvider(swapper),
+      swapProviderToKaminoSwapProvider(swapper, klendAccounts, quote),
       tokensBalances,
       priceAinBDecimal,
       includeAtaIxns
@@ -118,18 +127,18 @@ export async function getKtokenDepositIxs(
   }
 }
 
-export const getKtokenToTokenSwapper = async (
+export async function getKtokenToTokenSwapper<QuoteResponse>(
   kaminoMarket: KaminoMarket,
   kamino: Kamino,
   depositor: PublicKey,
-  swapper: SwapIxnsProvider
-): Promise<SwapIxnsProvider> => {
-  return async (amountInLamports: number, amountInMint: PublicKey, amountOutMint: PublicKey, slippage: number) => {
-    const amountInDecimals = kaminoMarket.getReserveByMint(amountInMint)!.state.liquidity.mintDecimals.toNumber();
-    const amountToWithdraw = lamportsToNumberDecimal(amountInLamports, amountInDecimals);
-    const kaminoStrategy = await kamino.getStrategyByKTokenMint(amountInMint);
+  swapper: SwapQuoteIxsProvider<QuoteResponse>
+): Promise<SwapQuoteIxsProvider<QuoteResponse>> {
+  return async (inputs: SwapInputs, klendAccounts: Array<PublicKey>, quote: SwapQuote<QuoteResponse>) => {
+    const amountInDecimals = kaminoMarket.getReserveByMint(inputs.inputMint)!.state.liquidity.mintDecimals.toNumber();
+    const amountToWithdraw = lamportsToNumberDecimal(inputs.inputAmountLamports, amountInDecimals);
+    const kaminoStrategy = await kamino.getStrategyByKTokenMint(inputs.inputMint);
 
-    console.log('Withdrawing ktoken', amountInMint.toString(), ' for ', amountOutMint.toString(), 'token');
+    console.log('Withdrawing ktoken', inputs.inputMint.toString(), ' for ', inputs.outputMint.toString(), 'token');
 
     const ixWithdraw = (await getKtokenWithdrawIxs(kamino, depositor, kaminoStrategy!, amountToWithdraw))!;
 
@@ -139,29 +148,45 @@ export const getKtokenToTokenSwapper = async (
       amountToWithdraw
     );
 
-    if (amountOutMint.equals(kaminoStrategy?.strategy.tokenAMint!)) {
-      const [swapIxs, swapLookupTables] = await swapper(
-        estimatedBOut.toNumber(),
-        kaminoStrategy?.strategy.tokenBMint!,
-        kaminoStrategy?.strategy.tokenAMint!,
-        slippage
+    if (inputs.outputMint.equals(kaminoStrategy!.strategy.tokenAMint!)) {
+      const { swapIxs, lookupTables } = await swapper(
+        {
+          inputAmountLamports: estimatedBOut,
+          inputMint: kaminoStrategy!.strategy.tokenBMint!,
+          outputMint: kaminoStrategy!.strategy.tokenAMint!,
+          amountDebtAtaBalance: new Decimal(0),
+        },
+        klendAccounts,
+        quote
       );
 
-      return [[...ixWithdraw.prerequisiteIxs, ixWithdraw.withdrawIx, ...swapIxs], swapLookupTables];
-    } else if (amountOutMint.equals(kaminoStrategy?.strategy.tokenBMint!)) {
-      const [swapIxs, swapLookupTables] = await swapper(
-        estimatedAOut.toNumber(),
-        kaminoStrategy?.strategy.tokenAMint!,
-        kaminoStrategy?.strategy.tokenBMint!,
-        slippage
+      return {
+        preActionIxs: [],
+        swapIxs: [...ixWithdraw.prerequisiteIxs, ixWithdraw.withdrawIx, ...swapIxs],
+        lookupTables,
+      };
+    } else if (inputs.outputMint.equals(kaminoStrategy!.strategy.tokenBMint!)) {
+      const { swapIxs, lookupTables } = await swapper(
+        {
+          inputAmountLamports: estimatedAOut,
+          inputMint: kaminoStrategy!.strategy.tokenAMint!,
+          outputMint: kaminoStrategy!.strategy.tokenBMint!,
+          amountDebtAtaBalance: new Decimal(0),
+        },
+        klendAccounts,
+        quote
       );
 
-      return [[...ixWithdraw.prerequisiteIxs, ixWithdraw.withdrawIx, ...swapIxs], swapLookupTables];
+      return {
+        preActionIxs: [],
+        swapIxs: [...ixWithdraw.prerequisiteIxs, ixWithdraw.withdrawIx, ...swapIxs],
+        lookupTables,
+      };
     } else {
       throw Error('Deposit token is neither A nor B in the strategy');
     }
   };
-};
+}
 
 export async function getKtokenWithdrawIxs(
   kamino: Kamino,
@@ -225,29 +250,43 @@ export async function getKtokenWithdrawEstimatesAndPrice(
   return [estimatedAOutDecimal, estimatedBOutDecimal];
 }
 
-export function swapProviderToKaminoSwapProvider(swapper: SwapIxnsProvider): KaminoSwapperIxBuilder {
+export function swapProviderToKaminoSwapProvider<QuoteResponse>(
+  swapper: SwapQuoteIxsProvider<QuoteResponse>,
+  klendAccounts: Array<PublicKey>,
+  swapQuote: SwapQuote<QuoteResponse>
+): KaminoSwapperIxBuilder {
   return async (
     input: DepositAmountsForSwap,
     tokenAMint: PublicKey,
     tokenBMint: PublicKey,
     _owner: PublicKey,
-    slippageBps: Decimal,
+    _slippage: Decimal,
     _allKeys: PublicKey[]
   ): Promise<[TransactionInstruction[], PublicKey[]]> => {
     if (input.tokenBToSwapAmount.lt(0)) {
-      return await swapper(
-        input.tokenBToSwapAmount.abs().toNumber(),
-        tokenBMint,
-        tokenAMint,
-        slippageBps.toNumber() / 100
+      const swapperIxs = await swapper(
+        {
+          inputAmountLamports: input.tokenBToSwapAmount.abs(),
+          inputMint: tokenBMint,
+          outputMint: tokenAMint,
+          amountDebtAtaBalance: undefined,
+        },
+        klendAccounts,
+        swapQuote
       );
+      return [swapperIxs.swapIxs, swapperIxs.lookupTables.map((lt) => lt.key)];
     } else if (input.tokenAToSwapAmount.lt(0)) {
-      return await swapper(
-        input.tokenAToSwapAmount.abs().toNumber(),
-        tokenAMint,
-        tokenBMint,
-        slippageBps.toNumber() / 100
+      const swapperIxs = await swapper(
+        {
+          inputAmountLamports: input.tokenAToSwapAmount.abs(),
+          inputMint: tokenAMint,
+          outputMint: tokenBMint,
+          amountDebtAtaBalance: undefined,
+        },
+        klendAccounts,
+        swapQuote
       );
+      return [swapperIxs.swapIxs, swapperIxs.lookupTables.map((lt) => lt.key)];
     } else {
       throw Error('Nothing to swap');
     }

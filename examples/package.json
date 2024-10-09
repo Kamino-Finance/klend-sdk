@@ -11,6 +11,7 @@
   "license": "MIT",
   "private": false,
   "scripts": {
+    "lint:fix": "yarn prettier --write .",
     "loan-ltv": "tsx example_loan_ltv.ts",
     "loan-value": "tsx example_loan_value.ts",
     "user-loans": "tsx example_user_loans.ts",
@@ -24,13 +25,17 @@
     "deposit-in-obligation": "tsx example_deposit_in_obligation.ts",
     "burn-ctokens-redeem": "tsx example_burn_ctokens_redeem_tokens.ts",
     "harvest-farm-reward": "tsx example_harvest_reward.ts",
+    "multiply-deposit": "tsx example_multiply_deposit_transaction.ts",
+    "multiply-withdraw": "tsx example_multiply_withdraw_transaction.ts",
+    "multiply-adjust": "tsx example_multiply_adjust_transaction.ts",
     "build": "rm -rf dist/; tsc"
   },
   "dependencies": {
     "@kamino-finance/farms-sdk": "^2.0.3",
-    "@kamino-finance/klend-sdk": "^3.2.12",
+    "@kamino-finance/klend-sdk": "^5.0.4",
     "@kamino-finance/scope-sdk": "^8.0.2",
     "@solana/web3.js": "^1.95.2",
+    "@solana/spl-token": "^0.4.8",
     "axios": "^1.7.3"
   },
   "devDependencies": {

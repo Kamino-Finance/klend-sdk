@@ -1,16 +1,20 @@
 import { LoanArgs, MarketArgs, ReserveArgs } from './models';
 import {
+  buildAndSendTxn,
+  buildVersionedTransaction,
   DEFAULT_RECENT_SLOT_DURATION_MS,
   KaminoMarket,
   KaminoObligation,
   KaminoReserve,
   lamportsToNumberDecimal,
+  sendAndConfirmVersionedTransaction,
 } from '@kamino-finance/klend-sdk';
 import Decimal from 'decimal.js';
 import { FarmState, RewardInfo } from '@kamino-finance/farms-sdk';
 import { Scope } from '@kamino-finance/scope-sdk';
 import { aprToApy, KaminoPrices } from '@kamino-finance/kliquidity-sdk';
-import { PublicKey } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { Wallet } from '@coral-xyz/anchor';
 
 /**
  * Get Kamino Lending Market
@@ -128,4 +132,18 @@ function getRewardPerTimeUnitSecond(reward: RewardInfo) {
     .div(rewardAmountPerUnitLamports);
 
   return rewardPerTimeUnitSecond ? rpsAdjusted : new Decimal(0);
+}
+
+export async function executeUserSetupLutsTransactions(
+  connection: Connection,
+  wallet: Keypair,
+  setupIxns: Array<Array<TransactionInstruction>>
+) {
+  for (const setupIxnsGroup of setupIxns) {
+    if (setupIxnsGroup.length === 0) {
+      continue;
+    }
+    const txHash = await buildAndSendTxn(connection, wallet, setupIxnsGroup, [], []);
+    console.log('txHash', txHash);
+  }
 }

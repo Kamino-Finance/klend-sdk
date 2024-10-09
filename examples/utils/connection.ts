@@ -3,5 +3,6 @@ import { getEnvOrThrow } from './env';
 
 export function getConnection() {
   const RPC_ENDPOINT = getEnvOrThrow('RPC_ENDPOINT');
+  console.log('RPC_ENDPOINT:', RPC_ENDPOINT);
   return new Connection(RPC_ENDPOINT);
 }

@@ -73,6 +73,8 @@ export const MIN_AUTODELEVERAGE_BONUS_BPS = 50;
  */
 export const WRAPPED_SOL_MINT = new PublicKey('So11111111111111111111111111111111111111112');
 
+export const SOL_DECIMALS = 9;
+
 /**
  * USDC Mint
  */

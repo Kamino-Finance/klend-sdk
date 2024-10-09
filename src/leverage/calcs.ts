@@ -1,6 +1,15 @@
 import { PublicKey } from '@solana/web3.js';
 import Decimal from 'decimal.js';
-import { Kamino, StrategyWithAddress, TokenAmounts } from '@kamino-finance/kliquidity-sdk';
+import { collToLamportsDecimal, Kamino, StrategyWithAddress, TokenAmounts } from '@kamino-finance/kliquidity-sdk';
+import { KaminoMarket, KaminoObligation, KaminoReserve } from '../classes';
+import { getExpectedTokenBalanceAfterBorrow } from './utils';
+import {
+  AdjustLeverageCalcsResult,
+  DepositLeverageCalcsResult,
+  PriceAinBProvider,
+  WithdrawLeverageCalcsResult,
+} from './types';
+import { fuzzyEqual } from '../utils';
 
 export const toJson = (object: any): string => {
   return JSON.stringify(object, null, 2);
@@ -126,9 +135,13 @@ export async function calculateMultiplyEffects(
       isClosingPosition =
         (withdrawModeEstimatedDepositTokenWithdrawn.gte(new Decimal(deposited)) ||
           withdrawModeEstimatedBorrowTokenWithdrawn.gte(new Decimal(borrowed)) ||
-          fuzzyEq(withdrawModeEstimatedDepositTokenWithdrawn, new Decimal(deposited), closingPositionDiffTolerance) ||
-          fuzzyEq(withdrawModeEstimatedBorrowTokenWithdrawn, new Decimal(borrowed), closingPositionDiffTolerance)) &&
-        !fuzzyEq(withdrawModeEstimatedDepositTokenWithdrawn, new Decimal(0), closingPositionDiffTolerance);
+          fuzzyEqual(
+            withdrawModeEstimatedDepositTokenWithdrawn,
+            new Decimal(deposited),
+            closingPositionDiffTolerance
+          ) ||
+          fuzzyEqual(withdrawModeEstimatedBorrowTokenWithdrawn, new Decimal(borrowed), closingPositionDiffTolerance)) &&
+        !fuzzyEqual(withdrawModeEstimatedDepositTokenWithdrawn, new Decimal(0), closingPositionDiffTolerance);
 
       totalDeposited = isClosingPosition ? new Decimal(0) : deposited.sub(withdrawModeEstimatedDepositTokenWithdrawn);
       totalBorrowed = isClosingPosition ? new Decimal(0) : borrowed.sub(withdrawModeEstimatedBorrowTokenWithdrawn);
@@ -269,10 +282,6 @@ export function calcWithdrawAmounts(params: WithdrawParams): WithdrawResult {
     adjustBorrowPosition,
   };
 }
-
-export const fuzzyEq = (a: Decimal.Value, b: Decimal.Value, epsilon = 0.0001) => {
-  return new Decimal(a).sub(b).abs().lte(epsilon);
-};
 
 interface UseEstimateAdjustAmountsProps {
   targetLeverage: Decimal;
@@ -462,4 +471,302 @@ export async function simulateMintKToken(
   console.log(`Actual deposit amounts: A: ${actualA}, B: ${actualB}, kTokens to mint: ${actualMint}`);
 
   return [requiredA, requiredB, actualMint];
+}
+
+export const depositLeverageCalcs = (props: {
+  depositAmount: Decimal;
+  depositTokenIsCollToken: boolean;
+  depositTokenIsSol: boolean;
+  priceDebtToColl: Decimal;
+  targetLeverage: Decimal;
+  slippagePct: Decimal;
+  flashLoanFee: Decimal;
+}): DepositLeverageCalcsResult => {
+  // Initialize local variables from the props object
+  const {
+    depositAmount,
+    depositTokenIsCollToken,
+    depositTokenIsSol,
+    priceDebtToColl,
+    targetLeverage,
+    slippagePct,
+    flashLoanFee,
+  } = props;
+  const slippage = slippagePct.div('100');
+
+  const initDepositInSol = depositTokenIsSol ? depositAmount : new Decimal(0);
+
+  // Core logic
+  if (depositTokenIsCollToken) {
+    const y = targetLeverage.mul(priceDebtToColl);
+    const x = flashLoanFee.add('1').mul(slippage.add('1')).div(priceDebtToColl);
+    const finalColl = depositAmount.mul(x).div(x.sub(targetLeverage.sub('1').div(y)));
+    const debt = finalColl.sub(depositAmount).mul(x);
+    const flashBorrowColl = finalColl.sub(depositAmount).mul(flashLoanFee.add('1'));
+
+    return {
+      flashBorrowInCollToken: flashBorrowColl,
+      initDepositInSol,
+      debtTokenToBorrow: debt,
+      collTokenToDeposit: finalColl,
+      swapDebtTokenIn: debt,
+      swapCollTokenExpectedOut: finalColl.sub(depositAmount),
+      flashBorrowInDebtTokenKtokenOnly: new Decimal(0),
+      singleSidedDepositKtokenOnly: new Decimal(0),
+      requiredCollateralKtokenOnly: new Decimal(0),
+    };
+  } else {
+    const y = targetLeverage.mul(priceDebtToColl);
+    const x = flashLoanFee.add('1').mul(slippage.add('1')).div(priceDebtToColl);
+    const finalColl = depositAmount.div(x.sub(targetLeverage.sub('1').div(y)));
+    const flashBorrowColl = finalColl.mul(flashLoanFee.add('1'));
+    const debt = targetLeverage.sub('1').mul(finalColl).div(y);
+
+    return {
+      flashBorrowInCollToken: flashBorrowColl,
+      initDepositInSol,
+      debtTokenToBorrow: debt,
+      collTokenToDeposit: finalColl,
+      swapDebtTokenIn: debt.add(depositAmount),
+      swapCollTokenExpectedOut: finalColl,
+      flashBorrowInDebtTokenKtokenOnly: new Decimal(0),
+      singleSidedDepositKtokenOnly: new Decimal(0),
+      requiredCollateralKtokenOnly: new Decimal(0),
+    };
+  }
+};
+
+export const depositLeverageKtokenCalcs = async (props: {
+  kamino: Kamino;
+  strategy: StrategyWithAddress;
+  debtTokenMint: PublicKey;
+  depositAmount: Decimal;
+  depositTokenIsCollToken: boolean;
+  depositTokenIsSol: boolean;
+  priceDebtToColl: Decimal;
+  targetLeverage: Decimal;
+  slippagePct: Decimal;
+  flashLoanFee: Decimal;
+  priceAinB: PriceAinBProvider;
+  strategyHoldings?: TokenAmounts;
+}): Promise<DepositLeverageCalcsResult> => {
+  const {
+    kamino,
+    strategy,
+    debtTokenMint,
+    depositAmount,
+    depositTokenIsCollToken,
+    depositTokenIsSol,
+    priceDebtToColl,
+    targetLeverage,
+    slippagePct,
+    flashLoanFee,
+    priceAinB,
+    strategyHoldings,
+  } = props;
+  const initDepositInSol = depositTokenIsSol ? depositAmount : new Decimal(0);
+  const slippage = slippagePct.div('100');
+
+  let flashBorrowInDebtToken: Decimal;
+  let collTokenToDeposit: Decimal;
+  let debtTokenToBorrow: Decimal;
+
+  if (depositTokenIsCollToken) {
+    const x = slippage.add('1').div(priceDebtToColl);
+    const y = flashLoanFee.add('1').mul(priceDebtToColl);
+    const z = targetLeverage.mul(y).div(targetLeverage.sub(1));
+    flashBorrowInDebtToken = depositAmount.div(z.minus(new Decimal(1).div(x)));
+    collTokenToDeposit = depositAmount.add(flashBorrowInDebtToken.div(x));
+    debtTokenToBorrow = flashBorrowInDebtToken.mul(new Decimal(1).add(flashLoanFee));
+
+    return {
+      flashBorrowInCollToken: new Decimal(0),
+      initDepositInSol,
+      collTokenToDeposit,
+      debtTokenToBorrow,
+      swapDebtTokenIn: new Decimal(0),
+      swapCollTokenExpectedOut: new Decimal(0),
+      flashBorrowInDebtTokenKtokenOnly: flashBorrowInDebtToken,
+      requiredCollateralKtokenOnly: collTokenToDeposit.sub(depositAmount), // Assuming netValue is requiredCollateral, adjust as needed
+      singleSidedDepositKtokenOnly: flashBorrowInDebtToken,
+    };
+  } else {
+    const y = targetLeverage.mul(priceDebtToColl);
+    // although we will only swap ~half of the debt token, we account for the slippage on the entire amount as we are working backwards from the minimum collateral and do not know the exact swap proportion in advance
+    // This also allows for some variation in the pool ratios between calculation + submitting the tx
+    const x = flashLoanFee.add('1').mul(slippage.add('1')).div(priceDebtToColl);
+    // Calculate the amount of collateral tokens we will deposit in order to achieve the desired leverage after swapping a portion of the debt token and flash loan fees
+    const finalColl = depositAmount.div(x.sub(targetLeverage.sub('1').div(y)));
+    // Calculate how many A and B tokens we will need to actually mint the desired amount of ktoken collateral
+    // The actual amount of ktokens received may be less than the finalColl due to smart proportional contract logic
+    // So we use the actualColl as the amount we will deposit
+    const [estimatedA, estimatedB, actualColl] = await simulateMintKToken(
+      kamino!,
+      strategy!,
+      finalColl,
+      strategyHoldings
+    );
+    const pxAinB = await priceAinB(strategy!.strategy.tokenAMint, strategy!.strategy.tokenBMint);
+    const isTokenADeposit = strategy.strategy.tokenAMint.equals(debtTokenMint);
+    // Calculate the amount we need to flash borrow by combining value of A and B into the debt token
+    const singleSidedDepositAmount = isTokenADeposit
+      ? estimatedA.add(estimatedB.div(pxAinB))
+      : estimatedB.add(estimatedA.mul(pxAinB));
+
+    // Add slippage to the entire amount, add flash loan fee to part we will flash borrow
+    flashBorrowInDebtToken = singleSidedDepositAmount
+      .div(new Decimal('1').sub(slippage))
+      .sub(depositAmount)
+      .div(new Decimal('1').sub(flashLoanFee));
+    // Deposit the min ktoken amount we calculated at the beginning
+    // Any slippage will be left in the user's wallet as ktokens
+    collTokenToDeposit = actualColl;
+    debtTokenToBorrow = flashBorrowInDebtToken.div(new Decimal('1').sub(flashLoanFee));
+    // Add slippage to ensure we try to swap/deposit as much as possible after flash loan fees
+    const singleSidedDeposit = singleSidedDepositAmount.div(new Decimal('1').sub(slippage));
+
+    return {
+      flashBorrowInCollToken: new Decimal(0),
+      initDepositInSol,
+      collTokenToDeposit,
+      debtTokenToBorrow,
+      swapDebtTokenIn: new Decimal(0),
+      swapCollTokenExpectedOut: new Decimal(0),
+      flashBorrowInDebtTokenKtokenOnly: flashBorrowInDebtToken,
+      singleSidedDepositKtokenOnly: singleSidedDeposit,
+      requiredCollateralKtokenOnly: collTokenToDeposit, // Assuming collTokenToDeposit is requiredCollateral, adjust as needed
+    };
+  }
+};
+
+export function withdrawLeverageCalcs(
+  market: KaminoMarket,
+  collReserve: KaminoReserve,
+  debtReserve: KaminoReserve,
+  priceCollToDebt: Decimal,
+  withdrawAmount: Decimal,
+  deposited: Decimal,
+  borrowed: Decimal,
+  currentSlot: number,
+  isClosingPosition: boolean,
+  selectedTokenIsCollToken: boolean,
+  selectedTokenMint: PublicKey,
+  obligation: KaminoObligation,
+  flashLoanFee: Decimal,
+  slippagePct: Decimal
+): WithdrawLeverageCalcsResult {
+  // 1. Calculate coll_amount and debt_amount to repay such that we maintain leverage and we withdraw to
+  // the wallet `amountInDepositTokenToWithdrawToWallet` amount of collateral token
+  // We need to withdraw withdrawAmountInDepositToken coll tokens
+  // and repay repayAmountInBorrowToken debt tokens
+  const { adjustDepositPosition: withdrawAmountCalculated, adjustBorrowPosition: initialRepayAmount } =
+    isClosingPosition
+      ? { adjustDepositPosition: deposited, adjustBorrowPosition: borrowed }
+      : calcWithdrawAmounts({
+          collTokenMint: collReserve.getLiquidityMint(),
+          priceCollToDebt: new Decimal(priceCollToDebt),
+          currentDepositPosition: deposited,
+          currentBorrowPosition: borrowed,
+          withdrawAmount: new Decimal(withdrawAmount),
+          selectedTokenMint: selectedTokenMint,
+        });
+
+  // Add slippage for the accrued interest rate amount
+  const irSlippageBpsForDebt = obligation!
+    .estimateObligationInterestRate(market, debtReserve!, obligation?.state.borrows[0]!, currentSlot)
+    .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
+  // add 0.1 to irSlippageBpsForDebt because we don't want to estimate slightly less than SC and end up not reapying enough
+  const repayAmount = initialRepayAmount
+    .mul(irSlippageBpsForDebt.add('0.1').div('10_000').add('1'))
+    .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
+
+  // 6. Get swap ixns
+  // 5. Get swap estimations to understand how much we need to borrow from borrow reserve
+  // prevent withdrawing more then deposited if we close position
+  const depositTokenWithdrawAmount = !isClosingPosition
+    ? withdrawAmountCalculated.mul(new Decimal(1).plus(flashLoanFee))
+    : withdrawAmountCalculated;
+
+  // We are swapping debt token
+  // When withdrawing coll, it means we just need to swap enough to pay for the flash borrow
+  const swapAmountIfWithdrawingColl = repayAmount
+    .mul(new Decimal(1).plus(flashLoanFee))
+    .mul(new Decimal(1).plus(slippagePct.div(100)))
+    .div(priceCollToDebt);
+
+  // When withdrawing debt, it means we need to swap just the collateral we are withdrwaing
+  // enough to cover the debt we are repaying, leaving the remaining in the wallet
+  const swapAmountIfWithdrawingDebt = withdrawAmountCalculated;
+
+  const collTokenSwapIn = selectedTokenIsCollToken ? swapAmountIfWithdrawingColl : swapAmountIfWithdrawingDebt;
+  const debtTokenExpectedSwapOut = collTokenSwapIn.mul(priceCollToDebt).div(new Decimal(1).add(slippagePct.div(100)));
+
+  return {
+    withdrawAmount: withdrawAmountCalculated,
+    repayAmount,
+    collTokenSwapIn,
+    debtTokenExpectedSwapOut,
+    depositTokenWithdrawAmount,
+  };
+}
+
+export async function adjustDepositLeverageCalcs(
+  market: KaminoMarket,
+  owner: PublicKey,
+  debtReserve: KaminoReserve,
+  adjustDepositPosition: Decimal,
+  adjustBorrowPosition: Decimal,
+  priceDebtToColl: Decimal,
+  flashLoanFee: Decimal,
+  slippagePct: Decimal,
+  collIsKtoken: boolean
+): Promise<AdjustLeverageCalcsResult> {
+  // used if coll is Ktoken and we borrow debt token instead
+  const amountToFlashBorrowDebt = adjustDepositPosition
+    .div(priceDebtToColl)
+    .mul(new Decimal(new Decimal(1).add(slippagePct.div(100))))
+    .toDecimalPlaces(debtReserve!.stats.decimals, Decimal.ROUND_UP);
+
+  const borrowAmount = adjustDepositPosition
+    .mul(new Decimal(1).plus(flashLoanFee))
+    .mul(new Decimal(new Decimal(1).add(slippagePct.div(100))))
+    .div(priceDebtToColl);
+
+  const expectedDebtTokenAtaBalance = await getExpectedTokenBalanceAfterBorrow(
+    market.getConnection(),
+    debtReserve.getLiquidityMint(),
+    owner,
+    collToLamportsDecimal(!collIsKtoken ? borrowAmount : amountToFlashBorrowDebt, debtReserve!.stats.decimals).floor(),
+    debtReserve!.state.liquidity.mintDecimals.toNumber()
+  );
+
+  return {
+    adjustDepositPosition,
+    adjustBorrowPosition,
+    amountToFlashBorrowDebt,
+    borrowAmount,
+    expectedDebtTokenAtaBalance,
+    withdrawAmountWithSlippageAndFlashLoanFee: new Decimal(0),
+  };
+}
+
+export function adjustWithdrawLeverageCalcs(
+  adjustDepositPosition: Decimal,
+  adjustBorrowPosition: Decimal,
+  flashLoanFee: Decimal,
+  slippagePct: Decimal
+): AdjustLeverageCalcsResult {
+  // used if coll is Ktoken and we borrow debt token instead
+  const withdrawAmountWithSlippageAndFlashLoanFee = Decimal.abs(adjustDepositPosition)
+    .mul(new Decimal(1).plus(flashLoanFee))
+    .mul(new Decimal(1).add(slippagePct.div(100)));
+
+  return {
+    adjustDepositPosition,
+    adjustBorrowPosition,
+    amountToFlashBorrowDebt: new Decimal(0),
+    borrowAmount: new Decimal(0),
+    expectedDebtTokenAtaBalance: new Decimal(0),
+    withdrawAmountWithSlippageAndFlashLoanFee,
+  };
 }
