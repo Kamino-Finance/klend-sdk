@@ -1,12 +1,21 @@
 import {
+  AccountInfo,
   Connection,
   Keypair,
+  ParsedAccountData,
   PublicKey,
   SystemProgram,
   SYSVAR_RENT_PUBKEY,
   TransactionInstruction,
 } from '@solana/web3.js';
-import { KaminoVault, KaminoVaultClient, KaminoVaultConfig, kaminoVaultId, ReserveAllocationConfig } from './vault';
+import {
+  KaminoVault,
+  KaminoVaultClient,
+  KaminoVaultConfig,
+  kaminoVaultId,
+  ReserveAllocationConfig,
+  VaultHolder,
+} from './vault';
 import {
   AddAssetToMarketParams,
   CreateKaminoMarketParams,
@@ -40,6 +49,11 @@ import BN from 'bn.js';
 import { ElevationGroup, ReserveConfig, UpdateLendingMarketMode } from '../idl_codegen/types';
 import Decimal from 'decimal.js';
 import * as anchor from '@coral-xyz/anchor';
+import { VaultState } from '../idl_codegen_kamino_vault/accounts';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { Data } from '@kamino-finance/kliquidity-sdk';
+import bs58 from 'bs58';
+import { getProgramAccounts } from '../utils/rpc';
 
 /**
  * KaminoManager is a class that provides a high-level interface to interact with the Kamino Lend and Kamino Vault programs, in order to create and manage a market, as well as vaults
@@ -359,6 +373,105 @@ export class KaminoManager {
   getKaminoVaultClient(): KaminoVaultClient {
     return this._vaultClient;
   }
+
+  /**
+   * Get all vaults
+   * @returns an array of all vaults
+   */
+  async getAllVaults(): Promise<KaminoVault[]> {
+    return this._vaultClient.getAllVaults();
+  }
+
+  /**
+   * Get all vaults for owner
+   * @returns an array of all vaults owned by a given pubkey
+   */
+  async getAllVaultsForOwner(owner: PublicKey): Promise<KaminoVault[]> {
+    const filters = [
+      {
+        dataSize: VaultState.layout.span + 8,
+      },
+      {
+        memcmp: {
+          offset: 0,
+          bytes: bs58.encode(VaultState.discriminator),
+        },
+      },
+      {
+        memcmp: {
+          offset: 8,
+          bytes: owner.toBase58(),
+        },
+      },
+    ];
+
+    const [kaminoVaults] = await Promise.all([
+      getProgramAccounts(this._connection, this._kaminoVaultProgramId, {
+        commitment: this._connection.commitment ?? 'processed',
+        filters,
+      }),
+    ]);
+
+    return kaminoVaults.map((kaminoVault) => {
+      if (kaminoVault.account === null) {
+        throw new Error(`kaminoVault with pubkey ${kaminoVault.pubkey.toString()} does not exist`);
+      }
+
+      const kaminoVaultAccount = VaultState.decode(kaminoVault.account.data);
+      if (!kaminoVaultAccount) {
+        throw Error(`kaminoVault with pubkey ${kaminoVault.pubkey.toString()} could not be decoded`);
+      }
+
+      return new KaminoVault(kaminoVault.pubkey, kaminoVaultAccount, this._kaminoVaultProgramId);
+    });
+  }
+
+  /**
+   * Get all token accounts that hold shares for a specific share mint
+   * @param shareMint
+   * @returns an array of all holders tokenAccounts pubkeys and their account info
+   */
+  async getShareTokenAccounts(
+    shareMint: PublicKey
+  ): Promise<{ pubkey: PublicKey; account: AccountInfo<Buffer | ParsedAccountData> }[]> {
+    //how to get all token accounts for specific mint: https://spl.solana.com/token#finding-all-token-accounts-for-a-specific-mint
+    //get it from the hardcoded token program and create a filter with the actual mint address
+    //datasize:165 filter selects all token accounts, memcmp filter selects based on the mint address withing each token account
+    return this._connection.getParsedProgramAccounts(TOKEN_PROGRAM_ID, {
+      filters: [{ dataSize: 165 }, { memcmp: { offset: 0, bytes: shareMint.toBase58() } }],
+    });
+  }
+
+  /**
+   * Get all token accounts that hold shares for a specific vault; if you already have the vault state use it in the param so you don't have to fetch it again
+   * @param vault
+   * @returns an array of all holders tokenAccounts pubkeys and their account info
+   */
+  async getVaultTokenAccounts(
+    vault: KaminoVault
+  ): Promise<{ pubkey: PublicKey; account: AccountInfo<Buffer | ParsedAccountData> }[]> {
+    const vaultState = await vault.getState(this._connection);
+    return this.getShareTokenAccounts(vaultState.sharesMint);
+  }
+
+  /**
+   * Get all vault token holders
+   * @param vault
+   * @returns an array of all vault holders with their pubkeys and amounts
+   */
+  getVaultHolders = async (vault: KaminoVault): Promise<VaultHolder[]> => {
+    await vault.getState(this._connection);
+    const tokenAccounts = await this.getVaultTokenAccounts(vault);
+    const result: VaultHolder[] = [];
+    for (const tokenAccount of tokenAccounts) {
+      const accountData = tokenAccount.account.data as Data;
+      result.push({
+        holderPubkey: new PublicKey(accountData.parsed.info.owner),
+        amount: new Decimal(accountData.parsed.info.tokenAmount.uiAmountString),
+      });
+    }
+    return result;
+  };
 
   /**
    * This will trigger invest by balancing, based on weights, the reserve allocations of the vault. It can either withdraw or deposit into reserves to balance them. This is a function that should be cranked

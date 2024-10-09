@@ -46,6 +46,8 @@ import { PROGRAM_ID } from '../idl_codegen/programId';
 import { DEFAULT_RECENT_SLOT_DURATION_MS, ReserveWithAddress } from './reserve';
 import { Fraction } from './fraction';
 import { lendingMarketAuthPda } from '../utils/seeds';
+import bs58 from 'bs58';
+import { getProgramAccounts } from '../utils/rpc';
 
 export const kaminoVaultId = new PublicKey('kvauTFR8qm1dhniz6pYuBZkuene3Hfrs1VQhVRgCNrr');
 
@@ -408,6 +410,7 @@ export class KaminoVaultClient {
     const cTokenVault = getCTokenVaultPda(vault.address, reserve.address, this._kaminoVaultProgramId);
     const lendingMarketAuth = lendingMarketAuthPda(reserve.state.lendingMarket, this._kaminoLendProgramId)[0];
 
+    // todo: create ata if needed here
     const payerTokenAta = getAssociatedTokenAddress(vaultState.tokenMint, payer);
 
     const investAccounts: InvestAccounts = {
@@ -653,6 +656,44 @@ export class KaminoVaultClient {
   }
 
   /**
+   * Get all vaults
+   * @returns an array of all vaults
+   */
+  async getAllVaults(): Promise<KaminoVault[]> {
+    const filters = [
+      {
+        dataSize: VaultState.layout.span + 8,
+      },
+      {
+        memcmp: {
+          offset: 0,
+          bytes: bs58.encode(VaultState.discriminator),
+        },
+      },
+    ];
+
+    const [kaminoVaults] = await Promise.all([
+      getProgramAccounts(this._connection, this._kaminoVaultProgramId, {
+        commitment: this._connection.commitment ?? 'processed',
+        filters,
+      }),
+    ]);
+
+    return kaminoVaults.map((kaminoVault) => {
+      if (kaminoVault.account === null) {
+        throw new Error(`kaminoVault with pubkey ${kaminoVault.pubkey.toString()} does not exist`);
+      }
+
+      const kaminoVaultAccount = VaultState.decode(kaminoVault.account.data);
+      if (!kaminoVaultAccount) {
+        throw Error(`kaminoVault with pubkey ${kaminoVault.pubkey.toString()} could not be decoded`);
+      }
+
+      return new KaminoVault(kaminoVault.pubkey, kaminoVaultAccount, this._kaminoVaultProgramId);
+    });
+  }
+
+  /**
    * This will return an unsorted hash map of all reserves that the given vault has allocations for, toghether with the amount that can be withdrawn from each of the reserves
    * @param vault - the kamino vault to get available liquidity to withdraw for
    * @param slot - current slot
@@ -734,40 +775,6 @@ export class KaminoVaultClient {
     });
 
     return kaminoReserves;
-  }
-
-  /**
-   * Get all vaults
-   * @returns an array of all vaults
-   */
-  async getAllVaults(): Promise<KaminoVault[]> {
-    const { getProgramAccounts } = await import('../utils/rpc');
-    const filters = [
-      {
-        dataSize: VaultState.layout.span + 8,
-      },
-    ];
-
-    const [, kaminoVaults] = await Promise.all([
-      this._connection.getSlot(),
-      getProgramAccounts(this._connection, this._kaminoVaultProgramId, {
-        commitment: this._connection.commitment ?? 'processed',
-        filters,
-      }),
-    ]);
-
-    return kaminoVaults.map((kaminoVault) => {
-      if (kaminoVault.account === null) {
-        throw new Error('Invalid account');
-      }
-
-      const kaminoVaultAccount = VaultState.decode(kaminoVault.account.data);
-      if (!kaminoVaultAccount) {
-        throw Error('Could not parse obligation.');
-      }
-
-      return new KaminoVault(kaminoVault.pubkey, kaminoVaultAccount, this._kaminoVaultProgramId);
-    });
   }
 } // KaminoVaultClient
 
@@ -872,3 +879,8 @@ export function getCTokenVaultPda(vaultAddress: PublicKey, reserveAddress: Publi
     kaminoVaultProgramId
   )[0];
 }
+
+export type VaultHolder = {
+  holderPubkey: PublicKey;
+  amount: Decimal;
+};
