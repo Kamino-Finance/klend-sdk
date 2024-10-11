@@ -1053,7 +1053,11 @@ export class KaminoReserve {
   }
 
   /* This takes into account all the caps */
-  getLiquidityAvailableForDebtReserveGivenCaps(market: KaminoMarket, elevationGroups: number[]): Decimal[] {
+  getLiquidityAvailableForDebtReserveGivenCaps(
+    market: KaminoMarket,
+    elevationGroups: number[],
+    collateralReserves: PublicKey[] = []
+  ): Decimal[] {
     const caps = this.getBorrowCapForReserve(market);
 
     const liquidityAvailable = this.getLiquidityAvailableAmount();
@@ -1089,7 +1093,16 @@ export class KaminoReserve {
           (x) => x.elevationGroup === elevationGroup
         );
         if (capsGivenEgroup.length > 0) {
-          remainingInsideEmodeCaps = Decimal.min(...capsGivenEgroup.map((x) => x.maxDebt.minus(x.currentValue)));
+          remainingInsideEmodeCaps = Decimal.min(
+            ...capsGivenEgroup.map((x) => {
+              // check reserve is part of collReserves array
+              if (collateralReserves.find((collateralReserve) => collateralReserve.equals(x.collateralReserve))) {
+                return x.maxDebt.minus(x.currentValue);
+              } else {
+                return new Decimal(U64_MAX);
+              }
+            })
+          );
         }
         return Decimal.min(
           positiveOrZero(liquidityAvailable),

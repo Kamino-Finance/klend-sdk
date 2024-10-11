@@ -139,5 +139,5 @@ yarn multiply-withdraw
 
 ```bash
 export KEYPAIR_FILE=YOUR_PATH_TO_YOUR_KEYPAIR_FILE
-yarn yarn multiply-adjust 
+yarn multiply-adjust
 ```

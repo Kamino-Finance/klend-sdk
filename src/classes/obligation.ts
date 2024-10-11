@@ -362,6 +362,9 @@ export class KaminoObligation {
     collateralExchangeRates: Map<PublicKey, Decimal>
   ): ObligationCollateral[] {
     const newDeposits: ObligationCollateral[] = [];
+    const depositIndex = obligationDeposits.findIndex((deposit) => deposit.depositReserve.equals(changeReserve));
+
+    // Always copy the previous deposits and modify the changeReserve one if it exists
     for (let i = 0; i < obligationDeposits.length; i++) {
       if (obligationDeposits[i].depositReserve.equals(changeReserve)) {
         const coll: ObligationCollateralFields = { ...obligationDeposits[i] };
@@ -373,6 +376,25 @@ export class KaminoObligation {
       } else {
         newDeposits.push(obligationDeposits[i]);
       }
+    }
+
+    if (depositIndex === -1) {
+      // If the reserve is not in the obligation, we add it
+      const firstBorrowIndexAvailable = obligationDeposits.findIndex((deposit) =>
+        deposit.depositReserve.equals(PublicKey.default)
+      );
+
+      if (firstBorrowIndexAvailable === -1) {
+        throw new Error('No available borrows to modify');
+      }
+
+      const coll: ObligationCollateralFields = { ...obligationDeposits[firstBorrowIndexAvailable] };
+      const exchangeRate = collateralExchangeRates.get(changeReserve)!;
+      const changeInCollateral = new Decimal(changeInLamports).mul(exchangeRate).toFixed(0);
+      coll.depositedAmount = new BN(positiveOrZero(new Decimal(changeInCollateral)).toString());
+      coll.depositReserve = changeReserve;
+
+      newDeposits[firstBorrowIndexAvailable] = new ObligationCollateral(coll);
     }
 
     return newDeposits;
@@ -387,16 +409,29 @@ export class KaminoObligation {
     const newBorrows: ObligationLiquidity[] = [];
     const borrowIndex = obligationBorrows.findIndex((borrow) => borrow.borrowReserve.equals(changeReserve));
 
-    if (borrowIndex !== -1) {
-      const borrow: ObligationLiquidityFields = { ...obligationBorrows[borrowIndex] };
-      const newBorrowedAmount: Decimal = new Fraction(borrow.borrowedAmountSf).toDecimal().add(changeInLamports);
-      const newBorrowedAmountSf = Fraction.fromDecimal(positiveOrZero(newBorrowedAmount)).getValue();
-      borrow.borrowedAmountSf = newBorrowedAmountSf;
-      newBorrows.push(new ObligationLiquidity(borrow));
-    } else {
+    // Always copy the previous borrows and modify the changeReserve one if it exists
+    for (let i = 0; i < obligationBorrows.length; i++) {
+      if (obligationBorrows[i].borrowReserve.equals(changeReserve)) {
+        const borrow: ObligationLiquidityFields = { ...obligationBorrows[borrowIndex] };
+        const newBorrowedAmount: Decimal = new Fraction(borrow.borrowedAmountSf).toDecimal().add(changeInLamports);
+        const newBorrowedAmountSf = Fraction.fromDecimal(positiveOrZero(newBorrowedAmount)).getValue();
+        borrow.borrowedAmountSf = newBorrowedAmountSf;
+
+        newBorrows.push(new ObligationLiquidity(borrow));
+      } else {
+        newBorrows.push(obligationBorrows[i]);
+      }
+    }
+
+    if (borrowIndex === -1) {
+      // If the reserve is not in the obligation, we add it
       const firstBorrowIndexAvailable = obligationBorrows.findIndex((borrow) =>
         borrow.borrowReserve.equals(PublicKey.default)
       );
+
+      if (firstBorrowIndexAvailable === -1) {
+        throw new Error('No available borrows to modify');
+      }
 
       const borrow: ObligationLiquidityFields = { ...obligationBorrows[firstBorrowIndexAvailable] };
       borrow.borrowedAmountSf = Fraction.fromDecimal(new Decimal(changeInLamports)).getValue();
@@ -405,7 +440,7 @@ export class KaminoObligation {
         padding: [],
         value: [Fraction.fromDecimal(cumulativeBorrowRate).getValue(), new BN(0), new BN(0), new BN(0)],
       };
-      newBorrows.push(new ObligationLiquidity(borrow));
+      newBorrows[firstBorrowIndexAvailable] = new ObligationLiquidity(borrow);
     }
 
     return newBorrows;
@@ -433,7 +468,23 @@ export class KaminoObligation {
     const { amountCollateral, amountDebt, action, mintCollateral, mintDebt, market } = params;
     let newStats = { ...this.refreshedStats };
 
-    const { collateralExchangeRates } = KaminoObligation.getRatesForObligation(market, this.state, params.slot);
+    const collateralReservePk = mintCollateral ? market.getReserveByMint(mintCollateral)!.address : undefined;
+    const debtReservePk = mintDebt ? market.getReserveByMint(mintDebt)!.address : undefined;
+
+    const additionalReserves = [];
+    if (collateralReservePk !== undefined) {
+      additionalReserves.push(collateralReservePk);
+    }
+    if (debtReservePk !== undefined) {
+      additionalReserves.push(debtReservePk);
+    }
+
+    const { collateralExchangeRates } = KaminoObligation.getRatesForObligation(
+      market,
+      this.state,
+      params.slot,
+      additionalReserves
+    );
 
     const elevationGroup = params.elevationGroupOverride ?? this.state.elevationGroup;
 
@@ -444,14 +495,20 @@ export class KaminoObligation {
     // so we have to recalculate the entire position, not just an updated deposit or borrow
     // as both LTVs and borrow factors can change, affecting all calcs
 
-    const collateralReservePk = mintCollateral ? market.getReserveByMint(mintCollateral)!.address : undefined;
-    const debtReservePk = mintDebt ? market.getReserveByMint(mintDebt)!.address : undefined;
     const debtReserveCumulativeBorrowRate = mintDebt
       ? market.getReserveByMint(mintDebt)!.getCumulativeBorrowRate()
       : undefined;
 
     let newObligationDeposits = this.state.deposits;
     let newObligationBorrows = this.state.borrows;
+
+    // Print deposits and borrows before
+    for (const deposit of this.state.deposits) {
+      console.log(`Before Deposit: ${deposit.depositReserve.toBase58()} - ${deposit.depositedAmount}`);
+    }
+    for (const borrow of this.state.borrows) {
+      console.log(`Before Borrow: ${borrow.borrowReserve.toBase58()} - ${borrow.borrowedAmountSf}`);
+    }
 
     switch (action) {
       case 'deposit': {
@@ -566,6 +623,14 @@ export class KaminoObligation {
       collateralExchangeRates,
       null
     );
+
+    // Print deposits and borrows after
+    for (const deposit of newObligationDeposits) {
+      console.log(`After Deposit: ${deposit.depositReserve.toBase58()} - ${deposit.depositedAmount}`);
+    }
+    for (const borrow of newObligationBorrows) {
+      console.log(`After Borrow: ${borrow.borrowReserve.toBase58()} - ${borrow.borrowedAmountSf}`);
+    }
 
     newStats = refreshedStats;
     newDeposits = deposits;
@@ -921,7 +986,11 @@ export class KaminoObligation {
       throw new Error('Reserve not found');
     }
 
-    const liquidityAvailable = reserve.getLiquidityAvailableForDebtReserveGivenCaps(market, [elevationGroup])[0];
+    const liquidityAvailable = reserve.getLiquidityAvailableForDebtReserveGivenCaps(
+      market,
+      [elevationGroup],
+      Array.from(this.deposits.keys())
+    )[0];
     const maxBorrowAmount = this.getBorrowPower(market, liquidityMint, slot, elevationGroup);
 
     if (elevationGroup === this.state.elevationGroup) {
@@ -1213,7 +1282,8 @@ export class KaminoObligation {
   public static getRatesForObligation(
     kaminoMarket: KaminoMarket,
     obligation: Obligation,
-    slot: number
+    slot: number,
+    additionalReserves: PublicKey[] = []
   ): {
     collateralExchangeRates: Map<PublicKey, Decimal>;
     cumulativeBorrowRates: Map<PublicKey, Decimal>;
@@ -1221,12 +1291,14 @@ export class KaminoObligation {
     const collateralExchangeRates = KaminoObligation.getCollateralExchangeRatesForObligation(
       kaminoMarket,
       obligation,
-      slot
+      slot,
+      additionalReserves
     );
     const cumulativeBorrowRates = KaminoObligation.getCumulativeBorrowRatesForObligation(
       kaminoMarket,
       obligation,
-      slot
+      slot,
+      additionalReserves
     );
 
     return {
@@ -1249,20 +1321,35 @@ export class KaminoObligation {
   static getCollateralExchangeRatesForObligation(
     kaminoMarket: KaminoMarket,
     obligation: Obligation,
-    slot: number
+    slot: number,
+    additionalReserves: PublicKey[]
   ): Map<PublicKey, Decimal> {
     const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
+
+    // Create a set of all reserves coming from deposit plus additional reserves
+    const allReserves = new Set<PublicKey>();
     for (let i = 0; i < obligation.deposits.length; i++) {
       const deposit = obligation.deposits[i];
-      if (isNotNullPubkey(deposit.depositReserve) && !collateralExchangeRates.has(deposit.depositReserve)) {
-        const reserve = kaminoMarket.getReserveByAddress(deposit.depositReserve)!;
-        const collateralExchangeRate = reserve.getEstimatedCollateralExchangeRate(
-          slot,
-          kaminoMarket.state.referralFeeBps
-        );
-        collateralExchangeRates.set(reserve.address, collateralExchangeRate);
+      if (isNotNullPubkey(deposit.depositReserve)) {
+        allReserves.add(deposit.depositReserve);
       }
     }
+    for (let i = 0; i < additionalReserves.length; i++) {
+      if (isNotNullPubkey(additionalReserves[i])) {
+        allReserves.add(additionalReserves[i]);
+      }
+    }
+
+    // Run through all reserves and get the exchange rate
+    for (const reserve of allReserves) {
+      const reserveInstance = kaminoMarket.getReserveByAddress(reserve)!;
+      const collateralExchangeRate = reserveInstance.getEstimatedCollateralExchangeRate(
+        slot,
+        kaminoMarket.state.referralFeeBps
+      );
+      collateralExchangeRates.set(reserve, collateralExchangeRate);
+    }
+
     return collateralExchangeRates;
   }
 
@@ -1285,16 +1372,39 @@ export class KaminoObligation {
     }
   }
 
-  static getCumulativeBorrowRatesForObligation(kaminoMarket: KaminoMarket, obligation: Obligation, slot: number) {
-    const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
+  static getCumulativeBorrowRatesForObligation(
+    kaminoMarket: KaminoMarket,
+    obligation: Obligation,
+    slot: number,
+    additionalReserves: PublicKey[] = []
+  ): Map<PublicKey, Decimal> {
+    const allReserves = new Set<PublicKey>();
     for (let i = 0; i < obligation.borrows.length; i++) {
       const borrow = obligation.borrows[i];
-      if (isNotNullPubkey(borrow.borrowReserve) && !cumulativeBorrowRates.has(borrow.borrowReserve)) {
-        const reserve = kaminoMarket.getReserveByAddress(borrow.borrowReserve)!;
-        const cumulativeBorrowRate = reserve.getEstimatedCumulativeBorrowRate(slot, kaminoMarket.state.referralFeeBps);
-        cumulativeBorrowRates.set(reserve.address, cumulativeBorrowRate);
+      if (isNotNullPubkey(borrow.borrowReserve)) {
+        allReserves.add(borrow.borrowReserve);
       }
     }
+
+    // Add additional reserves
+    for (let i = 0; i < additionalReserves.length; i++) {
+      if (isNotNullPubkey(additionalReserves[i])) {
+        allReserves.add(additionalReserves[i]);
+      }
+    }
+
+    const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
+
+    // Run through all reserves and get the cumulative borrow rate
+    for (const reserve of allReserves) {
+      const reserveInstance = kaminoMarket.getReserveByAddress(reserve)!;
+      const cumulativeBorrowRate = reserveInstance.getEstimatedCumulativeBorrowRate(
+        slot,
+        kaminoMarket.state.referralFeeBps
+      );
+      cumulativeBorrowRates.set(reserve, cumulativeBorrowRate);
+    }
+
     return cumulativeBorrowRates;
   }
 
