@@ -275,9 +275,9 @@ async function main() {
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const instruction = await kaminoManager.updateVaultConfigIx(kaminoVault, new PendingVaultAdmin(), newAdmin);
 
-      const updateVaultAllocationSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
+      const updateVaultPendingAdminSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
 
-      mode === 'execute' && console.log('Vault allocation updated:', updateVaultAllocationSig);
+      mode === 'execute' && console.log('Pending admin updated:', updateVaultPendingAdminSig);
     });
 
   commands
@@ -303,9 +303,9 @@ async function main() {
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const instruction = await kaminoManager.updateVaultConfigIx(kaminoVault, new ManagementFeeBps(), feeBps);
 
-      const updateVaultAllocationSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
+      const updateVaultConfigSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
 
-      mode === 'execute' && console.log('Vault allocation updated:', updateVaultAllocationSig);
+      mode === 'execute' && console.log('Management fee updated:', updateVaultConfigSig);
     });
 
   commands
@@ -331,9 +331,9 @@ async function main() {
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const instruction = await kaminoManager.updateVaultConfigIx(kaminoVault, new PerformanceFeeBps(), feeBps);
 
-      const updateVaultAllocationSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
+      const updateVaultPerfFeeSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
 
-      mode === 'execute' && console.log('Vault allocation updated:', updateVaultAllocationSig);
+      mode === 'execute' && console.log('Performance fee updated:', updateVaultPerfFeeSig);
     });
 
   commands
@@ -358,9 +358,9 @@ async function main() {
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const instruction = await kaminoManager.acceptVaultOwnershipIx(kaminoVault);
 
-      const updateVaultAllocationSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
+      const acceptVaultOwnershipSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
 
-      mode === 'execute' && console.log('Vault allocation updated:', updateVaultAllocationSig);
+      mode === 'execute' && console.log('Vault ownership accepted:', acceptVaultOwnershipSig);
     });
 
   commands
@@ -386,9 +386,9 @@ async function main() {
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const instruction = await kaminoManager.giveUpPendingFeesIx(kaminoVault, new Decimal(maxAmountToGiveUp));
 
-      const updateVaultAllocationSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
+      const giveUpPendingFeesSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
 
-      mode === 'execute' && console.log('Vault allocation updated:', updateVaultAllocationSig);
+      mode === 'execute' && console.log('Give up pending fees tx:', giveUpPendingFeesSig);
     });
 
   commands
@@ -416,9 +416,9 @@ async function main() {
         await env.connection.getSlot('confirmed')
       );
 
-      const updateVaultAllocationSig = await processTxn(env.client, env.payer, instructions, mode, 2500, []);
+      const withdrawPendingFeesSig = await processTxn(env.client, env.payer, instructions, mode, 2500, []);
 
-      mode === 'execute' && console.log('Vault allocation updated:', updateVaultAllocationSig);
+      mode === 'execute' && console.log('Pending fees withdrawn:', withdrawPendingFeesSig);
     });
 
   commands
@@ -475,7 +475,6 @@ async function main() {
   //   .requiredOption('--vault <string>', 'Vault address')
   //   .option(`--staging`, 'If true, will use the staging programs')
   //   .action(async ({vault, staging}) => {
-  //     console.log("silviuuuu vault", vault);
   //     const env = initializeClient(false, staging);
   //     const vaultAddress = new PublicKey(vault);
 

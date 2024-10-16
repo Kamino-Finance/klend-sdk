@@ -50,7 +50,7 @@ import {
 import { VaultConfigFieldKind } from '../idl_codegen_kamino_vault/types';
 import { VaultState } from '../idl_codegen_kamino_vault/accounts';
 import Decimal from 'decimal.js';
-import { getVaultConfigValue, numberToLamportsDecimal, parseTokenSymbol } from './utils';
+import { numberToLamportsDecimal, parseTokenSymbol } from './utils';
 import { deposit } from '../idl_codegen_kamino_vault/instructions/deposit';
 import { withdraw } from '../idl_codegen_kamino_vault/instructions/withdraw';
 import { PROGRAM_ID } from '../idl_codegen/programId';
@@ -220,8 +220,9 @@ export class KaminoVaultClient {
       const data = new PublicKey(value);
       updateVaultConfigArgs.data = data.toBuffer();
     } else {
-      const data = getVaultConfigValue(new Decimal(value));
-      updateVaultConfigArgs.data = Buffer.from(data);
+      const buffer = Buffer.alloc(8);
+      buffer.writeBigUInt64LE(BigInt(value.toString()));
+      updateVaultConfigArgs.data = buffer;
     }
 
     const vaultReserves = this.getVaultReserves(vaultState);

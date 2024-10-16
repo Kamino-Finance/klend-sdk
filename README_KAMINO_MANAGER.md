@@ -210,7 +210,7 @@ yarn kamino-manager accept-ownership --vault <vault_address> --mode <mode>
 #### Update performance fee
 
 ```
-yarn kamino-manager update-perf-fee --vault <vault_address> --fee-bps <performance_fee_in_bps> --mode <mode>
+yarn kamino-manager update-vault-perf-fee --vault <vault_address> --fee-bps <performance_fee_in_bps> --mode <mode>
 ```
 
 - **vault** - the vault address to change the pending admin for
@@ -225,7 +225,7 @@ yarn kamino-manager update-perf-fee --vault <vault_address> --fee-bps <performan
 #### Update management fee
 
 ```
-yarn kamino-manager update-mgmt-fee --vault <vault_address> --fee-bps <yearly_mgmt_fee_in_bps> --mode <mode>
+yarn kamino-manager update-vault-mgmt-fee --vault <vault_address> --fee-bps <yearly_mgmt_fee_in_bps> --mode <mode>
 ```
 
 - **vault** - the vault address to change the pending admin for
