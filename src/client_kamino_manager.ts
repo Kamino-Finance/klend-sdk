@@ -47,6 +47,11 @@ import { PythConfiguration, SwitchboardConfiguration } from './idl_codegen_kamin
 import * as fs from 'fs';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { MarketWithAddress } from './utils/managerTypes';
+import {
+  ManagementFeeBps,
+  PendingVaultAdmin,
+  PerformanceFeeBps,
+} from './idl_codegen_kamino_vault/types/VaultConfigField';
 
 dotenv.config({
   path: `.env${process.env.ENV ? '.' + process.env.ENV : ''}`,
@@ -245,6 +250,175 @@ async function main() {
       const _createVaultSig = await processTxn(env.client, env.payer, instructions, mode, 2500, [vaultKp]);
 
       mode === 'execute' && console.log('Vault created:', vaultKp.publicKey.toBase58());
+    });
+
+  commands
+    .command('update-vault-pending-admin')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption('--new-admin <string>', 'Pubkey of the new admin')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ vault, newAdmin, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
+      const vaultAddress = new PublicKey(vault);
+
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
+      const instruction = await kaminoManager.updateVaultConfigIx(kaminoVault, new PendingVaultAdmin(), newAdmin);
+
+      const updateVaultAllocationSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
+
+      mode === 'execute' && console.log('Vault allocation updated:', updateVaultAllocationSig);
+    });
+
+  commands
+    .command('update-vault-mgmt-fee')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption('--fee-bps <string>', 'Pubkey of the new admin')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ vault, feeBps, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
+      const vaultAddress = new PublicKey(vault);
+
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
+      const instruction = await kaminoManager.updateVaultConfigIx(kaminoVault, new ManagementFeeBps(), feeBps);
+
+      const updateVaultAllocationSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
+
+      mode === 'execute' && console.log('Vault allocation updated:', updateVaultAllocationSig);
+    });
+
+  commands
+    .command('update-vault-perf-fee')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption('--fee-bps <string>', 'Pubkey of the new admin')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ vault, feeBps, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
+      const vaultAddress = new PublicKey(vault);
+
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
+      const instruction = await kaminoManager.updateVaultConfigIx(kaminoVault, new PerformanceFeeBps(), feeBps);
+
+      const updateVaultAllocationSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
+
+      mode === 'execute' && console.log('Vault allocation updated:', updateVaultAllocationSig);
+    });
+
+  commands
+    .command('accept-vault-ownership')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ vault, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
+      const vaultAddress = new PublicKey(vault);
+
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
+      const instruction = await kaminoManager.acceptVaultOwnershipIx(kaminoVault);
+
+      const updateVaultAllocationSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
+
+      mode === 'execute' && console.log('Vault allocation updated:', updateVaultAllocationSig);
+    });
+
+  commands
+    .command('give-up-pending-fees')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption('--max-amount-to-give-up <string>', 'Max amount to give up')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ vault, maxAmountToGiveUp, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
+      const vaultAddress = new PublicKey(vault);
+
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
+      const instruction = await kaminoManager.giveUpPendingFeesIx(kaminoVault, new Decimal(maxAmountToGiveUp));
+
+      const updateVaultAllocationSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
+
+      mode === 'execute' && console.log('Vault allocation updated:', updateVaultAllocationSig);
+    });
+
+  commands
+    .command('withdraw-pending-fees')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ vault, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
+      const vaultAddress = new PublicKey(vault);
+
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
+      const instructions = await kaminoManager.withdrawPendingFeesIxs(
+        kaminoVault,
+        await env.connection.getSlot('confirmed')
+      );
+
+      const updateVaultAllocationSig = await processTxn(env.client, env.payer, instructions, mode, 2500, []);
+
+      mode === 'execute' && console.log('Vault allocation updated:', updateVaultAllocationSig);
     });
 
   commands

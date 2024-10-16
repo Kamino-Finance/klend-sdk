@@ -220,3 +220,9 @@ export function sameLengthArrayEquals(left: Array<number>, right: Array<number>)
   }
   return left.every((value, index) => value === right[index]);
 }
+
+export function getVaultConfigValue(value: Decimal): number[] {
+  const buffer = Buffer.alloc(128);
+  buffer.writeBigUInt64LE(BigInt(value.toString()));
+  return [...buffer];
+}

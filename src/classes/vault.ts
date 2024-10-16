@@ -27,19 +27,30 @@ import {
   // CloseVaultAccounts,
   DepositAccounts,
   DepositArgs,
+  giveUpPendingFees,
+  GiveUpPendingFeesAccounts,
+  GiveUpPendingFeesArgs,
   initVault,
   InitVaultAccounts,
   invest,
   InvestAccounts,
+  updateAdmin,
+  UpdateAdminAccounts,
   updateReserveAllocation,
   UpdateReserveAllocationAccounts,
   UpdateReserveAllocationArgs,
+  updateVaultConfig,
+  UpdateVaultConfigAccounts,
+  UpdateVaultConfigArgs,
   WithdrawAccounts,
   WithdrawArgs,
+  withdrawPendingFees,
+  WithdrawPendingFeesAccounts,
 } from '../idl_codegen_kamino_vault/instructions';
+import { VaultConfigFieldKind } from '../idl_codegen_kamino_vault/types';
 import { VaultState } from '../idl_codegen_kamino_vault/accounts';
 import Decimal from 'decimal.js';
-import { numberToLamportsDecimal, parseTokenSymbol } from './utils';
+import { getVaultConfigValue, numberToLamportsDecimal, parseTokenSymbol } from './utils';
 import { deposit } from '../idl_codegen_kamino_vault/instructions/deposit';
 import { withdraw } from '../idl_codegen_kamino_vault/instructions/withdraw';
 import { PROGRAM_ID } from '../idl_codegen/programId';
@@ -178,6 +189,187 @@ export class KaminoVaultClient {
       updateReserveAllocationAccounts,
       this._kaminoVaultProgramId
     );
+  }
+
+  /**
+   * This method updates the vault config
+   * @param vault - vault to be updated
+   * @param mode - the field to be updated
+   * @param value - the new value for the field to be updated (number or pubkey)
+   * @returns - a list of instructions
+   */
+  async updateVaultConfigIx(
+    vault: KaminoVault,
+    mode: VaultConfigFieldKind,
+    value: string
+  ): Promise<TransactionInstruction> {
+    const vaultState: VaultState = await vault.getState(this.getConnection());
+
+    const updateVaultConfigAccs: UpdateVaultConfigAccounts = {
+      adminAuthority: vaultState.adminAuthority,
+      vaultState: vault.address,
+      klendProgram: this._kaminoLendProgramId,
+    };
+
+    const updateVaultConfigArgs: UpdateVaultConfigArgs = {
+      entry: mode,
+      data: Buffer.from([0]),
+    };
+
+    if (isNaN(+value)) {
+      const data = new PublicKey(value);
+      updateVaultConfigArgs.data = data.toBuffer();
+    } else {
+      const data = getVaultConfigValue(new Decimal(value));
+      updateVaultConfigArgs.data = Buffer.from(data);
+    }
+
+    const vaultReserves = this.getVaultReserves(vaultState);
+    const vaultReservesState = await this.loadVaultReserves(vaultState);
+
+    let vaultReservesAccountMetas: AccountMeta[] = [];
+    let vaultReservesLendingMarkets: AccountMeta[] = [];
+    vaultReserves.forEach((reserve) => {
+      const reserveState = vaultReservesState.get(reserve);
+      if (reserveState === undefined) {
+        throw new Error(`Reserve ${reserve.toBase58()} not found`);
+      }
+      vaultReservesAccountMetas = vaultReservesAccountMetas.concat([
+        { pubkey: reserve, isSigner: false, isWritable: true },
+      ]);
+      vaultReservesLendingMarkets = vaultReservesLendingMarkets.concat([
+        { pubkey: reserveState.state.lendingMarket, isSigner: false, isWritable: false },
+      ]);
+    });
+
+    const updateVaultConfigIx = updateVaultConfig(
+      updateVaultConfigArgs,
+      updateVaultConfigAccs,
+      this._kaminoVaultProgramId
+    );
+
+    updateVaultConfigIx.keys = updateVaultConfigIx.keys.concat(vaultReservesAccountMetas);
+    updateVaultConfigIx.keys = updateVaultConfigIx.keys.concat(vaultReservesLendingMarkets);
+
+    return updateVaultConfigIx;
+  }
+
+  /**
+   * This function creates the instruction for the `pendingAdmin` of the vault to accept to become the owner of the vault (step 2/2 of the ownership transfer)
+   * @param vault - vault to change the ownership for
+   * @returns - an instruction to be used to be executed
+   */
+  async acceptVaultOwnershipIx(vault: KaminoVault): Promise<TransactionInstruction> {
+    const vaultState: VaultState = await vault.getState(this.getConnection());
+
+    const acceptOwneshipAccounts: UpdateAdminAccounts = {
+      pendingAdmin: vaultState.pendingAdmin,
+      vaultState: vault.address,
+    };
+
+    return updateAdmin(acceptOwneshipAccounts, this._kaminoVaultProgramId);
+  }
+
+  /**
+   * This function creates the instruction for the admin to give up a part of the pending fees (which will be accounted as part of the vault)
+   * @param vault - vault to give up pending fees for
+   * @param maxAmountToGiveUp - the maximum amount of fees to give up, in tokens
+   * @returns - an instruction to be used to be executed
+   */
+  async giveUpPendingFeesIx(vault: KaminoVault, maxAmountToGiveUp: Decimal): Promise<TransactionInstruction> {
+    const vaultState: VaultState = await vault.getState(this.getConnection());
+
+    const giveUpPendingFeesAccounts: GiveUpPendingFeesAccounts = {
+      adminAuthority: vaultState.adminAuthority,
+      vaultState: vault.address,
+      klendProgram: this._kaminoLendProgramId,
+    };
+
+    const maxAmountToGiveUpLamports = numberToLamportsDecimal(
+      maxAmountToGiveUp,
+      vaultState.tokenMintDecimals.toNumber()
+    );
+    const giveUpPendingFeesArgs: GiveUpPendingFeesArgs = {
+      maxAmountToGiveUp: new BN(maxAmountToGiveUpLamports.toString()),
+    };
+
+    return giveUpPendingFees(giveUpPendingFeesArgs, giveUpPendingFeesAccounts, this._kaminoVaultProgramId);
+  }
+
+  /**
+   * This method withdraws all the pending fees from the vault to the owner's token ATA
+   * @param vault - vault for which the admin withdraws the pending fees
+   * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
+   * @returns - list of instructions to withdraw all pending fees
+   */
+  async withdrawPendingFeesIxs(vault: KaminoVault, slot: number): Promise<TransactionInstruction[]> {
+    const vaultState: VaultState = await vault.getState(this.getConnection());
+    const { atas, createAtaIxs } = await getAtasWithCreateIxnsIfMissing(this._connection, vaultState.adminAuthority, [
+      {
+        mint: vaultState.tokenMint,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      },
+    ]);
+    const adminTokenAta = atas[0];
+
+    const tokensToWithdraw = new Fraction(vaultState.pendingFeesSf).toDecimal();
+    let tokenLeftToWithdraw = tokensToWithdraw;
+    tokenLeftToWithdraw = tokenLeftToWithdraw.sub(new Decimal(vaultState.tokenAvailable.toString()));
+    const reservesToWithdraw: PublicKey[] = [];
+
+    if (tokenLeftToWithdraw.lte(0)) {
+      // Availabe enough to withdraw all - using first reserve as it does not matter
+      reservesToWithdraw.push(vaultState.vaultAllocationStrategy[0].reserve);
+    } else {
+      // Get decreasing order sorted available liquidity to withdraw from each reserve allocated to
+      const reserveAllocationAvailableLiquidityToWithdraw = await this.getReserveAllocationAvailableLiquidityToWithdraw(
+        vault,
+        slot
+      );
+      // sort
+      const reserveAllocationAvailableLiquidityToWithdrawSorted = new PubkeyHashMap(
+        [...reserveAllocationAvailableLiquidityToWithdraw.entries()].sort((a, b) => b[1].sub(a[1]).toNumber())
+      );
+
+      reserveAllocationAvailableLiquidityToWithdrawSorted.forEach((availableLiquidityToWithdraw, key) => {
+        if (tokenLeftToWithdraw.gt(0)) {
+          reservesToWithdraw.push(key);
+          tokenLeftToWithdraw = tokenLeftToWithdraw.sub(availableLiquidityToWithdraw);
+        }
+      });
+    }
+
+    const reserveStates = await Reserve.fetchMultiple(this._connection, reservesToWithdraw, this._kaminoLendProgramId);
+    const withdrawIxns: TransactionInstruction[] = await Promise.all(
+      reservesToWithdraw.map(async (reserve, index) => {
+        if (reserveStates[index] === null) {
+          throw new Error(`Reserve ${reserve.toBase58()} not found`);
+        }
+
+        const reserveState = reserveStates[index]!;
+
+        const market = reserveState.lendingMarket;
+        const marketState = await LendingMarket.fetch(this._connection, market, this._kaminoLendProgramId);
+        if (marketState === null) {
+          throw new Error(`Market ${market.toBase58()} not found`);
+        }
+
+        const marketWithAddress = {
+          address: market,
+          state: marketState,
+        };
+
+        return this.withdrawPendingFeesIxn(
+          vault,
+          vaultState,
+          marketWithAddress,
+          { address: reserve, state: reserveState },
+          adminTokenAta
+        );
+      })
+    );
+
+    return [...createAtaIxs, ...withdrawIxns];
   }
 
   // async closeVaultIx(vault: KaminoVault): Promise<TransactionInstruction> {
@@ -509,6 +701,63 @@ export class KaminoVaultClient {
     withdrawIxn.keys = withdrawIxn.keys.concat(vaultReservesLendingMarkets);
 
     return withdrawIxn;
+  }
+
+  private async withdrawPendingFeesIxn(
+    vault: KaminoVault,
+    vaultState: VaultState,
+    marketWithAddress: MarketWithAddress,
+    reserve: ReserveWithAddress,
+    adminTokenAta: PublicKey
+  ): Promise<TransactionInstruction> {
+    const lendingMarketAuth = lendingMarketAuthPda(marketWithAddress.address, this._kaminoLendProgramId)[0];
+
+    const withdrawPendingFeesAccounts: WithdrawPendingFeesAccounts = {
+      adminAuthority: vaultState.adminAuthority,
+      vaultState: vault.address,
+      reserve: reserve.address,
+      tokenVault: vaultState.tokenVault,
+      ctokenVault: getCTokenVaultPda(vault.address, reserve.address, this._kaminoVaultProgramId),
+      baseVaultAuthority: vaultState.baseVaultAuthority,
+      tokenAta: adminTokenAta,
+      tokenMint: vaultState.tokenMint,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      /** CPI accounts */
+      lendingMarket: marketWithAddress.address,
+      lendingMarketAuthority: lendingMarketAuth,
+      reserveLiquiditySupply: reserve.state.liquidity.supplyVault,
+      reserveCollateralMint: reserve.state.collateral.mintPubkey,
+      klendProgram: this._kaminoLendProgramId,
+      instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
+      reserveCollateralTokenProgram: TOKEN_PROGRAM_ID,
+      sharesTokenProgram: TOKEN_PROGRAM_ID,
+    };
+
+    const withdrawPendingFeesIxn = withdrawPendingFees(withdrawPendingFeesAccounts, this._kaminoVaultProgramId);
+
+    const vaultReserves = this.getVaultReserves(vaultState);
+    const vaultReservesState = await this.loadVaultReserves(vaultState);
+
+    let vaultReservesAccountMetas: AccountMeta[] = [];
+    let vaultReservesLendingMarkets: AccountMeta[] = [];
+
+    vaultReserves.forEach((reserve) => {
+      const reserveState = vaultReservesState.get(reserve);
+      if (reserveState === undefined) {
+        throw new Error(`Reserve ${reserve.toBase58()} not found`);
+      }
+
+      vaultReservesAccountMetas = vaultReservesAccountMetas.concat([
+        { pubkey: reserve, isSigner: false, isWritable: true },
+      ]);
+      vaultReservesLendingMarkets = vaultReservesLendingMarkets.concat([
+        { pubkey: reserveState.state.lendingMarket, isSigner: false, isWritable: false },
+      ]);
+    });
+    withdrawPendingFeesIxn.keys = withdrawPendingFeesIxn.keys.concat(vaultReservesAccountMetas);
+    withdrawPendingFeesIxn.keys = withdrawPendingFeesIxn.keys.concat(vaultReservesLendingMarkets);
+
+    return withdrawPendingFeesIxn;
   }
 
   /**

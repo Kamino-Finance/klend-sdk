@@ -54,6 +54,7 @@ import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { Data } from '@kamino-finance/kliquidity-sdk';
 import bs58 from 'bs58';
 import { getProgramAccounts } from '../utils/rpc';
+import { VaultConfigFieldKind } from '../idl_codegen_kamino_vault/types';
 
 /**
  * KaminoManager is a class that provides a high-level interface to interact with the Kamino Lend and Kamino Vault programs, in order to create and manage a market, as well as vaults
@@ -317,6 +318,29 @@ export class KaminoManager {
     return this._vaultClient.depositIxs(user, vault, tokenAmount);
   }
 
+  async updateVaultConfigIx(vault: KaminoVault, mode: VaultConfigFieldKind, value: string): Promise<TransactionInstruction> {
+    return this._vaultClient.updateVaultConfigIx(vault, mode, value);
+  }
+
+  /**
+   * This function creates the instruction for the `pendingAdmin` of the vault to accept to become the owner of the vault (step 2/2 of the ownership transfer)
+   * @param vault - vault to change the ownership for
+   * @returns - an instruction to be used to be executed
+   */
+  async acceptVaultOwnershipIx(vault: KaminoVault): Promise<TransactionInstruction> {
+    return this._vaultClient.acceptVaultOwnershipIx(vault);
+  }
+
+  /**
+   * This function creates the instruction for the admin to give up a part of the pending fees (which will be accounted as part of the vault)
+   * @param vault - vault to give up pending fees for
+   * @param maxAmountToGiveUp - the maximum amount of fees to give up, in tokens
+   * @returns - an instruction to be used to be executed
+   */
+  async giveUpPendingFeesIx(vault: KaminoVault, maxAmountToGiveUp: Decimal): Promise<TransactionInstruction> {
+    return this._vaultClient.giveUpPendingFeesIx(vault, maxAmountToGiveUp);
+  }
+
   /**
    * This function will return the missing ATA creation instructions, as well as one or multiple withdraw instructions, based on how many reserves it's needed to withdraw from. This might have to be split in multiple transactions
    * @param user - user to withdraw
@@ -332,6 +356,16 @@ export class KaminoManager {
     slot: number
   ): Promise<TransactionInstruction[]> {
     return this._vaultClient.withdrawIxs(user, vault, shareAmount, slot);
+  }
+
+  /**
+   * This method withdraws all the pending fees from the vault to the owner's token ATA
+   * @param vault - vault for which the admin withdraws the pending fees
+   * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
+   * @returns - list of instructions to withdraw all pending fees
+   */
+  async withdrawPendingFeesIxs(vault: KaminoVault, slot: number): Promise<TransactionInstruction[]> {
+    return this._vaultClient.withdrawPendingFeesIxs(vault, slot);
   }
 
   /**
