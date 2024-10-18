@@ -149,7 +149,7 @@ export function getJupiterSwapper(connection: Connection, payer: PublicKey): Swa
     klendAccounts: Array<PublicKey>,
     quote: SwapQuote<QuoteResponse>
   ): Promise<SwapQuoteIxs> => {
-    const scaledQuoteResponse = scaleJupQuoteResponse(quote.quoteResponse!, inputs.inputAmountLamports);
+    const scaledQuoteResponse = scaleJupQuoteResponse(quote.quoteResponse!, new Decimal(inputs.inputAmountLamports));
     const { swapTxs, swapLookupTableAccounts } = await swapTxFromQuote(connection, payer, scaledQuoteResponse, {
       slippageBps: 100,
       wrapAndUnwrapSol: false,

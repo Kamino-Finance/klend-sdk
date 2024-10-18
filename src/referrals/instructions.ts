@@ -1,6 +1,6 @@
 import { PublicKey, SYSVAR_RENT_PUBKEY, SystemProgram, TransactionInstruction, Connection } from '@solana/web3.js';
 import { KaminoMarket } from '../classes';
-import { checkIfAccountExists, referrerStatePda, referrerTokenStatePda, shortUrlPda, userMetadataPda } from '../utils';
+import { PublicKeySet, referrerStatePda, referrerTokenStatePda, shortUrlPda, userMetadataPda } from '../utils';
 import {
   PROGRAM_ID,
   ReferrerState,
@@ -12,9 +12,11 @@ import {
 export const getInitAllReferrerTokenStateIxns = async ({
   referrer,
   kaminoMarket,
+  payer = referrer,
 }: {
   referrer: PublicKey;
   kaminoMarket: KaminoMarket;
+  payer?: PublicKey;
 }) => {
   if (referrer.equals(PublicKey.default)) {
     throw new Error('Referrer not set');
@@ -25,27 +27,32 @@ export const getInitAllReferrerTokenStateIxns = async ({
   const initReferrerTokenStateIxns: TransactionInstruction[] = [];
 
   const tokenStatesToCreate: [PublicKey, PublicKey][] = [];
-  for (const reserve of kaminoMarket.reserves.values()) {
-    const referrerTokenStateAddress = referrerTokenStatePda(referrer, reserve.address, kaminoMarket.programId)[0];
-
-    if (!(await checkIfAccountExists(kaminoMarket.getConnection(), referrerTokenStateAddress))) {
-      tokenStatesToCreate.push([referrerTokenStateAddress, reserve?.address]);
+  const reserves = kaminoMarket.getReserves();
+  const referrerTokenStates = reserves.map((reserve) => {
+    return referrerTokenStatePda(referrer, reserve.address, kaminoMarket.programId)[0];
+  });
+  const uniqueReferrerTokenStates = new PublicKeySet<PublicKey>(referrerTokenStates).toArray();
+  const accounts = await kaminoMarket.getConnection().getMultipleAccountsInfo(uniqueReferrerTokenStates);
+  for (let i = 0; i < uniqueReferrerTokenStates.length; i++) {
+    if (!accounts[i]) {
+      tokenStatesToCreate.push([uniqueReferrerTokenStates[i], reserves[i].address]);
     }
   }
 
   tokenStatesToCreate.forEach(([referrerTokenStateAddress, reserveAddress]) => {
     const initReferrerTokenStateIx = initReferrerTokenState(
       {
-        referrer: referrer,
+        referrer,
       },
       {
         lendingMarket: kaminoMarket.getAddress(),
-        payer: referrer,
+        payer,
         reserve: reserveAddress,
         referrerTokenState: referrerTokenStateAddress,
         rent: SYSVAR_RENT_PUBKEY,
         systemProgram: SystemProgram.programId,
-      }
+      },
+      kaminoMarket.programId
     );
 
     initReferrerTokenStateIxns.push(initReferrerTokenStateIx);

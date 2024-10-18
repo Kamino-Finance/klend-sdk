@@ -32,14 +32,17 @@ import { loadReserveData } from './utils/helpers';
     true
   );
 
+  console.log('depositAction.computeBudgetIxsLabels', depositAction.computeBudgetIxsLabels);
+  // depositAction.computeBudgetIxsLabels [ 'AddComputeBudget[300000]' ]
   console.log('depositAction.setupIxsLabels', depositAction.setupIxsLabels);
-  // depositAction.setupIxsLabels [ 'AddComputeBudget[300000]' ]
+  // depositAction.setupIxsLabels []
   console.log('depositAction.lendingIxsLabels', depositAction.lendingIxsLabels);
   // depositAction.lendingIxsLabels [ 'depositReserveLiquidity' ]
   console.log('depositAction.cleanupIxs', depositAction.cleanupIxsLabels);
   // depositAction.cleanupIxsLabels []
 
   const tx = await buildVersionedTransaction(connection, wallet.publicKey, [
+    ...depositAction.computeBudgetIxs,
     ...depositAction.setupIxs,
     ...depositAction.lendingIxs,
     ...depositAction.cleanupIxs,

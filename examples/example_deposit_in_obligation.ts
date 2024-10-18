@@ -40,9 +40,11 @@ import { loadReserveData } from './utils/helpers';
 
   // We refresh the farm for the collateral before and after the deposit, to make sure the user is getting the correct amount of rewards and his new stake is reflected properly.
 
+  console.log('depositAction.computeBudgetIxsLabels', depositAction.computeBudgetIxsLabels);
+  // depositAction.computeBudgetIxsLabels [ 'AddComputeBudget[300000]' ]
+
   console.log('depositAction.setupIxsLabels', depositAction.setupIxsLabels);
   // depositAction.setupIxsLabels [
-  // 'AddComputeBudget[300000]',
   // 'RefreshReserve[DGQZWCY17gGtBUgdaFs1VreJWsodkjFxndPsskwFKGpp]',
   // 'RefreshReserve[2gc9Dm1eB6UgVYFBUN9bWks6Kes9PbWSaPaa9DqyvEiN]',
   // 'RefreshReserve[D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59]',
@@ -58,6 +60,7 @@ import { loadReserveData } from './utils/helpers';
   // ]
 
   const tx = await buildVersionedTransaction(connection, wallet.publicKey, [
+    ...depositAction.computeBudgetIxs,
     ...depositAction.setupIxs,
     ...depositAction.lendingIxs,
     ...depositAction.cleanupIxs,

@@ -52,7 +52,6 @@ import {
   referrerTokenStatePda,
   userMetadataPda,
   getAtasWithCreateIxnsIfMissing,
-  checkIfAccountExists,
   createLookupTableIx,
   isNotNullPubkey,
   PublicKeySet,
@@ -127,6 +126,9 @@ export class KaminoAction {
   amount: BN;
   outflowAmount?: BN;
 
+  computeBudgetIxs: Array<TransactionInstruction>;
+  computeBudgetIxsLabels: Array<string>;
+
   setupIxs: Array<TransactionInstruction>;
   setupIxsLabels: Array<string>;
 
@@ -190,6 +192,8 @@ export class KaminoAction {
     this.positions = positions;
     this.userTokenAccountAddress = userTokenAccountAddress;
     this.userCollateralAccountAddress = userCollateralAccountAddress;
+    this.computeBudgetIxs = [];
+    this.computeBudgetIxsLabels = [];
     this.setupIxs = [];
     this.setupIxsLabels = [];
     this.inBetweenIxs = [];
@@ -1920,7 +1924,11 @@ export class KaminoAction {
         await this.addInitUserMetadataIxs();
       }
 
-      await this.addInitReferrerTokenStateIxs();
+      if (['borrow', 'withdrawReferrerFees'].includes(action)) {
+        await this.addInitReferrerTokenStateIx(this.reserve);
+      } if (action === 'deposit' && this.outflowReserve) { // depositAndBorrow
+        await this.addInitReferrerTokenStateIx(this.outflowReserve);
+      }
       await this.addInitObligationIxs();
     }
 
@@ -2361,51 +2369,33 @@ export class KaminoAction {
     this.setupIxsLabels.push(`initUserMetadata[${userMetadataAddress.toString()}]`);
   }
 
-  private async addInitReferrerTokenStateIxs(reservesArr: KaminoReserve[] = []) {
+  private async addInitReferrerTokenStateIx(reserve: KaminoReserve) {
     if (this.referrer.equals(PublicKey.default)) {
       return;
     }
 
-    const outflowReserve = this.outflowReserve?.address ? [this.outflowReserve.address] : [];
-
-    const reserves =
-      reservesArr.length !== 0
-        ? reservesArr.map((reserve) => reserve.address)
-        : new PublicKeySet<PublicKey>([this.reserve.address, ...outflowReserve]).toArray();
-    const tokenStatesToCreate: [PublicKey, PublicKey][] = [];
-    for (const reserve of reserves) {
-      if (!reserve) {
-        continue;
-      }
-
-      const referrerTokenStateAddress = referrerTokenStatePda(this.referrer, reserve, this.kaminoMarket.programId)[0];
-
-      if (!(await checkIfAccountExists(this.kaminoMarket.getConnection(), referrerTokenStateAddress))) {
-        tokenStatesToCreate.push([referrerTokenStateAddress, reserve]);
-      }
-    }
-
-    tokenStatesToCreate.forEach(([referrerTokenStateAddress, reserveAddress]) => {
-      const initreferrerTokenStateIx = initReferrerTokenState(
+    const referrerTokenState = referrerTokenStatePda(this.referrer, reserve.address, this.kaminoMarket.programId)[0];
+    const account = await this.kaminoMarket.getConnection().getAccountInfo(referrerTokenState);
+    if (!account) {
+      const initReferrerTokenStateIx = initReferrerTokenState(
         {
           referrer: this.referrer,
         },
         {
           lendingMarket: this.kaminoMarket.getAddress(),
           payer: this.owner,
-          reserve: reserveAddress,
-          referrerTokenState: referrerTokenStateAddress,
+          reserve: reserve.address,
+          referrerTokenState,
           rent: SYSVAR_RENT_PUBKEY,
           systemProgram: SystemProgram.programId,
         },
         this.kaminoMarket.programId
       );
-
-      this.setupIxs.unshift(initreferrerTokenStateIx);
+      this.setupIxs.unshift(initReferrerTokenStateIx);
       this.setupIxsLabels.unshift(
-        `InitReferrerTokenState[${referrerTokenStateAddress.toString()} res=${reserveAddress}]`
+        `InitReferrerTokenState[${referrerTokenState.toString()} res=${reserve.address}]`
       );
-    });
+    }
   }
 
   private addWithdrawReferrerFeesIxs() {
@@ -2435,8 +2425,8 @@ export class KaminoAction {
   }
 
   private addComputeBudgetIxn(units: number) {
-    this.setupIxs.push(buildComputeBudgetIx(units));
-    this.setupIxsLabels.push(`AddComputeBudget[${units}]`);
+    this.computeBudgetIxs.push(buildComputeBudgetIx(units));
+    this.computeBudgetIxsLabels.push(`AddComputeBudget[${units}]`);
   }
 
   private async addAtaIxs(action: ActionType) {
@@ -2859,7 +2849,7 @@ export class KaminoAction {
   }
 
   public static actionToIxs(action: KaminoAction): Array<TransactionInstruction> {
-    const ixs: TransactionInstruction[] = [...action.setupIxs];
+    const ixs: TransactionInstruction[] = [...action.computeBudgetIxs, ...action.setupIxs];
     ixs.push(...KaminoAction.actionToLendingIxs(action));
     ixs.push(...action.cleanupIxs);
     return ixs;
@@ -2874,5 +2864,23 @@ export class KaminoAction {
       }
     }
     return ixs;
+  }
+
+  public static actionToIxLabels(action: KaminoAction): Array<string> {
+    const labels: string[] = [...action.computeBudgetIxsLabels, ...action.setupIxsLabels];
+    labels.push(...KaminoAction.actionToLendingIxLabels(action));
+    labels.push(...action.cleanupIxsLabels);
+    return labels;
+  }
+
+  public static actionToLendingIxLabels(action: KaminoAction): Array<string> {
+    const lables: string[] = [];
+    for (let i = 0; i < action.lendingIxsLabels.length; i++) {
+      lables.push(action.lendingIxsLabels[i]);
+      if (i !== action.lendingIxsLabels.length - 1) {
+        lables.push(...action.inBetweenIxsLabels);
+      }
+    }
+    return lables;
   }
 }

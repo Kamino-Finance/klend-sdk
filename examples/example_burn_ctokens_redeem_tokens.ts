@@ -39,14 +39,17 @@ import { loadReserveData } from './utils/helpers';
     true
   );
 
+  console.log('redeemAction.computeBudgetIxs', redeemAction.computeBudgetIxsLabels);
+  // redeemAction.computeBudgetIxs [ 'AddComputeBudget[300000]' ]
   console.log('redeemAction.setupIxsLabels', redeemAction.setupIxsLabels);
-  // redeemAction.setupIxsLabels [ 'AddComputeBudget[300000]' ]
+  // redeemAction.setupIxsLabels []
   console.log('redeemAction.lendingIxsLabels', redeemAction.lendingIxsLabels);
   // redeemAction.lendingIxsLabels [ 'redeemReserveCollateral' ]
   console.log('redeemAction.cleanupIxs', redeemAction.cleanupIxsLabels);
   // redeemAction.cleanupIxsLabels []
 
   const tx = await buildVersionedTransaction(connection, wallet.publicKey, [
+    ...redeemAction.computeBudgetIxs,
     ...redeemAction.setupIxs,
     ...redeemAction.lendingIxs,
     ...redeemAction.cleanupIxs,

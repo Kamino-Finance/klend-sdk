@@ -279,11 +279,7 @@ async function deposit(connection: Connection, wallet: Keypair, token: string, d
   );
   console.log('User obligation', kaminoAction.obligation!.obligationAddress.toString());
 
-  const tx = await buildVersionedTransaction(connection, wallet.publicKey, [
-    ...kaminoAction.setupIxs,
-    ...kaminoAction.lendingIxs,
-    ...kaminoAction.cleanupIxs,
-  ]);
+  const tx = await buildVersionedTransaction(connection, wallet.publicKey, KaminoAction.actionToIxs(kaminoAction));
 
   console.log('Deposit SetupIxns:', kaminoAction.setupIxsLabels);
   console.log('Deposit LendingIxns:', kaminoAction.lendingIxsLabels);
@@ -303,11 +299,7 @@ async function withdraw(connection: Connection, wallet: Keypair, token: string, 
   );
   console.log('User obligation', kaminoAction.obligation!.obligationAddress.toString());
 
-  const tx = await buildVersionedTransaction(connection, wallet.publicKey, [
-    ...kaminoAction.setupIxs,
-    ...kaminoAction.lendingIxs,
-    ...kaminoAction.cleanupIxs,
-  ]);
+  const tx = await buildVersionedTransaction(connection, wallet.publicKey, KaminoAction.actionToIxs(kaminoAction));
 
   console.log('Withdraw SetupIxns:', kaminoAction.setupIxsLabels);
   console.log('Withdraw LendingIxns:', kaminoAction.lendingIxsLabels);
@@ -327,11 +319,7 @@ async function borrow(connection: Connection, wallet: Keypair, token: string, bo
   );
   console.log('User obligation', kaminoAction.obligation!.obligationAddress.toString());
 
-  const tx = await buildVersionedTransaction(connection, wallet.publicKey, [
-    ...kaminoAction.setupIxs,
-    ...kaminoAction.lendingIxs,
-    ...kaminoAction.cleanupIxs,
-  ]);
+  const tx = await buildVersionedTransaction(connection, wallet.publicKey, KaminoAction.actionToIxs(kaminoAction));
 
   console.log('Borrow SetupIxns:', kaminoAction.setupIxsLabels);
   console.log('Borrow LendingIxns:', kaminoAction.lendingIxsLabels);
@@ -352,11 +340,7 @@ async function repay(connection: Connection, wallet: Keypair, token: string, bor
   );
   console.log('User obligation', kaminoAction.obligation!.obligationAddress.toString());
 
-  const tx = await buildVersionedTransaction(connection, wallet.publicKey, [
-    ...kaminoAction.setupIxs,
-    ...kaminoAction.lendingIxs,
-    ...kaminoAction.cleanupIxs,
-  ]);
+  const tx = await buildVersionedTransaction(connection, wallet.publicKey, KaminoAction.actionToIxs(kaminoAction));
 
   console.log('Repay SetupIxns:', kaminoAction.setupIxsLabels);
   console.log('Repay LendingIxns:', kaminoAction.lendingIxsLabels);

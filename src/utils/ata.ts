@@ -98,11 +98,6 @@ export function createAtasIdempotent(
   return res;
 }
 
-export const checkIfAccountExists = async (connection: Connection, account: PublicKey): Promise<boolean> => {
-  const acc = await connection.getAccountInfo(account);
-  return acc !== null;
-};
-
 export function getDepositWsolIxns(owner: PublicKey, ata: PublicKey, amountLamports: Decimal) {
   const ixns: TransactionInstruction[] = [];
 
@@ -158,15 +153,14 @@ export async function getTokenAccountBalance(provider: AnchorProvider, tokenAcco
 export async function getTokenAccountBalanceDecimal(
   connection: Connection,
   mint: PublicKey,
-  owner: PublicKey
+  owner: PublicKey,
+  tokenProgram: PublicKey = TOKEN_PROGRAM_ID,
 ): Promise<Decimal> {
-  const tokenAta = getAssociatedTokenAddress(mint, owner);
-  const ataExists = await checkIfAccountExists(connection, tokenAta);
-
-  if (!ataExists) {
-    return new Decimal(0);
-  } else {
-    const tokenData = (await connection.getTokenAccountBalance(tokenAta)).value;
-    return new Decimal(tokenData.uiAmountString!);
+  const ata = getAssociatedTokenAddress(mint, owner, true, tokenProgram);
+  const accInfo = await connection.getAccountInfo(ata);
+  if (accInfo === null) {
+    return new Decimal('0');
   }
+  const { value } = await connection.getTokenAccountBalance(ata);
+  return new Decimal(value.uiAmountString!);
 }
