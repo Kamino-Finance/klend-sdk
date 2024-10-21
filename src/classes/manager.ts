@@ -14,7 +14,9 @@ import {
   KaminoVaultConfig,
   kaminoVaultId,
   ReserveAllocationConfig,
+  ReserveOverview,
   VaultHolder,
+  VaultHoldings,
 } from './vault';
 import {
   AddAssetToMarketParams,
@@ -26,6 +28,7 @@ import {
   initLendingMarket,
   InitLendingMarketAccounts,
   InitLendingMarketArgs,
+  KaminoReserve,
   LendingMarket,
   lendingMarketAuthPda,
   MarketWithAddress,
@@ -318,7 +321,11 @@ export class KaminoManager {
     return this._vaultClient.depositIxs(user, vault, tokenAmount);
   }
 
-  async updateVaultConfigIx(vault: KaminoVault, mode: VaultConfigFieldKind, value: string): Promise<TransactionInstruction> {
+  async updateVaultConfigIx(
+    vault: KaminoVault,
+    mode: VaultConfigFieldKind,
+    value: string
+  ): Promise<TransactionInstruction> {
     return this._vaultClient.updateVaultConfigIx(vault, mode, value);
   }
 
@@ -506,6 +513,78 @@ export class KaminoManager {
     }
     return result;
   };
+
+  /**
+   * This will return an Holdings object which contains the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
+   * @param vault - the kamino vault to get available liquidity to withdraw for
+   * @param slot - current slot
+   * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @returns an Holdings object
+   */
+  async getVaultHoldings(
+    vault: VaultState,
+    slot: number,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<VaultHoldings> {
+    return this._vaultClient.getVaultHoldings(vault, slot, vaultReserves);
+  }
+
+  /**
+   * This will return an overview of each reserve that is part of the vault allocation
+   * @param vault - the kamino vault to get available liquidity to withdraw for
+   * @param slot - current slot
+   * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @returns a hashmap from vault reserve pubkey to ReserveOverview object
+   */
+  async getVaultReservesDetails(
+    vault: VaultState,
+    slot: number,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<PubkeyHashMap<PublicKey, ReserveOverview>> {
+    return this._vaultClient.getVaultReservesDetails(vault, slot, vaultReserves);
+  }
+
+  /**
+   * This will return the APY of the vault under the assumption that all the available tokens in the vault are all the time invested in the reserves
+   * @param vault - the kamino vault to get APY for
+   * @param slot - current slot
+   * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @returns APY for the vault
+   */
+  async getVaultTheoreticalAPY(
+    vault: VaultState,
+    slot: number,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<Decimal> {
+    return this._vaultClient.getVaultTheoreticalAPY(vault, slot, vaultReserves);
+  }
+
+  /**
+   * This will load the onchain state for all the reserves that the vault has allocations for
+   * @param vaultState - the vault state to load reserves for
+   * @returns a hashmap from each reserve pubkey to the reserve state
+   */
+  async loadVaultReserves(vaultState: VaultState): Promise<PubkeyHashMap<PublicKey, KaminoReserve>> {
+    return this._vaultClient.loadVaultReserves(vaultState);
+  }
+
+  /**
+   * This will get the list of all reserve pubkeys that the vault has allocations for
+   * @param vaultState - the vault state to load reserves for
+   * @returns a hashmap from each reserve pubkey to the reserve state
+   */
+  getAllVaultReserves(vault: VaultState): PublicKey[] {
+    return this._vaultClient.getAllVaultReserves(vault);
+  }
+
+  /**
+   * This will load the onchain state for all the reserves that the vault has allocations for
+   * @param vaultState - the vault state to load reserves for
+   * @returns a hashmap from each reserve pubkey to the reserve state
+   */
+  getVaultReserves(vault: VaultState): PublicKey[] {
+    return this._vaultClient.getVaultReserves(vault);
+  }
 
   /**
    * This will trigger invest by balancing, based on weights, the reserve allocations of the vault. It can either withdraw or deposit into reserves to balance them. This is a function that should be cranked

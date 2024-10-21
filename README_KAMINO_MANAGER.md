@@ -14,7 +14,7 @@ yarn
 
 #### Requirements
 
-In order to use the CLI, the followign `.env` configuration is required:
+In order to use the CLI, the followign `.env` configuration is required (i.e. you need to create a `.env` file in the root of the project with the content below but replace the values of ADMIN and RPC with your own):
 
 ```
 ADMIN="admin.json"
@@ -24,6 +24,16 @@ KVAULT_PROGRAM_ID_MAINNET="kvauTFR8qm1dhniz6pYuBZkuene3Hfrs1VQhVRgCNrr"
 KLEND_PROGRAM_ID_STAGING="SLendK7ySfcEzyaFqy93gDnD3RtrpXJcnRwb6zFHJSh"
 KVAULT_PROGRAM_ID_STAGING="STkvh7ostar39Fwr4uZKASs1RNNuYMFMTsE77FiRsL2"
 ```
+
+- for the template you can copy `.env.example` to `.env` and then replace the ADMIN and RPC values `cp .env.example .env`
+
+- **ADMIN** - path to a local private key file (it has to be a JSON file and have some SOL). If you don't have one create one. To create it you need to have Solana locally
+  - Install Solana: guide: https://docs.solanalabs.com/cli/install or directly `sh -c "$(curl -sSfL https://release.solana.com/v1.18.18/install)"`. If it suggests a command involving `PATH` after installation, run it.
+  - Restart the terminal you are using
+  - Create new keypair: `solana-keygen new -o admin.json`
+  - Get the pubkey: `solana-keygen pubkey admin.json`
+  - Send some SOL to it
+- **RPC** - the RPC url to use; If you don't have one you can use the default Solana one `https://api.mainnet-beta.solana.com` but it is strongly recommended to use a private one as this one is rate limited and has low success rate for landing transactions
 
 ### Kamino Lending
 
@@ -45,11 +55,11 @@ yarn kamino-manager create-market --staging --mode execute
 #### Add a new asset to market / Create new reserve
 
 ```
-yarn kamino-manager add-asset-to-market --market market_address --mint token_mint --mint-program-id TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA --reserve-config-path ./configs/reserve_config_example.json --staging --mode execute
+yarn kamino-manager add-asset-to-market --market market_address --mint <token_mint> --mint-program-id TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA --reserve-config-path ./configs/reserve_config_example.json --staging --mode execute
 ```
 
 - **market** - address to create the reserve for
-- **mint** - the liquidity mint to create the reserve for
+- **mint** - the liquidity mint to create the reserve for; e.g. if you want to create a reserve for USDC use the USDC mint `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`
 - **mint-program-id** - the program id of the mint - `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` - spl token program `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb` - for token 2022 token program
 - **reserve-config-path** - path to the reserve config to be used. A reserve config example can be found [here](https://github.com/Kamino-Finance/klend-sdk/blob/master/configs/reserve_config_example.json)
 - **mode** - can have these values:
@@ -349,3 +359,14 @@ To have a strategy under multisig you can:
 ### Managing a vault under a multisig
 
 For all actions that require admin permissions (updating reserves allocation, setting the performance and management fee, collect pending fees, give up fees) at the commands above you will need to add the `--multisig <multisig_pubkey>` flag and the command will return the base58 transaction to be proposed in the multisig.
+
+
+## Troubleshooting
+
+### Debugging transactions
+
+#### Common error messages
+- `Transaction failed: Error processing Instruction 0: custom program error: 0x1`: you don't have enough SOL in the admin wallet to pay for the transaction fees; you can check the transaction hash to see exactly how much SOL was needed
+- `TransactionExpiredBlockheightExceededError: Signature <signature_value> has expired: block height exceeded.`: this has multiple potential causes:
+  - the transaction was not submitted to the network in time because of the RPC/network being congested
+  - you are using the wrong signer for the transaction

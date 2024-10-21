@@ -496,6 +496,14 @@ async function main() {
     console.log('oracleConfigs', JSON.parse(JSON.stringify(oracleConfigs)));
   });
 
+  commands.command('get-all-vaults').action(async () => {
+    const env = initializeClient(false, false);
+    const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+    const allVaults = await kaminoManager.getAllVaults();
+    console.log('all vaults', allVaults);
+  });
+
   commands
     .command('download-lending-market-config')
     .requiredOption('--lending-market <string>', 'Lending Market Address')

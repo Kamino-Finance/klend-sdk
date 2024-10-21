@@ -541,10 +541,10 @@
     decimal.js "^10.4.3"
     exponential-backoff "^3.1.1"
 
-"@kamino-finance/klend-sdk@^5.0.4":
-  version "5.0.4"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/klend-sdk/-/klend-sdk-5.0.4.tgz#03354ba1bc225f89b58e4dbd8c60d82aed332f4e"
-  integrity sha512-F1YiOZPs8wZJii5c/Y14YF9mj2+CKpP0RsLo24Q3eh/2cslBfPulrEOyOHLtirpa9kejTQgoqKjh+ZtEjD2blg==
+"@kamino-finance/klend-sdk@^5.1.0":
+  version "5.1.0"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/klend-sdk/-/klend-sdk-5.1.0.tgz#00082b8cbe937bdf0d5239ed3ee046e961c5e2eb"
+  integrity sha512-e2M9ri9ROiG5ZXmMntw85dg8gMiF52J0PYxUQtKxAtSxoiUfdjNHMUO/qAV0u33dB/9iQ9YBfPRtzX3oJYDKuA==
   dependencies:
     "@bokuweb/zstd-wasm" "^0.0.20"
     "@coral-xyz/anchor" "^0.28.0"
@@ -560,6 +560,7 @@
     axios "^1.6.8"
     base58-js "^2.0.0"
     bn.js "^5.2.1"
+    bs58 "^6.0.0"
     buffer "^6.0.3"
     commander "^9.3.0"
     decimal.js "^10.4.3"

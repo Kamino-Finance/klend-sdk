@@ -61,6 +61,7 @@ import bs58 from 'bs58';
 import { getProgramAccounts } from '../utils/rpc';
 
 export const kaminoVaultId = new PublicKey('kvauTFR8qm1dhniz6pYuBZkuene3Hfrs1VQhVRgCNrr');
+export const kaminoVaultStagingId = new PublicKey('STkvh7ostar39Fwr4uZKASs1RNNuYMFMTsE77FiRsL2');
 
 const TOKEN_VAULT_SEED = 'token_vault';
 const CTOKEN_VAULT_SEED = 'ctoken_vault';
@@ -391,7 +392,12 @@ export class KaminoVaultClient {
    * @param tokenAmount - token amount to be deposited, in decimals (will be converted in lamports)
    * @returns - an array of instructions to be used to be executed
    */
-  async depositIxs(user: PublicKey, vault: KaminoVault, tokenAmount: Decimal): Promise<TransactionInstruction[]> {
+  async depositIxs(
+    user: PublicKey,
+    vault: KaminoVault,
+    tokenAmount: Decimal,
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<TransactionInstruction[]> {
     const vaultState = await vault.getState(this._connection);
 
     const userTokenAta = getAssociatedTokenAddress(vaultState.tokenMint, user);
@@ -450,7 +456,7 @@ export class KaminoVaultClient {
 
     const vaultReserves = this.getVaultReserves(vaultState);
 
-    const vaultReservesState = await this.loadVaultReserves(vaultState);
+    const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
 
     let vaultReservesAccountMetas: AccountMeta[] = [];
     let vaultReservesLendingMarkets: AccountMeta[] = [];
@@ -983,13 +989,32 @@ export class KaminoVaultClient {
     return reserveAllocationAvailableLiquidityToWithdraw;
   }
 
-  private getVaultReserves(vault: VaultState): PublicKey[] {
+  /**
+   * This will get the list of all reserve pubkeys that the vault has allocations for
+   * @param vaultState - the vault state to load reserves for
+   * @returns a hashmap from each reserve pubkey to the reserve state
+   */
+  getAllVaultReserves(vault: VaultState): PublicKey[] {
+    return vault.vaultAllocationStrategy.map((vaultAllocation) => vaultAllocation.reserve);
+  }
+
+  /**
+   * This will get the list of all reserve pubkeys that the vault has allocations for ex
+   * @param vaultState - the vault state to load reserves for
+   * @returns a hashmap from each reserve pubkey to the reserve state
+   */
+  getVaultReserves(vault: VaultState): PublicKey[] {
     return vault.vaultAllocationStrategy
       .filter((vaultAllocation) => !vaultAllocation.reserve.equals(PublicKey.default))
       .map((vaultAllocation) => vaultAllocation.reserve);
   }
 
-  private async loadVaultReserves(vaultState: VaultState): Promise<PubkeyHashMap<PublicKey, KaminoReserve>> {
+  /**
+   * This will load the onchain state for all the reserves that the vault has allocations for
+   * @param vaultState - the vault state to load reserves for
+   * @returns a hashmap from each reserve pubkey to the reserve state
+   */
+  async loadVaultReserves(vaultState: VaultState): Promise<PubkeyHashMap<PublicKey, KaminoReserve>> {
     const vaultReservesAddresses = this.getVaultReserves(vaultState);
     const reserveAccounts = await this._connection.getMultipleAccountsInfo(vaultReservesAddresses, 'processed');
 
@@ -1025,6 +1050,122 @@ export class KaminoVaultClient {
     });
 
     return kaminoReserves;
+  }
+
+  /**
+   * This will return an Holdings object which contains the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
+   * @param vault - the kamino vault to get available liquidity to withdraw for
+   * @param slot - current slot
+   * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @returns an Holdings object
+   */
+  async getVaultHoldings(
+    vault: VaultState,
+    slot: number,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<VaultHoldings> {
+    const vaultHoldings: VaultHoldings = {
+      available: new Decimal(vault.tokenAvailable.toString()),
+      invested: new Decimal(0),
+      investedInReserves: new PubkeyHashMap<PublicKey, Decimal>(),
+    };
+
+    const vaultReservesState = vaultReserves ? vaultReserves : await this.loadVaultReserves(vault);
+
+    vault.vaultAllocationStrategy.forEach((allocationStrategy) => {
+      if (allocationStrategy.reserve.equals(PublicKey.default)) {
+        return;
+      }
+
+      const reserve = vaultReservesState.get(allocationStrategy.reserve);
+      if (reserve === undefined) {
+        throw new Error(`Reserve ${allocationStrategy.reserve.toBase58()} not found`);
+      }
+
+      const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, 0);
+      const reserveAllocationLiquidityAmount = new Decimal(allocationStrategy.cTokenAllocation.toString()).mul(
+        reserveCollExchangeRate
+      );
+
+      vaultHoldings.invested = vaultHoldings.invested.add(reserveAllocationLiquidityAmount);
+      vaultHoldings.investedInReserves.set(allocationStrategy.reserve, reserveAllocationLiquidityAmount);
+    });
+
+    return vaultHoldings;
+  }
+
+  /**
+   * This will return an overview of each reserve that is part of the vault allocation
+   * @param vault - the kamino vault to get available liquidity to withdraw for
+   * @param slot - current slot
+   * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @returns a hashmap from vault reserve pubkey to ReserveOverview object
+   */
+  async getVaultReservesDetails(
+    vault: VaultState,
+    slot: number,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<PubkeyHashMap<PublicKey, ReserveOverview>> {
+    const vaultReservesState = vaultReserves ? vaultReserves : await this.loadVaultReserves(vault);
+    const reservesDetails = new PubkeyHashMap<PublicKey, ReserveOverview>();
+
+    vault.vaultAllocationStrategy.forEach((allocationStrategy) => {
+      if (allocationStrategy.reserve.equals(PublicKey.default)) {
+        return;
+      }
+
+      const reserve = vaultReservesState.get(allocationStrategy.reserve);
+      if (reserve === undefined) {
+        throw new Error(`Reserve ${allocationStrategy.reserve.toBase58()} not found`);
+      }
+
+      reserve.getBorrowedAmount();
+      const reserveOverview: ReserveOverview = {
+        supplyAPY: new Decimal(reserve.totalSupplyAPY(slot)),
+        uUtilizationRatio: new Decimal(reserve.getEstimatedUtilizationRatio(slot, 0)),
+        liquidationThresholdPct: new Decimal(reserve.state.config.liquidationThresholdPct),
+        borrowedAmount: reserve.getBorrowedAmount(),
+      };
+      reservesDetails.set(allocationStrategy.reserve, reserveOverview);
+    });
+
+    return reservesDetails;
+  }
+
+  /**
+   * This will return the APY of the vault under the assumption that all the available tokens in the vault are all the time invested in the reserves
+   * @param vault - the kamino vault to get APY for
+   * @param slot - current slot
+   * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @returns APY for the vault
+   */
+  async getVaultTheoreticalAPY(
+    vault: VaultState,
+    slot: number,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<Decimal> {
+    const vaultReservesState = vaultReserves ? vaultReserves : await this.loadVaultReserves(vault);
+
+    let totalWeights = new Decimal(0);
+    let totalAPY = new Decimal(0);
+    vault.vaultAllocationStrategy.forEach((allocationStrategy) => {
+      if (allocationStrategy.reserve.equals(PublicKey.default)) {
+        return;
+      }
+
+      const reserve = vaultReservesState.get(allocationStrategy.reserve);
+      if (reserve === undefined) {
+        throw new Error(`Reserve ${allocationStrategy.reserve.toBase58()} not found`);
+      }
+
+      const reserveAPY = new Decimal(reserve.totalSupplyAPY(slot));
+      const weight = new Decimal(allocationStrategy.targetAllocationWeight.toString());
+      const weightedAPY = reserveAPY.mul(weight);
+      totalAPY = totalAPY.add(weightedAPY);
+      totalWeights = totalWeights.add(weight);
+    });
+
+    return totalAPY.div(totalWeights);
   }
 } // KaminoVaultClient
 
@@ -1133,4 +1274,17 @@ export function getCTokenVaultPda(vaultAddress: PublicKey, reserveAddress: Publi
 export type VaultHolder = {
   holderPubkey: PublicKey;
   amount: Decimal;
+};
+
+export type VaultHoldings = {
+  available: Decimal;
+  invested: Decimal;
+  investedInReserves: PubkeyHashMap<PublicKey, Decimal>;
+};
+
+export type ReserveOverview = {
+  supplyAPY: Decimal;
+  uUtilizationRatio: Decimal;
+  liquidationThresholdPct: Decimal;
+  borrowedAmount: Decimal;
 };
