@@ -17,6 +17,7 @@ import {
   ReserveOverview,
   VaultHolder,
   VaultHoldings,
+  VaultHoldingsWithUSDValue,
 } from './vault';
 import {
   AddAssetToMarketParams,
@@ -386,6 +387,18 @@ export class KaminoManager {
   }
 
   /**
+   * This method calculates the price of one vault share(kToken)
+   * @param vault - vault to calculate sharePrice for
+   * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
+   * @param tokenPrice - the price of the vault token (e.g. SOL) in USD
+   * @returns - share value in USD
+   */
+  async getSharePriceInUSD(vault: KaminoVault, slot: number, tokenPrice: Decimal): Promise<Decimal> {
+    const tokensPerShare = await this.getTokensPerShareSingleVault(vault, slot);
+    return tokensPerShare.mul(tokenPrice);
+  }
+
+  /**
    * This method returns the user shares balance for a given vault
    * @param user - user to calculate the shares balance for
    * @param vault - vault to calculate shares balance for
@@ -515,11 +528,11 @@ export class KaminoManager {
   };
 
   /**
-   * This will return an Holdings object which contains the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
+   * This will return an VaultHoldings object which contains the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
    * @param vault - the kamino vault to get available liquidity to withdraw for
    * @param slot - current slot
    * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
-   * @returns an Holdings object
+   * @returns an VaultHoldings object
    */
   async getVaultHoldings(
     vault: VaultState,
@@ -527,6 +540,23 @@ export class KaminoManager {
     vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<VaultHoldings> {
     return this._vaultClient.getVaultHoldings(vault, slot, vaultReserves);
+  }
+
+  /**
+   * This will return an VaultHoldingsWithUSDValue object which contains an holdings field representing the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve and additional fields for the total USD value of the available and invested amounts
+   * @param vault - the kamino vault to get available liquidity to withdraw for
+   * @param slot - current slot
+   * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param price - the price of the token in the vault (e.g. USDC)
+   * @returns an VaultHoldingsWithUSDValue object with details about the tokens available and invested in the vault, denominated in tokens and USD
+   */
+  async getVaultHoldingsWithPrice(
+    vault: VaultState,
+    slot: number,
+    price: Decimal,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<VaultHoldingsWithUSDValue> {
+    return this._vaultClient.getVaultHoldingsWithPrice(vault, slot, price, vaultReserves);
   }
 
   /**

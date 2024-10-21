@@ -390,6 +390,7 @@ export class KaminoVaultClient {
    * @param user - user to deposit
    * @param vault - vault to deposit into
    * @param tokenAmount - token amount to be deposited, in decimals (will be converted in lamports)
+   * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @returns - an array of instructions to be used to be executed
    */
   async depositIxs(
@@ -831,16 +832,21 @@ export class KaminoVaultClient {
    * This method calculates the token per shar value. This will always change based on interest earned from the vault, but calculating it requires a bunch of rpc requests. Caching this for a short duration would be optimal
    * @param vault - vault to calculate tokensPerShare for
    * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
+   * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @returns - token per share value
    */
-  async getTokensPerShareSingleVault(vault: KaminoVault, slot: number): Promise<Decimal> {
+  async getTokensPerShareSingleVault(
+    vault: KaminoVault,
+    slot: number,
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<Decimal> {
     const vaultState = await vault.getState(this._connection);
-    const reserves = await this.loadVaultReserves(vaultState);
+    const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
 
     const totalVaultLiquidityAmount = new Decimal(vaultState.tokenAvailable.toString());
     vaultState.vaultAllocationStrategy.forEach((allocationStrategy) => {
       if (!allocationStrategy.reserve.equals(PublicKey.default)) {
-        const reserve = reserves.get(allocationStrategy.reserve);
+        const reserve = vaultReservesState.get(allocationStrategy.reserve);
         if (reserve === undefined) {
           throw new Error(`Reserve ${allocationStrategy.reserve.toBase58()} not found`);
         }
@@ -1053,11 +1059,11 @@ export class KaminoVaultClient {
   }
 
   /**
-   * This will return an Holdings object which contains the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
+   * This will return an VaultHoldings object which contains the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
    * @param vault - the kamino vault to get available liquidity to withdraw for
    * @param slot - current slot
    * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
-   * @returns an Holdings object
+   * @returns an VaultHoldings object
    */
   async getVaultHoldings(
     vault: VaultState,
@@ -1092,6 +1098,36 @@ export class KaminoVaultClient {
     });
 
     return vaultHoldings;
+  }
+
+  /**
+   * This will return an VaultHoldingsWithUSDValue object which contains an holdings field representing the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve and additional fields for the total USD value of the available and invested amounts
+   * @param vault - the kamino vault to get available liquidity to withdraw for
+   * @param slot - current slot
+   * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param price - the price of the token in the vault (e.g. USDC)
+   * @returns an VaultHoldingsWithUSDValue object with details about the tokens available and invested in the vault, denominated in tokens and USD
+   */
+  async getVaultHoldingsWithPrice(
+    vault: VaultState,
+    slot: number,
+    price: Decimal,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<VaultHoldingsWithUSDValue> {
+    const holdings = await this.getVaultHoldings(vault, slot, vaultReserves);
+
+    const investedInReservesUSD = new PubkeyHashMap<PublicKey, Decimal>();
+    holdings.investedInReserves.forEach((amount, reserve) => {
+      investedInReservesUSD.set(reserve, amount.mul(price));
+    });
+    const holdingsWithUSDValue: VaultHoldingsWithUSDValue = {
+      holdings: holdings,
+      availableUSD: holdings.available.mul(price),
+      investedUSD: holdings.invested.mul(price),
+      investedInReservesUSD: investedInReservesUSD,
+    };
+
+    return holdingsWithUSDValue;
   }
 
   /**
@@ -1280,6 +1316,13 @@ export type VaultHoldings = {
   available: Decimal;
   invested: Decimal;
   investedInReserves: PubkeyHashMap<PublicKey, Decimal>;
+};
+
+export type VaultHoldingsWithUSDValue = {
+  holdings: VaultHoldings;
+  availableUSD: Decimal;
+  investedUSD: Decimal;
+  investedInReservesUSD: PubkeyHashMap<PublicKey, Decimal>;
 };
 
 export type ReserveOverview = {
