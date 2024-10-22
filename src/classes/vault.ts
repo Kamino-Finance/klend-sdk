@@ -415,12 +415,12 @@ export class KaminoVaultClient {
         ]
       );
       createAtasIxns.push(...createWsolAtaIxns);
-      const depositWsolixn = getDepositWsolIxns(
+      const depositWsolIxn = getDepositWsolIxns(
         user,
         wsolAta[0],
         numberToLamportsDecimal(tokenAmount, vaultState.tokenMintDecimals.toNumber()).ceil()
       );
-      createAtasIxns.push(...depositWsolixn);
+      createAtasIxns.push(...depositWsolIxn);
     }
 
     const { atas, createAtaIxs: createSharesAtaIxns } = await getAtasWithCreateIxnsIfMissing(this._connection, user, [
@@ -611,7 +611,6 @@ export class KaminoVaultClient {
     const cTokenVault = getCTokenVaultPda(vault.address, reserve.address, this._kaminoVaultProgramId);
     const lendingMarketAuth = lendingMarketAuthPda(reserve.state.lendingMarket, this._kaminoLendProgramId)[0];
 
-    // todo: create ata if needed here
     const payerTokenAta = getAssociatedTokenAddress(vaultState.tokenMint, payer);
 
     const investAccounts: InvestAccounts = {

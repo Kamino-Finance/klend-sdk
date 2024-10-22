@@ -471,6 +471,67 @@ async function main() {
       mode === 'execute' && console.log('Vault allocation updated:', updateVaultAllocationSig);
     });
 
+  commands
+    .command('deposit')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption('--amount <number>', 'Token amount to deposit, in decimals')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ vault, amount, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
+      const vaultAddress = new PublicKey(vault);
+
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
+      const instructions = await kaminoManager.depositToVaultIxs(env.payer.publicKey, kaminoVault, amount);
+
+      const depositSig = await processTxn(env.client, env.payer, instructions, mode, 2500, []);
+
+      mode === 'execute' && console.log('User deposit:', depositSig);
+    });
+
+  commands
+    .command('withdraw')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption('--amount <number>', 'Shares amount to withdraw')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ vault, amount, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
+      const vaultAddress = new PublicKey(vault);
+
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
+      const instructions = await kaminoManager.withdrawFromVaultIxs(
+        env.payer.publicKey,
+        kaminoVault,
+        new Decimal(amount),
+        await env.connection.getSlot('confirmed')
+      );
+
+      const depositSig = await processTxn(env.client, env.payer, instructions, mode, 2500, []);
+
+      mode === 'execute' && console.log('User withdraw:', depositSig);
+    });
+
   // commands
   //   .command('close-vault')
   //   .requiredOption('--vault <string>', 'Vault address')
