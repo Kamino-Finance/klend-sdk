@@ -6,3 +6,6 @@ keys/localnet/farms.json
 keys/localnet/owner.json
 .env
 configs/**/*.json
+
+# Only allow reserve_config_example.json in configs/ folder, but ignore all others
+!configs/reserve_config_example.json
