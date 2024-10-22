@@ -4,9 +4,9 @@ import {
   Connection,
   Keypair,
   PublicKey,
+  SystemProgram,
   SYSVAR_INSTRUCTIONS_PUBKEY,
   SYSVAR_RENT_PUBKEY,
-  SystemProgram,
   TransactionInstruction,
 } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, unpackAccount } from '@solana/spl-token';
@@ -23,8 +23,6 @@ import {
   WRAPPED_SOL_MINT,
 } from '../lib';
 import {
-  // closeVault,
-  // CloseVaultAccounts,
   DepositAccounts,
   DepositArgs,
   giveUpPendingFees,
@@ -51,12 +49,12 @@ import { VaultConfigFieldKind } from '../idl_codegen_kamino_vault/types';
 import { VaultState } from '../idl_codegen_kamino_vault/accounts';
 import Decimal from 'decimal.js';
 import { numberToLamportsDecimal, parseTokenSymbol } from './utils';
-import { deposit } from '../idl_codegen_kamino_vault/instructions/deposit';
-import { withdraw } from '../idl_codegen_kamino_vault/instructions/withdraw';
+import { deposit } from '../idl_codegen_kamino_vault/instructions';
+import { withdraw } from '../idl_codegen_kamino_vault/instructions';
 import { PROGRAM_ID } from '../idl_codegen/programId';
 import { DEFAULT_RECENT_SLOT_DURATION_MS, ReserveWithAddress } from './reserve';
 import { Fraction } from './fraction';
-import { lendingMarketAuthPda } from '../utils/seeds';
+import { lendingMarketAuthPda } from '../utils';
 import bs58 from 'bs58';
 import { getProgramAccounts } from '../utils/rpc';
 
@@ -390,7 +388,7 @@ export class KaminoVaultClient {
    * @param user - user to deposit
    * @param vault - vault to deposit into
    * @param tokenAmount - token amount to be deposited, in decimals (will be converted in lamports)
-   * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param vaultReservesMap - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @returns - an array of instructions to be used to be executed
    */
   async depositIxs(
@@ -574,7 +572,8 @@ export class KaminoVaultClient {
 
   /**
    * This will trigger invest by balancing, based on weights, the reserve allocations of the vault. It can either withdraw or deposit into reserves to balance them. This is a function that should be cranked
-   * @param kaminoVault - vault to invest from
+   * @param payer wallet that pays the tx
+   * @param vault - vault to invest from
    * @returns - an array of invest instructions for each invest action required for the vault reserves
    */
   async investAllReservesIxs(payer: PublicKey, vault: KaminoVault): Promise<TransactionInstruction[]> {
@@ -596,7 +595,8 @@ export class KaminoVaultClient {
 
   /**
    * This will trigger invest by balancing, based on weights, the reserve allocation of the vault. It can either withdraw or deposit into the given reserve to balance it
-   * @param kaminoVault - vault to invest from
+   * @param payer wallet pubkey
+   * @param vault - vault to invest from
    * @param reserve - reserve to invest into or disinvest from
    * @returns - an array of invest instructions for each invest action required for the vault reserves
    */
@@ -783,8 +783,8 @@ export class KaminoVaultClient {
     }
     const userSharesAccount = unpackAccount(userSharesAta, userSharesAccountInfo);
 
-    return new Decimal(new Decimal(userSharesAccount.amount.toString()).toNumber()).div(
-      new Decimal(10).pow(vaultState.sharesMintDecimals.toNumber())
+    return new Decimal(userSharesAccount.amount.toString()).div(
+      new Decimal(10).pow(vaultState.sharesMintDecimals.toString())
     );
   }
 
@@ -819,7 +819,7 @@ export class KaminoVaultClient {
         vaultUserShareBalance.set(
           vaults[index].address,
           new Decimal(userShareAtaAccount.lamports).div(
-            new Decimal(10).pow(vaults[index].state!.sharesMintDecimals.toNumber())
+            new Decimal(10).pow(vaults[index].state!.sharesMintDecimals.toString())
           )
         );
       }
@@ -832,7 +832,7 @@ export class KaminoVaultClient {
    * This method calculates the token per shar value. This will always change based on interest earned from the vault, but calculating it requires a bunch of rpc requests. Caching this for a short duration would be optimal
    * @param vault - vault to calculate tokensPerShare for
    * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
-   * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param vaultReservesMap - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @returns - token per share value
    */
   async getTokensPerShareSingleVault(
@@ -843,7 +843,7 @@ export class KaminoVaultClient {
     const vaultState = await vault.getState(this._connection);
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
 
-    const totalVaultLiquidityAmount = new Decimal(vaultState.tokenAvailable.toString());
+    let totalVaultLiquidityAmount = new Decimal(vaultState.tokenAvailable.toString());
     vaultState.vaultAllocationStrategy.forEach((allocationStrategy) => {
       if (!allocationStrategy.reserve.equals(PublicKey.default)) {
         const reserve = vaultReservesState.get(allocationStrategy.reserve);
@@ -858,61 +858,39 @@ export class KaminoVaultClient {
             .floor()
             .toNumber()
         );
-        const reserveAllocationLiquidityAmount = new Decimal(allocationStrategy.cTokenAllocation.toString()).div(
-          reserveCollExchangeRate
-        );
-        totalVaultLiquidityAmount.add(reserveAllocationLiquidityAmount);
+        if (reserveCollExchangeRate.gt(0)) {
+          const reserveAllocationLiquidityAmount = new Decimal(allocationStrategy.cTokenAllocation.toString()).div(
+            reserveCollExchangeRate
+          );
+          totalVaultLiquidityAmount = totalVaultLiquidityAmount.add(reserveAllocationLiquidityAmount);
+        }
       }
     });
+    if (totalVaultLiquidityAmount.isZero()) {
+      return new Decimal(0);
+    }
 
     return new Decimal(vaultState.sharesIssued.toString()).div(totalVaultLiquidityAmount);
   }
 
   /**
    * This method calculates the token per share value. This will always change based on interest earned from the vault, but calculating it requires a bunch of rpc requests. Caching this for a short duration would be optimal
-   * @param vault - vault to calculate tokensPerShare for
    * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
+   * @param vaultsOverride
+   * @param vaultReservesMap
    * @returns - token per share value
    */
   async getTokensPerShareAllVaults(
     slot: number,
-    vaultsOverride?: Array<KaminoVault>
+    vaultsOverride?: Array<KaminoVault>,
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<PubkeyHashMap<PublicKey, Decimal>> {
     const vaults = vaultsOverride ? vaultsOverride : await this.getAllVaults();
     const vaultTokensPerShare = new PubkeyHashMap<PublicKey, Decimal>();
-    vaults.forEach(async (vault) => {
-      const vaultState = vault.state;
-      if (!vaultState) {
-        throw new Error(`Vault ${vault.address.toBase58()} not fetched`);
-      }
-      const reserves = await this.loadVaultReserves(vaultState);
-
-      const totalVaultLiquidityAmount = new Decimal(vaultState.tokenAvailable.toString());
-      vaultState.vaultAllocationStrategy.forEach((allocationStrategy) => {
-        if (!allocationStrategy.reserve.equals(PublicKey.default)) {
-          const reserve = reserves.get(allocationStrategy.reserve);
-          if (reserve === undefined) {
-            throw new Error(`Reserve ${allocationStrategy.reserve.toBase58()} not found`);
-          }
-          const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(
-            slot,
-            new Fraction(reserve.state.liquidity.absoluteReferralRateSf)
-              .toDecimal()
-              .div(reserve.state.config.protocolTakeRatePct / 100)
-              .floor()
-              .toNumber()
-          );
-          const reserveAllocationLiquidityAmount = new Decimal(allocationStrategy.cTokenAllocation.toString()).div(
-            reserveCollExchangeRate
-          );
-          totalVaultLiquidityAmount.add(reserveAllocationLiquidityAmount);
-        }
-      });
-      vaultTokensPerShare.set(
-        vault.address,
-        new Decimal(vaultState.sharesIssued.toString()).div(totalVaultLiquidityAmount)
-      );
-    });
+    for (const vault of vaults) {
+      const tokensPerShare = await this.getTokensPerShareSingleVault(vault, slot, vaultReservesMap);
+      vaultTokensPerShare.set(vault.address, tokensPerShare);
+    }
 
     return vaultTokensPerShare;
   }
@@ -934,12 +912,10 @@ export class KaminoVaultClient {
       },
     ];
 
-    const [kaminoVaults] = await Promise.all([
-      getProgramAccounts(this._connection, this._kaminoVaultProgramId, {
-        commitment: this._connection.commitment ?? 'processed',
-        filters,
-      }),
-    ]);
+    const kaminoVaults = await getProgramAccounts(this._connection, this._kaminoVaultProgramId, {
+      commitment: this._connection.commitment ?? 'processed',
+      filters,
+    });
 
     return kaminoVaults.map((kaminoVault) => {
       if (kaminoVault.account === null) {
@@ -997,7 +973,7 @@ export class KaminoVaultClient {
 
   /**
    * This will get the list of all reserve pubkeys that the vault has allocations for
-   * @param vaultState - the vault state to load reserves for
+   * @param vault - the vault state to load reserves for
    * @returns a hashmap from each reserve pubkey to the reserve state
    */
   getAllVaultReserves(vault: VaultState): PublicKey[] {
@@ -1006,7 +982,7 @@ export class KaminoVaultClient {
 
   /**
    * This will get the list of all reserve pubkeys that the vault has allocations for ex
-   * @param vaultState - the vault state to load reserves for
+   * @param vault - the vault state to load reserves for
    * @returns a hashmap from each reserve pubkey to the reserve state
    */
   getVaultReserves(vault: VaultState): PublicKey[] {
@@ -1120,14 +1096,12 @@ export class KaminoVaultClient {
     holdings.investedInReserves.forEach((amount, reserve) => {
       investedInReservesUSD.set(reserve, amount.mul(price));
     });
-    const holdingsWithUSDValue: VaultHoldingsWithUSDValue = {
+    return {
       holdings: holdings,
       availableUSD: holdings.available.mul(price),
       investedUSD: holdings.invested.mul(price),
       investedInReservesUSD: investedInReservesUSD,
     };
-
-    return holdingsWithUSDValue;
   }
 
   /**
@@ -1200,7 +1174,9 @@ export class KaminoVaultClient {
       totalAPY = totalAPY.add(weightedAPY);
       totalWeights = totalWeights.add(weight);
     });
-
+    if (totalWeights.isZero()) {
+      return new Decimal(0);
+    }
     return totalAPY.div(totalWeights);
   }
 } // KaminoVaultClient
