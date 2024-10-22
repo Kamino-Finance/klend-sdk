@@ -10,7 +10,7 @@ import {
 import { Buffer } from 'buffer';
 import axios from 'axios';
 import { init, decompress } from '@bokuweb/zstd-wasm';
-import { randomUUID } from 'crypto';
+import { v4 as uuidv4 } from 'uuid';
 
 (async () => {
   await init();
@@ -46,7 +46,7 @@ export async function getProgramAccounts(
           ...configWithoutEncoding,
         },
       ],
-      id: randomUUID(),
+      id: uuidv4(),
     },
     {
       headers: {
