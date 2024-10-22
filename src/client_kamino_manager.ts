@@ -45,13 +45,13 @@ import Decimal from 'decimal.js';
 import { BN } from '@coral-xyz/anchor';
 import { PythConfiguration, SwitchboardConfiguration } from './idl_codegen_kamino_vault/types';
 import * as fs from 'fs';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { MarketWithAddress } from './utils/managerTypes';
 import {
   ManagementFeeBps,
   PendingVaultAdmin,
   PerformanceFeeBps,
 } from './idl_codegen_kamino_vault/types/VaultConfigField';
+import { getAccountOwner } from './utils/rpc';
 
 dotenv.config({
   path: `.env${process.env.ENV ? '.' + process.env.ENV : ''}`,
@@ -237,10 +237,11 @@ async function main() {
       const multisigPk = multisig ? new PublicKey(multisig) : PublicKey.default;
       const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
 
+      const tokenProgramID = await getAccountOwner(env.connection, tokenMint);
       const kaminoVaultConfig = new KaminoVaultConfig({
         admin: mode === 'multisig' ? multisigPk : env.payer.publicKey,
         tokenMint: tokenMint,
-        tokenMintProgramId: TOKEN_PROGRAM_ID,
+        tokenMintProgramId: tokenProgramID,
         performanceFeeRate: new Decimal(0.0),
         managementFeeRate: new Decimal(0.0),
       });
@@ -500,7 +501,7 @@ async function main() {
     const env = initializeClient(false, false);
     const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
 
-    const allVaults = await kaminoManager.getAllVaults();
+    const allVaults = await kaminoManager.getAllVaults(true);
     console.log('all vaults', allVaults);
   });
 

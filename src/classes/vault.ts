@@ -2,6 +2,7 @@ import { BN } from '@coral-xyz/anchor';
 import {
   AccountMeta,
   Connection,
+  GetProgramAccountsResponse,
   Keypair,
   PublicKey,
   SystemProgram,
@@ -875,17 +876,19 @@ export class KaminoVaultClient {
 
   /**
    * This method calculates the token per share value. This will always change based on interest earned from the vault, but calculating it requires a bunch of rpc requests. Caching this for a short duration would be optimal
+   * @param vaultsOverride - a list of vaults to get the tokens per share for; if provided with state it will not fetch the state again
+   * @param vaultReservesMap - optional parameter; a hashmap from pubkey to reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
-   * @param vaultsOverride
-   * @param vaultReservesMap
+   * @param useOptimisedRPCCall - if set to true, it will use the optimized getProgramAccounts RPC call, which is more efficient but doesn't work in web environments
    * @returns - token per share value
    */
   async getTokensPerShareAllVaults(
     slot: number,
     vaultsOverride?: Array<KaminoVault>,
-    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>,
+    useOptimisedRPCCall: boolean = true
   ): Promise<PubkeyHashMap<PublicKey, Decimal>> {
-    const vaults = vaultsOverride ? vaultsOverride : await this.getAllVaults();
+    const vaults = vaultsOverride ? vaultsOverride : await this.getAllVaults(useOptimisedRPCCall);
     const vaultTokensPerShare = new PubkeyHashMap<PublicKey, Decimal>();
     for (const vault of vaults) {
       const tokensPerShare = await this.getTokensPerShareSingleVault(vault, slot, vaultReservesMap);
@@ -897,9 +900,10 @@ export class KaminoVaultClient {
 
   /**
    * Get all vaults
+   * @param useOptimisedRPCCall - if set to true, it will use the optimized getProgramAccounts RPC call, which is more efficient but doesn't work in web environments
    * @returns an array of all vaults
    */
-  async getAllVaults(): Promise<KaminoVault[]> {
+  async getAllVaults(useOptimisedRPCCall: boolean = true): Promise<KaminoVault[]> {
     const filters = [
       {
         dataSize: VaultState.layout.span + 8,
@@ -912,10 +916,16 @@ export class KaminoVaultClient {
       },
     ];
 
-    const kaminoVaults = await getProgramAccounts(this._connection, this._kaminoVaultProgramId, {
-      commitment: this._connection.commitment ?? 'processed',
-      filters,
-    });
+    let kaminoVaults: GetProgramAccountsResponse = [];
+
+    if (useOptimisedRPCCall) {
+      kaminoVaults = await getProgramAccounts(this._connection, this._kaminoVaultProgramId, {
+        commitment: this._connection.commitment ?? 'processed',
+        filters,
+      });
+    } else {
+      kaminoVaults = await this._connection.getProgramAccounts(this._kaminoVaultProgramId, { filters });
+    }
 
     return kaminoVaults.map((kaminoVault) => {
       if (kaminoVault.account === null) {

@@ -1,4 +1,4 @@
-import { AccountInfo, Connection, PublicKey } from '@solana/web3.js';
+import { AccountInfo, Connection, GetProgramAccountsResponse, PublicKey } from '@solana/web3.js';
 import { KaminoObligation } from './obligation';
 import { KaminoReserve } from './reserve';
 import { LendingMarket, Obligation, UserMetadata, ReferrerTokenState, Reserve } from '../idl_codegen/accounts';
@@ -531,8 +531,9 @@ export class KaminoMarket {
    * This function will likely require an RPC capable of returning more than the default 100k rows in a single scan
    *
    * @param tag
+   * @param useOptimisedRPCCall - use the optimised RPC call (compressed) to get all obligations
    */
-  async getAllObligationsForMarket(tag?: number): Promise<KaminoObligation[]> {
+  async getAllObligationsForMarket(tag?: number, useOptimisedRPCCall: boolean = true): Promise<KaminoObligation[]> {
     const filters = [
       {
         dataSize: Obligation.layout.span + 8,
@@ -557,14 +558,26 @@ export class KaminoMarket {
     const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
     const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
 
-    const [slot, obligations] = await Promise.all([
-      this.connection.getSlot(),
-      getProgramAccounts(this.connection, this.programId, {
-        commitment: this.connection.commitment ?? 'processed',
+    let obligations: GetProgramAccountsResponse = [];
+    let slot = 0;
+    const slotPromise = this.connection.getSlot();
+
+    if (useOptimisedRPCCall) {
+      [slot, obligations] = await Promise.all([
+        slotPromise,
+        getProgramAccounts(this.connection, this.programId, {
+          commitment: this.connection.commitment ?? 'processed',
+          filters,
+          dataSlice: { offset: 0, length: ObligationZP.layout.span + 8 }, // truncate the padding
+        }),
+      ]);
+    } else {
+      const obligationsPromise = this.connection.getProgramAccounts(this.programId, {
         filters,
         dataSlice: { offset: 0, length: ObligationZP.layout.span + 8 }, // truncate the padding
-      }),
-    ]);
+      });
+      [slot, obligations] = await Promise.all([slotPromise, obligationsPromise]);
+    }
 
     return obligations.map((obligation) => {
       if (obligation.account === null) {

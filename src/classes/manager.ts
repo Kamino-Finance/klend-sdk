@@ -1,6 +1,7 @@
 import {
   AccountInfo,
   Connection,
+  GetProgramAccountsResponse,
   Keypair,
   ParsedAccountData,
   PublicKey,
@@ -430,17 +431,20 @@ export class KaminoManager {
 
   /**
    * Get all vaults
+   * @param useOptimisedRPCCall - if set to true, it will use the optimized getProgramAccounts RPC call, which is more efficient but doesn't work in web environments
    * @returns an array of all vaults
    */
-  async getAllVaults(): Promise<KaminoVault[]> {
-    return this._vaultClient.getAllVaults();
+  async getAllVaults(useOptimisedRPCCall: boolean = true): Promise<KaminoVault[]> {
+    return this._vaultClient.getAllVaults(useOptimisedRPCCall);
   }
 
   /**
    * Get all vaults for owner
+   * @param owner the pubkey of the vaults owner
+   * @param useOptimisedRPCCall - if set to true, it will use the optimized getProgramAccounts RPC call, which is more efficient but doesn't work in web environments
    * @returns an array of all vaults owned by a given pubkey
    */
-  async getAllVaultsForOwner(owner: PublicKey): Promise<KaminoVault[]> {
+  async getAllVaultsForOwner(owner: PublicKey, useOptimisedRPCCall: boolean = true): Promise<KaminoVault[]> {
     const filters = [
       {
         dataSize: VaultState.layout.span + 8,
@@ -459,12 +463,16 @@ export class KaminoManager {
       },
     ];
 
-    const [kaminoVaults] = await Promise.all([
-      getProgramAccounts(this._connection, this._kaminoVaultProgramId, {
+    let kaminoVaults: GetProgramAccountsResponse = [];
+
+    if (useOptimisedRPCCall) {
+      kaminoVaults = await getProgramAccounts(this._connection, this._kaminoVaultProgramId, {
         commitment: this._connection.commitment ?? 'processed',
         filters,
-      }),
-    ]);
+      });
+    } else {
+      kaminoVaults = await this._connection.getProgramAccounts(this._kaminoVaultProgramId, { filters });
+    }
 
     return kaminoVaults.map((kaminoVault) => {
       if (kaminoVault.account === null) {

@@ -72,6 +72,14 @@ export async function getProgramAccounts(
   return x as GetProgramAccountsResponse;
 }
 
+export async function getAccountOwner(connection: Connection, address: PublicKey): Promise<PublicKey> {
+  const acc = await connection.getAccountInfo(address);
+  if (acc == null) {
+    throw Error(`Could not fetch mint ${address.toString()}`);
+  }
+  return acc.owner;
+}
+
 async function deserializeAccountInfo(accountInfo: AccountInfo<string[]>): Promise<AccountInfo<Buffer>> {
   const data = decompress(Buffer.from(accountInfo.data[0], 'base64'));
   return {
