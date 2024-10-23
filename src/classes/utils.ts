@@ -179,6 +179,11 @@ export function lamportsToNumberDecimal(amount: Decimal.Value, decimals: number)
   return new Decimal(amount).div(factor);
 }
 
+export function lamportsToDecimal(amount: Decimal.Value, decimals: Decimal.Value): Decimal {
+  const factor = new Decimal(10).pow(decimals);
+  return new Decimal(amount).div(factor);
+}
+
 export const isSolMint = (mint: PublicKey): boolean => {
   return SOL_MINTS.filter((m) => m.equals(mint)).length > 0;
 };

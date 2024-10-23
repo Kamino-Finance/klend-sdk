@@ -17,6 +17,7 @@ import {
   getDepositWsolIxns,
   getTokenOracleData,
   KaminoReserve,
+  lamportsToDecimal,
   LendingMarket,
   MarketWithAddress,
   PubkeyHashMap,
@@ -841,8 +842,12 @@ export class KaminoVaultClient {
     vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<Decimal> {
     const vaultState = await vault.getState(this._connection);
-    const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
+    if (vaultState.sharesIssued.isZero()) {
+      return new Decimal(0);
+    }
+    const tokenDecimals = new Decimal(vaultState.tokenMintDecimals.toString());
 
+    const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
     let totalVaultLiquidityAmount = new Decimal(vaultState.tokenAvailable.toString());
     vaultState.vaultAllocationStrategy.forEach((allocationStrategy) => {
       if (!allocationStrategy.reserve.equals(PublicKey.default)) {
@@ -866,11 +871,10 @@ export class KaminoVaultClient {
         }
       }
     });
-    if (totalVaultLiquidityAmount.isZero()) {
-      return new Decimal(0);
-    }
 
-    return new Decimal(vaultState.sharesIssued.toString()).div(totalVaultLiquidityAmount);
+    return lamportsToDecimal(totalVaultLiquidityAmount, tokenDecimals).dividedBy(
+      lamportsToDecimal(vaultState.sharesIssued.toString(), vaultState.sharesMintDecimals.toString())
+    );
   }
 
   /**
@@ -1062,6 +1066,7 @@ export class KaminoVaultClient {
     };
 
     const vaultReservesState = vaultReserves ? vaultReserves : await this.loadVaultReserves(vault);
+    const decimals = new Decimal(vault.tokenMintDecimals.toString());
 
     vault.vaultAllocationStrategy.forEach((allocationStrategy) => {
       if (allocationStrategy.reserve.equals(PublicKey.default)) {
@@ -1079,10 +1084,17 @@ export class KaminoVaultClient {
       );
 
       vaultHoldings.invested = vaultHoldings.invested.add(reserveAllocationLiquidityAmount);
-      vaultHoldings.investedInReserves.set(allocationStrategy.reserve, reserveAllocationLiquidityAmount);
+      vaultHoldings.investedInReserves.set(
+        allocationStrategy.reserve,
+        lamportsToDecimal(reserveAllocationLiquidityAmount, decimals)
+      );
     });
 
-    return vaultHoldings;
+    return {
+      available: lamportsToDecimal(vaultHoldings.available, decimals),
+      invested: lamportsToDecimal(vaultHoldings.invested, decimals),
+      investedInReserves: vaultHoldings.investedInReserves,
+    };
   }
 
   /**
