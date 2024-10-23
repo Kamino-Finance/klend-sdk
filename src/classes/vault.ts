@@ -1200,6 +1200,16 @@ export class KaminoVaultClient {
     }
     return totalAPY.div(totalWeights);
   }
+
+  /**
+   * Retrive the total amount of tokenes earned by the vault since its inception after deducting the management and performance fees
+   * @param vaultState the kamino vault state to get total net yield for
+   * @returns a decimal representing the net number of tokens earned by the vault since its inception after deducting the management and performance fees
+   */
+  async getVaultTotalNetYield(vaultState: VaultState) {
+    const netYieldLamports = new Fraction(vaultState.cumulativeNetEarnedYield).toDecimal();
+    return lamportsToDecimal(netYieldLamports, vaultState.tokenMintDecimals.toString());
+  }
 } // KaminoVaultClient
 
 export class KaminoVault {

@@ -598,6 +598,15 @@ export class KaminoManager {
   }
 
   /**
+   * Retrive the total amount of tokenes earned by the vault since its inception after deducting the management and performance fees
+   * @param vaultState the kamino vault state to get total net yield for
+   * @returns a decimal representing the net number of tokens earned by the vault since its inception after deducting the management and performance fees
+   */
+  async getVaultTotalNetYield(vaultState: VaultState) {
+    return this._vaultClient.getVaultTotalNetYield(vaultState);
+  }
+
+  /**
    * This will load the onchain state for all the reserves that the vault has allocations for
    * @param vaultState - the vault state to load reserves for
    * @returns a hashmap from each reserve pubkey to the reserve state
