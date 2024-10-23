@@ -31,6 +31,7 @@ export type Position = {
 
 export type ObligationStats = {
   userTotalDeposit: Decimal;
+  userTotalCollateralDeposit: Decimal;
   userTotalBorrow: Decimal;
   userTotalBorrowBorrowFactorAdjusted: Decimal;
   borrowLimit: Decimal;
@@ -715,6 +716,7 @@ export class KaminoObligation {
         userTotalBorrow: borrowStatsOraclePrice.userTotalBorrow,
         userTotalBorrowBorrowFactorAdjusted: borrowStatsOraclePrice.userTotalBorrowBorrowFactorAdjusted,
         userTotalDeposit: depositStatsOraclePrice.userTotalDeposit,
+        userTotalCollateralDeposit: depositStatsOraclePrice.userTotalCollateralDeposit,
         liquidationLtv: depositStatsOraclePrice.liquidationLtv,
         borrowUtilization: borrowStatsOraclePrice.userTotalBorrowBorrowFactorAdjusted.dividedBy(
           depositStatsOraclePrice.borrowLimit
