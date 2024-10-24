@@ -51,13 +51,13 @@ import {
   U64_MAX,
   referrerTokenStatePda,
   userMetadataPda,
-  getAtasWithCreateIxnsIfMissing,
   createLookupTableIx,
   isNotNullPubkey,
   PublicKeySet,
   WRAPPED_SOL_MINT,
   getAssociatedTokenAddress,
   ScopeRefresh,
+  createAtasIdempotent,
 } from '../utils';
 import { KaminoMarket } from './market';
 import { KaminoObligation } from './obligation';
@@ -1926,7 +1926,9 @@ export class KaminoAction {
 
       if (['borrow', 'withdrawReferrerFees'].includes(action)) {
         await this.addInitReferrerTokenStateIx(this.reserve);
-      } if (action === 'deposit' && this.outflowReserve) { // depositAndBorrow
+      }
+      if (action === 'deposit' && this.outflowReserve) {
+        // depositAndBorrow
         await this.addInitReferrerTokenStateIx(this.outflowReserve);
       }
       await this.addInitObligationIxs();
@@ -2392,9 +2394,7 @@ export class KaminoAction {
         this.kaminoMarket.programId
       );
       this.setupIxs.unshift(initReferrerTokenStateIx);
-      this.setupIxsLabels.unshift(
-        `InitReferrerTokenState[${referrerTokenState.toString()} res=${reserve.address}]`
-      );
+      this.setupIxsLabels.unshift(`InitReferrerTokenState[${referrerTokenState.toString()} res=${reserve.address}]`);
     }
   }
 
@@ -2767,14 +2767,14 @@ export class KaminoAction {
       throw new Error(`Reserve ${mint} not found in market ${kaminoMarket.getAddress().toBase58()}`);
     }
 
-    const { atas, createAtaIxs } = await getAtasWithCreateIxnsIfMissing(kaminoMarket.getConnection(), owner, [
+    const [{ ata, createAtaIx }] = createAtasIdempotent(owner, [
       {
         mint: reserve.getLiquidityMint(),
         tokenProgram: reserve.getLiquidityTokenProgram(),
       },
     ]);
 
-    const userTokenAccountAddress = atas[0];
+    const userTokenAccountAddress = ata;
 
     return {
       axn: new KaminoAction(
@@ -2796,7 +2796,7 @@ export class KaminoAction {
         undefined,
         undefined
       ),
-      createAtaIxs,
+      createAtaIxs: [createAtaIx],
     };
   }
 

@@ -532,6 +532,78 @@ async function main() {
       mode === 'execute' && console.log('User withdraw:', depositSig);
     });
 
+  commands
+    .command('invest-all-reserves')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ vault, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
+      const vaultAddress = new PublicKey(vault);
+
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
+      const instructions = await kaminoManager.investAllReserves(env.payer.publicKey, kaminoVault);
+
+      for (let i = 0; i < instructions.length; i++) {
+        const txInstructions: TransactionInstruction[] = [];
+        txInstructions.push(instructions[i]);
+        const investReserveSig = await processTxn(env.client, env.payer, txInstructions, mode, 2500, [], 400000);
+
+        mode === 'execute' && console.log('Reserve invested:', investReserveSig);
+      }
+    });
+
+  commands
+    .command('invest-single-reserve')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption('--reserve <string>', 'Reserve address')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ vault, reserve, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
+      const vaultAddress = new PublicKey(vault);
+
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
+      const reserveState = await Reserve.fetch(env.connection, new PublicKey(reserve), env.kLendProgramId);
+      if (!reserveState) {
+        throw new Error('Reserve not found');
+      }
+
+      const reserveWithAddress: ReserveWithAddress = {
+        address: new PublicKey(reserve),
+        state: reserveState,
+      };
+
+      const instructions = await kaminoManager.investSingleReserve(
+        env.payer.publicKey,
+        kaminoVault,
+        reserveWithAddress
+      );
+      const investReserveSig = await processTxn(env.client, env.payer, instructions, mode, 2500, [], 400_000);
+
+      mode === 'execute' && console.log('Reserve invested:', investReserveSig);
+    });
+
   // commands
   //   .command('close-vault')
   //   .requiredOption('--vault <string>', 'Vault address')
@@ -548,6 +620,28 @@ async function main() {
   //     const closeVaultSig = await processTxn(env.client, env.payer, [instructions], 'execute', 2500, []);
   //     console.log('Vault closed:', closeVaultSig);
   //   });
+
+  commands
+    .command('get-vault-colls')
+    .requiredOption('--vault <string>', 'Vault address')
+    .action(async ({ vault }) => {
+      const env = initializeClient(false, false);
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const vaultAddress = new PublicKey(vault);
+      const vaultState = await new KaminoVault(vaultAddress, undefined, env.kVaultProgramId).getState(env.connection);
+      const vaultCollaterals = await kaminoManager.getVaultCollaterals(
+        vaultState,
+        await env.connection.getSlot('confirmed')
+      );
+      vaultCollaterals.forEach((collateral) => {
+        console.log('reserve ', collateral.address);
+        console.log('market overview', collateral.reservesAsCollateral);
+        console.log('min LTV', collateral.minLTVPct);
+        console.log('max LTV', collateral.maxLTVPct);
+      });
+    });
 
   commands.command('get-oracle-mappings').action(async () => {
     const env = initializeClient(false, false);
@@ -851,7 +945,11 @@ async function processTxn(
       const simulation = await web3Client.sendConnection.simulateTransaction(
         new VersionedTransaction(tx.compileMessage())
       );
-      console.log('Simulation: \n' + simulation.value.logs);
+      if (simulation.value.logs && simulation.value.logs.length > 0) {
+        console.log('Simulation: \n' + simulation.value.logs);
+      } else {
+        console.log('Simulation failed: \n' + simulation);
+      }
     } else if (mode === 'inspect') {
       console.log(
         'Tx in B64',

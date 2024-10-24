@@ -14,6 +14,7 @@ import {
   KaminoVaultClient,
   KaminoVaultConfig,
   kaminoVaultId,
+  MarketOverview,
   ReserveAllocationConfig,
   ReserveOverview,
   VaultHolder,
@@ -313,14 +314,18 @@ export class KaminoManager {
    * @param user - user to deposit
    * @param vault - vault to deposit into
    * @param tokenAmount - token amount to be deposited, in decimals (will be converted in lamports)
+   * @param tokenProgramIDOverride - optional param; should be passed if token to be deposited is token22
+   * @param vaultReservesMap - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @returns - an array of instructions to be used to be executed
    */
   async depositToVaultIxs(
     user: PublicKey,
     vault: KaminoVault,
-    tokenAmount: Decimal
+    tokenAmount: Decimal,
+    tokenProgramIDOverride?: PublicKey,
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<TransactionInstruction[]> {
-    return this._vaultClient.depositIxs(user, vault, tokenAmount);
+    return this._vaultClient.depositIxs(user, vault, tokenAmount, tokenProgramIDOverride, vaultReservesMap);
   }
 
   async updateVaultConfigIx(
@@ -634,6 +639,16 @@ export class KaminoManager {
   }
 
   /**
+   * This will retrieve all the tokens that can be use as collateral by the users who borrow the token in the vault alongside details about the min and max loan to value ratio
+   * @param vaultState - the vault state to load reserves for
+   *
+   * @returns a hashmap from each reserve pubkey to the market overview of the collaterals that can be used and the min and max loan to value ratio in that market
+   */
+  async getVaultCollaterals(vaultState: VaultState, slot: number): Promise<PubkeyHashMap<PublicKey, MarketOverview>> {
+    return this._vaultClient.getVaultCollaterals(vaultState, slot);
+  }
+
+  /**
    * This will trigger invest by balancing, based on weights, the reserve allocations of the vault. It can either withdraw or deposit into reserves to balance them. This is a function that should be cranked
    * @param kaminoVault - vault to invest from
    * @returns - an array of invest instructions for each invest action required for the vault reserves
@@ -652,7 +667,7 @@ export class KaminoManager {
     payer: PublicKey,
     kaminoVault: KaminoVault,
     reserveWithAddress: ReserveWithAddress
-  ): Promise<TransactionInstruction> {
+  ): Promise<TransactionInstruction[]> {
     return this._vaultClient.investSingleReserveIxs(payer, kaminoVault, reserveWithAddress);
   }
 

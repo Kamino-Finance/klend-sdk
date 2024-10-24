@@ -13,9 +13,9 @@ import {
 import { TOKEN_PROGRAM_ID, unpackAccount } from '@solana/spl-token';
 import {
   getAssociatedTokenAddress,
-  getAtasWithCreateIxnsIfMissing,
   getDepositWsolIxns,
   getTokenOracleData,
+  KaminoMarket,
   KaminoReserve,
   lamportsToDecimal,
   LendingMarket,
@@ -56,9 +56,9 @@ import { withdraw } from '../idl_codegen_kamino_vault/instructions';
 import { PROGRAM_ID } from '../idl_codegen/programId';
 import { DEFAULT_RECENT_SLOT_DURATION_MS, ReserveWithAddress } from './reserve';
 import { Fraction } from './fraction';
-import { lendingMarketAuthPda } from '../utils';
+import { createAtasIdempotent, lendingMarketAuthPda } from '../utils';
 import bs58 from 'bs58';
-import { getProgramAccounts } from '../utils/rpc';
+import { getAccountOwner, getProgramAccounts } from '../utils/rpc';
 
 export const kaminoVaultId = new PublicKey('kvauTFR8qm1dhniz6pYuBZkuene3Hfrs1VQhVRgCNrr');
 export const kaminoVaultStagingId = new PublicKey('STkvh7ostar39Fwr4uZKASs1RNNuYMFMTsE77FiRsL2');
@@ -306,13 +306,12 @@ export class KaminoVaultClient {
    */
   async withdrawPendingFeesIxs(vault: KaminoVault, slot: number): Promise<TransactionInstruction[]> {
     const vaultState: VaultState = await vault.getState(this.getConnection());
-    const { atas, createAtaIxs } = await getAtasWithCreateIxnsIfMissing(this._connection, vaultState.adminAuthority, [
+    const [{ ata: adminTokenAta, createAtaIx }] = createAtasIdempotent(vaultState.adminAuthority, [
       {
         mint: vaultState.tokenMint,
         tokenProgram: TOKEN_PROGRAM_ID,
       },
     ]);
-    const adminTokenAta = atas[0];
 
     const tokensToWithdraw = new Fraction(vaultState.pendingFeesSf).toDecimal();
     let tokenLeftToWithdraw = tokensToWithdraw;
@@ -371,7 +370,7 @@ export class KaminoVaultClient {
       })
     );
 
-    return [...createAtaIxs, ...withdrawIxns];
+    return [createAtaIx, ...withdrawIxns];
   }
 
   // async closeVaultIx(vault: KaminoVault): Promise<TransactionInstruction> {
@@ -390,6 +389,7 @@ export class KaminoVaultClient {
    * @param user - user to deposit
    * @param vault - vault to deposit into
    * @param tokenAmount - token amount to be deposited, in decimals (will be converted in lamports)
+   * @param tokenProgramIDOverride - optional param; should be passed if token to be deposited is token22
    * @param vaultReservesMap - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @returns - an array of instructions to be used to be executed
    */
@@ -397,42 +397,38 @@ export class KaminoVaultClient {
     user: PublicKey,
     vault: KaminoVault,
     tokenAmount: Decimal,
+    tokenProgramIDOverride?: PublicKey,
     vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<TransactionInstruction[]> {
     const vaultState = await vault.getState(this._connection);
 
-    const userTokenAta = getAssociatedTokenAddress(vaultState.tokenMint, user);
+    const tokenProgramID = tokenProgramIDOverride ? tokenProgramIDOverride : TOKEN_PROGRAM_ID;
+    const userTokenAta = getAssociatedTokenAddress(vaultState.tokenMint, user, true, tokenProgramID);
     const createAtasIxns: TransactionInstruction[] = [];
     const closeAtasIxns: TransactionInstruction[] = [];
     if (vaultState.tokenMint.equals(WRAPPED_SOL_MINT)) {
-      const { atas: wsolAta, createAtaIxs: createWsolAtaIxns } = await getAtasWithCreateIxnsIfMissing(
-        this._connection,
-        user,
-        [
-          {
-            mint: WRAPPED_SOL_MINT,
-            tokenProgram: TOKEN_PROGRAM_ID,
-          },
-        ]
-      );
-      createAtasIxns.push(...createWsolAtaIxns);
+      const [{ ata: wsolAta, createAtaIx: createWsolAtaIxn }] = createAtasIdempotent(user, [
+        {
+          mint: WRAPPED_SOL_MINT,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+      ]);
+      createAtasIxns.push(createWsolAtaIxn);
       const depositWsolIxn = getDepositWsolIxns(
         user,
-        wsolAta[0],
+        wsolAta,
         numberToLamportsDecimal(tokenAmount, vaultState.tokenMintDecimals.toNumber()).ceil()
       );
       createAtasIxns.push(...depositWsolIxn);
     }
 
-    const { atas, createAtaIxs: createSharesAtaIxns } = await getAtasWithCreateIxnsIfMissing(this._connection, user, [
+    const [{ ata: userSharesAta, createAtaIx: createSharesAtaIxns }] = createAtasIdempotent(user, [
       {
         mint: vaultState.sharesMint,
         tokenProgram: TOKEN_PROGRAM_ID,
       },
     ]);
-    createAtasIxns.push(...createSharesAtaIxns);
-
-    const userSharesAta = atas[0];
+    createAtasIxns.push(createSharesAtaIxns);
 
     const depoistAccounts: DepositAccounts = {
       user: user,
@@ -443,7 +439,7 @@ export class KaminoVaultClient {
       sharesMint: vaultState.sharesMint,
       tokenAta: userTokenAta,
       userSharesAta: userSharesAta,
-      tokenProgram: TOKEN_PROGRAM_ID,
+      tokenProgram: tokenProgramID,
       instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
       klendProgram: this._kaminoLendProgramId,
       sharesTokenProgram: TOKEN_PROGRAM_ID,
@@ -496,13 +492,12 @@ export class KaminoVaultClient {
     const vaultState = await vault.getState(this._connection);
 
     const userSharesAta = getAssociatedTokenAddress(vaultState.sharesMint, user);
-    const { atas, createAtaIxs } = await getAtasWithCreateIxnsIfMissing(this._connection, user, [
+    const [{ ata: userTokenAta, createAtaIx }] = createAtasIdempotent(user, [
       {
         mint: vaultState.tokenMint,
         tokenProgram: TOKEN_PROGRAM_ID,
       },
     ]);
-    const userTokenAta = atas[0];
 
     const tokensToWithdraw = shareAmount.div(await this.getTokensPerShareSingleVault(vault, slot));
     let tokenLeftToWithdraw = tokensToWithdraw;
@@ -569,7 +564,7 @@ export class KaminoVaultClient {
       })
     );
 
-    return [...createAtaIxs, ...withdrawIxns];
+    return [createAtaIx, ...withdrawIxns];
   }
 
   /**
@@ -580,17 +575,19 @@ export class KaminoVaultClient {
    */
   async investAllReservesIxs(payer: PublicKey, vault: KaminoVault): Promise<TransactionInstruction[]> {
     //TODO: Order invest ixns by - invest that removes first, then invest that adds
-
     const vaultState = await vault.getState(this._connection);
     const vaultReserves = this.getVaultReserves(vaultState);
-    const investIxns: TransactionInstruction[] = [];
+    const investIxnsPromises: Promise<TransactionInstruction[]>[] = [];
     for (const reserve of vaultReserves) {
       const reserveState = await Reserve.fetch(this._connection, reserve, this._kaminoLendProgramId);
       if (reserveState === null) {
         throw new Error(`Reserve ${reserve.toBase58()} not found`);
       }
-      investIxns.push(await this.investSingleReserveIxs(payer, vault, { address: reserve, state: reserveState }));
+      const investIxsPromise = this.investSingleReserveIxs(payer, vault, { address: reserve, state: reserveState });
+      investIxnsPromises.push(investIxsPromise);
     }
+
+    const investIxns = await Promise.all(investIxnsPromises).then((ixns) => ixns.flat());
 
     return investIxns;
   }
@@ -606,13 +603,16 @@ export class KaminoVaultClient {
     payer: PublicKey,
     vault: KaminoVault,
     reserve: ReserveWithAddress
-  ): Promise<TransactionInstruction> {
+  ): Promise<TransactionInstruction[]> {
     const vaultState = await vault.getState(this._connection);
 
     const cTokenVault = getCTokenVaultPda(vault.address, reserve.address, this._kaminoVaultProgramId);
     const lendingMarketAuth = lendingMarketAuthPda(reserve.state.lendingMarket, this._kaminoLendProgramId)[0];
 
-    const payerTokenAta = getAssociatedTokenAddress(vaultState.tokenMint, payer);
+    const tokenProgram = await getAccountOwner(this._connection, vaultState.tokenMint);
+    const [{ ata: payerTokenAta, createAtaIx }] = createAtasIdempotent(payer, [
+      { mint: vaultState.tokenMint, tokenProgram },
+    ]);
 
     const investAccounts: InvestAccounts = {
       payer,
@@ -628,7 +628,7 @@ export class KaminoVaultClient {
       reserveCollateralMint: reserve.state.collateral.mintPubkey,
       klendProgram: this._kaminoLendProgramId,
       instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
-      tokenProgram: TOKEN_PROGRAM_ID,
+      tokenProgram: tokenProgram,
       payerTokenAccount: payerTokenAta,
       tokenMint: vaultState.tokenMint,
       reserveCollateralTokenProgram: TOKEN_PROGRAM_ID,
@@ -643,7 +643,7 @@ export class KaminoVaultClient {
     });
     investIx.keys = investIx.keys.concat(vaultReservesAccountMetas);
 
-    return investIx;
+    return [createAtaIx, investIx];
   }
 
   private async withdrawIxn(
@@ -1048,6 +1048,57 @@ export class KaminoVaultClient {
   }
 
   /**
+   * This will retrieve all the tokens that can be use as collateral by the users who borrow the token in the vault alongside details about the min and max loan to value ratio
+   * @param vaultState - the vault state to load reserves for
+   *
+   * @returns a hashmap from each reserve pubkey to the market overview of the collaterals that can be used and the min and max loan to value ratio in that market
+   */
+  async getVaultCollaterals(vaultState: VaultState, slot: number): Promise<PubkeyHashMap<PublicKey, MarketOverview>> {
+    const vaultReservesState = Array.from((await this.loadVaultReserves(vaultState)).values());
+
+    const vaultCollateralsPerReserve: PubkeyHashMap<PublicKey, MarketOverview> = new PubkeyHashMap();
+
+    for (const reserve of vaultReservesState) {
+      const lendingMarket = await KaminoMarket.load(this._connection, reserve.state.lendingMarket, slot);
+      if (!lendingMarket) {
+        throw Error(`Could not fetch lending market ${reserve.state.lendingMarket.toBase58()}`);
+      }
+
+      const marketReserves = lendingMarket.getReserves();
+      const marketOverview: MarketOverview = {
+        address: reserve.state.lendingMarket,
+        reservesAsCollateral: [],
+        minLTVPct: new Decimal(0),
+        maxLTVPct: new Decimal(100),
+      };
+
+      marketReserves
+        .filter((marketReserve) => {
+          return (
+            marketReserve.state.config.liquidationThresholdPct > 0 && !marketReserve.address.equals(reserve.address)
+          );
+        })
+        .map((filteredReserve) => {
+          const reserveAsCollateral: ReserveAsCollateral = {
+            mint: filteredReserve.getLiquidityMint(),
+            liquidationLTVPct: new Decimal(filteredReserve.state.config.liquidationThresholdPct),
+          };
+          marketOverview.reservesAsCollateral.push(reserveAsCollateral);
+          if (reserveAsCollateral.liquidationLTVPct.lt(marketOverview.minLTVPct) || marketOverview.minLTVPct.eq(0)) {
+            marketOverview.minLTVPct = reserveAsCollateral.liquidationLTVPct;
+          }
+          if (reserveAsCollateral.liquidationLTVPct.gt(marketOverview.maxLTVPct) || marketOverview.maxLTVPct.eq(0)) {
+            marketOverview.maxLTVPct = reserveAsCollateral.liquidationLTVPct;
+          }
+        });
+
+      vaultCollateralsPerReserve.set(reserve.address, marketOverview);
+    }
+
+    return vaultCollateralsPerReserve;
+  }
+
+  /**
    * This will return an VaultHoldings object which contains the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
    * @param vault - the kamino vault to get available liquidity to withdraw for
    * @param slot - current slot
@@ -1337,4 +1388,16 @@ export type ReserveOverview = {
   uUtilizationRatio: Decimal;
   liquidationThresholdPct: Decimal;
   borrowedAmount: Decimal;
+};
+
+export type MarketOverview = {
+  address: PublicKey;
+  reservesAsCollateral: ReserveAsCollateral[]; // this MarketOverview has the reserve the caller calls for as the debt reserve and all the others as collateral reserves, so the debt reserve is not included here
+  minLTVPct: Decimal;
+  maxLTVPct: Decimal;
+};
+
+export type ReserveAsCollateral = {
+  mint: PublicKey;
+  liquidationLTVPct: Decimal;
 };
