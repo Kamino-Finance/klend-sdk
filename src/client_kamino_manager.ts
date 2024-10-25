@@ -674,6 +674,49 @@ async function main() {
       });
     });
 
+  commands
+    .command('get-tokens-per-share')
+    .requiredOption('--vault <string>', 'Vault address')
+    .action(async ({ vault }) => {
+      const env = initializeClient(false, false);
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const vaultAddress = new PublicKey(vault);
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
+      const tokensPerShare = await kaminoManager.getTokensPerShareSingleVault(
+        kaminoVault,
+        await env.connection.getSlot('confirmed')
+      );
+      console.log(`Tokens per share for vault ${vaultAddress.toBase58()}: ${tokensPerShare}`);
+    });
+
+  commands
+    .command('print-vault')
+    .requiredOption('--vault <string>', 'Vault address')
+    .action(async ({ vault }) => {
+      const env = initializeClient(false, false);
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const vaultAddress = new PublicKey(vault);
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
+      await kaminoVault.getState(env.connection);
+
+      const slot = await env.connection.getSlot('confirmed');
+      const tokensPerShare = await kaminoManager.getTokensPerShareSingleVault(kaminoVault, slot);
+      const holdings = await kaminoManager.getVaultHoldings(kaminoVault.state!, slot);
+
+      const vaultState = kaminoVault.state!;
+
+      const sharesIssued = new Decimal(vaultState.sharesIssued.toString()!).div(
+        new Decimal(vaultState.sharesMintDecimals.toString())
+      );
+      console.log('Shares issued: ', sharesIssued);
+      console.log('Holdings: ', holdings);
+      console.log(`Tokens per share for vault ${vaultAddress.toBase58()}: ${tokensPerShare}`);
+    });
+
   commands.command('get-oracle-mappings').action(async () => {
     const env = initializeClient(false, false);
     const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);

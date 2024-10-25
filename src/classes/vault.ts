@@ -845,36 +845,21 @@ export class KaminoVaultClient {
     if (vaultState.sharesIssued.isZero()) {
       return new Decimal(0);
     }
-    const tokenDecimals = new Decimal(vaultState.tokenMintDecimals.toString());
 
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
-    let totalVaultLiquidityAmount = new Decimal(vaultState.tokenAvailable.toString());
-    vaultState.vaultAllocationStrategy.forEach((allocationStrategy) => {
-      if (!allocationStrategy.reserve.equals(PublicKey.default)) {
-        const reserve = vaultReservesState.get(allocationStrategy.reserve);
-        if (reserve === undefined) {
-          throw new Error(`Reserve ${allocationStrategy.reserve.toBase58()} not found`);
-        }
-        const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(
-          slot,
-          new Fraction(reserve.state.liquidity.absoluteReferralRateSf)
-            .toDecimal()
-            .div(reserve.state.config.protocolTakeRatePct / 100)
-            .floor()
-            .toNumber()
-        );
-        if (reserveCollExchangeRate.gt(0)) {
-          const reserveAllocationLiquidityAmount = new Decimal(allocationStrategy.cTokenAllocation.toString()).div(
-            reserveCollExchangeRate
-          );
-          totalVaultLiquidityAmount = totalVaultLiquidityAmount.add(reserveAllocationLiquidityAmount);
-        }
-      }
-    });
 
-    return lamportsToDecimal(totalVaultLiquidityAmount, tokenDecimals).dividedBy(
-      lamportsToDecimal(vaultState.sharesIssued.toString(), vaultState.sharesMintDecimals.toString())
+    const sharesDecimal = lamportsToDecimal(
+      vaultState.sharesIssued.toString(),
+      vaultState.sharesMintDecimals.toString()
     );
+
+    const holdings = await this.getVaultHoldings(
+      vaultState,
+      await this._connection.getSlot('confirmed'),
+      vaultReservesState
+    );
+
+    return holdings.total.div(sharesDecimal);
   }
 
   /**
@@ -1114,6 +1099,7 @@ export class KaminoVaultClient {
       available: new Decimal(vault.tokenAvailable.toString()),
       invested: new Decimal(0),
       investedInReserves: new PubkeyHashMap<PublicKey, Decimal>(),
+      total: new Decimal(0),
     };
 
     const vaultReservesState = vaultReserves ? vaultReserves : await this.loadVaultReserves(vault);
@@ -1130,7 +1116,7 @@ export class KaminoVaultClient {
       }
 
       const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, 0);
-      const reserveAllocationLiquidityAmount = new Decimal(allocationStrategy.cTokenAllocation.toString()).mul(
+      const reserveAllocationLiquidityAmount = new Decimal(allocationStrategy.cTokenAllocation.toString()).div(
         reserveCollExchangeRate
       );
 
@@ -1141,10 +1127,13 @@ export class KaminoVaultClient {
       );
     });
 
+    const totalAvailableDecimal = lamportsToDecimal(vaultHoldings.available, decimals);
+    const totalInvestedDecimal = lamportsToDecimal(vaultHoldings.invested, decimals);
     return {
-      available: lamportsToDecimal(vaultHoldings.available, decimals),
-      invested: lamportsToDecimal(vaultHoldings.invested, decimals),
+      available: totalAvailableDecimal,
+      invested: totalInvestedDecimal,
       investedInReserves: vaultHoldings.investedInReserves,
+      total: totalAvailableDecimal.add(totalInvestedDecimal),
     };
   }
 
@@ -1374,6 +1363,7 @@ export type VaultHoldings = {
   available: Decimal;
   invested: Decimal;
   investedInReserves: PubkeyHashMap<PublicKey, Decimal>;
+  total: Decimal;
 };
 
 export type VaultHoldingsWithUSDValue = {
