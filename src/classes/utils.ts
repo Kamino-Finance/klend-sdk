@@ -1,7 +1,8 @@
 import { SLOTS_PER_SECOND, SLOTS_PER_YEAR } from '../utils';
 import Decimal from 'decimal.js';
-import { PublicKey } from '@solana/web3.js';
+import { AccountInfo, PublicKey } from '@solana/web3.js';
 import { SOL_MINTS } from '../lib';
+import { AccountLayout } from '@solana/spl-token';
 
 type ObligationFarmScoreType = {
   obligationId: string;
@@ -224,4 +225,14 @@ export function sameLengthArrayEquals(left: Array<number>, right: Array<number>)
     throw new Error(`Not same length: ${left.length} != ${left.length}`);
   }
   return left.every((value, index) => value === right[index]);
+}
+
+export function getTokenBalanceFromAccountInfoLamports(accountInfo: AccountInfo<Buffer>): Decimal {
+  // Decode the buffer using the AccountLayout from @solana/spl-token
+  const tokenAccountData = AccountLayout.decode(accountInfo.data);
+
+  // Extract the balance from the `amount` field, which is a 64-bit unsigned integer
+  const balance = tokenAccountData.amount;
+
+  return new Decimal(balance.toString());
 }

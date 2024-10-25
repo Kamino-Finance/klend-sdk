@@ -50,7 +50,7 @@ import {
 import { VaultConfigFieldKind } from '../idl_codegen_kamino_vault/types';
 import { VaultState } from '../idl_codegen_kamino_vault/accounts';
 import Decimal from 'decimal.js';
-import { numberToLamportsDecimal, parseTokenSymbol } from './utils';
+import { getTokenBalanceFromAccountInfoLamports, numberToLamportsDecimal, parseTokenSymbol } from './utils';
 import { deposit } from '../idl_codegen_kamino_vault/instructions';
 import { withdraw } from '../idl_codegen_kamino_vault/instructions';
 import { PROGRAM_ID } from '../idl_codegen/programId';
@@ -499,7 +499,7 @@ export class KaminoVaultClient {
       },
     ]);
 
-    const tokensToWithdraw = shareAmount.div(await this.getTokensPerShareSingleVault(vault, slot));
+    const tokensToWithdraw = shareAmount.mul(await this.getTokensPerShareSingleVault(vault, slot));
     let tokenLeftToWithdraw = tokensToWithdraw;
 
     tokenLeftToWithdraw = tokenLeftToWithdraw.sub(new Decimal(vaultState.tokenAvailable.toString()));
@@ -819,7 +819,7 @@ export class KaminoVaultClient {
       } else {
         vaultUserShareBalance.set(
           vaults[index].address,
-          new Decimal(userShareAtaAccount.lamports).div(
+          getTokenBalanceFromAccountInfoLamports(userShareAtaAccount).div(
             new Decimal(10).pow(vaults[index].state!.sharesMintDecimals.toString())
           )
         );

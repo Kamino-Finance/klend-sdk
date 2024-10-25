@@ -643,6 +643,37 @@ async function main() {
       });
     });
 
+  commands
+    .command('get-user-shares-for-vault')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption('--wallet <string>', 'User wailt address')
+    .action(async ({ vault, wallet }) => {
+      const env = initializeClient(false, false);
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const vaultAddress = new PublicKey(vault);
+      const walletAddress = new PublicKey(wallet);
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
+      const userShares = await kaminoManager.getUserSharesBalanceSingleVault(walletAddress, kaminoVault);
+      console.log(`User shares for vault ${vaultAddress.toBase58()}: ${userShares}`);
+    });
+
+  commands
+    .command('get-user-shares-all-vaults')
+    .requiredOption('--wallet <string>', 'User wailt address')
+    .action(async ({ wallet }) => {
+      const env = initializeClient(false, false);
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const walletAddress = new PublicKey(wallet);
+      const userShares = await kaminoManager.getUserSharesBalanceAllVaults(walletAddress);
+      userShares.forEach((userShares, vaultAddress) => {
+        console.log(`User shares for vault ${vaultAddress}: ${userShares}`);
+      });
+    });
+
   commands.command('get-oracle-mappings').action(async () => {
     const env = initializeClient(false, false);
     const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);

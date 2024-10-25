@@ -422,7 +422,7 @@ export class KaminoManager {
    */
   async getUserSharesBalanceAllVaults(
     user: PublicKey,
-    vaultsOverride: KaminoVault[]
+    vaultsOverride?: KaminoVault[]
   ): Promise<PubkeyHashMap<PublicKey, Decimal>> {
     return this._vaultClient.getUserSharesBalanceAllVaults(user, vaultsOverride);
   }
