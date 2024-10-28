@@ -141,3 +141,9 @@ yarn multiply-withdraw
 export KEYPAIR_FILE=YOUR_PATH_TO_YOUR_KEYPAIR_FILE
 yarn multiply-adjust
 ```
+
+### Get multiply/leverage Loan info and PNL
+
+```bash
+yarn multiply-loan-info-and-pnl
+```

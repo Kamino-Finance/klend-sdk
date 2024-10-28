@@ -154,7 +154,7 @@ export async function getTokenAccountBalanceDecimal(
   connection: Connection,
   mint: PublicKey,
   owner: PublicKey,
-  tokenProgram: PublicKey = TOKEN_PROGRAM_ID,
+  tokenProgram: PublicKey = TOKEN_PROGRAM_ID
 ): Promise<Decimal> {
   const ata = getAssociatedTokenAddress(mint, owner, true, tokenProgram);
   const accInfo = await connection.getAccountInfo(ata);
