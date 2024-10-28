@@ -29,8 +29,6 @@
     "docs": "typedoc",
     "prepublish": "yarn build",
     "build": "rm -rf dist/; tsc",
-    "build:test": "yarn tsc --project ./tests/tsconfig.json",
-    "test": "npx ts-mocha tests/**/*.test.ts --exit",
     "watch": "tsc --watch",
     "coverage": "jest --coverage",
     "clean": "rm -rf dist/",
@@ -41,9 +39,6 @@
     "codegen": "yarn anchor-client-gen src/idl.json ./src/idl_codegen/ --program-id KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD",
     "codegen-kvault": "yarn anchor-client-gen src/idl_kamino_vault.json ./src/idl_codegen_kamino_vault/ --program-id kvauTFR8qm1dhniz6pYuBZkuene3Hfrs1VQhVRgCNrr",
     "codegen-jupiter-perps": "yarn anchor-client-gen src/jupiter_perps_idl.json ./src/idl_codegen_jupiter_perps/ --program-id PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu",
-    "start-validator": "solana-test-validator $(./deps/test-validator-params.sh)",
-    "start-validator-and-test": "yarn start-server-and-test 'yarn start-validator' http://127.0.0.1:8899/health test",
-    "dump-programs": "./deps/dump-from-mainnet.sh",
     "kamino-manager": "tsx src/client_kamino_manager.ts"
   },
   "dependencies": {

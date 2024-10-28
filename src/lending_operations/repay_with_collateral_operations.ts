@@ -74,14 +74,11 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
     throw new Error(`Debt reserve with mint ${debtReserve} not found in market ${kaminoMarket.getAddress()}`);
   }
 
-  const { repayAmountLamports, flashRepayAmountLamports } = calcRepayAmountWithSlippage(
-    kaminoMarket,
-    debtReserve,
-    currentSlot,
-    obligation,
-    repayAmount,
-    referrer
-  );
+  const {
+    repayAmountLamports,
+    flashRepayAmountLamports,
+    repayAmount: finalRepayAmount,
+  } = calcRepayAmountWithSlippage(kaminoMarket, debtReserve, currentSlot, obligation, repayAmount, referrer);
 
   const debtPosition = obligation.getBorrowByReserve(debtReserve.address);
   const collPosition = obligation.getDepositByReserve(collReserve.address);
@@ -103,8 +100,17 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
     repayAmountLamports
   );
 
+  // sanity check: we have extra collateral to swap, but we want to ensure we don't quote for way more than needed and get a bad px
+  const maxCollNeededFromOracle = finalRepayAmount
+    .mul(debtReserve.getOracleMarketPrice())
+    .div(collReserve.getOracleMarketPrice())
+    .mul('1.1')
+    .mul(collReserve.getMintFactor())
+    .ceil();
+  const inputAmountLamports = Decimal.min(withdrawableCollLamports, maxCollNeededFromOracle);
+
   const swapQuoteInputs: SwapInputs = {
-    inputAmountLamports: withdrawableCollLamports,
+    inputAmountLamports,
     inputMint: collTokenMint,
     outputMint: debtTokenMint,
     amountDebtAtaBalance: new Decimal(0), // only used for kTokens
@@ -127,7 +133,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
     },
     isClosingPosition,
     repayAmountLamports,
-    withdrawableCollLamports
+    inputAmountLamports
   );
   const uniqueKlendAccounts = uniqueAccounts(klendIxs);
   const swapQuote = await quoter(swapQuoteInputs, uniqueKlendAccounts);

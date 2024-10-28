@@ -656,15 +656,12 @@ export class KaminoObligation {
     borrow: ObligationLiquidity,
     currentSlot: number
   ): Decimal => {
-    const estimatedCumulativeBorrowRate = reserve.getEstimatedCumulativeBorrowRate(
-      currentSlot,
-      market.state.referralFeeBps
-    );
+    const newCumulativeBorrowRate = reserve.getEstimatedCumulativeBorrowRate(currentSlot, market.state.referralFeeBps);
 
-    const currentCumulativeBorrowRate = KaminoObligation.getCumulativeBorrowRate(borrow);
+    const formerCumulativeBorrowRate = KaminoObligation.getCumulativeBorrowRate(borrow);
 
-    if (estimatedCumulativeBorrowRate.gt(currentCumulativeBorrowRate)) {
-      return estimatedCumulativeBorrowRate.div(currentCumulativeBorrowRate);
+    if (newCumulativeBorrowRate.gt(formerCumulativeBorrowRate)) {
+      return newCumulativeBorrowRate.div(formerCumulativeBorrowRate);
     }
 
     return new Decimal(0);

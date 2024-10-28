@@ -347,7 +347,7 @@ export class KaminoAction {
     currentSlot: number = 0
   ) {
     //  placeholder for action initialization
-    const firstReserve = obligation.state.deposits[0].depositReserve;
+    const firstReserve = obligation.getDeposits()[0].reserveAddress;
     const firstKaminoReserve = kaminoMarket.getReserveByAddress(firstReserve);
     if (!firstKaminoReserve) {
       throw new Error(`Reserve ${firstReserve.toBase58()} not found`);
@@ -1927,8 +1927,8 @@ export class KaminoAction {
       if (['borrow', 'withdrawReferrerFees'].includes(action)) {
         await this.addInitReferrerTokenStateIx(this.reserve);
       }
+      // depositAndBorrow
       if (action === 'deposit' && this.outflowReserve) {
-        // depositAndBorrow
         await this.addInitReferrerTokenStateIx(this.outflowReserve);
       }
       await this.addInitObligationIxs();
