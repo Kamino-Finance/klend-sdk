@@ -20,6 +20,8 @@ import {
   VaultHolder,
   VaultHoldings,
   VaultHoldingsWithUSDValue,
+  VaultOverview,
+  VaultReserveTotalBorrowedAndInvested,
 } from './vault';
 import {
   AddAssetToMarketParams,
@@ -31,6 +33,7 @@ import {
   initLendingMarket,
   InitLendingMarketAccounts,
   InitLendingMarketArgs,
+  KaminoMarket,
   KaminoReserve,
   LendingMarket,
   lendingMarketAuthPda,
@@ -570,6 +573,40 @@ export class KaminoManager {
     vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<VaultHoldingsWithUSDValue> {
     return this._vaultClient.getVaultHoldingsWithPrice(vault, slot, price, vaultReserves);
+  }
+
+  /**
+   * This will return an VaultOverview object that encapsulates all the information about the vault, including the holdings, reserves details, theoretical APY, utilization ratio and total borrowed amount
+   * @param vault - the kamino vault to get available liquidity to withdraw for
+   * @param slot - current slot
+   * @param price - the price of the token in the vault (e.g. USDC)
+   * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param kaminoMarkets - optional parameter; a list of all kamino markets. If provided the function will be significantly faster as it will not have to fetch the markets
+   * @returns an VaultHoldingsWithUSDValue object with details about the tokens available and invested in the vault, denominated in tokens and USD
+   */
+  async getVaultOverview(
+    vault: VaultState,
+    slot: number,
+    price: Decimal,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>,
+    kaminoMarkets?: KaminoMarket[]
+  ): Promise<VaultOverview> {
+    return this._vaultClient.getVaultOverview(vault, slot, price, vaultReserves, kaminoMarkets);
+  }
+
+  /**
+   * This will return an aggregation of the current state of the vault with all the invested amounts and the utilization ratio of the vault
+   * @param vault - the kamino vault to get available liquidity to withdraw for
+   * @param slot - current slot
+   * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @returns an VaultReserveTotalBorrowedAndInvested object with the total invested amount, total borrowed amount and the utilization ratio of the vault
+   */
+  async getTotalBorrowedAndInvested(
+    vault: VaultState,
+    slot: number,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<VaultReserveTotalBorrowedAndInvested> {
+    return this._vaultClient.getTotalBorrowedAndInvested(vault, slot, vaultReserves);
   }
 
   /**

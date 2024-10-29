@@ -1038,15 +1038,32 @@ export class KaminoVaultClient {
    *
    * @returns a hashmap from each reserve pubkey to the market overview of the collaterals that can be used and the min and max loan to value ratio in that market
    */
-  async getVaultCollaterals(vaultState: VaultState, slot: number): Promise<PubkeyHashMap<PublicKey, MarketOverview>> {
-    const vaultReservesState = Array.from((await this.loadVaultReserves(vaultState)).values());
+  async getVaultCollaterals(
+    vaultState: VaultState,
+    slot: number,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>,
+    kaminoMarkets?: KaminoMarket[]
+  ): Promise<PubkeyHashMap<PublicKey, MarketOverview>> {
+    const vaultReservesStateMap = vaultReserves ? vaultReserves : await this.loadVaultReserves(vaultState);
+    const vaultReservesState = Array.from(vaultReservesStateMap.values());
 
     const vaultCollateralsPerReserve: PubkeyHashMap<PublicKey, MarketOverview> = new PubkeyHashMap();
 
     for (const reserve of vaultReservesState) {
-      const lendingMarket = await KaminoMarket.load(this._connection, reserve.state.lendingMarket, slot);
+      // try to read the market from the provided list, if it doesn't exist fetch it
+      let lendingMarket: KaminoMarket | undefined = undefined;
+      if (kaminoMarkets) {
+        lendingMarket = kaminoMarkets?.find((market) =>
+          reserve.state.lendingMarket.equals(new PublicKey(market.address))
+        );
+      }
+
       if (!lendingMarket) {
-        throw Error(`Could not fetch lending market ${reserve.state.lendingMarket.toBase58()}`);
+        const fetchedLendingMarket = await KaminoMarket.load(this._connection, reserve.state.lendingMarket, slot);
+        if (!fetchedLendingMarket) {
+          throw Error(`Could not fetch lending market ${reserve.state.lendingMarket.toBase58()}`);
+        }
+        lendingMarket = fetchedLendingMarket;
       }
 
       const marketReserves = lendingMarket.getReserves();
@@ -1164,6 +1181,104 @@ export class KaminoVaultClient {
       availableUSD: holdings.available.mul(price),
       investedUSD: holdings.invested.mul(price),
       investedInReservesUSD: investedInReservesUSD,
+      totalUSD: holdings.total.mul(price),
+    };
+  }
+
+  /**
+   * This will return an VaultOverview object that encapsulates all the information about the vault, including the holdings, reserves details, theoretical APY, utilization ratio and total borrowed amount
+   * @param vault - the kamino vault to get available liquidity to withdraw for
+   * @param slot - current slot
+   * @param price - the price of the token in the vault (e.g. USDC)
+   * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param kaminoMarkets - optional parameter; a list of all kamino markets. If provided the function will be significantly faster as it will not have to fetch the markets
+   * @returns an VaultHoldingsWithUSDValue object with details about the tokens available and invested in the vault, denominated in tokens and USD
+   */
+  async getVaultOverview(
+    vault: VaultState,
+    slot: number,
+    price: Decimal,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>,
+    kaminoMarkets?: KaminoMarket[]
+  ): Promise<VaultOverview> {
+    const vaultReservesState = vaultReserves ? vaultReserves : await this.loadVaultReserves(vault);
+
+    const vaultHoldingsWithUSDValuePromise = await this.getVaultHoldingsWithPrice(
+      vault,
+      slot,
+      price,
+      vaultReservesState
+    );
+    const vaultTheoreticalAPYPromise = await this.getVaultTheoreticalAPY(vault, slot, vaultReservesState);
+    const totalInvestedAndBorrowedPromise = await this.getTotalBorrowedAndInvested(vault, slot, vaultReservesState);
+    const vaultCollateralsPromise = await this.getVaultCollaterals(vault, slot, vaultReservesState, kaminoMarkets);
+    const reservesOverviewPromise = await this.getVaultReservesDetails(vault, slot, vaultReservesState);
+
+    // all the async part of the functions above just read the vaultReservesState which is read beforehand, so excepting vaultCollateralsPromise they should do no additional network calls
+    const [
+      vaultHoldingsWithUSDValue,
+      vaultTheoreticalAPY,
+      totalInvestedAndBorrowed,
+      vaultCollaterals,
+      reservesOverview,
+    ] = await Promise.all([
+      vaultHoldingsWithUSDValuePromise,
+      vaultTheoreticalAPYPromise,
+      totalInvestedAndBorrowedPromise,
+      vaultCollateralsPromise,
+      reservesOverviewPromise,
+    ]);
+
+    return {
+      holdingsUSD: vaultHoldingsWithUSDValue,
+      reservesOverview: reservesOverview,
+      vaultCollaterals: vaultCollaterals,
+      theoreticalSupplyAPY: vaultTheoreticalAPY,
+      totalBorrowed: totalInvestedAndBorrowed.totalBorrowed,
+      utilizationRatio: totalInvestedAndBorrowed.utilizationRatio,
+    };
+  }
+
+  /**
+   * This will return an aggregation of the current state of the vault with all the invested amounts and the utilization ratio of the vault
+   * @param vault - the kamino vault to get available liquidity to withdraw for
+   * @param slot - current slot
+   * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @returns an VaultReserveTotalBorrowedAndInvested object with the total invested amount, total borrowed amount and the utilization ratio of the vault
+   */
+  async getTotalBorrowedAndInvested(
+    vault: VaultState,
+    slot: number,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<VaultReserveTotalBorrowedAndInvested> {
+    const vaultReservesState = vaultReserves ? vaultReserves : await this.loadVaultReserves(vault);
+
+    let totalInvested = new Decimal(0);
+    let totalBorrowed = new Decimal(0);
+
+    vault.vaultAllocationStrategy.forEach((allocationStrategy) => {
+      if (allocationStrategy.reserve.equals(PublicKey.default)) {
+        return;
+      }
+
+      const reserve = vaultReservesState.get(allocationStrategy.reserve);
+      if (reserve === undefined) {
+        throw new Error(`Reserve ${allocationStrategy.reserve.toBase58()} not found`);
+      }
+
+      const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, 0);
+      const reserveAllocationLiquidityAmount = new Decimal(allocationStrategy.cTokenAllocation.toString()).div(
+        reserveCollExchangeRate
+      );
+
+      const utilizationRatio = reserve.getEstimatedUtilizationRatio(slot, 0);
+      totalInvested = totalInvested.add(reserveAllocationLiquidityAmount);
+      totalBorrowed = totalBorrowed.add(reserveAllocationLiquidityAmount.mul(utilizationRatio));
+    });
+    return {
+      totalInvested: totalInvested,
+      totalBorrowed: totalBorrowed,
+      utilizationRatio: totalBorrowed.div(totalInvested),
     };
   }
 
@@ -1195,9 +1310,10 @@ export class KaminoVaultClient {
       reserve.getBorrowedAmount();
       const reserveOverview: ReserveOverview = {
         supplyAPY: new Decimal(reserve.totalSupplyAPY(slot)),
-        uUtilizationRatio: new Decimal(reserve.getEstimatedUtilizationRatio(slot, 0)),
+        utilizationRatio: new Decimal(reserve.getEstimatedUtilizationRatio(slot, 0)),
         liquidationThresholdPct: new Decimal(reserve.state.config.liquidationThresholdPct),
         borrowedAmount: reserve.getBorrowedAmount(),
+        market: reserve.state.lendingMarket,
       };
       reservesDetails.set(allocationStrategy.reserve, reserveOverview);
     });
@@ -1373,13 +1489,21 @@ export type VaultHoldingsWithUSDValue = {
   availableUSD: Decimal;
   investedUSD: Decimal;
   investedInReservesUSD: PubkeyHashMap<PublicKey, Decimal>;
+  totalUSD: Decimal;
 };
 
 export type ReserveOverview = {
   supplyAPY: Decimal;
-  uUtilizationRatio: Decimal;
+  utilizationRatio: Decimal;
   liquidationThresholdPct: Decimal;
   borrowedAmount: Decimal;
+  market: PublicKey;
+};
+
+export type VaultReserveTotalBorrowedAndInvested = {
+  totalInvested: Decimal;
+  totalBorrowed: Decimal;
+  utilizationRatio: Decimal;
 };
 
 export type MarketOverview = {
@@ -1392,4 +1516,13 @@ export type MarketOverview = {
 export type ReserveAsCollateral = {
   mint: PublicKey;
   liquidationLTVPct: Decimal;
+};
+
+export type VaultOverview = {
+  holdingsUSD: VaultHoldingsWithUSDValue;
+  reservesOverview: PubkeyHashMap<PublicKey, ReserveOverview>;
+  vaultCollaterals: PubkeyHashMap<PublicKey, MarketOverview>;
+  theoreticalSupplyAPY: Decimal;
+  totalBorrowed: Decimal;
+  utilizationRatio: Decimal;
 };

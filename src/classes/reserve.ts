@@ -421,7 +421,7 @@ export class KaminoReserve {
     return { accumulatedProtocolFees, compoundedVariableProtocolFee, compoundedFixedHostFee };
   }
 
-  calculateUtilizationRatio() {
+  calculateUtilizationRatio(): number {
     const totalBorrows = this.getBorrowedAmount();
     const totalSupply = this.getTotalSupply();
     if (totalSupply.eq(0)) {
@@ -430,7 +430,7 @@ export class KaminoReserve {
     return totalBorrows.dividedBy(totalSupply).toNumber();
   }
 
-  getEstimatedUtilizationRatio(slot: number, referralFeeBps: number) {
+  getEstimatedUtilizationRatio(slot: number, referralFeeBps: number): number {
     const { totalBorrow: estimatedTotalBorrowed, totalSupply: estimatedTotalSupply } = this.getEstimatedDebtAndSupply(
       slot,
       referralFeeBps
