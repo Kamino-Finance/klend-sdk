@@ -1060,7 +1060,9 @@ export class KaminoVaultClient {
       marketReserves
         .filter((marketReserve) => {
           return (
-            marketReserve.state.config.liquidationThresholdPct > 0 && !marketReserve.address.equals(reserve.address)
+            marketReserve.state.config.liquidationThresholdPct > 0 &&
+            !marketReserve.address.equals(reserve.address) &&
+            marketReserve.state.config.status === 0
           );
         })
         .map((filteredReserve) => {
