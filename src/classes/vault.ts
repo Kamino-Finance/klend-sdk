@@ -648,7 +648,7 @@ export class KaminoVaultClient {
       sharesMint: vaultState.sharesMint,
       userSharesAta: userSharesAta,
       tokenAta: userTokenAta,
-      tokenProgram: TOKEN_PROGRAM_ID,
+      tokenProgram: vaultState.tokenProgram,
       instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
       reserve: reserve.address,
       ctokenVault: getCTokenVaultPda(vault.address, reserve.address, this._kaminoVaultProgramId),
