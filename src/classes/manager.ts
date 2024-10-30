@@ -17,6 +17,7 @@ import {
   MarketOverview,
   ReserveAllocationConfig,
   ReserveOverview,
+  VaultFeesPct,
   VaultHolder,
   VaultHoldings,
   VaultHoldingsWithUSDValue,
@@ -325,10 +326,9 @@ export class KaminoManager {
     user: PublicKey,
     vault: KaminoVault,
     tokenAmount: Decimal,
-    tokenProgramIDOverride?: PublicKey,
     vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<TransactionInstruction[]> {
-    return this._vaultClient.depositIxs(user, vault, tokenAmount, tokenProgramIDOverride, vaultReservesMap);
+    return this._vaultClient.depositIxs(user, vault, tokenAmount, vaultReservesMap);
   }
 
   async updateVaultConfigIx(
@@ -428,6 +428,15 @@ export class KaminoManager {
     vaultsOverride?: KaminoVault[]
   ): Promise<PubkeyHashMap<PublicKey, Decimal>> {
     return this._vaultClient.getUserSharesBalanceAllVaults(user, vaultsOverride);
+  }
+
+  /**
+   * This method returns the management and performance fee percentages
+   * @param vaultState - vault to retrieve the fees percentages from
+   * @returns - VaultFeesPct containing management and performance fee percentages
+   */
+  getVaultFeesPct(vaultState: VaultState): VaultFeesPct {
+    return this._vaultClient.getVaultFeesPct(vaultState);
   }
 
   /**

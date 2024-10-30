@@ -236,3 +236,7 @@ export function getTokenBalanceFromAccountInfoLamports(accountInfo: AccountInfo<
 
   return new Decimal(balance.toString());
 }
+
+export function bpsToPct(bps: Decimal): Decimal {
+  return bps.div(100);
+}

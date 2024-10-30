@@ -644,6 +644,25 @@ async function main() {
     });
 
   commands
+    .command('get-vault-overview')
+    .requiredOption('--vault <string>', 'Vault address')
+    .action(async ({ vault }) => {
+      const env = initializeClient(false, false);
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const vaultAddress = new PublicKey(vault);
+      const vaultState = await new KaminoVault(vaultAddress, undefined, env.kVaultProgramId).getState(env.connection);
+      const vaultOverview = await kaminoManager.getVaultOverview(
+        vaultState,
+        await env.connection.getSlot('confirmed'),
+        new Decimal(1.0)
+      );
+      
+      console.log('vaultOverview', vaultOverview);
+    });
+
+  commands
     .command('get-user-shares-for-vault')
     .requiredOption('--vault <string>', 'Vault address')
     .requiredOption('--wallet <string>', 'User wailt address')

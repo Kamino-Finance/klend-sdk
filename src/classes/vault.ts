@@ -18,8 +18,6 @@ import {
   KaminoMarket,
   KaminoReserve,
   lamportsToDecimal,
-  LendingMarket,
-  MarketWithAddress,
   PubkeyHashMap,
   Reserve,
   WRAPPED_SOL_MINT,
@@ -50,7 +48,7 @@ import {
 import { VaultConfigFieldKind } from '../idl_codegen_kamino_vault/types';
 import { VaultState } from '../idl_codegen_kamino_vault/accounts';
 import Decimal from 'decimal.js';
-import { getTokenBalanceFromAccountInfoLamports, numberToLamportsDecimal, parseTokenSymbol } from './utils';
+import { bpsToPct, getTokenBalanceFromAccountInfoLamports, numberToLamportsDecimal, parseTokenSymbol } from './utils';
 import { deposit } from '../idl_codegen_kamino_vault/instructions';
 import { withdraw } from '../idl_codegen_kamino_vault/instructions';
 import { PROGRAM_ID } from '../idl_codegen/programId';
@@ -348,22 +346,12 @@ export class KaminoVaultClient {
         }
 
         const reserveState = reserveStates[index]!;
-
-        const market = reserveState.lendingMarket;
-        const marketState = await LendingMarket.fetch(this._connection, market, this._kaminoLendProgramId);
-        if (marketState === null) {
-          throw new Error(`Market ${market.toBase58()} not found`);
-        }
-
-        const marketWithAddress = {
-          address: market,
-          state: marketState,
-        };
+        const marketAddress = reserveState.lendingMarket;
 
         return this.withdrawPendingFeesIxn(
           vault,
           vaultState,
-          marketWithAddress,
+          marketAddress,
           { address: reserve, state: reserveState },
           adminTokenAta
         );
@@ -389,7 +377,6 @@ export class KaminoVaultClient {
    * @param user - user to deposit
    * @param vault - vault to deposit into
    * @param tokenAmount - token amount to be deposited, in decimals (will be converted in lamports)
-   * @param tokenProgramIDOverride - optional param; should be passed if token to be deposited is token22
    * @param vaultReservesMap - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @returns - an array of instructions to be used to be executed
    */
@@ -397,12 +384,11 @@ export class KaminoVaultClient {
     user: PublicKey,
     vault: KaminoVault,
     tokenAmount: Decimal,
-    tokenProgramIDOverride?: PublicKey,
     vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<TransactionInstruction[]> {
     const vaultState = await vault.getState(this._connection);
 
-    const tokenProgramID = tokenProgramIDOverride ? tokenProgramIDOverride : TOKEN_PROGRAM_ID;
+    const tokenProgramID = vaultState.tokenProgram;
     const userTokenAta = getAssociatedTokenAddress(vaultState.tokenMint, user, true, tokenProgramID);
     const createAtasIxns: TransactionInstruction[] = [];
     const closeAtasIxns: TransactionInstruction[] = [];
@@ -487,15 +473,18 @@ export class KaminoVaultClient {
     user: PublicKey,
     vault: KaminoVault,
     shareAmount: Decimal,
-    slot: number
+    slot: number,
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<TransactionInstruction[]> {
     const vaultState = await vault.getState(this._connection);
+
+    const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
 
     const userSharesAta = getAssociatedTokenAddress(vaultState.sharesMint, user);
     const [{ ata: userTokenAta, createAtaIx }] = createAtasIdempotent(user, [
       {
         mint: vaultState.tokenMint,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram: vaultState.tokenProgram,
       },
     ]);
 
@@ -531,40 +520,31 @@ export class KaminoVaultClient {
       });
     }
 
-    const reserveStates = await Reserve.fetchMultiple(this._connection, reservesToWithdraw, this._kaminoLendProgramId);
-    const withdrawIxns: TransactionInstruction[] = await Promise.all(
-      reservesToWithdraw.map(async (reserve, index) => {
-        if (reserveStates[index] === null) {
-          throw new Error(`Reserve ${reserve.toBase58()} not found`);
-        }
+    const withdrawIxns: TransactionInstruction[] = [];
+    withdrawIxns.push(createAtaIx);
 
-        const reserveState = reserveStates[index]!;
+    reservesToWithdraw.forEach((reserve, index) => {
+      const reserveState = vaultReservesState.get(reserve);
+      if (reserveState === undefined) {
+        throw new Error(`Reserve ${reserve.toBase58()} not found in vault reserves map`);
+      }
 
-        const market = reserveState.lendingMarket;
-        const marketState = await LendingMarket.fetch(this._connection, market, this._kaminoLendProgramId);
-        if (marketState === null) {
-          throw new Error(`Market ${market.toBase58()} not found`);
-        }
+      const marketAddress = reserveState.state.lendingMarket;
+      const withdrawFromReserveIx = this.withdrawIxn(
+        user,
+        vault,
+        vaultState,
+        marketAddress,
+        { address: reserve, state: reserveState.state },
+        userSharesAta,
+        userTokenAta,
+        amountToWithdraw[index],
+        vaultReservesState
+      );
+      withdrawIxns.push(withdrawFromReserveIx);
+    });
 
-        const marketWithAddress = {
-          address: market,
-          state: marketState,
-        };
-
-        return this.withdrawIxn(
-          user,
-          vault,
-          vaultState,
-          marketWithAddress,
-          { address: reserve, state: reserveState },
-          userSharesAta,
-          userTokenAta,
-          amountToWithdraw[index]
-        );
-      })
-    );
-
-    return [createAtaIx, ...withdrawIxns];
+    return withdrawIxns;
   }
 
   /**
@@ -646,17 +626,18 @@ export class KaminoVaultClient {
     return [createAtaIx, investIx];
   }
 
-  private async withdrawIxn(
+  private withdrawIxn(
     user: PublicKey,
     vault: KaminoVault,
     vaultState: VaultState,
-    marketWithAddress: MarketWithAddress,
+    marketAddress: PublicKey,
     reserve: ReserveWithAddress,
     userSharesAta: PublicKey,
     userTokenAta: PublicKey,
-    shareAmountLamports: Decimal
-  ): Promise<TransactionInstruction> {
-    const lendingMarketAuth = lendingMarketAuthPda(marketWithAddress.address, this._kaminoLendProgramId)[0];
+    shareAmountLamports: Decimal,
+    vaultReservesState: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): TransactionInstruction {
+    const lendingMarketAuth = lendingMarketAuthPda(marketAddress, this._kaminoLendProgramId)[0];
 
     const withdrawAccounts: WithdrawAccounts = {
       user: user,
@@ -672,7 +653,7 @@ export class KaminoVaultClient {
       reserve: reserve.address,
       ctokenVault: getCTokenVaultPda(vault.address, reserve.address, this._kaminoVaultProgramId),
       /** CPI accounts */
-      lendingMarket: marketWithAddress.address,
+      lendingMarket: marketAddress,
       lendingMarketAuthority: lendingMarketAuth,
       reserveLiquiditySupply: reserve.state.liquidity.supplyVault,
       reserveCollateralMint: reserve.state.collateral.mintPubkey,
@@ -688,7 +669,6 @@ export class KaminoVaultClient {
     const withdrawIxn = withdraw(withdrawArgs, withdrawAccounts, this._kaminoVaultProgramId);
 
     const vaultReserves = this.getVaultReserves(vaultState);
-    const vaultReservesState = await this.loadVaultReserves(vaultState);
 
     let vaultReservesAccountMetas: AccountMeta[] = [];
     let vaultReservesLendingMarkets: AccountMeta[] = [];
@@ -715,11 +695,11 @@ export class KaminoVaultClient {
   private async withdrawPendingFeesIxn(
     vault: KaminoVault,
     vaultState: VaultState,
-    marketWithAddress: MarketWithAddress,
+    marketAddress: PublicKey,
     reserve: ReserveWithAddress,
     adminTokenAta: PublicKey
   ): Promise<TransactionInstruction> {
-    const lendingMarketAuth = lendingMarketAuthPda(marketWithAddress.address, this._kaminoLendProgramId)[0];
+    const lendingMarketAuth = lendingMarketAuthPda(marketAddress, this._kaminoLendProgramId)[0];
 
     const withdrawPendingFeesAccounts: WithdrawPendingFeesAccounts = {
       adminAuthority: vaultState.adminAuthority,
@@ -732,7 +712,7 @@ export class KaminoVaultClient {
       tokenMint: vaultState.tokenMint,
       tokenProgram: TOKEN_PROGRAM_ID,
       /** CPI accounts */
-      lendingMarket: marketWithAddress.address,
+      lendingMarket: marketAddress,
       lendingMarketAuthority: lendingMarketAuth,
       reserveLiquiditySupply: reserve.state.liquidity.supplyVault,
       reserveCollateralMint: reserve.state.collateral.mintPubkey,
@@ -827,6 +807,18 @@ export class KaminoVaultClient {
     });
 
     return vaultUserShareBalance;
+  }
+
+  /**
+   * This method returns the management and performance fee percentages
+   * @param vaultState - vault to retrieve the fees percentages from
+   * @returns - VaultFeesPct containing management and performance fee percentages
+   */
+  getVaultFeesPct(vaultState: VaultState): VaultFeesPct {
+    return {
+      managementFeePct: bpsToPct(new Decimal(vaultState.managementFeeBps.toString())),
+      performanceFeePct: bpsToPct(new Decimal(vaultState.performanceFeeBps.toString())),
+    };
   }
 
   /**
@@ -1275,10 +1267,15 @@ export class KaminoVaultClient {
       totalInvested = totalInvested.add(reserveAllocationLiquidityAmount);
       totalBorrowed = totalBorrowed.add(reserveAllocationLiquidityAmount.mul(utilizationRatio));
     });
+
+    let utilizationRatio = new Decimal(0);
+    if (!totalInvested.isZero()) {
+      utilizationRatio = totalBorrowed.div(totalInvested);
+    }
     return {
       totalInvested: totalInvested,
       totalBorrowed: totalBorrowed,
-      utilizationRatio: totalBorrowed.div(totalInvested),
+      utilizationRatio: utilizationRatio,
     };
   }
 
@@ -1525,4 +1522,9 @@ export type VaultOverview = {
   theoreticalSupplyAPY: Decimal;
   totalBorrowed: Decimal;
   utilizationRatio: Decimal;
+};
+
+export type VaultFeesPct = {
+  managementFeePct: Decimal;
+  performanceFeePct: Decimal;
 };
