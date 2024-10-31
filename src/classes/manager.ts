@@ -634,7 +634,7 @@ export class KaminoManager {
   }
 
   /**
-   * This will return the APY of the vault under the assumption that all the available tokens in the vault are all the time invested in the reserves
+   * This will return the APY of the vault under the assumption that all the available tokens in the vault are all the time invested in the reserves as ratio; for percentage it needs multiplication by 100
    * @param vault - the kamino vault to get APY for
    * @param slot - current slot
    * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
@@ -726,16 +726,16 @@ export class KaminoManager {
     return this._vaultClient.getAllocationsDistribuionPct(vaultState);
   }
 
-    /**
+  /**
    * This will return the amount of token invested from the vault into the given reserve
    * @param vault - the kamino vault to get invested amount in reserve for
    * @param slot - current slot
    * @param reserve - the reserve state to get vault invested amount in
    * @returns vault amount supplied in reserve in decimal
    */
-    getSuppliedInReserve(vaultState: VaultState, slot: number, reserve: KaminoReserve): Decimal {
-      return this._vaultClient.getSuppliedInReserve(vaultState, slot, reserve);
-    }
+  getSuppliedInReserve(vaultState: VaultState, slot: number, reserve: KaminoReserve): Decimal {
+    return this._vaultClient.getSuppliedInReserve(vaultState, slot, reserve);
+  }
 
   /**
    * This retruns an array of scope oracle configs to be used to set the scope price and twap oracles for a reserve

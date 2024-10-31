@@ -1292,6 +1292,7 @@ export class KaminoVaultClient {
       theoreticalSupplyAPY: vaultTheoreticalAPY,
       totalBorrowed: totalInvestedAndBorrowed.totalBorrowed,
       utilizationRatio: totalInvestedAndBorrowed.utilizationRatio,
+      totalSupplied: totalInvestedAndBorrowed.totalInvested,
     };
   }
 
@@ -1323,8 +1324,12 @@ export class KaminoVaultClient {
       }
 
       const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, 0);
-      const reserveAllocationLiquidityAmount = new Decimal(allocationStrategy.cTokenAllocation.toString()).div(
+      const reserveAllocationLiquidityAmountLamports = new Decimal(allocationStrategy.cTokenAllocation.toString()).div(
         reserveCollExchangeRate
+      );
+      const reserveAllocationLiquidityAmount = lamportsToDecimal(
+        reserveAllocationLiquidityAmountLamports,
+        vault.tokenMintDecimals.toString()
       );
 
       const utilizationRatio = reserve.getEstimatedUtilizationRatio(slot, 0);
@@ -1384,7 +1389,7 @@ export class KaminoVaultClient {
   }
 
   /**
-   * This will return the APY of the vault under the assumption that all the available tokens in the vault are all the time invested in the reserves
+   * This will return the APY of the vault under the assumption that all the available tokens in the vault are all the time invested in the reserves as ratio; for percentage it needs multiplication by 100
    * @param vault - the kamino vault to get APY for
    * @param slot - current slot
    * @param vaultReserves - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
@@ -1587,7 +1592,7 @@ export type VaultOverview = {
   vaultCollaterals: PubkeyHashMap<PublicKey, MarketOverview>;
   theoreticalSupplyAPY: Decimal;
   totalBorrowed: Decimal;
-
+  totalSupplied: Decimal;
   utilizationRatio: Decimal;
 };
 
