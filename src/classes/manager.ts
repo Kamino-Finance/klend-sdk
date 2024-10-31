@@ -718,6 +718,26 @@ export class KaminoManager {
   }
 
   /**
+   * This will return the a map between reserve pubkey and the pct of the vault invested amount in each reserve
+   * @param vaultState - the kamino vault to get reserves distribution for
+   * @returns a ma between reserve pubkey and the allocation pct for the reserve
+   */
+  getAllocationsDistribuionPct(vaultState: VaultState): PubkeyHashMap<PublicKey, Decimal> {
+    return this._vaultClient.getAllocationsDistribuionPct(vaultState);
+  }
+
+    /**
+   * This will return the amount of token invested from the vault into the given reserve
+   * @param vault - the kamino vault to get invested amount in reserve for
+   * @param slot - current slot
+   * @param reserve - the reserve state to get vault invested amount in
+   * @returns vault amount supplied in reserve in decimal
+   */
+    getSuppliedInReserve(vaultState: VaultState, slot: number, reserve: KaminoReserve): Decimal {
+      return this._vaultClient.getSuppliedInReserve(vaultState, slot, reserve);
+    }
+
+  /**
    * This retruns an array of scope oracle configs to be used to set the scope price and twap oracles for a reserve
    * @param feed - scope feed to fetch prices from
    * @param cluster - cluster to fetch from, this should be left unchanged unless working on devnet or locally

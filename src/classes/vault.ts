@@ -302,8 +302,13 @@ export class KaminoVaultClient {
    * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
    * @returns - list of instructions to withdraw all pending fees
    */
-  async withdrawPendingFeesIxs(vault: KaminoVault, slot: number): Promise<TransactionInstruction[]> {
+  async withdrawPendingFeesIxs(
+    vault: KaminoVault,
+    slot: number,
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<TransactionInstruction[]> {
     const vaultState: VaultState = await vault.getState(this.getConnection());
+    const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
     const [{ ata: adminTokenAta, createAtaIx }] = createAtasIdempotent(vaultState.adminAuthority, [
       {
         mint: vaultState.tokenMint,
@@ -323,7 +328,8 @@ export class KaminoVaultClient {
       // Get decreasing order sorted available liquidity to withdraw from each reserve allocated to
       const reserveAllocationAvailableLiquidityToWithdraw = await this.getReserveAllocationAvailableLiquidityToWithdraw(
         vault,
-        slot
+        slot,
+        vaultReservesState
       );
       // sort
       const reserveAllocationAvailableLiquidityToWithdrawSorted = new PubkeyHashMap(
@@ -504,7 +510,8 @@ export class KaminoVaultClient {
       // Get decreasing order sorted available liquidity to withdraw from each reserve allocated to
       const reserveAllocationAvailableLiquidityToWithdraw = await this.getReserveAllocationAvailableLiquidityToWithdraw(
         vault,
-        slot
+        slot,
+        vaultReservesState
       );
       // sort
       const reserveAllocationAvailableLiquidityToWithdrawSorted = new PubkeyHashMap(
@@ -922,6 +929,63 @@ export class KaminoVaultClient {
   }
 
   /**
+   * This will return the amount of token invested from the vault into the given reserve
+   * @param vault - the kamino vault to get invested amount in reserve for
+   * @param slot - current slot
+   * @param reserve - the reserve state to get vault invested amount in
+   * @returns vault amount supplied in reserve in decimal
+   */
+  getSuppliedInReserve(vaultState: VaultState, slot: number, reserve: KaminoReserve): Decimal {
+    const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(
+      slot,
+      new Fraction(reserve.state.liquidity.absoluteReferralRateSf)
+        .toDecimal()
+        .div(reserve.state.config.protocolTakeRatePct / 100)
+        .floor()
+        .toNumber()
+    );
+
+    const reserveAllocation = vaultState.vaultAllocationStrategy.find((allocation) =>
+      allocation.reserve.equals(reserve.address)
+    );
+    if (!reserveAllocation) {
+      throw new Error(`Reserve ${reserve.address.toBase58()} not found in vault allocation strategy`);
+    }
+
+    const reserveAllocationLiquidityAmount = new Decimal(reserveAllocation.cTokenAllocation.toString()).div(
+      reserveCollExchangeRate
+    );
+    return reserveAllocationLiquidityAmount;
+  }
+
+  /**
+   * This will return the a map between reserve pubkey and the pct of the vault invested amount in each reserve
+   * @param vaultState - the kamino vault to get reserves distribution for
+   * @returns a ma between reserve pubkey and the allocation pct for the reserve
+   */
+  getAllocationsDistribuionPct(vaultState: VaultState): PubkeyHashMap<PublicKey, Decimal> {
+    const allocationsDistributionPct = new PubkeyHashMap<PublicKey, Decimal>();
+    let totalAllocation = new Decimal(0);
+
+    const filteredAllocations = vaultState.vaultAllocationStrategy.filter(
+      (allocation) => !allocation.reserve.equals(PublicKey.default)
+    );
+    console.log('filteredAllocations length', filteredAllocations.length);
+    filteredAllocations.forEach((allocation) => {
+      totalAllocation = totalAllocation.add(new Decimal(allocation.targetAllocationWeight.toString()));
+    });
+
+    filteredAllocations.forEach((allocation) => {
+      allocationsDistributionPct.set(
+        allocation.reserve,
+        new Decimal(allocation.targetAllocationWeight.toString()).mul(new Decimal(100)).div(totalAllocation)
+      );
+    });
+
+    return allocationsDistributionPct;
+  }
+
+  /**
    * This will return an unsorted hash map of all reserves that the given vault has allocations for, toghether with the amount that can be withdrawn from each of the reserves
    * @param vault - the kamino vault to get available liquidity to withdraw for
    * @param slot - current slot
@@ -929,10 +993,10 @@ export class KaminoVaultClient {
    */
   private async getReserveAllocationAvailableLiquidityToWithdraw(
     vault: KaminoVault,
-    slot: number
+    slot: number,
+    reserves: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<PubkeyHashMap<PublicKey, Decimal>> {
     const vaultState = await vault.getState(this._connection);
-    const reserves = await this.loadVaultReserves(vaultState);
 
     const reserveAllocationAvailableLiquidityToWithdraw = new PubkeyHashMap<PublicKey, Decimal>();
     vaultState.vaultAllocationStrategy.forEach((allocationStrategy) => {
@@ -1304,13 +1368,14 @@ export class KaminoVaultClient {
         throw new Error(`Reserve ${allocationStrategy.reserve.toBase58()} not found`);
       }
 
-      reserve.getBorrowedAmount();
+      const suppliedInReserve = this.getSuppliedInReserve(vault, slot, reserve);
       const reserveOverview: ReserveOverview = {
         supplyAPY: new Decimal(reserve.totalSupplyAPY(slot)),
         utilizationRatio: new Decimal(reserve.getEstimatedUtilizationRatio(slot, 0)),
         liquidationThresholdPct: new Decimal(reserve.state.config.liquidationThresholdPct),
         borrowedAmount: reserve.getBorrowedAmount(),
         market: reserve.state.lendingMarket,
+        suppliedAmount: suppliedInReserve,
       };
       reservesDetails.set(allocationStrategy.reserve, reserveOverview);
     });
@@ -1494,6 +1559,7 @@ export type ReserveOverview = {
   utilizationRatio: Decimal;
   liquidationThresholdPct: Decimal;
   borrowedAmount: Decimal;
+  suppliedAmount: Decimal;
   market: PublicKey;
 };
 
@@ -1521,6 +1587,7 @@ export type VaultOverview = {
   vaultCollaterals: PubkeyHashMap<PublicKey, MarketOverview>;
   theoreticalSupplyAPY: Decimal;
   totalBorrowed: Decimal;
+
   utilizationRatio: Decimal;
 };
 

@@ -658,8 +658,26 @@ async function main() {
         await env.connection.getSlot('confirmed'),
         new Decimal(1.0)
       );
-      
+
       console.log('vaultOverview', vaultOverview);
+    });
+
+  commands
+    .command('get-vault-allocation-distribution')
+    .requiredOption('--vault <string>', 'Vault address')
+    .action(async ({ vault }) => {
+      const env = initializeClient(false, false);
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const vaultAddress = new PublicKey(vault);
+      const vaultState = await new KaminoVault(vaultAddress, undefined, env.kVaultProgramId).getState(env.connection);
+      const allocationDistribution = kaminoManager.getAllocationsDistribuionPct(vaultState);
+
+      allocationDistribution.forEach((allocation, reserveAddress) => {
+        console.log('reserve ', reserveAddress);
+        console.log('allocation', allocation);
+      });
     });
 
   commands
