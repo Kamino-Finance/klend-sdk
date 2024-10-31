@@ -952,8 +952,12 @@ export class KaminoVaultClient {
       throw new Error(`Reserve ${reserve.address.toBase58()} not found in vault allocation strategy`);
     }
 
-    const reserveAllocationLiquidityAmount = new Decimal(reserveAllocation.cTokenAllocation.toString()).div(
+    const reserveAllocationLiquidityAmountLamports = new Decimal(reserveAllocation.cTokenAllocation.toString()).div(
       reserveCollExchangeRate
+    );
+    const reserveAllocationLiquidityAmount = lamportsToDecimal(
+      reserveAllocationLiquidityAmountLamports,
+      vaultState.tokenMintDecimals.toNumber()
     );
     return reserveAllocationLiquidityAmount;
   }
