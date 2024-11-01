@@ -23,7 +23,7 @@ import Decimal from 'decimal.js';
 
 const DEFAULT_MAX_ACCOUNTS_BUFFER = 2;
 const MAX_LOCKED_ACCOUNTS = 64;
-const DEFAULT_JUP_V6_BASE_URL = 'https://quote-api.jup.ag/v6';
+const JUPITER_PRICE_API = 'https://api.jup.ag/price/v2';
 
 export type ErrorBody = {
   error: string;
@@ -52,15 +52,9 @@ export async function getJupiterPrice(inputMint: PublicKey | string, outputMint:
   const params = {
     ids: inputMint.toString(),
     vsToken: outputMint.toString(),
-    vsAmount: 1,
   };
 
-  // BONK token
-  if (outputMint.toString() === 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263') {
-    params.vsAmount = 100;
-  }
-
-  const res = await axios.get('https://quote-api.jup.ag/v4/price', { params });
+  const res = await axios.get(JUPITER_PRICE_API, { params });
   return res.data.data[inputMint.toString()]?.price || 0;
 }
 
@@ -84,7 +78,7 @@ async function quote(
   maxAccs?: number
 ): Promise<QuoteResponse> {
   const quoteApi = createJupiterApiClient({
-    basePath: DEFAULT_JUP_V6_BASE_URL,
+    basePath: JUPITER_PRICE_API,
   });
   try {
     const quoteParameters: QuoteGetRequest = {
@@ -172,7 +166,7 @@ async function swapTxFromQuote(
 ): Promise<SwapTxResponse> {
   let swap: SwapInstructionsResponse;
   const quoteApi = createJupiterApiClient({
-    basePath: DEFAULT_JUP_V6_BASE_URL,
+    basePath: JUPITER_PRICE_API,
   });
   try {
     const swapParameters: SwapInstructionsPostRequest = {
