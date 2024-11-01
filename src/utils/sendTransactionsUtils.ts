@@ -38,7 +38,7 @@ export class Web3Client {
     this._env = chain.name;
     // use this connection to get data
     this._connection = new Connection(this._endpoint, {
-      commitment: 'recent',
+      commitment: 'processed',
       wsEndpoint: chain.wsEndpoint,
       confirmTransactionInitialTimeout: 120 * 1000,
     });
