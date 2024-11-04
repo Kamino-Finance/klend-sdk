@@ -27,7 +27,6 @@
   "license": "MIT",
   "scripts": {
     "docs": "typedoc",
-    "prepublish": "yarn build",
     "build": "rm -rf dist/; tsc",
     "watch": "tsc --watch",
     "coverage": "jest --coverage",

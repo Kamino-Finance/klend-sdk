@@ -53,37 +53,6 @@ const env = await initEnv('mainnet-beta');
 await sendTransactionFromAction(env, sendTransaction); // sendTransaction from wallet adapter or custom
 ```
 
-## FAQ
-
-## Client 
-* npx tsx src/client.ts deposit --url <RPC> --owner ./keypair.json --token USDH --amount 10
-* npx tsx src/client.ts deposit --url <RPC> --owner ./keypair.json --token SOL --amount 10
-
-## Codegen 
-* Copy the new `idl` from the kamino-lending program to `src/idl.json`
-* `yarn codegen`
-
-## Setup localnet 
-* Ensure `deps` contains the correct `.so` you want to test against. Either build it from the main repo or dump it from mainnet
-* `yarn start-validator`
-
-## Run tests
-* `yarn start-validator-and-test`
-* Or, if the local validator is already running, `yarn test`
-
-## TODO: 
-
-Better sdk documentation
-
-## Sync with smart contracts 
-* Copy the program .so, idl and codegen
-```sh
-$ yarn
-$ cp ../kamino-lending/target/deploy/kamino_lending.so deps/programs/kamino_lending.so
-$ cp ../kamino-lending/target/idl/kamino_lending.json src/idl.json
-$ yarn codegen
-```
-
 ### Getting a vanilla obligation for a user
 ```ts
   const kaminoMarket = await KaminoMarket.load(env.provider.connection, marketAddress, DEFAULT_RECENT_SLOT_DURATION_MS, programId);
@@ -125,3 +94,11 @@ $ yarn codegen
     }
   });
 ```
+
+## CLI
+* npx tsx src/client.ts deposit --url <RPC> --owner ./keypair.json --token USDH --amount 10
+* npx tsx src/client.ts deposit --url <RPC> --owner ./keypair.json --token SOL --amount 10
+
+## Codegen
+* Copy the new `idl` from the kamino-lending program to `src/idl.json`
+* `yarn codegen`
