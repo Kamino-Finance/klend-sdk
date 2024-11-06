@@ -1,4 +1,3 @@
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { KaminoAction, KaminoMarket, KaminoObligation, KaminoReserve } from '../classes';
 import {
   getFlashLoanInstructions,
@@ -253,7 +252,6 @@ async function buildRepayWithCollateralIxs(
   const atas = [
     { mint: collReserve.getLiquidityMint(), tokenProgram: collReserve.getLiquidityTokenProgram() },
     { mint: debtReserve.getLiquidityMint(), tokenProgram: debtReserve.getLiquidityTokenProgram() },
-    { mint: collReserve.getCTokenMint(), tokenProgram: TOKEN_PROGRAM_ID },
   ];
 
   const atasAndIxs = createAtasIdempotent(obligation.state.owner, atas);
@@ -289,7 +287,6 @@ async function buildRepayWithCollateralIxs(
     false,
     requestElevationGroup,
     undefined,
-    isClosingPosition,
     referrer,
     scopeRefresh
   );

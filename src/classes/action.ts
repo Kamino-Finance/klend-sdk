@@ -154,7 +154,6 @@ export class KaminoAction {
   borrowReserves: Array<PublicKey>;
 
   preLoadedDepositReservesSameTx: Array<PublicKey>;
-  preLoadedBorrowReservesSameTx: Array<PublicKey>;
 
   currentSlot: number;
 
@@ -216,7 +215,6 @@ export class KaminoAction {
     this.outflowReserve = outflowReserveState;
     this.outflowAmount = outflowAmount ? new BN(outflowAmount) : undefined;
     this.preLoadedDepositReservesSameTx = [];
-    this.preLoadedBorrowReservesSameTx = [];
     this.referrer = referrer ? referrer : PublicKey.default;
     this.currentSlot = currentSlot;
   }
@@ -798,7 +796,6 @@ export class KaminoAction {
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata,
-    isClosingPosition: boolean = false,
     referrer: PublicKey = PublicKey.default,
     scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
   ) {
@@ -847,8 +844,7 @@ export class KaminoAction {
       'repayAndWithdraw',
       includeAtaIxns,
       requestElevationGroup,
-      addInitObligationForFarmForWithdraw,
-      isClosingPosition
+      addInitObligationForFarmForWithdraw
     );
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
     return axn;
@@ -1582,16 +1578,14 @@ export class KaminoAction {
     action: ActionType,
     includeAtaIxns: boolean,
     requestElevationGroup: boolean,
-    addInitObligationForFarm: boolean,
-    isClosingPosition: boolean = false
+    addInitObligationForFarm: boolean
   ) {
     await this.addSupportIxsWithoutInitObligation(
       action,
       includeAtaIxns,
       'inBetween',
       requestElevationGroup,
-      addInitObligationForFarm,
-      isClosingPosition
+      addInitObligationForFarm
     );
   }
 
@@ -1615,7 +1609,7 @@ export class KaminoAction {
       ReserveFarmKind.Debt,
       crank
     );
-    this.addRefreshObligationIx(addAllToSetupIxns, false);
+    this.addRefreshObligationIx(addAllToSetupIxns);
   }
 
   async addSupportIxsWithoutInitObligation(
@@ -1624,7 +1618,6 @@ export class KaminoAction {
     addAsSupportIx: AuxiliaryIx = 'setup',
     requestElevationGroup: boolean = false,
     addInitObligationForFarm: boolean = false,
-    isClosingPosition: boolean = false,
     twoTokenAction: boolean = false,
     overrideElevationGroupRequest?: number
   ) {
@@ -1668,43 +1661,16 @@ export class KaminoAction {
 
         if (action === 'depositAndBorrow' || action === 'repayAndWithdraw') {
           currentReserves = [this.reserve, this.outflowReserve];
-          if (this.obligation) {
-            if (action === 'depositAndBorrow') {
-              const deposit = this.obligation.state.deposits.find((deposit) =>
-                deposit.depositReserve.equals(this.reserve.address)
-              );
-
+          if (action === 'depositAndBorrow') {
+            if (this.obligation) {
+              const deposit = this.obligation.getDepositByReserve(this.reserve.address);
               if (!deposit) {
                 this.preLoadedDepositReservesSameTx.push(this.reserve.address);
               }
             } else {
-              const borrow = this.obligation.state.borrows.find((borrow) =>
-                borrow.borrowReserve.equals(this.reserve.address)
-              );
-
-              if (!borrow) {
-                throw Error(`Unable to find obligation borrow to repay for ${this.obligation.state.owner.toBase58()}`);
-              }
-
-              const cumulativeBorrowRateObligation = KaminoObligation.getCumulativeBorrowRate(borrow);
-
-              const cumulativeBorrowRateReserve = this.reserve.getEstimatedCumulativeBorrowRate(
-                this.currentSlot,
-                this.kaminoMarket.state.referralFeeBps
-              );
-              const fullRepay = KaminoObligation.getBorrowAmount(borrow)
-                .mul(cumulativeBorrowRateReserve)
-                .div(cumulativeBorrowRateObligation);
-
-              const amountDecimal = new Decimal(this.amount.toString());
-
-              if (fullRepay.lte(amountDecimal)) {
-                this.preLoadedBorrowReservesSameTx.push(this.reserve.address);
-              }
+              // Obligation doesn't exist yet, so we have to preload the deposit reserve
+              this.preLoadedDepositReservesSameTx.push(this.reserve.address);
             }
-          } else {
-            // Obligation doesn't exist yet, so we have to preload the deposit reserve
-            this.preLoadedDepositReservesSameTx.push(this.reserve.address);
           }
         } else if (action === 'liquidate' && !this.outflowReserve.address.equals(this.reserve.address)) {
           currentReserves = [this.outflowReserve, this.reserve];
@@ -1755,14 +1721,17 @@ export class KaminoAction {
       }
       this.addRefreshReserveIxs(currentReserveAddresses.toArray(), addAsSupportIx);
 
-      if (action === 'repayAndWithdraw' && addAsSupportIx === 'inBetween' && isClosingPosition) {
-        // addToSetupIxs === addInBetween (same thing)
-        // If this is a repay and withdraw, and it's not the first action, and it's closing a position
-        // we don't need to include the repay reserve in the refresh obligation
-        // I am ashamed of this code, we need to rewrite this entire thing
-        this.addRefreshObligationIx(addAsSupportIx, true);
+      if (action === 'repayAndWithdraw' && addAsSupportIx === 'inBetween') {
+        const repayObligationLiquidity = this.obligation!.getBorrowByReserve(this.reserve.address);
+        if (!repayObligationLiquidity) {
+          throw new Error(`Could not find debt reserve ${this.reserve.address} in obligation`);
+        }
+        const repaidBorrowReservesToSkip = repayObligationLiquidity.amount.lte(new Decimal(this.amount.toString()))
+          ? [repayObligationLiquidity.reserveAddress]
+          : [];
+        this.addRefreshObligationIx(addAsSupportIx, repaidBorrowReservesToSkip);
       } else {
-        this.addRefreshObligationIx(addAsSupportIx, false);
+        this.addRefreshObligationIx(addAsSupportIx);
       }
 
       if (requestElevationGroup) {
@@ -1774,14 +1743,14 @@ export class KaminoAction {
           }
 
           if (
-            new Decimal(repayObligationLiquidity.amount).lte(new Decimal(this.amount.toString())) &&
+            repayObligationLiquidity.amount.lte(new Decimal(this.amount.toString())) &&
             this.obligation!.borrows.size === 1 &&
             this.obligation?.state.elevationGroup !== 0
           ) {
             this.addRefreshReserveIxs(allReservesExcludingCurrent, 'cleanup');
             // Skip the borrow reserve, since we repay in the same tx
-            this.addRefreshObligationIx('cleanup', true);
-            this.addRequestElevationIx(overrideElevationGroupRequest ?? 0, 'cleanup', true);
+            this.addRefreshObligationIx('cleanup', [this.reserve.address]);
+            this.addRequestElevationIx(overrideElevationGroupRequest ?? 0, 'cleanup', [this.reserve.address]);
           }
         } else if (action === 'depositAndBorrow' || action === 'borrow') {
           let newElevationGroup: number = -1;
@@ -1940,7 +1909,6 @@ export class KaminoAction {
       'setup',
       requestElevationGroup,
       addInitObligationForFarm,
-      false,
       twoTokenAction,
       overrideElevationGroupRequest
     );
@@ -2031,7 +1999,7 @@ export class KaminoAction {
     });
   }
 
-  private addRefreshObligationIx(addAsSupportIx: AuxiliaryIx = 'setup', skipBorrowObligations: boolean = false) {
+  private addRefreshObligationIx(addAsSupportIx: AuxiliaryIx = 'setup', borrowReservesToSkip: PublicKey[] = []) {
     const marketAddress = this.kaminoMarket.getAddress();
     const obligationPda = this.getObligationPda();
     const refreshObligationIx = refreshObligation(
@@ -2048,10 +2016,8 @@ export class KaminoAction {
       return { pubkey: reserve, isSigner: false, isWritable: true };
     });
 
-    const preloadedBorrowReservesString = this.preLoadedBorrowReservesSameTx.map((reserve) => reserve.toString());
-    const borrowReservesList = this.borrowReserves.filter(
-      (reserve) => !preloadedBorrowReservesString.includes(reserve.toString())
-    );
+    const skipBorrowsSet = new PublicKeySet(borrowReservesToSkip);
+    const borrowReservesList = this.borrowReserves.filter((reserve) => !skipBorrowsSet.contains(reserve));
 
     const borrowReserveAccountMetas = borrowReservesList.map((reserve) => {
       return { pubkey: reserve, isSigner: false, isWritable: true };
@@ -2069,7 +2035,8 @@ export class KaminoAction {
 
     refreshObligationIx.keys = refreshObligationIx.keys.concat([
       ...depositReserveAccountMetas,
-      ...(skipBorrowObligations ? [] : [...borrowReserveAccountMetas, ...borrowReservesReferrerTokenStates]),
+      ...borrowReserveAccountMetas,
+      ...borrowReservesReferrerTokenStates,
     ]);
 
     if (addAsSupportIx === 'setup') {
@@ -2087,7 +2054,7 @@ export class KaminoAction {
   private addRequestElevationIx(
     elevationGroup: number,
     addAsSupportIx: AuxiliaryIx,
-    skipBorrowObligations: boolean = false
+    skipBorrowReserves: PublicKey[] = []
   ) {
     const obligationPda = this.getObligationPda();
     const args: RequestElevationGroupArgs = {
@@ -2107,10 +2074,8 @@ export class KaminoAction {
       return { pubkey: reserve, isSigner: false, isWritable: true };
     });
 
-    const preloadedBorrowReservesString = this.preLoadedBorrowReservesSameTx.map((reserve) => reserve.toString());
-    const borrowReservesList = this.borrowReserves.filter(
-      (reserve) => !preloadedBorrowReservesString.includes(reserve.toString())
-    );
+    const skipBorrowReservesSet = new PublicKeySet<PublicKey>(skipBorrowReserves);
+    const borrowReservesList = this.borrowReserves.filter((reserve) => !skipBorrowReservesSet.contains(reserve));
 
     const borrowReserveAccountMetas = borrowReservesList.map((reserve) => {
       return { pubkey: reserve, isSigner: false, isWritable: true };
@@ -2133,7 +2098,8 @@ export class KaminoAction {
 
     requestElevationGroupIx.keys = requestElevationGroupIx.keys.concat([
       ...depositReserveAccountMetas,
-      ...(skipBorrowObligations ? [] : [...borrowReserveAccountMetas, ...borrowReservesReferrerTokenStates]),
+      ...borrowReserveAccountMetas,
+      ...borrowReservesReferrerTokenStates,
     ]);
 
     if (addAsSupportIx === 'setup') {

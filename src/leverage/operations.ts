@@ -911,7 +911,6 @@ export async function buildWithdrawWithLeverageIxns(
     obligation,
     0,
     false,
-    false,
     false, // to be checked and created in a setup tx in the UI (won't be the case for withdraw anyway as this would be created in deposit)
     isClosingPosition,
     referrer,
