@@ -1314,6 +1314,10 @@ export class KaminoVaultClient {
   ): Promise<VaultReserveTotalBorrowedAndInvested> {
     const vaultReservesState = vaultReserves ? vaultReserves : await this.loadVaultReserves(vault);
 
+    const totalAvailable = lamportsToDecimal(
+      new Decimal(vault.tokenAvailable.toString()),
+      new Decimal(vault.tokenMintDecimals.toString())
+    );
     let totalInvested = new Decimal(0);
     let totalBorrowed = new Decimal(0);
 
@@ -1343,7 +1347,7 @@ export class KaminoVaultClient {
 
     let utilizationRatio = new Decimal(0);
     if (!totalInvested.isZero()) {
-      utilizationRatio = totalBorrowed.div(totalInvested);
+      utilizationRatio = totalBorrowed.div(totalInvested.add(totalAvailable));
     }
     return {
       totalInvested: totalInvested,
