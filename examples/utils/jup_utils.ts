@@ -24,6 +24,7 @@ import Decimal from 'decimal.js';
 const DEFAULT_MAX_ACCOUNTS_BUFFER = 2;
 const MAX_LOCKED_ACCOUNTS = 64;
 const JUPITER_PRICE_API = 'https://api.jup.ag/price/v2';
+const DEFAULT_JUP_V6_BASE_URL = 'https://quote-api.jup.ag/v6';
 
 export type ErrorBody = {
   error: string;
@@ -78,7 +79,7 @@ async function quote(
   maxAccs?: number
 ): Promise<QuoteResponse> {
   const quoteApi = createJupiterApiClient({
-    basePath: JUPITER_PRICE_API,
+    basePath: DEFAULT_JUP_V6_BASE_URL,
   });
   try {
     const quoteParameters: QuoteGetRequest = {
@@ -120,6 +121,7 @@ export function getJupiterQuoter(
       {
         slippageBps: slippageBps,
         wrapAndUnwrapSol: false,
+        onlyDirectRoutes: false,
       },
       maxAccounts
     );

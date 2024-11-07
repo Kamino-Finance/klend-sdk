@@ -1,24 +1,16 @@
 import {
   KaminoAction,
   MultiplyObligation,
-  ObligationTypeTag,
   PROGRAM_ID,
-  U64_MAX,
   buildAndSendTxn,
   getComputeBudgetAndPriorityFeeIxns,
-  getDepositWithLeverageIxns,
-  getUserLutAddressAndSetupIxns,
 } from '@kamino-finance/klend-sdk';
 import { getConnection } from './utils/connection';
 import { getKeypair } from './utils/keypair';
-import { JLP_MARKET, JLP_MARKET_LUT, JLP_MINT, JUP_QUOTE_BUFFER_BPS, USDC_MINT } from './utils/constants';
-import { executeUserSetupLutsTransactions, getMarket } from './utils/helpers';
-import { getKaminoResources } from './utils/kamino_resources';
+import { JLP_MARKET, JLP_MINT, USDC_MINT } from './utils/constants';
+import { getMarket } from './utils/helpers';
 import { PublicKey } from '@solana/web3.js';
 import Decimal from 'decimal.js';
-import { getJupiterPrice, getJupiterQuoter, getJupiterSwapper } from './utils/jup_utils';
-import { withdrawObligationCollateralAndRedeemReserveCollateral } from '../src/idl_codegen/instructions/withdrawObligationCollateralAndRedeemReserveCollateral';
-import { collToLamportsDecimal } from '@kamino-finance/kliquidity-sdk';
 
 // For this example we are only using JLP/USDC multiply
 // This can be also used for leverage by using the correct type when creating the obligation

@@ -1,6 +1,7 @@
 import Decimal from 'decimal.js';
 import { KaminoMarket, KaminoObligation, KaminoReserve, numberToLamportsDecimal } from '../classes';
 import { PublicKey } from '@solana/web3.js';
+import { lamportsToDecimal } from '../classes/utils';
 
 export function calcRepayAmountWithSlippage(
   kaminoMarket: KaminoMarket,
@@ -23,9 +24,25 @@ export function calcRepayAmountWithSlippage(
     )
     .toDecimalPlaces(debtReserve.state.liquidity.mintDecimals.toNumber(), Decimal.ROUND_CEIL);
   // add 0.1% to irSlippageBpsForDebt because we don't want to estimate slightly less than SC and end up not reapying enough
-  const repayAmount = amount
+  const repayAmountIrAdjusted = amount
     .mul(irSlippageBpsForDebt.mul(new Decimal('1.001')))
     .toDecimalPlaces(debtReserve.state.liquidity.mintDecimals.toNumber(), Decimal.ROUND_CEIL);
+
+  let repayAmount: Decimal;
+  // Ensure when repaying close to the full amount, we repay the full amount as otherwise we might end up having a small amount left
+  if (
+    repayAmountIrAdjusted.greaterThanOrEqualTo(
+      lamportsToDecimal(
+        obligation.borrows.get(debtReserve.address)?.amount || new Decimal(0),
+        debtReserve.stats.decimals
+      )
+    )
+  ) {
+    repayAmount = repayAmountIrAdjusted;
+  } else {
+    repayAmount = amount;
+  }
+
   const repayAmountLamports = numberToLamportsDecimal(repayAmount, debtReserve.stats.decimals);
 
   const { flashRepayAmountLamports } = calcFlashRepayAmount({
