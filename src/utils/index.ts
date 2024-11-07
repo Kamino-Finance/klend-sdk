@@ -13,3 +13,4 @@ export * from './lookupTable';
 export * from './sendTransactionsUtils';
 export * from './managerTypes';
 export * from './fuzz';
+export * from './rpc';
