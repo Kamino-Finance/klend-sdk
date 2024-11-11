@@ -649,12 +649,12 @@ export class KaminoManager {
   }
 
   /**
-   * Retrive the total amount of tokenes earned by the vault since its inception after deducting the management and performance fees
+   * Retrive the total amount of interest earned by the vault since its inception, including what was charged as fees
    * @param vaultState the kamino vault state to get total net yield for
-   * @returns a decimal representing the net number of tokens earned by the vault since its inception after deducting the management and performance fees
+   * @returns a decimal representing the net number of tokens earned by the vault since its inception
    */
   async getVaultTotalNetYield(vaultState: VaultState) {
-    return this._vaultClient.getVaultTotalNetYield(vaultState);
+    return this._vaultClient.getVaultCumulativeInterest(vaultState);
   }
 
   /**

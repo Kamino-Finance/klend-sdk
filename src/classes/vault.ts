@@ -131,7 +131,7 @@ export class KaminoVaultClient {
     const initVaultAccounts: InitVaultAccounts = {
       adminAuthority: vaultConfig.admin,
       vaultState: vaultState.publicKey,
-      tokenMint: vaultConfig.tokenMint,
+      baseTokenMint: vaultConfig.tokenMint,
       tokenVault,
       baseVaultAuthority,
       sharesMint,
@@ -429,7 +429,7 @@ export class KaminoVaultClient {
       tokenMint: vaultState.tokenMint,
       baseVaultAuthority: vaultState.baseVaultAuthority,
       sharesMint: vaultState.sharesMint,
-      tokenAta: userTokenAta,
+      userTokenAta: userTokenAta,
       userSharesAta: userSharesAta,
       tokenProgram: tokenProgramID,
       instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
@@ -619,7 +619,6 @@ export class KaminoVaultClient {
       payerTokenAccount: payerTokenAta,
       tokenMint: vaultState.tokenMint,
       reserveCollateralTokenProgram: TOKEN_PROGRAM_ID,
-      sharesTokenProgram: TOKEN_PROGRAM_ID,
     };
 
     const investIx = invest(investAccounts, this._kaminoVaultProgramId);
@@ -647,26 +646,30 @@ export class KaminoVaultClient {
     const lendingMarketAuth = lendingMarketAuthPda(marketAddress, this._kaminoLendProgramId)[0];
 
     const withdrawAccounts: WithdrawAccounts = {
-      user: user,
-      vaultState: vault.address,
-      tokenVault: vaultState.tokenVault,
-      tokenMint: vaultState.tokenMint,
-      baseVaultAuthority: vaultState.baseVaultAuthority,
-      sharesMint: vaultState.sharesMint,
-      userSharesAta: userSharesAta,
-      tokenAta: userTokenAta,
-      tokenProgram: vaultState.tokenProgram,
-      instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
-      reserve: reserve.address,
-      ctokenVault: getCTokenVaultPda(vault.address, reserve.address, this._kaminoVaultProgramId),
-      /** CPI accounts */
-      lendingMarket: marketAddress,
-      lendingMarketAuthority: lendingMarketAuth,
-      reserveLiquiditySupply: reserve.state.liquidity.supplyVault,
-      reserveCollateralMint: reserve.state.collateral.mintPubkey,
-      klendProgram: this._kaminoLendProgramId,
-      reserveCollateralTokenProgram: TOKEN_PROGRAM_ID,
-      sharesTokenProgram: TOKEN_PROGRAM_ID,
+      withdrawFromAvailable: {
+        user,
+        vaultState: vault.address,
+        tokenVault: vaultState.tokenVault,
+        baseVaultAuthority: vaultState.baseVaultAuthority,
+        userTokenAta: userTokenAta,
+        tokenMint: vaultState.tokenMint,
+        userSharesAta: userSharesAta,
+        sharesMint: vaultState.sharesMint,
+        tokenProgram: vaultState.tokenProgram,
+        sharesTokenProgram: TOKEN_PROGRAM_ID,
+        klendProgram: this._kaminoLendProgramId,
+      },
+      withdrawFromReserveAccounts: {
+        vaultState: vault.address,
+        reserve: reserve.address,
+        ctokenVault: getCTokenVaultPda(vault.address, reserve.address, this._kaminoVaultProgramId),
+        lendingMarket: marketAddress,
+        lendingMarketAuthority: lendingMarketAuth,
+        reserveLiquiditySupply: reserve.state.liquidity.supplyVault,
+        reserveCollateralMint: reserve.state.collateral.mintPubkey,
+        reserveCollateralTokenProgram: TOKEN_PROGRAM_ID,
+        instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
+      },
     };
 
     const withdrawArgs: WithdrawArgs = {
@@ -726,7 +729,6 @@ export class KaminoVaultClient {
       klendProgram: this._kaminoLendProgramId,
       instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
       reserveCollateralTokenProgram: TOKEN_PROGRAM_ID,
-      sharesTokenProgram: TOKEN_PROGRAM_ID,
     };
 
     const withdrawPendingFeesIxn = withdrawPendingFees(withdrawPendingFeesAccounts, this._kaminoVaultProgramId);
@@ -952,7 +954,7 @@ export class KaminoVaultClient {
       throw new Error(`Reserve ${reserve.address.toBase58()} not found in vault allocation strategy`);
     }
 
-    const reserveAllocationLiquidityAmountLamports = new Decimal(reserveAllocation.cTokenAllocation.toString()).div(
+    const reserveAllocationLiquidityAmountLamports = new Decimal(reserveAllocation.ctokenAllocation.toString()).div(
       reserveCollExchangeRate
     );
     const reserveAllocationLiquidityAmount = lamportsToDecimal(
@@ -1016,7 +1018,7 @@ export class KaminoVaultClient {
           .floor()
           .toNumber()
       );
-      const reserveAllocationLiquidityAmount = new Decimal(allocationStrategy.cTokenAllocation.toString()).div(
+      const reserveAllocationLiquidityAmount = new Decimal(allocationStrategy.ctokenAllocation.toString()).div(
         reserveCollExchangeRate
       );
       const reserveAvailableLiquidityAmount = reserve.getLiquidityAvailableAmount();
@@ -1195,7 +1197,7 @@ export class KaminoVaultClient {
       }
 
       const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, 0);
-      const reserveAllocationLiquidityAmount = new Decimal(allocationStrategy.cTokenAllocation.toString()).div(
+      const reserveAllocationLiquidityAmount = new Decimal(allocationStrategy.ctokenAllocation.toString()).div(
         reserveCollExchangeRate
       );
 
@@ -1332,7 +1334,7 @@ export class KaminoVaultClient {
       }
 
       const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, 0);
-      const reserveAllocationLiquidityAmountLamports = new Decimal(allocationStrategy.cTokenAllocation.toString()).div(
+      const reserveAllocationLiquidityAmountLamports = new Decimal(allocationStrategy.ctokenAllocation.toString()).div(
         reserveCollExchangeRate
       );
       const reserveAllocationLiquidityAmount = lamportsToDecimal(
@@ -1435,12 +1437,12 @@ export class KaminoVaultClient {
   }
 
   /**
-   * Retrive the total amount of tokenes earned by the vault since its inception after deducting the management and performance fees
+   * Retrive the total amount of interest earned by the vault since its inception, including what was charged as fees
    * @param vaultState the kamino vault state to get total net yield for
-   * @returns a decimal representing the net number of tokens earned by the vault since its inception after deducting the management and performance fees
+   * @returns a decimal representing the net number of tokens earned by the vault since its inception
    */
-  async getVaultTotalNetYield(vaultState: VaultState) {
-    const netYieldLamports = new Fraction(vaultState.cumulativeNetEarnedYield).toDecimal();
+  async getVaultCumulativeInterest(vaultState: VaultState) {
+    const netYieldLamports = new Fraction(vaultState.cumulativeEarnedInterestSf).toDecimal();
     return lamportsToDecimal(netYieldLamports, vaultState.tokenMintDecimals.toString());
   }
 } // KaminoVaultClient

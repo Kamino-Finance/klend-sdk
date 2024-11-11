@@ -10,7 +10,7 @@ export interface VaultAllocationFields {
   /** Maximum token invested in this reserve */
   tokenAllocationCap: BN
   configPadding: Array<BN>
-  cTokenAllocation: BN
+  ctokenAllocation: BN
   lastInvestSlot: BN
   tokenTargetAllocationSf: BN
   statePadding: Array<BN>
@@ -23,7 +23,7 @@ export interface VaultAllocationJSON {
   /** Maximum token invested in this reserve */
   tokenAllocationCap: string
   configPadding: Array<string>
-  cTokenAllocation: string
+  ctokenAllocation: string
   lastInvestSlot: string
   tokenTargetAllocationSf: string
   statePadding: Array<string>
@@ -36,7 +36,7 @@ export class VaultAllocation {
   /** Maximum token invested in this reserve */
   readonly tokenAllocationCap: BN
   readonly configPadding: Array<BN>
-  readonly cTokenAllocation: BN
+  readonly ctokenAllocation: BN
   readonly lastInvestSlot: BN
   readonly tokenTargetAllocationSf: BN
   readonly statePadding: Array<BN>
@@ -47,7 +47,7 @@ export class VaultAllocation {
     this.targetAllocationWeight = fields.targetAllocationWeight
     this.tokenAllocationCap = fields.tokenAllocationCap
     this.configPadding = fields.configPadding
-    this.cTokenAllocation = fields.cTokenAllocation
+    this.ctokenAllocation = fields.ctokenAllocation
     this.lastInvestSlot = fields.lastInvestSlot
     this.tokenTargetAllocationSf = fields.tokenTargetAllocationSf
     this.statePadding = fields.statePadding
@@ -61,7 +61,7 @@ export class VaultAllocation {
         borsh.u64("targetAllocationWeight"),
         borsh.u64("tokenAllocationCap"),
         borsh.array(borsh.u64(), 128, "configPadding"),
-        borsh.u64("cTokenAllocation"),
+        borsh.u64("ctokenAllocation"),
         borsh.u64("lastInvestSlot"),
         borsh.u128("tokenTargetAllocationSf"),
         borsh.array(borsh.u64(), 128, "statePadding"),
@@ -78,7 +78,7 @@ export class VaultAllocation {
       targetAllocationWeight: obj.targetAllocationWeight,
       tokenAllocationCap: obj.tokenAllocationCap,
       configPadding: obj.configPadding,
-      cTokenAllocation: obj.cTokenAllocation,
+      ctokenAllocation: obj.ctokenAllocation,
       lastInvestSlot: obj.lastInvestSlot,
       tokenTargetAllocationSf: obj.tokenTargetAllocationSf,
       statePadding: obj.statePadding,
@@ -92,7 +92,7 @@ export class VaultAllocation {
       targetAllocationWeight: fields.targetAllocationWeight,
       tokenAllocationCap: fields.tokenAllocationCap,
       configPadding: fields.configPadding,
-      cTokenAllocation: fields.cTokenAllocation,
+      ctokenAllocation: fields.ctokenAllocation,
       lastInvestSlot: fields.lastInvestSlot,
       tokenTargetAllocationSf: fields.tokenTargetAllocationSf,
       statePadding: fields.statePadding,
@@ -106,7 +106,7 @@ export class VaultAllocation {
       targetAllocationWeight: this.targetAllocationWeight.toString(),
       tokenAllocationCap: this.tokenAllocationCap.toString(),
       configPadding: this.configPadding.map((item) => item.toString()),
-      cTokenAllocation: this.cTokenAllocation.toString(),
+      ctokenAllocation: this.ctokenAllocation.toString(),
       lastInvestSlot: this.lastInvestSlot.toString(),
       tokenTargetAllocationSf: this.tokenTargetAllocationSf.toString(),
       statePadding: this.statePadding.map((item) => item.toString()),
@@ -120,7 +120,7 @@ export class VaultAllocation {
       targetAllocationWeight: new BN(obj.targetAllocationWeight),
       tokenAllocationCap: new BN(obj.tokenAllocationCap),
       configPadding: obj.configPadding.map((item) => new BN(item)),
-      cTokenAllocation: new BN(obj.cTokenAllocation),
+      ctokenAllocation: new BN(obj.ctokenAllocation),
       lastInvestSlot: new BN(obj.lastInvestSlot),
       tokenTargetAllocationSf: new BN(obj.tokenTargetAllocationSf),
       statePadding: obj.statePadding.map((item) => new BN(item)),

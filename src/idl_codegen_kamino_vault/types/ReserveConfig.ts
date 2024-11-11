@@ -31,13 +31,18 @@ export interface ReserveConfigFields {
   maxLiquidationBonusBps: number
   /** Bad debt liquidation bonus for an undercollateralized obligation, as bps */
   badDebtLiquidationBonusBps: number
-  /** Time in seconds that must pass before redemptions are enabled after the deposit limit is crossed */
+  /**
+   * Time in seconds that must pass before redemptions are enabled after the deposit limit is
+   * crossed.
+   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
+   */
   deleveragingMarginCallPeriodSecs: BN
   /**
-   * The rate at which the deleveraging threshold decreases in slots per bps
-   * e.g. 1 bps per hour would be 7200 slots per bps (assuming 2 slots per second)
+   * The rate at which the deleveraging threshold decreases in seconds per bps
+   * e.g. 1 bps per hour would be denoted by `3600` here.
+   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
    */
-  deleveragingThresholdSlotsPerBps: BN
+  deleveragingThresholdSecsPerBps: BN
   /** Program owner fees assessed, separate from gains due to interest accrual */
   fees: types.ReserveFeesFields
   /** Borrow rate curve based on utilization */
@@ -50,13 +55,21 @@ export interface ReserveConfigFields {
   borrowLimit: BN
   /** Token id from TokenInfos struct */
   tokenInfo: types.TokenInfoFields
-  /** Deposit withdrawl caps - deposit & redeem */
+  /** Deposit withdrawal caps - deposit & redeem */
   depositWithdrawalCap: types.WithdrawalCapsFields
-  /** Debt withdrawl caps - borrow & repay */
+  /** Debt withdrawal caps - borrow & repay */
   debtWithdrawalCap: types.WithdrawalCapsFields
   elevationGroups: Array<number>
   disableUsageAsCollOutsideEmode: number
   utilizationLimitBlockBorrowingAbove: number
+  /**
+   * Whether this reserve should be subject to auto-deleveraging after deposit or borrow limit is
+   * crossed.
+   * Besides this flag, the lending market's flag also needs to be enabled (logical `AND`).
+   * **NOTE:** the manual "target LTV" deleveraging (enabled by the risk council for individual
+   * obligations) is NOT affected by this flag.
+   */
+  autodeleverageEnabled: number
   reserved1: Array<number>
   /**
    * Maximum amount liquidity of this reserve borrowed outside all elevation groups
@@ -71,6 +84,11 @@ export interface ReserveConfigFields {
    * - 0 to disable borrows in this elevation group (expected value for the debt asset)
    */
   borrowLimitAgainstThisCollateralInElevationGroup: Array<BN>
+  /**
+   * The rate at which the deleveraging-related liquidation bonus increases, in bps per day.
+   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
+   */
+  deleveragingBonusIncreaseBpsPerDay: BN
 }
 
 export interface ReserveConfigJSON {
@@ -101,13 +119,18 @@ export interface ReserveConfigJSON {
   maxLiquidationBonusBps: number
   /** Bad debt liquidation bonus for an undercollateralized obligation, as bps */
   badDebtLiquidationBonusBps: number
-  /** Time in seconds that must pass before redemptions are enabled after the deposit limit is crossed */
+  /**
+   * Time in seconds that must pass before redemptions are enabled after the deposit limit is
+   * crossed.
+   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
+   */
   deleveragingMarginCallPeriodSecs: string
   /**
-   * The rate at which the deleveraging threshold decreases in slots per bps
-   * e.g. 1 bps per hour would be 7200 slots per bps (assuming 2 slots per second)
+   * The rate at which the deleveraging threshold decreases in seconds per bps
+   * e.g. 1 bps per hour would be denoted by `3600` here.
+   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
    */
-  deleveragingThresholdSlotsPerBps: string
+  deleveragingThresholdSecsPerBps: string
   /** Program owner fees assessed, separate from gains due to interest accrual */
   fees: types.ReserveFeesJSON
   /** Borrow rate curve based on utilization */
@@ -120,13 +143,21 @@ export interface ReserveConfigJSON {
   borrowLimit: string
   /** Token id from TokenInfos struct */
   tokenInfo: types.TokenInfoJSON
-  /** Deposit withdrawl caps - deposit & redeem */
+  /** Deposit withdrawal caps - deposit & redeem */
   depositWithdrawalCap: types.WithdrawalCapsJSON
-  /** Debt withdrawl caps - borrow & repay */
+  /** Debt withdrawal caps - borrow & repay */
   debtWithdrawalCap: types.WithdrawalCapsJSON
   elevationGroups: Array<number>
   disableUsageAsCollOutsideEmode: number
   utilizationLimitBlockBorrowingAbove: number
+  /**
+   * Whether this reserve should be subject to auto-deleveraging after deposit or borrow limit is
+   * crossed.
+   * Besides this flag, the lending market's flag also needs to be enabled (logical `AND`).
+   * **NOTE:** the manual "target LTV" deleveraging (enabled by the risk council for individual
+   * obligations) is NOT affected by this flag.
+   */
+  autodeleverageEnabled: number
   reserved1: Array<number>
   /**
    * Maximum amount liquidity of this reserve borrowed outside all elevation groups
@@ -141,6 +172,11 @@ export interface ReserveConfigJSON {
    * - 0 to disable borrows in this elevation group (expected value for the debt asset)
    */
   borrowLimitAgainstThisCollateralInElevationGroup: Array<string>
+  /**
+   * The rate at which the deleveraging-related liquidation bonus increases, in bps per day.
+   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
+   */
+  deleveragingBonusIncreaseBpsPerDay: string
 }
 
 /** Reserve configuration values */
@@ -172,13 +208,18 @@ export class ReserveConfig {
   readonly maxLiquidationBonusBps: number
   /** Bad debt liquidation bonus for an undercollateralized obligation, as bps */
   readonly badDebtLiquidationBonusBps: number
-  /** Time in seconds that must pass before redemptions are enabled after the deposit limit is crossed */
+  /**
+   * Time in seconds that must pass before redemptions are enabled after the deposit limit is
+   * crossed.
+   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
+   */
   readonly deleveragingMarginCallPeriodSecs: BN
   /**
-   * The rate at which the deleveraging threshold decreases in slots per bps
-   * e.g. 1 bps per hour would be 7200 slots per bps (assuming 2 slots per second)
+   * The rate at which the deleveraging threshold decreases in seconds per bps
+   * e.g. 1 bps per hour would be denoted by `3600` here.
+   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
    */
-  readonly deleveragingThresholdSlotsPerBps: BN
+  readonly deleveragingThresholdSecsPerBps: BN
   /** Program owner fees assessed, separate from gains due to interest accrual */
   readonly fees: types.ReserveFees
   /** Borrow rate curve based on utilization */
@@ -191,13 +232,21 @@ export class ReserveConfig {
   readonly borrowLimit: BN
   /** Token id from TokenInfos struct */
   readonly tokenInfo: types.TokenInfo
-  /** Deposit withdrawl caps - deposit & redeem */
+  /** Deposit withdrawal caps - deposit & redeem */
   readonly depositWithdrawalCap: types.WithdrawalCaps
-  /** Debt withdrawl caps - borrow & repay */
+  /** Debt withdrawal caps - borrow & repay */
   readonly debtWithdrawalCap: types.WithdrawalCaps
   readonly elevationGroups: Array<number>
   readonly disableUsageAsCollOutsideEmode: number
   readonly utilizationLimitBlockBorrowingAbove: number
+  /**
+   * Whether this reserve should be subject to auto-deleveraging after deposit or borrow limit is
+   * crossed.
+   * Besides this flag, the lending market's flag also needs to be enabled (logical `AND`).
+   * **NOTE:** the manual "target LTV" deleveraging (enabled by the risk council for individual
+   * obligations) is NOT affected by this flag.
+   */
+  readonly autodeleverageEnabled: number
   readonly reserved1: Array<number>
   /**
    * Maximum amount liquidity of this reserve borrowed outside all elevation groups
@@ -212,6 +261,11 @@ export class ReserveConfig {
    * - 0 to disable borrows in this elevation group (expected value for the debt asset)
    */
   readonly borrowLimitAgainstThisCollateralInElevationGroup: Array<BN>
+  /**
+   * The rate at which the deleveraging-related liquidation bonus increases, in bps per day.
+   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
+   */
+  readonly deleveragingBonusIncreaseBpsPerDay: BN
 
   constructor(fields: ReserveConfigFields) {
     this.status = fields.status
@@ -228,8 +282,8 @@ export class ReserveConfig {
     this.badDebtLiquidationBonusBps = fields.badDebtLiquidationBonusBps
     this.deleveragingMarginCallPeriodSecs =
       fields.deleveragingMarginCallPeriodSecs
-    this.deleveragingThresholdSlotsPerBps =
-      fields.deleveragingThresholdSlotsPerBps
+    this.deleveragingThresholdSecsPerBps =
+      fields.deleveragingThresholdSecsPerBps
     this.fees = new types.ReserveFees({ ...fields.fees })
     this.borrowRateCurve = new types.BorrowRateCurve({
       ...fields.borrowRateCurve,
@@ -248,11 +302,14 @@ export class ReserveConfig {
     this.disableUsageAsCollOutsideEmode = fields.disableUsageAsCollOutsideEmode
     this.utilizationLimitBlockBorrowingAbove =
       fields.utilizationLimitBlockBorrowingAbove
+    this.autodeleverageEnabled = fields.autodeleverageEnabled
     this.reserved1 = fields.reserved1
     this.borrowLimitOutsideElevationGroup =
       fields.borrowLimitOutsideElevationGroup
     this.borrowLimitAgainstThisCollateralInElevationGroup =
       fields.borrowLimitAgainstThisCollateralInElevationGroup
+    this.deleveragingBonusIncreaseBpsPerDay =
+      fields.deleveragingBonusIncreaseBpsPerDay
   }
 
   static layout(property?: string) {
@@ -271,7 +328,7 @@ export class ReserveConfig {
         borsh.u16("maxLiquidationBonusBps"),
         borsh.u16("badDebtLiquidationBonusBps"),
         borsh.u64("deleveragingMarginCallPeriodSecs"),
-        borsh.u64("deleveragingThresholdSlotsPerBps"),
+        borsh.u64("deleveragingThresholdSecsPerBps"),
         types.ReserveFees.layout("fees"),
         types.BorrowRateCurve.layout("borrowRateCurve"),
         borsh.u64("borrowFactorPct"),
@@ -283,13 +340,15 @@ export class ReserveConfig {
         borsh.array(borsh.u8(), 20, "elevationGroups"),
         borsh.u8("disableUsageAsCollOutsideEmode"),
         borsh.u8("utilizationLimitBlockBorrowingAbove"),
-        borsh.array(borsh.u8(), 2, "reserved1"),
+        borsh.u8("autodeleverageEnabled"),
+        borsh.array(borsh.u8(), 1, "reserved1"),
         borsh.u64("borrowLimitOutsideElevationGroup"),
         borsh.array(
           borsh.u64(),
           32,
           "borrowLimitAgainstThisCollateralInElevationGroup"
         ),
+        borsh.u64("deleveragingBonusIncreaseBpsPerDay"),
       ],
       property
     )
@@ -311,7 +370,7 @@ export class ReserveConfig {
       maxLiquidationBonusBps: obj.maxLiquidationBonusBps,
       badDebtLiquidationBonusBps: obj.badDebtLiquidationBonusBps,
       deleveragingMarginCallPeriodSecs: obj.deleveragingMarginCallPeriodSecs,
-      deleveragingThresholdSlotsPerBps: obj.deleveragingThresholdSlotsPerBps,
+      deleveragingThresholdSecsPerBps: obj.deleveragingThresholdSecsPerBps,
       fees: types.ReserveFees.fromDecoded(obj.fees),
       borrowRateCurve: types.BorrowRateCurve.fromDecoded(obj.borrowRateCurve),
       borrowFactorPct: obj.borrowFactorPct,
@@ -328,10 +387,13 @@ export class ReserveConfig {
       disableUsageAsCollOutsideEmode: obj.disableUsageAsCollOutsideEmode,
       utilizationLimitBlockBorrowingAbove:
         obj.utilizationLimitBlockBorrowingAbove,
+      autodeleverageEnabled: obj.autodeleverageEnabled,
       reserved1: obj.reserved1,
       borrowLimitOutsideElevationGroup: obj.borrowLimitOutsideElevationGroup,
       borrowLimitAgainstThisCollateralInElevationGroup:
         obj.borrowLimitAgainstThisCollateralInElevationGroup,
+      deleveragingBonusIncreaseBpsPerDay:
+        obj.deleveragingBonusIncreaseBpsPerDay,
     })
   }
 
@@ -350,7 +412,7 @@ export class ReserveConfig {
       maxLiquidationBonusBps: fields.maxLiquidationBonusBps,
       badDebtLiquidationBonusBps: fields.badDebtLiquidationBonusBps,
       deleveragingMarginCallPeriodSecs: fields.deleveragingMarginCallPeriodSecs,
-      deleveragingThresholdSlotsPerBps: fields.deleveragingThresholdSlotsPerBps,
+      deleveragingThresholdSecsPerBps: fields.deleveragingThresholdSecsPerBps,
       fees: types.ReserveFees.toEncodable(fields.fees),
       borrowRateCurve: types.BorrowRateCurve.toEncodable(
         fields.borrowRateCurve
@@ -369,10 +431,13 @@ export class ReserveConfig {
       disableUsageAsCollOutsideEmode: fields.disableUsageAsCollOutsideEmode,
       utilizationLimitBlockBorrowingAbove:
         fields.utilizationLimitBlockBorrowingAbove,
+      autodeleverageEnabled: fields.autodeleverageEnabled,
       reserved1: fields.reserved1,
       borrowLimitOutsideElevationGroup: fields.borrowLimitOutsideElevationGroup,
       borrowLimitAgainstThisCollateralInElevationGroup:
         fields.borrowLimitAgainstThisCollateralInElevationGroup,
+      deleveragingBonusIncreaseBpsPerDay:
+        fields.deleveragingBonusIncreaseBpsPerDay,
     }
   }
 
@@ -392,8 +457,8 @@ export class ReserveConfig {
       badDebtLiquidationBonusBps: this.badDebtLiquidationBonusBps,
       deleveragingMarginCallPeriodSecs:
         this.deleveragingMarginCallPeriodSecs.toString(),
-      deleveragingThresholdSlotsPerBps:
-        this.deleveragingThresholdSlotsPerBps.toString(),
+      deleveragingThresholdSecsPerBps:
+        this.deleveragingThresholdSecsPerBps.toString(),
       fees: this.fees.toJSON(),
       borrowRateCurve: this.borrowRateCurve.toJSON(),
       borrowFactorPct: this.borrowFactorPct.toString(),
@@ -406,6 +471,7 @@ export class ReserveConfig {
       disableUsageAsCollOutsideEmode: this.disableUsageAsCollOutsideEmode,
       utilizationLimitBlockBorrowingAbove:
         this.utilizationLimitBlockBorrowingAbove,
+      autodeleverageEnabled: this.autodeleverageEnabled,
       reserved1: this.reserved1,
       borrowLimitOutsideElevationGroup:
         this.borrowLimitOutsideElevationGroup.toString(),
@@ -413,6 +479,8 @@ export class ReserveConfig {
         this.borrowLimitAgainstThisCollateralInElevationGroup.map((item) =>
           item.toString()
         ),
+      deleveragingBonusIncreaseBpsPerDay:
+        this.deleveragingBonusIncreaseBpsPerDay.toString(),
     }
   }
 
@@ -433,8 +501,8 @@ export class ReserveConfig {
       deleveragingMarginCallPeriodSecs: new BN(
         obj.deleveragingMarginCallPeriodSecs
       ),
-      deleveragingThresholdSlotsPerBps: new BN(
-        obj.deleveragingThresholdSlotsPerBps
+      deleveragingThresholdSecsPerBps: new BN(
+        obj.deleveragingThresholdSecsPerBps
       ),
       fees: types.ReserveFees.fromJSON(obj.fees),
       borrowRateCurve: types.BorrowRateCurve.fromJSON(obj.borrowRateCurve),
@@ -450,6 +518,7 @@ export class ReserveConfig {
       disableUsageAsCollOutsideEmode: obj.disableUsageAsCollOutsideEmode,
       utilizationLimitBlockBorrowingAbove:
         obj.utilizationLimitBlockBorrowingAbove,
+      autodeleverageEnabled: obj.autodeleverageEnabled,
       reserved1: obj.reserved1,
       borrowLimitOutsideElevationGroup: new BN(
         obj.borrowLimitOutsideElevationGroup
@@ -458,6 +527,9 @@ export class ReserveConfig {
         obj.borrowLimitAgainstThisCollateralInElevationGroup.map(
           (item) => new BN(item)
         ),
+      deleveragingBonusIncreaseBpsPerDay: new BN(
+        obj.deleveragingBonusIncreaseBpsPerDay
+      ),
     })
   }
 

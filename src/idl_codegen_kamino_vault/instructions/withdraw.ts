@@ -9,26 +9,30 @@ export interface WithdrawArgs {
 }
 
 export interface WithdrawAccounts {
-  user: PublicKey
-  vaultState: PublicKey
-  reserve: PublicKey
-  tokenVault: PublicKey
-  ctokenVault: PublicKey
-  baseVaultAuthority: PublicKey
-  tokenAta: PublicKey
-  tokenMint: PublicKey
-  userSharesAta: PublicKey
-  sharesMint: PublicKey
-  tokenProgram: PublicKey
-  /** CPI accounts */
-  lendingMarket: PublicKey
-  lendingMarketAuthority: PublicKey
-  reserveLiquiditySupply: PublicKey
-  reserveCollateralMint: PublicKey
-  klendProgram: PublicKey
-  instructionSysvarAccount: PublicKey
-  reserveCollateralTokenProgram: PublicKey
-  sharesTokenProgram: PublicKey
+  withdrawFromAvailable: {
+    user: PublicKey
+    vaultState: PublicKey
+    tokenVault: PublicKey
+    baseVaultAuthority: PublicKey
+    userTokenAta: PublicKey
+    tokenMint: PublicKey
+    userSharesAta: PublicKey
+    sharesMint: PublicKey
+    tokenProgram: PublicKey
+    sharesTokenProgram: PublicKey
+    klendProgram: PublicKey
+  }
+  withdrawFromReserveAccounts: {
+    vaultState: PublicKey
+    reserve: PublicKey
+    ctokenVault: PublicKey
+    lendingMarket: PublicKey
+    lendingMarketAuthority: PublicKey
+    reserveLiquiditySupply: PublicKey
+    reserveCollateralMint: PublicKey
+    reserveCollateralTokenProgram: PublicKey
+    instructionSysvarAccount: PublicKey
+  }
 }
 
 export const layout = borsh.struct([borsh.u64("sharesAmount")])
@@ -39,45 +43,107 @@ export function withdraw(
   programId: PublicKey = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta> = [
-    { pubkey: accounts.user, isSigner: true, isWritable: true },
-    { pubkey: accounts.vaultState, isSigner: false, isWritable: true },
-    { pubkey: accounts.reserve, isSigner: false, isWritable: true },
-    { pubkey: accounts.tokenVault, isSigner: false, isWritable: true },
-    { pubkey: accounts.ctokenVault, isSigner: false, isWritable: true },
-    { pubkey: accounts.baseVaultAuthority, isSigner: false, isWritable: true },
-    { pubkey: accounts.tokenAta, isSigner: false, isWritable: true },
-    { pubkey: accounts.tokenMint, isSigner: false, isWritable: true },
-    { pubkey: accounts.userSharesAta, isSigner: false, isWritable: true },
-    { pubkey: accounts.sharesMint, isSigner: false, isWritable: true },
-    { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
-    { pubkey: accounts.lendingMarket, isSigner: false, isWritable: false },
     {
-      pubkey: accounts.lendingMarketAuthority,
-      isSigner: false,
-      isWritable: false,
+      pubkey: accounts.withdrawFromAvailable.user,
+      isSigner: true,
+      isWritable: true,
     },
     {
-      pubkey: accounts.reserveLiquiditySupply,
+      pubkey: accounts.withdrawFromAvailable.vaultState,
       isSigner: false,
       isWritable: true,
     },
     {
-      pubkey: accounts.reserveCollateralMint,
+      pubkey: accounts.withdrawFromAvailable.tokenVault,
       isSigner: false,
       isWritable: true,
     },
-    { pubkey: accounts.klendProgram, isSigner: false, isWritable: false },
     {
-      pubkey: accounts.instructionSysvarAccount,
+      pubkey: accounts.withdrawFromAvailable.baseVaultAuthority,
       isSigner: false,
       isWritable: false,
     },
     {
-      pubkey: accounts.reserveCollateralTokenProgram,
+      pubkey: accounts.withdrawFromAvailable.userTokenAta,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.withdrawFromAvailable.tokenMint,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.withdrawFromAvailable.userSharesAta,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.withdrawFromAvailable.sharesMint,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.withdrawFromAvailable.tokenProgram,
       isSigner: false,
       isWritable: false,
     },
-    { pubkey: accounts.sharesTokenProgram, isSigner: false, isWritable: false },
+    {
+      pubkey: accounts.withdrawFromAvailable.sharesTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.withdrawFromAvailable.klendProgram,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.withdrawFromReserveAccounts.vaultState,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.withdrawFromReserveAccounts.reserve,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.withdrawFromReserveAccounts.ctokenVault,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.withdrawFromReserveAccounts.lendingMarket,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.withdrawFromReserveAccounts.lendingMarketAuthority,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.withdrawFromReserveAccounts.reserveLiquiditySupply,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.withdrawFromReserveAccounts.reserveCollateralMint,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey:
+        accounts.withdrawFromReserveAccounts.reserveCollateralTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.withdrawFromReserveAccounts.instructionSysvarAccount,
+      isSigner: false,
+      isWritable: false,
+    },
   ]
   const identifier = Buffer.from([183, 18, 70, 156, 148, 109, 161, 34])
   const buffer = Buffer.alloc(1000)

@@ -13,16 +13,15 @@ export interface WithdrawPendingFeesAccounts {
   baseVaultAuthority: PublicKey
   tokenAta: PublicKey
   tokenMint: PublicKey
-  tokenProgram: PublicKey
   /** CPI accounts */
   lendingMarket: PublicKey
   lendingMarketAuthority: PublicKey
   reserveLiquiditySupply: PublicKey
   reserveCollateralMint: PublicKey
   klendProgram: PublicKey
-  instructionSysvarAccount: PublicKey
+  tokenProgram: PublicKey
   reserveCollateralTokenProgram: PublicKey
-  sharesTokenProgram: PublicKey
+  instructionSysvarAccount: PublicKey
 }
 
 export function withdrawPendingFees(
@@ -38,7 +37,6 @@ export function withdrawPendingFees(
     { pubkey: accounts.baseVaultAuthority, isSigner: false, isWritable: true },
     { pubkey: accounts.tokenAta, isSigner: false, isWritable: true },
     { pubkey: accounts.tokenMint, isSigner: false, isWritable: true },
-    { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
     { pubkey: accounts.lendingMarket, isSigner: false, isWritable: false },
     {
       pubkey: accounts.lendingMarketAuthority,
@@ -56,17 +54,17 @@ export function withdrawPendingFees(
       isWritable: true,
     },
     { pubkey: accounts.klendProgram, isSigner: false, isWritable: false },
-    {
-      pubkey: accounts.instructionSysvarAccount,
-      isSigner: false,
-      isWritable: false,
-    },
+    { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
     {
       pubkey: accounts.reserveCollateralTokenProgram,
       isSigner: false,
       isWritable: false,
     },
-    { pubkey: accounts.sharesTokenProgram, isSigner: false, isWritable: false },
+    {
+      pubkey: accounts.instructionSysvarAccount,
+      isSigner: false,
+      isWritable: false,
+    },
   ]
   const identifier = Buffer.from([131, 194, 200, 140, 175, 244, 217, 183])
   const data = identifier

@@ -56,19 +56,25 @@ export type VaultConfigFieldKind =
   | VaultConfigField.ManagementFeeBps
   | VaultConfigField.MinDepositAmount
   | VaultConfigField.MinWithdrawAmount
-  | VaultConfigField.MintInvestAmount
+  | VaultConfigField.MinInvestAmount
   | VaultConfigField.MinInvestDelaySlots
   | VaultConfigField.CrankFundFeePerReserve
   | VaultConfigField.PendingVaultAdmin
+  | VaultConfigField.Name
+  | VaultConfigField.LookupTable
+  | VaultConfigField.Farm
 export type VaultConfigFieldJSON =
   | VaultConfigField.PerformanceFeeBpsJSON
   | VaultConfigField.ManagementFeeBpsJSON
   | VaultConfigField.MinDepositAmountJSON
   | VaultConfigField.MinWithdrawAmountJSON
-  | VaultConfigField.MintInvestAmountJSON
+  | VaultConfigField.MinInvestAmountJSON
   | VaultConfigField.MinInvestDelaySlotsJSON
   | VaultConfigField.CrankFundFeePerReserveJSON
   | VaultConfigField.PendingVaultAdminJSON
+  | VaultConfigField.NameJSON
+  | VaultConfigField.LookupTableJSON
+  | VaultConfigField.FarmJSON
 
 export { VaultAllocation } from "./VaultAllocation"
 export type {

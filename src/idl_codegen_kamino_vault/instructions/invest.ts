@@ -12,17 +12,16 @@ export interface InvestAccounts {
   tokenMint: PublicKey
   baseVaultAuthority: PublicKey
   ctokenVault: PublicKey
-  reserve: PublicKey
   /** CPI accounts */
+  reserve: PublicKey
   lendingMarket: PublicKey
   lendingMarketAuthority: PublicKey
   reserveLiquiditySupply: PublicKey
   reserveCollateralMint: PublicKey
-  reserveCollateralTokenProgram: PublicKey
   klendProgram: PublicKey
-  instructionSysvarAccount: PublicKey
+  reserveCollateralTokenProgram: PublicKey
   tokenProgram: PublicKey
-  sharesTokenProgram: PublicKey
+  instructionSysvarAccount: PublicKey
 }
 
 export function invest(
@@ -54,19 +53,18 @@ export function invest(
       isSigner: false,
       isWritable: true,
     },
+    { pubkey: accounts.klendProgram, isSigner: false, isWritable: false },
     {
       pubkey: accounts.reserveCollateralTokenProgram,
       isSigner: false,
       isWritable: false,
     },
-    { pubkey: accounts.klendProgram, isSigner: false, isWritable: false },
+    { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
     {
       pubkey: accounts.instructionSysvarAccount,
       isSigner: false,
       isWritable: false,
     },
-    { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
-    { pubkey: accounts.sharesTokenProgram, isSigner: false, isWritable: false },
   ]
   const identifier = Buffer.from([13, 245, 180, 103, 254, 182, 121, 4])
   const data = identifier

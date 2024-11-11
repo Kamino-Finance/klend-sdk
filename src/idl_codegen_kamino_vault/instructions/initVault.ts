@@ -7,9 +7,9 @@ import { PROGRAM_ID } from "../programId"
 export interface InitVaultAccounts {
   adminAuthority: PublicKey
   vaultState: PublicKey
-  tokenMint: PublicKey
-  tokenVault: PublicKey
   baseVaultAuthority: PublicKey
+  tokenVault: PublicKey
+  baseTokenMint: PublicKey
   sharesMint: PublicKey
   systemProgram: PublicKey
   rent: PublicKey
@@ -24,9 +24,9 @@ export function initVault(
   const keys: Array<AccountMeta> = [
     { pubkey: accounts.adminAuthority, isSigner: true, isWritable: true },
     { pubkey: accounts.vaultState, isSigner: false, isWritable: true },
-    { pubkey: accounts.tokenMint, isSigner: false, isWritable: false },
+    { pubkey: accounts.baseVaultAuthority, isSigner: false, isWritable: false },
     { pubkey: accounts.tokenVault, isSigner: false, isWritable: true },
-    { pubkey: accounts.baseVaultAuthority, isSigner: false, isWritable: true },
+    { pubkey: accounts.baseTokenMint, isSigner: false, isWritable: false },
     { pubkey: accounts.sharesMint, isSigner: false, isWritable: true },
     { pubkey: accounts.systemProgram, isSigner: false, isWritable: false },
     { pubkey: accounts.rent, isSigner: false, isWritable: false },

@@ -25,3 +25,18 @@ export type {
   GiveUpPendingFeesArgs,
   GiveUpPendingFeesAccounts,
 } from "./giveUpPendingFees"
+export { initializeSharesMetadata } from "./initializeSharesMetadata"
+export type {
+  InitializeSharesMetadataArgs,
+  InitializeSharesMetadataAccounts,
+} from "./initializeSharesMetadata"
+export { updateSharesMetadata } from "./updateSharesMetadata"
+export type {
+  UpdateSharesMetadataArgs,
+  UpdateSharesMetadataAccounts,
+} from "./updateSharesMetadata"
+export { withdrawFromAvailable } from "./withdrawFromAvailable"
+export type {
+  WithdrawFromAvailableArgs,
+  WithdrawFromAvailableAccounts,
+} from "./withdrawFromAvailable"

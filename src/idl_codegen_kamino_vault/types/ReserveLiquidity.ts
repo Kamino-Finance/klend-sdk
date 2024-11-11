@@ -21,15 +21,15 @@ export interface ReserveLiquidityFields {
   /** Reserve liquidity mint decimals */
   mintDecimals: BN
   /**
-   * Timestamp in slots when the last refresh reserve detected that the liquidity amount is above the deposit cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
+   * Timestamp when the last refresh reserve detected that the liquidity amount is above the deposit cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
    * If the threshold is not crossed, then the timestamp is set to 0
    */
-  depositLimitCrossedSlot: BN
+  depositLimitCrossedTimestamp: BN
   /**
-   * Timestamp in slots when the last refresh reserve detected that the borrowed amount is above the borrow cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
+   * Timestamp when the last refresh reserve detected that the borrowed amount is above the borrow cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
    * If the threshold is not crossed, then the timestamp is set to 0
    */
-  borrowLimitCrossedSlot: BN
+  borrowLimitCrossedTimestamp: BN
   /** Reserve liquidity cumulative borrow rate (scaled fraction) */
   cumulativeBorrowRateBsf: types.BigFractionBytesFields
   /** Reserve cumulative protocol fees (scaled fraction) */
@@ -64,15 +64,15 @@ export interface ReserveLiquidityJSON {
   /** Reserve liquidity mint decimals */
   mintDecimals: string
   /**
-   * Timestamp in slots when the last refresh reserve detected that the liquidity amount is above the deposit cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
+   * Timestamp when the last refresh reserve detected that the liquidity amount is above the deposit cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
    * If the threshold is not crossed, then the timestamp is set to 0
    */
-  depositLimitCrossedSlot: string
+  depositLimitCrossedTimestamp: string
   /**
-   * Timestamp in slots when the last refresh reserve detected that the borrowed amount is above the borrow cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
+   * Timestamp when the last refresh reserve detected that the borrowed amount is above the borrow cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
    * If the threshold is not crossed, then the timestamp is set to 0
    */
-  borrowLimitCrossedSlot: string
+  borrowLimitCrossedTimestamp: string
   /** Reserve liquidity cumulative borrow rate (scaled fraction) */
   cumulativeBorrowRateBsf: types.BigFractionBytesJSON
   /** Reserve cumulative protocol fees (scaled fraction) */
@@ -108,15 +108,15 @@ export class ReserveLiquidity {
   /** Reserve liquidity mint decimals */
   readonly mintDecimals: BN
   /**
-   * Timestamp in slots when the last refresh reserve detected that the liquidity amount is above the deposit cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
+   * Timestamp when the last refresh reserve detected that the liquidity amount is above the deposit cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
    * If the threshold is not crossed, then the timestamp is set to 0
    */
-  readonly depositLimitCrossedSlot: BN
+  readonly depositLimitCrossedTimestamp: BN
   /**
-   * Timestamp in slots when the last refresh reserve detected that the borrowed amount is above the borrow cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
+   * Timestamp when the last refresh reserve detected that the borrowed amount is above the borrow cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
    * If the threshold is not crossed, then the timestamp is set to 0
    */
-  readonly borrowLimitCrossedSlot: BN
+  readonly borrowLimitCrossedTimestamp: BN
   /** Reserve liquidity cumulative borrow rate (scaled fraction) */
   readonly cumulativeBorrowRateBsf: types.BigFractionBytes
   /** Reserve cumulative protocol fees (scaled fraction) */
@@ -141,8 +141,8 @@ export class ReserveLiquidity {
     this.marketPriceSf = fields.marketPriceSf
     this.marketPriceLastUpdatedTs = fields.marketPriceLastUpdatedTs
     this.mintDecimals = fields.mintDecimals
-    this.depositLimitCrossedSlot = fields.depositLimitCrossedSlot
-    this.borrowLimitCrossedSlot = fields.borrowLimitCrossedSlot
+    this.depositLimitCrossedTimestamp = fields.depositLimitCrossedTimestamp
+    this.borrowLimitCrossedTimestamp = fields.borrowLimitCrossedTimestamp
     this.cumulativeBorrowRateBsf = new types.BigFractionBytes({
       ...fields.cumulativeBorrowRateBsf,
     })
@@ -166,8 +166,8 @@ export class ReserveLiquidity {
         borsh.u128("marketPriceSf"),
         borsh.u64("marketPriceLastUpdatedTs"),
         borsh.u64("mintDecimals"),
-        borsh.u64("depositLimitCrossedSlot"),
-        borsh.u64("borrowLimitCrossedSlot"),
+        borsh.u64("depositLimitCrossedTimestamp"),
+        borsh.u64("borrowLimitCrossedTimestamp"),
         types.BigFractionBytes.layout("cumulativeBorrowRateBsf"),
         borsh.u128("accumulatedProtocolFeesSf"),
         borsh.u128("accumulatedReferrerFeesSf"),
@@ -192,8 +192,8 @@ export class ReserveLiquidity {
       marketPriceSf: obj.marketPriceSf,
       marketPriceLastUpdatedTs: obj.marketPriceLastUpdatedTs,
       mintDecimals: obj.mintDecimals,
-      depositLimitCrossedSlot: obj.depositLimitCrossedSlot,
-      borrowLimitCrossedSlot: obj.borrowLimitCrossedSlot,
+      depositLimitCrossedTimestamp: obj.depositLimitCrossedTimestamp,
+      borrowLimitCrossedTimestamp: obj.borrowLimitCrossedTimestamp,
       cumulativeBorrowRateBsf: types.BigFractionBytes.fromDecoded(
         obj.cumulativeBorrowRateBsf
       ),
@@ -217,8 +217,8 @@ export class ReserveLiquidity {
       marketPriceSf: fields.marketPriceSf,
       marketPriceLastUpdatedTs: fields.marketPriceLastUpdatedTs,
       mintDecimals: fields.mintDecimals,
-      depositLimitCrossedSlot: fields.depositLimitCrossedSlot,
-      borrowLimitCrossedSlot: fields.borrowLimitCrossedSlot,
+      depositLimitCrossedTimestamp: fields.depositLimitCrossedTimestamp,
+      borrowLimitCrossedTimestamp: fields.borrowLimitCrossedTimestamp,
       cumulativeBorrowRateBsf: types.BigFractionBytes.toEncodable(
         fields.cumulativeBorrowRateBsf
       ),
@@ -242,8 +242,9 @@ export class ReserveLiquidity {
       marketPriceSf: this.marketPriceSf.toString(),
       marketPriceLastUpdatedTs: this.marketPriceLastUpdatedTs.toString(),
       mintDecimals: this.mintDecimals.toString(),
-      depositLimitCrossedSlot: this.depositLimitCrossedSlot.toString(),
-      borrowLimitCrossedSlot: this.borrowLimitCrossedSlot.toString(),
+      depositLimitCrossedTimestamp:
+        this.depositLimitCrossedTimestamp.toString(),
+      borrowLimitCrossedTimestamp: this.borrowLimitCrossedTimestamp.toString(),
       cumulativeBorrowRateBsf: this.cumulativeBorrowRateBsf.toJSON(),
       accumulatedProtocolFeesSf: this.accumulatedProtocolFeesSf.toString(),
       accumulatedReferrerFeesSf: this.accumulatedReferrerFeesSf.toString(),
@@ -265,8 +266,8 @@ export class ReserveLiquidity {
       marketPriceSf: new BN(obj.marketPriceSf),
       marketPriceLastUpdatedTs: new BN(obj.marketPriceLastUpdatedTs),
       mintDecimals: new BN(obj.mintDecimals),
-      depositLimitCrossedSlot: new BN(obj.depositLimitCrossedSlot),
-      borrowLimitCrossedSlot: new BN(obj.borrowLimitCrossedSlot),
+      depositLimitCrossedTimestamp: new BN(obj.depositLimitCrossedTimestamp),
+      borrowLimitCrossedTimestamp: new BN(obj.borrowLimitCrossedTimestamp),
       cumulativeBorrowRateBsf: types.BigFractionBytes.fromJSON(
         obj.cumulativeBorrowRateBsf
       ),

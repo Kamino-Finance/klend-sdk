@@ -95,25 +95,25 @@ export class MinWithdrawAmount {
   }
 }
 
-export interface MintInvestAmountJSON {
-  kind: "MintInvestAmount"
+export interface MinInvestAmountJSON {
+  kind: "MinInvestAmount"
 }
 
-export class MintInvestAmount {
+export class MinInvestAmount {
   static readonly discriminator = 4
-  static readonly kind = "MintInvestAmount"
+  static readonly kind = "MinInvestAmount"
   readonly discriminator = 4
-  readonly kind = "MintInvestAmount"
+  readonly kind = "MinInvestAmount"
 
-  toJSON(): MintInvestAmountJSON {
+  toJSON(): MinInvestAmountJSON {
     return {
-      kind: "MintInvestAmount",
+      kind: "MinInvestAmount",
     }
   }
 
   toEncodable() {
     return {
-      MintInvestAmount: {},
+      MinInvestAmount: {},
     }
   }
 }
@@ -187,6 +187,75 @@ export class PendingVaultAdmin {
   }
 }
 
+export interface NameJSON {
+  kind: "Name"
+}
+
+export class Name {
+  static readonly discriminator = 8
+  static readonly kind = "Name"
+  readonly discriminator = 8
+  readonly kind = "Name"
+
+  toJSON(): NameJSON {
+    return {
+      kind: "Name",
+    }
+  }
+
+  toEncodable() {
+    return {
+      Name: {},
+    }
+  }
+}
+
+export interface LookupTableJSON {
+  kind: "LookupTable"
+}
+
+export class LookupTable {
+  static readonly discriminator = 9
+  static readonly kind = "LookupTable"
+  readonly discriminator = 9
+  readonly kind = "LookupTable"
+
+  toJSON(): LookupTableJSON {
+    return {
+      kind: "LookupTable",
+    }
+  }
+
+  toEncodable() {
+    return {
+      LookupTable: {},
+    }
+  }
+}
+
+export interface FarmJSON {
+  kind: "Farm"
+}
+
+export class Farm {
+  static readonly discriminator = 10
+  static readonly kind = "Farm"
+  readonly discriminator = 10
+  readonly kind = "Farm"
+
+  toJSON(): FarmJSON {
+    return {
+      kind: "Farm",
+    }
+  }
+
+  toEncodable() {
+    return {
+      Farm: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.VaultConfigFieldKind {
   if (typeof obj !== "object") {
@@ -205,8 +274,8 @@ export function fromDecoded(obj: any): types.VaultConfigFieldKind {
   if ("MinWithdrawAmount" in obj) {
     return new MinWithdrawAmount()
   }
-  if ("MintInvestAmount" in obj) {
-    return new MintInvestAmount()
+  if ("MinInvestAmount" in obj) {
+    return new MinInvestAmount()
   }
   if ("MinInvestDelaySlots" in obj) {
     return new MinInvestDelaySlots()
@@ -216,6 +285,15 @@ export function fromDecoded(obj: any): types.VaultConfigFieldKind {
   }
   if ("PendingVaultAdmin" in obj) {
     return new PendingVaultAdmin()
+  }
+  if ("Name" in obj) {
+    return new Name()
+  }
+  if ("LookupTable" in obj) {
+    return new LookupTable()
+  }
+  if ("Farm" in obj) {
+    return new Farm()
   }
 
   throw new Error("Invalid enum object")
@@ -237,8 +315,8 @@ export function fromJSON(
     case "MinWithdrawAmount": {
       return new MinWithdrawAmount()
     }
-    case "MintInvestAmount": {
-      return new MintInvestAmount()
+    case "MinInvestAmount": {
+      return new MinInvestAmount()
     }
     case "MinInvestDelaySlots": {
       return new MinInvestDelaySlots()
@@ -249,6 +327,15 @@ export function fromJSON(
     case "PendingVaultAdmin": {
       return new PendingVaultAdmin()
     }
+    case "Name": {
+      return new Name()
+    }
+    case "LookupTable": {
+      return new LookupTable()
+    }
+    case "Farm": {
+      return new Farm()
+    }
   }
 }
 
@@ -258,10 +345,13 @@ export function layout(property?: string) {
     borsh.struct([], "ManagementFeeBps"),
     borsh.struct([], "MinDepositAmount"),
     borsh.struct([], "MinWithdrawAmount"),
-    borsh.struct([], "MintInvestAmount"),
+    borsh.struct([], "MinInvestAmount"),
     borsh.struct([], "MinInvestDelaySlots"),
     borsh.struct([], "CrankFundFeePerReserve"),
     borsh.struct([], "PendingVaultAdmin"),
+    borsh.struct([], "Name"),
+    borsh.struct([], "LookupTable"),
+    borsh.struct([], "Farm"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)
