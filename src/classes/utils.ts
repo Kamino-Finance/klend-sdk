@@ -151,10 +151,10 @@ export function parseZeroPaddedUtf8(utf8Array: number[]): string {
       for (let i = 0; i <= last; i++) {
         encoding[i] = utf8Array[i];
       }
-      break;
+      return new TextDecoder().decode(encoding);
     }
   }
-  return new TextDecoder().decode();
+  return '';
 }
 
 export function renderZeroPaddedUtf8(str: string, utf8ArrayLength: number): number[] {
