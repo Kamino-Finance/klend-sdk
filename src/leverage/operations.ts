@@ -410,8 +410,18 @@ async function buildDepositWithLeverageIxns(
   const budgetIxns = budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxns(3000000);
   const collTokenMint = collReserve.getLiquidityMint();
   const debtTokenMint = debtReserve.getLiquidityMint();
-  const collTokenAta = getAssociatedTokenAddressSync(collTokenMint, owner);
-  const debtTokenAta = getAssociatedTokenAddressSync(debtTokenMint, owner);
+  const collTokenAta = getAssociatedTokenAddressSync(
+    collTokenMint,
+    owner,
+    false,
+    collReserve.getLiquidityTokenProgram()
+  );
+  const debtTokenAta = getAssociatedTokenAddressSync(
+    debtTokenMint,
+    owner,
+    false,
+    debtReserve.getLiquidityTokenProgram()
+  );
 
   // 1. Create atas & budget txns
   let mintsToCreateAtas: Array<{ mint: PublicKey; tokenProgram: PublicKey }>;
@@ -807,7 +817,12 @@ export async function buildWithdrawWithLeverageIxns(
 ): Promise<TransactionInstruction[]> {
   const collTokenMint = collReserve.getLiquidityMint();
   const debtTokenMint = debtReserve.getLiquidityMint();
-  const debtTokenAta = getAssociatedTokenAddressSync(debtTokenMint, owner);
+  const debtTokenAta = getAssociatedTokenAddressSync(
+    debtTokenMint,
+    owner,
+    false,
+    debtReserve.getLiquidityTokenProgram()
+  );
   // 1. Create atas & budget txns & user metadata
   let mintsToCreateAtas: Array<{ mint: PublicKey; tokenProgram: PublicKey }>;
   if (collIsKtoken) {
@@ -1349,8 +1364,18 @@ async function buildIncreaseLeverageIxns(
 ): Promise<TransactionInstruction[]> {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
-  const debtTokenAta = getAssociatedTokenAddressSync(debtTokenMint, owner);
-  const collTokenAta = getAssociatedTokenAddressSync(collTokenMint, owner);
+  const debtTokenAta = getAssociatedTokenAddressSync(
+    debtTokenMint,
+    owner,
+    false,
+    debtReserve!.getLiquidityTokenProgram()
+  );
+  const collTokenAta = getAssociatedTokenAddressSync(
+    collTokenMint,
+    owner,
+    false,
+    collReserve!.getLiquidityTokenProgram()
+  );
 
   // 1. Create atas & budget txns
   const budgetIxns = budgetAndPriorityFeeIxns || getComputeBudgetAndPriorityFeeIxns(3000000);
@@ -1504,7 +1529,12 @@ async function buildDecreaseLeverageIxns(
 ): Promise<TransactionInstruction[]> {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
-  const debtTokenAta = getAssociatedTokenAddressSync(debtTokenMint, owner);
+  const debtTokenAta = getAssociatedTokenAddressSync(
+    debtTokenMint,
+    owner,
+    false,
+    debtReserve!.getLiquidityTokenProgram()
+  );
 
   // 1. Create atas & budget txns
   const budgetIxns = budgetAndPriorityFeeIxns || getComputeBudgetAndPriorityFeeIxns(3000000);
