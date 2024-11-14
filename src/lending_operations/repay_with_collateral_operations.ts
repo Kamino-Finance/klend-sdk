@@ -108,13 +108,6 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
     .ceil();
   const inputAmountLamports = Decimal.min(withdrawableCollLamports, maxCollNeededFromOracle);
 
-  const swapQuoteInputs: SwapInputs = {
-    inputAmountLamports,
-    inputMint: collTokenMint,
-    outputMint: debtTokenMint,
-    amountDebtAtaBalance: new Decimal(0), // only used for kTokens
-  };
-
   // Build the repay & withdraw collateral tx to get the number of accounts
   const klendIxs = await buildRepayWithCollateralIxs(
     kaminoMarket,
@@ -135,6 +128,14 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
     inputAmountLamports
   );
   const uniqueKlendAccounts = uniqueAccounts(klendIxs);
+
+  const swapQuoteInputs: SwapInputs = {
+    inputAmountLamports,
+    inputMint: collTokenMint,
+    outputMint: debtTokenMint,
+    amountDebtAtaBalance: new Decimal(0), // only used for kTokens
+  };
+
   const swapQuote = await quoter(swapQuoteInputs, uniqueKlendAccounts);
 
   const swapQuotePxDebtToColl = swapQuote.priceAInB;
@@ -147,6 +148,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
   return {
     swapInputs: {
       inputAmountLamports: collSwapInLamports,
+      minOutAmountLamports: flashRepayAmountLamports,
       inputMint: collTokenMint,
       outputMint: debtTokenMint,
       amountDebtAtaBalance: new Decimal(0), // only used for kTokens

@@ -86,10 +86,10 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
   swapInputs: SwapInputs;
   initialInputs: DepositLeverageInitialInputs<QuoteResponse>;
 }> {
-  const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
-  const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
+  const collReserve = kaminoMarket.getReserveByMint(collTokenMint)!;
+  const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint)!;
   const solTokenReserve = kaminoMarket.getReserveByMint(WRAPPED_SOL_MINT);
-  const flashLoanFee = collReserve!.getFlashLoanFee() || new Decimal(0);
+  const flashLoanFee = collReserve.getFlashLoanFee() || new Decimal(0);
 
   const selectedTokenIsCollToken = selectedTokenMint.equals(collTokenMint);
   const depositTokenIsSol = !solTokenReserve ? false : selectedTokenMint.equals(solTokenReserve!.getLiquidityMint());
@@ -129,8 +129,8 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
   // Build the repay & withdraw collateral tx to get the number of accounts
   const klendIxs = await buildDepositWithLeverageIxns(
     kaminoMarket,
-    debtReserve!,
-    collReserve!,
+    debtReserve,
+    collReserve,
     owner,
     obligation ? obligation : obligationType,
     referrer,
@@ -152,7 +152,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
 
   const swapInputAmount = toLamports(
     !collIsKtoken ? calcs.swapDebtTokenIn : calcs.singleSidedDepositKtokenOnly,
-    debtReserve!.stats.decimals
+    debtReserve.stats.decimals
   ).ceil();
 
   const swapInputsForQuote: SwapInputs = {
@@ -182,7 +182,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
 
   const swapInputAmountQuotePrice = toLamports(
     !collIsKtoken ? quotePriceCalcs.swapDebtTokenIn : quotePriceCalcs.singleSidedDepositKtokenOnly,
-    debtReserve!.stats.decimals
+    debtReserve.stats.decimals
   ).ceil();
 
   let expectedDebtTokenAtaBalance = new Decimal(0);
@@ -201,14 +201,18 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
       kaminoMarket.getConnection(),
       debtTokenMint,
       owner,
-      toLamports(futureBalanceInAta.toDecimalPlaces(debtReserve!.stats.decimals), debtReserve!.stats.decimals),
-      debtReserve!.state.liquidity.mintDecimals.toNumber()
+      toLamports(futureBalanceInAta.toDecimalPlaces(debtReserve.stats.decimals), debtReserve.stats.decimals),
+      debtReserve.state.liquidity.mintDecimals.toNumber()
     );
   }
 
   return {
     swapInputs: {
       inputAmountLamports: swapInputAmountQuotePrice,
+      minOutAmountLamports: toLamports(
+        !collIsKtoken ? quotePriceCalcs.flashBorrowInCollToken : quotePriceCalcs.flashBorrowInDebtTokenKtokenOnly,
+        !collIsKtoken ? collReserve.stats.decimals : debtReserve.stats.decimals
+      ),
       inputMint: debtTokenMint,
       outputMint: collTokenMint,
       amountDebtAtaBalance: expectedDebtTokenAtaBalance,
@@ -650,7 +654,7 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
     kaminoMarket,
     collReserve!,
     debtReserve!,
-    collIsKtoken ? swapQuote.priceAInB : priceCollToDebt,
+    !collIsKtoken ? swapQuote.priceAInB : priceCollToDebt,
     withdrawAmount,
     deposited,
     borrowed,
@@ -671,6 +675,7 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
   return {
     swapInputs: {
       inputAmountLamports: swapInputAmountQuotePrice,
+      minOutAmountLamports: calcsQuotePrice.repayAmount,
       inputMint: collTokenMint,
       outputMint: debtTokenMint,
       amountDebtAtaBalance: new Decimal(0), // Only needed for ktokens deposits
@@ -972,10 +977,10 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
   swapInputs: SwapInputs;
   initialInputs: AdjustLeverageInitialInputs<QuoteResponse>;
 }> {
-  const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
-  const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
-  const deposited = fromLamports(depositedLamports, collReserve!.stats.decimals);
-  const borrowed = fromLamports(borrowedLamports, debtReserve!.stats.decimals);
+  const collReserve = kaminoMarket.getReserveByMint(collTokenMint)!;
+  const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint)!;
+  const deposited = fromLamports(depositedLamports, collReserve.stats.decimals);
+  const borrowed = fromLamports(borrowedLamports, debtReserve.stats.decimals);
   const collIsKtoken = await isKtoken(collTokenMint);
   const strategy = collIsKtoken ? (await kamino!.getStrategyByKTokenMint(collTokenMint))! : undefined;
 
@@ -984,9 +989,9 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
   const isDepositViaLeverage = targetLeverage.gte(new Decimal(currentLeverage));
   let flashLoanFee;
   if (isDepositViaLeverage) {
-    flashLoanFee = collReserve!.getFlashLoanFee() || new Decimal(0);
+    flashLoanFee = collReserve.getFlashLoanFee() || new Decimal(0);
   } else {
-    flashLoanFee = debtReserve!.getFlashLoanFee() || new Decimal(0);
+    flashLoanFee = debtReserve.getFlashLoanFee() || new Decimal(0);
   }
 
   const { adjustDepositPosition, adjustBorrowPosition } = calcAdjustAmounts({
@@ -1040,7 +1045,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
 
     const swapInputAmount = toLamports(
       !collIsKtoken ? calcs.borrowAmount : calcs.amountToFlashBorrowDebt,
-      debtReserve!.state.liquidity.mintDecimals.toNumber()
+      debtReserve.stats.decimals,
     ).ceil();
 
     const swapInputsForQuote: SwapInputs = {
@@ -1066,7 +1071,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
     const calcsQuotePrice = await adjustDepositLeverageCalcs(
       kaminoMarket,
       owner,
-      debtReserve!,
+      debtReserve,
       adjustDepositPositionQuotePrice,
       adjustBorrowPositionQuotePrice,
       swapQuote.priceAInB,
@@ -1077,7 +1082,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
 
     const swapInputAmountQuotePrice = toLamports(
       !collIsKtoken ? calcsQuotePrice.borrowAmount : calcsQuotePrice.amountToFlashBorrowDebt,
-      debtReserve!.state.liquidity.mintDecimals.toNumber()
+      debtReserve.state.liquidity.mintDecimals.toNumber()
     ).ceil();
 
     let expectedDebtTokenAtaBalance = new Decimal(0);
@@ -1088,15 +1093,19 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         owner,
         toLamports(
           !collIsKtoken ? calcsQuotePrice.borrowAmount : calcsQuotePrice.amountToFlashBorrowDebt,
-          debtReserve!.stats.decimals
+          debtReserve.stats.decimals
         ).floor(),
-        debtReserve!.state.liquidity.mintDecimals.toNumber()
+        debtReserve.state.liquidity.mintDecimals.toNumber()
       );
     }
 
     return {
       swapInputs: {
         inputAmountLamports: swapInputAmountQuotePrice,
+        minOutAmountLamports: toLamports(
+          !collIsKtoken ? calcsQuotePrice.adjustDepositPosition : calcsQuotePrice.amountToFlashBorrowDebt,
+          !collIsKtoken ? collReserve.stats.decimals : debtReserve!.stats.decimals
+        ),
         inputMint: debtTokenMint,
         outputMint: collTokenMint,
         amountDebtAtaBalance: expectedDebtTokenAtaBalance,
@@ -1139,7 +1148,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
 
     const swapInputAmount = toLamports(
       calcs.withdrawAmountWithSlippageAndFlashLoanFee,
-      collReserve!.state.liquidity.mintDecimals.toNumber()
+      collReserve.state.liquidity.mintDecimals.toNumber()
     ).ceil();
 
     const swapInputsForQuote: SwapInputs = {
@@ -1171,12 +1180,13 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
 
     const swapInputAmountQuotePrice = toLamports(
       calcsQuotePrice.withdrawAmountWithSlippageAndFlashLoanFee,
-      collReserve!.state.liquidity.mintDecimals.toNumber()
+      collReserve.state.liquidity.mintDecimals.toNumber()
     ).ceil();
 
     return {
       swapInputs: {
         inputAmountLamports: swapInputAmountQuotePrice,
+        minOutAmountLamports: toLamports(calcsQuotePrice.adjustBorrowPosition.abs(), debtReserve.stats.decimals),
         inputMint: collTokenMint,
         outputMint: debtTokenMint,
         amountDebtAtaBalance: new Decimal(0), // Only needed for ktokens deposits

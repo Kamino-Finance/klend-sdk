@@ -32,6 +32,7 @@ export type IsKtokenProvider = (token: PublicKey | string) => Promise<boolean>;
 
 export type SwapInputs = {
   inputAmountLamports: Decimal;
+  minOutAmountLamports?: Decimal;
   inputMint: PublicKey;
   outputMint: PublicKey;
   amountDebtAtaBalance: Decimal | undefined;
