@@ -26,6 +26,7 @@ import {
   ReserveAllocationConfig,
   ReserveWithAddress,
   signSendAndConfirmRawTransactionWithRetry,
+  sleep,
   Web3Client,
 } from './lib';
 import * as anchor from '@coral-xyz/anchor';
@@ -224,9 +225,10 @@ async function main() {
       `--mode <string>`,
       'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
     )
+    .option(`--name`, 'The onchain name of the strat')
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ mint, mode, staging, multisig }) => {
+    .action(async ({ mint, mode, name, staging, multisig }) => {
       const env = initializeClient(mode === 'multisig', staging);
       const tokenMint = new PublicKey(mint);
 
@@ -244,11 +246,14 @@ async function main() {
         tokenMintProgramId: tokenProgramID,
         performanceFeeRate: new Decimal(0.0),
         managementFeeRate: new Decimal(0.0),
+        name,
       });
 
-      const { vault: vaultKp, ixns: instructions } = await kaminoManager.createVaultIxs(kaminoVaultConfig);
+      const { vault: vaultKp, initVaultIxs: instructions } = await kaminoManager.createVaultIxs(kaminoVaultConfig);
 
-      const _createVaultSig = await processTxn(env.client, env.payer, instructions, mode, 2500, [vaultKp]);
+      const _createVaultSig = await processTxn(env.client, env.payer, instructions.initVaultIxs, mode, 2500, [vaultKp]);
+      await sleep(5000);
+      const _populateLUTSig = await processTxn(env.client, env.payer, instructions.populateLUTIxs, mode, 2500, []);
 
       mode === 'execute' && console.log('Vault created:', vaultKp.publicKey.toBase58());
     });
@@ -274,9 +279,16 @@ async function main() {
       const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
-      const instruction = await kaminoManager.updateVaultConfigIx(kaminoVault, new PendingVaultAdmin(), newAdmin);
+      const instructions = await kaminoManager.updateVaultConfigIxs(kaminoVault, new PendingVaultAdmin(), newAdmin);
 
-      const updateVaultPendingAdminSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
+      const updateVaultPendingAdminSig = await processTxn(
+        env.client,
+        env.payer,
+        [instructions.updateVaultConfigIx, ...instructions.updateLUTIxs],
+        mode,
+        2500,
+        []
+      );
 
       mode === 'execute' && console.log('Pending admin updated:', updateVaultPendingAdminSig);
     });
@@ -302,11 +314,82 @@ async function main() {
       const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
-      const instruction = await kaminoManager.updateVaultConfigIx(kaminoVault, new ManagementFeeBps(), feeBps);
+      const instructions = await kaminoManager.updateVaultConfigIxs(kaminoVault, new ManagementFeeBps(), feeBps);
 
-      const updateVaultConfigSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
+      const updateVaultConfigSig = await processTxn(
+        env.client,
+        env.payer,
+        [instructions.updateVaultConfigIx, ...instructions.updateLUTIxs],
+        mode,
+        2500,
+        []
+      );
 
       mode === 'execute' && console.log('Management fee updated:', updateVaultConfigSig);
+    });
+
+  commands
+    .command('insert-into-lut')
+    .requiredOption('--lut <string>', 'Lookup table address')
+    .requiredOption('--addresses <string>', 'The addresses to insert into the LUT, space separated')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ lut, addresses, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
+      const lutAddress = new PublicKey(lut);
+
+      const addressesArr = addresses.split(' ').map((address: string) => new PublicKey(address));
+
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const instructions = await kaminoManager.insertIntoLUT(env.payer.publicKey, lutAddress, addressesArr);
+
+      const updateVaultConfigSig = await processTxn(env.client, env.payer, instructions, mode, 2500, []);
+
+      mode === 'execute' && console.log('Management fee updated:', updateVaultConfigSig);
+    });
+
+  commands
+    .command('sync-vault-lut')
+    .requiredOption('--vault <string>', 'The vault address to sync')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ vault, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
+      const vaultAddress = new PublicKey(vault);
+
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
+      const syncLUTIxs = await kaminoManager.syncVaultLUT(kaminoVault);
+
+      // if we need to create the LUT we have to do that in a separate tx and wait a little bit after
+      if (syncLUTIxs.setupLUTIfNeededIxs.length > 0) {
+        const setupLUTSig = await processTxn(env.client, env.payer, syncLUTIxs.setupLUTIfNeededIxs, mode, 2500, []);
+        await sleep(5000);
+        mode === 'execute' && console.log('LUT created and set to the vault:', setupLUTSig);
+      }
+      // if there are accounts to be added to the LUT we have to do that in a separate tx
+      for (const ix of syncLUTIxs.syncLUTIxs) {
+        const insertIntoLUTSig = await processTxn(env.client, env.payer, [ix], mode, 2500, []);
+        mode === 'execute' && console.log('Accounts added to the LUT:', insertIntoLUTSig);
+      }
     });
 
   commands
@@ -330,9 +413,16 @@ async function main() {
       const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
-      const instruction = await kaminoManager.updateVaultConfigIx(kaminoVault, new PerformanceFeeBps(), feeBps);
+      const instructions = await kaminoManager.updateVaultConfigIxs(kaminoVault, new PerformanceFeeBps(), feeBps);
 
-      const updateVaultPerfFeeSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
+      const updateVaultPerfFeeSig = await processTxn(
+        env.client,
+        env.payer,
+        [instructions.updateVaultConfigIx, ...instructions.updateLUTIxs],
+        mode,
+        2500,
+        []
+      );
 
       mode === 'execute' && console.log('Performance fee updated:', updateVaultPerfFeeSig);
     });
@@ -357,9 +447,16 @@ async function main() {
       const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
-      const instruction = await kaminoManager.acceptVaultOwnershipIx(kaminoVault);
+      const instructions = await kaminoManager.acceptVaultOwnershipIxs(kaminoVault);
 
-      const acceptVaultOwnershipSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
+      const acceptVaultOwnershipSig = await processTxn(
+        env.client,
+        env.payer,
+        [instructions.acceptVaultOwnershipIx, ...instructions.updateLUTIxs],
+        mode,
+        2500,
+        []
+      );
 
       mode === 'execute' && console.log('Vault ownership accepted:', acceptVaultOwnershipSig);
     });
@@ -466,7 +563,14 @@ async function main() {
         firstReserveAllocationConfig
       );
 
-      const updateVaultAllocationSig = await processTxn(env.client, env.payer, [instructions], mode, 2500, []);
+      const updateVaultAllocationSig = await processTxn(
+        env.client,
+        env.payer,
+        [instructions.updateReserveAllocationIx, ...instructions.updateLUTIxs],
+        mode,
+        2500,
+        []
+      );
 
       mode === 'execute' && console.log('Vault allocation updated:', updateVaultAllocationSig);
     });

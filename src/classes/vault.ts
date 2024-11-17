@@ -1,6 +1,7 @@
 import { BN } from '@coral-xyz/anchor';
 import {
   AccountMeta,
+  AddressLookupTableProgram,
   Connection,
   GetProgramAccountsResponse,
   Keypair,
@@ -42,10 +43,13 @@ import {
   UpdateVaultConfigArgs,
   WithdrawAccounts,
   WithdrawArgs,
+  withdrawFromAvailable,
+  WithdrawFromAvailableAccounts,
+  WithdrawFromAvailableArgs,
   withdrawPendingFees,
   WithdrawPendingFeesAccounts,
 } from '../idl_codegen_kamino_vault/instructions';
-import { VaultConfigFieldKind } from '../idl_codegen_kamino_vault/types';
+import { VaultConfigField, VaultConfigFieldKind } from '../idl_codegen_kamino_vault/types';
 import { VaultState } from '../idl_codegen_kamino_vault/accounts';
 import Decimal from 'decimal.js';
 import { bpsToPct, getTokenBalanceFromAccountInfoLamports, numberToLamportsDecimal, parseTokenSymbol } from './utils';
@@ -54,9 +58,17 @@ import { withdraw } from '../idl_codegen_kamino_vault/instructions';
 import { PROGRAM_ID } from '../idl_codegen/programId';
 import { DEFAULT_RECENT_SLOT_DURATION_MS, ReserveWithAddress } from './reserve';
 import { Fraction } from './fraction';
-import { createAtasIdempotent, lendingMarketAuthPda } from '../utils';
+import { createAtasIdempotent, lendingMarketAuthPda, PublicKeySet } from '../utils';
 import bs58 from 'bs58';
 import { getAccountOwner, getProgramAccounts } from '../utils/rpc';
+import {
+  AcceptVaultOwnershipIxs,
+  InitVaultIxs,
+  SyncVaultLUTIxs,
+  UpdateReserveAllocationIxs,
+  UpdateVaultConfigIxs,
+} from './types';
+import { collToLamportsDecimal } from '@kamino-finance/kliquidity-sdk';
 
 export const kaminoVaultId = new PublicKey('kvauTFR8qm1dhniz6pYuBZkuene3Hfrs1VQhVRgCNrr');
 export const kaminoVaultStagingId = new PublicKey('STkvh7ostar39Fwr4uZKASs1RNNuYMFMTsE77FiRsL2');
@@ -99,9 +111,9 @@ export class KaminoVaultClient {
    * This method will create a vault with a given config. The config can be changed later on, but it is recommended to set it up correctly from the start
    * @param vaultConfig - the config object used to create a vault
    * @returns vault - keypair, should be used to sign the transaction which creates the vault account
-   * @returns ixns - an array of instructions to create the vault
+   * @returns vault: the keypair of the vault, used to sign the initialization transaction; initVaultIxs: a struct with ixs to initialize the vault and its lookup table + populateLUTIxs, a list to populate the lookup table which has to be executed in a separate transaction
    */
-  async createVaultIxs(vaultConfig: KaminoVaultConfig): Promise<{ vault: Keypair; ixns: TransactionInstruction[] }> {
+  async createVaultIxs(vaultConfig: KaminoVaultConfig): Promise<{ vault: Keypair; initVaultIxs: InitVaultIxs }> {
     const vaultState = Keypair.generate();
     const size = VaultState.layout.span + 8;
 
@@ -142,9 +154,63 @@ export class KaminoVaultClient {
     };
     const initVaultIx = initVault(initVaultAccounts, this._kaminoVaultProgramId);
 
-    // TODO: Add logic to update vault based on vaultConfig
+    // create and set up the vault lookup table
+    const slot = await this._connection.getSlot();
+    const [createLUTIx, lut] = this.getInitLookupTableIx(vaultConfig.admin, slot);
 
-    return { vault: vaultState, ixns: [createVaultIx, initVaultIx] };
+    const accountsToBeInserted = [
+      vaultConfig.admin,
+      vaultState.publicKey,
+      vaultConfig.tokenMint,
+      vaultConfig.tokenMintProgramId,
+      baseVaultAuthority,
+      sharesMint,
+      SystemProgram.programId,
+      SYSVAR_RENT_PUBKEY,
+      TOKEN_PROGRAM_ID,
+      this._kaminoLendProgramId,
+      SYSVAR_INSTRUCTIONS_PUBKEY,
+    ];
+    const insertIntoLUTIxs = await this.insertIntoLookupTableIxs(vaultConfig.admin, lut, accountsToBeInserted, []);
+
+    const setLUTIx = this.updateUninitialisedVaultConfigIx(
+      vaultConfig.admin,
+      vaultState.publicKey,
+      new VaultConfigField.LookupTable(),
+      lut.toString()
+    );
+
+    const ixns = [createVaultIx, initVaultIx, createLUTIx, setLUTIx];
+
+    if (vaultConfig.getPerformanceFeeBps() > 0) {
+      const setPerformanceFeeIx = this.updateUninitialisedVaultConfigIx(
+        vaultConfig.admin,
+        vaultState.publicKey,
+        new VaultConfigField.PerformanceFeeBps(),
+        vaultConfig.getPerformanceFeeBps().toString()
+      );
+      ixns.push(setPerformanceFeeIx);
+    }
+    if (vaultConfig.getManagementFeeBps() > 0) {
+      const setManagementFeeIx = this.updateUninitialisedVaultConfigIx(
+        vaultConfig.admin,
+        vaultState.publicKey,
+        new VaultConfigField.ManagementFeeBps(),
+        vaultConfig.getManagementFeeBps().toString()
+      );
+      ixns.push(setManagementFeeIx);
+    }
+    if (vaultConfig.name && vaultConfig.name.length > 0) {
+      const setNameIx = this.updateUninitialisedVaultConfigIx(
+        vaultConfig.admin,
+        vaultState.publicKey,
+        new VaultConfigField.Name(),
+        vaultConfig.name
+      );
+      ixns.push(setNameIx);
+    }
+
+    return { vault: vaultState, initVaultIxs: { initVaultIxs: ixns, populateLUTIxs: insertIntoLUTIxs } };
   }
 
   /**
@@ -156,7 +222,7 @@ export class KaminoVaultClient {
   async updateReserveAllocationIxs(
     vault: KaminoVault,
     reserveAllocationConfig: ReserveAllocationConfig
-  ): Promise<TransactionInstruction> {
+  ): Promise<UpdateReserveAllocationIxs> {
     const vaultState: VaultState = await vault.getState(this.getConnection());
     const reserveState: Reserve = reserveAllocationConfig.getReserveState();
 
@@ -183,25 +249,47 @@ export class KaminoVaultClient {
       cap: new BN(reserveAllocationConfig.getAllocationCapLamports().floor().toString()),
     };
 
-    return updateReserveAllocation(
+    const updateReserveAllocationIx = updateReserveAllocation(
       updateReserveAllocationArgs,
       updateReserveAllocationAccounts,
       this._kaminoVaultProgramId
     );
+
+    const accountsToAddToLUT = [
+      reserveAllocationConfig.getReserveAddress(),
+      cTokenVault,
+      ...this.getReserveAccountsToInsertInLut(reserveState),
+    ];
+
+    const lendingMarketAuth = lendingMarketAuthPda(reserveState.lendingMarket, this._kaminoLendProgramId)[0];
+    accountsToAddToLUT.push(lendingMarketAuth);
+
+    const insertIntoLUTIxs = await this.insertIntoLookupTableIxs(
+      vaultState.adminAuthority,
+      vaultState.vaultLookupTable,
+      accountsToAddToLUT
+    );
+
+    const updateReserveAllocationIxs: UpdateReserveAllocationIxs = {
+      updateReserveAllocationIx,
+      updateLUTIxs: insertIntoLUTIxs,
+    };
+
+    return updateReserveAllocationIxs;
   }
 
   /**
-   * This method updates the vault config
-   * @param vault - vault to be updated
-   * @param mode - the field to be updated
-   * @param value - the new value for the field to be updated (number or pubkey)
-   * @returns - a list of instructions
+   * Update a field of the vault. If the field is a pubkey it will return an extra instruction to add that account into the lookup table
+   * @param vault the vault to update
+   * @param mode the field to update (based on VaultConfigFieldKind enum)
+   * @param value the value to update the field with
+   * @returns a struct that contains the instruction to update the field and an optional list of instructions to update the lookup table
    */
-  async updateVaultConfigIx(
+  async updateVaultConfigIxs(
     vault: KaminoVault,
     mode: VaultConfigFieldKind,
     value: string
-  ): Promise<TransactionInstruction> {
+  ): Promise<UpdateVaultConfigIxs> {
     const vaultState: VaultState = await vault.getState(this.getConnection());
 
     const updateVaultConfigAccs: UpdateVaultConfigAccounts = {
@@ -216,8 +304,13 @@ export class KaminoVaultClient {
     };
 
     if (isNaN(+value)) {
-      const data = new PublicKey(value);
-      updateVaultConfigArgs.data = data.toBuffer();
+      if (mode.kind === new VaultConfigField.Name().kind) {
+        const data = Array.from(this.encodeVaultName(value));
+        updateVaultConfigArgs.data = Buffer.from(data);
+      } else {
+        const data = new PublicKey(value);
+        updateVaultConfigArgs.data = data.toBuffer();
+      }
     } else {
       const buffer = Buffer.alloc(8);
       buffer.writeBigUInt64LE(BigInt(value.toString()));
@@ -251,6 +344,70 @@ export class KaminoVaultClient {
     updateVaultConfigIx.keys = updateVaultConfigIx.keys.concat(vaultReservesAccountMetas);
     updateVaultConfigIx.keys = updateVaultConfigIx.keys.concat(vaultReservesLendingMarkets);
 
+    const updateLUTIxs = [];
+
+    if (mode.kind === new VaultConfigField.PendingVaultAdmin().kind || mode.kind === new VaultConfigField.Farm().kind) {
+      const newPubkey = new PublicKey(value);
+      const insertIntoLutIxs = await this.insertIntoLookupTableIxs(
+        vaultState.adminAuthority,
+        vaultState.vaultLookupTable,
+        [newPubkey]
+      );
+      updateLUTIxs.push(...insertIntoLutIxs);
+    }
+
+    const updateVaultConfigIxs: UpdateVaultConfigIxs = {
+      updateVaultConfigIx,
+      updateLUTIxs,
+    };
+
+    return updateVaultConfigIxs;
+  }
+
+  /**
+   * This method updates the vault config for a vault that
+   * @param vault - address of vault to be updated
+   * @param mode - the field to be updated
+   * @param value - the new value for the field to be updated (number or pubkey)
+   * @returns - a list of instructions
+   */
+  updateUninitialisedVaultConfigIx(
+    admin: PublicKey,
+    vault: PublicKey,
+    mode: VaultConfigFieldKind,
+    value: string
+  ): TransactionInstruction {
+    const updateVaultConfigAccs: UpdateVaultConfigAccounts = {
+      adminAuthority: admin,
+      vaultState: vault,
+      klendProgram: this._kaminoLendProgramId,
+    };
+
+    const updateVaultConfigArgs: UpdateVaultConfigArgs = {
+      entry: mode,
+      data: Buffer.from([0]),
+    };
+
+    if (isNaN(+value)) {
+      if (mode.kind === new VaultConfigField.Name().kind) {
+        const data = Array.from(this.encodeVaultName(value));
+        updateVaultConfigArgs.data = Buffer.from(data);
+      } else {
+        const data = new PublicKey(value);
+        updateVaultConfigArgs.data = data.toBuffer();
+      }
+    } else {
+      const buffer = Buffer.alloc(8);
+      buffer.writeBigUInt64LE(BigInt(value.toString()));
+      updateVaultConfigArgs.data = buffer;
+    }
+
+    const updateVaultConfigIx = updateVaultConfig(
+      updateVaultConfigArgs,
+      updateVaultConfigAccs,
+      this._kaminoVaultProgramId
+    );
+
     return updateVaultConfigIx;
   }
 
@@ -259,7 +416,7 @@ export class KaminoVaultClient {
    * @param vault - vault to change the ownership for
    * @returns - an instruction to be used to be executed
    */
-  async acceptVaultOwnershipIx(vault: KaminoVault): Promise<TransactionInstruction> {
+  async acceptVaultOwnershipIxs(vault: KaminoVault): Promise<AcceptVaultOwnershipIxs> {
     const vaultState: VaultState = await vault.getState(this.getConnection());
 
     const acceptOwneshipAccounts: UpdateAdminAccounts = {
@@ -267,7 +424,39 @@ export class KaminoVaultClient {
       vaultState: vault.address,
     };
 
-    return updateAdmin(acceptOwneshipAccounts, this._kaminoVaultProgramId);
+    const acceptVaultOwnershipIx = updateAdmin(acceptOwneshipAccounts, this._kaminoVaultProgramId);
+
+    // read the current LUT and create a new one for the new admin and backfill it
+    const accountsInExistentLUT = (await this.getAccountsInLUT(vaultState.vaultLookupTable)).filter(
+      (account) => !account.equals(vaultState.adminAuthority)
+    );
+
+    const LUTIxs = [];
+    const [initNewLUTIx, newLUT] = this.getInitLookupTableIx(vaultState.pendingAdmin, await this._connection.getSlot());
+    LUTIxs.push(initNewLUTIx);
+
+    const insertIntoLUTIxs = await this.insertIntoLookupTableIxs(
+      vaultState.pendingAdmin,
+      newLUT,
+      accountsInExistentLUT
+    );
+
+    LUTIxs.push(...insertIntoLUTIxs);
+
+    const updateVaultConfigIxs = await this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.LookupTable(),
+      newLUT.toString()
+    );
+    LUTIxs.push(updateVaultConfigIxs.updateVaultConfigIx);
+    LUTIxs.push(...updateVaultConfigIxs.updateLUTIxs);
+
+    const acceptVaultOwnershipIxs: AcceptVaultOwnershipIxs = {
+      acceptVaultOwnershipIx,
+      updateLUTIxs: LUTIxs,
+    };
+
+    return acceptVaultOwnershipIxs;
   }
 
   /**
@@ -483,6 +672,57 @@ export class KaminoVaultClient {
     vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<TransactionInstruction[]> {
     const vaultState = await vault.getState(this._connection);
+    const kaminoVault = new KaminoVault(vault.address, vaultState, vault.programId);
+
+    // if the vault has allocations withdraw otherwise wtihdraw from available ix
+    const vaultAllocation = vaultState.vaultAllocationStrategy.find(
+      (allocation) => ~allocation.reserve.equals(PublicKey.default)
+    );
+
+    if (vaultAllocation) {
+      return this.wihdrdrawWithReserveIxns(user, kaminoVault, shareAmount, slot, vaultReservesMap);
+    } else {
+      return this.withdrawFromAvailableIxns(user, kaminoVault, shareAmount);
+    }
+  }
+
+  private async withdrawFromAvailableIxns(
+    user: PublicKey,
+    vault: KaminoVault,
+    shareAmount: Decimal
+  ): Promise<TransactionInstruction[]> {
+    const vaultState = await vault.getState(this._connection);
+    const kaminoVault = new KaminoVault(vault.address, vaultState, vault.programId);
+
+    const userSharesAta = getAssociatedTokenAddress(vaultState.sharesMint, user);
+    const [{ ata: userTokenAta, createAtaIx }] = createAtasIdempotent(user, [
+      {
+        mint: vaultState.tokenMint,
+        tokenProgram: vaultState.tokenProgram,
+      },
+    ]);
+
+    const shareLamportsToWithdraw = collToLamportsDecimal(shareAmount, vaultState.sharesMintDecimals.toNumber());
+    const withdrawFromAvailableIxn = await this.withdrawFromAvailableIxn(
+      user,
+      kaminoVault,
+      vaultState,
+      userSharesAta,
+      userTokenAta,
+      shareLamportsToWithdraw
+    );
+
+    return [createAtaIx, withdrawFromAvailableIxn];
+  }
+
+  private async wihdrdrawWithReserveIxns(
+    user: PublicKey,
+    vault: KaminoVault,
+    shareAmount: Decimal,
+    slot: number,
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<TransactionInstruction[]> {
+    const vaultState = await vault.getState(this._connection);
 
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
 
@@ -632,6 +872,21 @@ export class KaminoVaultClient {
     return [createAtaIx, investIx];
   }
 
+  encodeVaultName(token: string): Uint8Array {
+    const maxArray = new Uint8Array(40);
+    const s: Uint8Array = new TextEncoder().encode(token);
+    maxArray.set(s);
+    return maxArray;
+  }
+
+  decodeVaultName(token: number[]): string {
+    const maxArray = new Uint8Array(token);
+    let s: string = new TextDecoder().decode(maxArray);
+    // Remove trailing zeros and spaces
+    s = s.replace(/[\0 ]+$/, '');
+    return s;
+  }
+
   private withdrawIxn(
     user: PublicKey,
     vault: KaminoVault,
@@ -702,6 +957,35 @@ export class KaminoVaultClient {
     return withdrawIxn;
   }
 
+  private async withdrawFromAvailableIxn(
+    user: PublicKey,
+    vault: KaminoVault,
+    vaultState: VaultState,
+    userSharesAta: PublicKey,
+    userTokenAta: PublicKey,
+    shareAmountLamports: Decimal
+  ): Promise<TransactionInstruction> {
+    const withdrawFromAvailableAccounts: WithdrawFromAvailableAccounts = {
+      user,
+      vaultState: vault.address,
+      tokenVault: vaultState.tokenVault,
+      baseVaultAuthority: vaultState.baseVaultAuthority,
+      userTokenAta: userTokenAta,
+      tokenMint: vaultState.tokenMint,
+      userSharesAta: userSharesAta,
+      sharesMint: vaultState.sharesMint,
+      tokenProgram: vaultState.tokenProgram,
+      sharesTokenProgram: TOKEN_PROGRAM_ID,
+      klendProgram: this._kaminoLendProgramId,
+    };
+
+    const withdrawFromAvailableArgs: WithdrawFromAvailableArgs = {
+      sharesAmount: new BN(shareAmountLamports.toString()),
+    };
+
+    return withdrawFromAvailable(withdrawFromAvailableArgs, withdrawFromAvailableAccounts, this._kaminoVaultProgramId);
+  }
+
   private async withdrawPendingFeesIxn(
     vault: KaminoVault,
     vaultState: VaultState,
@@ -756,6 +1040,189 @@ export class KaminoVaultClient {
     withdrawPendingFeesIxn.keys = withdrawPendingFeesIxn.keys.concat(vaultReservesLendingMarkets);
 
     return withdrawPendingFeesIxn;
+  }
+
+  /**
+   * Sync a vault for lookup table; create and set the LUT for the vault if needed and fill it with all the needed accounts
+   * @param vault the vault to sync and set the LUT for if needed
+   * @param vaultReserves optional; the state of the reserves in the vault allocation
+   * @returns a struct that contains a list of ix to create the LUT and assign it to the vault if needed + a list of ixs to insert all the accounts in the LUT
+   */
+  async syncVaultLookupTable(
+    vault: KaminoVault,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<SyncVaultLUTIxs> {
+    const vaultState = await vault.getState(this._connection);
+    const allAccountsToBeInserted = [
+      vault.address,
+      vaultState.adminAuthority,
+      vaultState.baseVaultAuthority,
+      vaultState.tokenMint,
+      vaultState.tokenVault,
+      vaultState.sharesMint,
+      vaultState.tokenProgram,
+      this._kaminoLendProgramId,
+    ];
+
+    vaultState.vaultAllocationStrategy.forEach((allocation) => {
+      allAccountsToBeInserted.push(allocation.reserve);
+      allAccountsToBeInserted.push(allocation.ctokenVault);
+    });
+
+    if (vaultReserves) {
+      vaultReserves.forEach((reserve) => {
+        allAccountsToBeInserted.push(reserve.state.lendingMarket);
+        allAccountsToBeInserted.push(reserve.state.farmCollateral);
+        allAccountsToBeInserted.push(reserve.state.farmDebt);
+        allAccountsToBeInserted.push(reserve.state.liquidity.supplyVault);
+        allAccountsToBeInserted.push(reserve.state.liquidity.feeVault);
+        allAccountsToBeInserted.push(reserve.state.collateral.mintPubkey);
+        allAccountsToBeInserted.push(reserve.state.collateral.supplyVault);
+      });
+    } else {
+      const vaultReservesState = await this.loadVaultReserves(vaultState);
+      vaultReservesState.forEach((reserve) => {
+        allAccountsToBeInserted.push(reserve.state.lendingMarket);
+        allAccountsToBeInserted.push(reserve.state.farmCollateral);
+        allAccountsToBeInserted.push(reserve.state.farmDebt);
+        allAccountsToBeInserted.push(reserve.state.liquidity.supplyVault);
+        allAccountsToBeInserted.push(reserve.state.liquidity.feeVault);
+        allAccountsToBeInserted.push(reserve.state.collateral.mintPubkey);
+        allAccountsToBeInserted.push(reserve.state.collateral.supplyVault);
+      });
+    }
+
+    if (!vaultState.vaultFarm.equals(PublicKey.default)) {
+      allAccountsToBeInserted.push(vaultState.vaultFarm);
+    }
+
+    const setupLUTIfNeededIxs: TransactionInstruction[] = [];
+    let lut = vaultState.vaultLookupTable;
+    if (lut.equals(PublicKey.default)) {
+      const recentSlot = await this._connection.getSlot();
+      const [ixn, address] = this.getInitLookupTableIx(vaultState.adminAuthority, recentSlot);
+      setupLUTIfNeededIxs.push(ixn);
+      lut = address;
+
+      // set the new LUT for the vault
+      const updateVaultConfigIxs = await this.updateVaultConfigIxs(
+        vault,
+        new VaultConfigField.LookupTable(),
+        lut.toString()
+      );
+      setupLUTIfNeededIxs.push(updateVaultConfigIxs.updateVaultConfigIx);
+    }
+
+    const ixns: TransactionInstruction[] = [];
+    let overridenExistentAccounts: PublicKey[] | undefined = undefined;
+    if (vaultState.vaultLookupTable.equals(PublicKey.default)) {
+      overridenExistentAccounts = [];
+    }
+    ixns.push(
+      ...(await this.insertIntoLookupTableIxs(
+        vaultState.adminAuthority,
+        lut,
+        allAccountsToBeInserted,
+        overridenExistentAccounts
+      ))
+    );
+
+    return {
+      setupLUTIfNeededIxs,
+      syncLUTIxs: ixns,
+    };
+  }
+
+  getInitLookupTableIx(payer: PublicKey, slot: number): [TransactionInstruction, PublicKey] {
+    const [ixn, address] = AddressLookupTableProgram.createLookupTable({
+      authority: payer,
+      payer,
+      recentSlot: slot,
+    });
+
+    return [ixn, address];
+  }
+
+  getReserveAccountsToInsertInLut(reserveState: Reserve): PublicKey[] {
+    return [
+      reserveState.lendingMarket,
+      reserveState.farmCollateral,
+      reserveState.farmDebt,
+      reserveState.liquidity.mintPubkey,
+      reserveState.liquidity.supplyVault,
+      reserveState.liquidity.feeVault,
+      reserveState.collateral.mintPubkey,
+      reserveState.collateral.supplyVault,
+    ];
+  }
+
+  async insertIntoLookupTableIxs(
+    payer: PublicKey,
+    lookupTable: PublicKey,
+    keys: PublicKey[],
+    accountsInLUT?: PublicKey[]
+  ): Promise<TransactionInstruction[]> {
+    let lutContents = accountsInLUT;
+    if (!accountsInLUT) {
+      lutContents = await this.getAccountsInLUT(lookupTable);
+    } else {
+      lutContents = accountsInLUT;
+    }
+
+    const missingAccounts = keys.filter((key) => !lutContents!.includes(key) && !key.equals(PublicKey.default));
+    // deduplicate missing accounts and remove default accounts and convert it back to an array
+    const missingAccountsList = new PublicKeySet(missingAccounts).toArray();
+
+    const chunkSize = 20;
+    const ixns: TransactionInstruction[] = [];
+
+    for (let i = 0; i < missingAccountsList.length; i += chunkSize) {
+      const chunk = missingAccountsList.slice(i, i + chunkSize);
+      const ixn = AddressLookupTableProgram.extendLookupTable({
+        lookupTable,
+        authority: payer,
+        payer,
+        addresses: chunk,
+      });
+      ixns.push(ixn);
+    }
+
+    return ixns;
+  }
+
+  /**
+   *
+   * @param connection
+   * @param lookupTable
+   * @returns
+   */
+  async getAccountsInLUT(lookupTable: PublicKey): Promise<PublicKey[]> {
+    const lutState = await this._connection.getAddressLookupTable(lookupTable);
+    if (!lutState || !lutState.value) {
+      throw new Error(`Lookup table ${lookupTable} not found`);
+    }
+
+    return lutState.value.state.addresses;
+  }
+
+  deactivateLookupTableIx(payer: PublicKey, lookupTable: PublicKey): TransactionInstruction {
+    const ixn = AddressLookupTableProgram.deactivateLookupTable({
+      authority: payer,
+      lookupTable: lookupTable,
+    });
+
+    return ixn;
+  }
+
+  /// this require the LUT to be deactivated at least 500 blocks before
+  closeLookupTableIx(payer: PublicKey, lookupTable: PublicKey): TransactionInstruction {
+    const ixn = AddressLookupTableProgram.closeLookupTable({
+      authority: payer,
+      recipient: payer,
+      lookupTable: lookupTable,
+    });
+
+    return ixn;
   }
 
   /**
@@ -1494,6 +1961,8 @@ export class KaminoVaultConfig {
   readonly performanceFeeRate: Decimal;
   /** The management fee rate of the vault, expressed as a decimal */
   readonly managementFeeRate: Decimal;
+  /** The name to be stored on cain for the vault (max 40 characters). */
+  readonly name: string;
 
   constructor(args: {
     admin: PublicKey;
@@ -1501,20 +1970,22 @@ export class KaminoVaultConfig {
     tokenMintProgramId: PublicKey;
     performanceFeeRate: Decimal;
     managementFeeRate: Decimal;
+    name: string;
   }) {
     this.admin = args.admin;
     this.tokenMint = args.tokenMint;
     this.performanceFeeRate = args.performanceFeeRate;
     this.managementFeeRate = args.managementFeeRate;
     this.tokenMintProgramId = args.tokenMintProgramId;
+    this.name = args.name;
   }
 
   getPerformanceFeeBps(): number {
-    return this.performanceFeeRate.mul(10000).toNumber();
+    return this.performanceFeeRate.mul(100).toNumber();
   }
 
-  getManagementFeeRate(): number {
-    return this.managementFeeRate.mul(10000).toNumber();
+  getManagementFeeBps(): number {
+    return this.managementFeeRate.mul(100).toNumber();
   }
 }
 

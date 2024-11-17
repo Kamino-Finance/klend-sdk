@@ -65,6 +65,13 @@ import { Data } from '@kamino-finance/kliquidity-sdk';
 import bs58 from 'bs58';
 import { getProgramAccounts } from '../utils/rpc';
 import { VaultConfigFieldKind } from '../idl_codegen_kamino_vault/types';
+import {
+  AcceptVaultOwnershipIxs,
+  InitVaultIxs,
+  SyncVaultLUTIxs,
+  UpdateReserveAllocationIxs,
+  UpdateVaultConfigIxs,
+} from './types';
 
 /**
  * KaminoManager is a class that provides a high-level interface to interact with the Kamino Lend and Kamino Vault programs, in order to create and manage a market, as well as vaults
@@ -190,9 +197,9 @@ export class KaminoManager {
    * This method will create a vault with a given config. The config can be changed later on, but it is recommended to set it up correctly from the start
    * @param vaultConfig - the config object used to create a vault
    * @returns vault - keypair, should be used to sign the transaction which creates the vault account
-   * @returns ixns - an array of instructions to create the vault
+   * @returns vault: the keypair of the vault, used to sign the initialization transaction; initVaultIxs: a struct with ixs to initialize the vault and its lookup table + populateLUTIxs, a list to populate the lookup table which has to be executed in a separate transaction
    */
-  async createVaultIxs(vaultConfig: KaminoVaultConfig): Promise<{ vault: Keypair; ixns: TransactionInstruction[] }> {
+  async createVaultIxs(vaultConfig: KaminoVaultConfig): Promise<{ vault: Keypair; initVaultIxs: InitVaultIxs }> {
     return this._vaultClient.createVaultIxs(vaultConfig);
   }
 
@@ -200,12 +207,12 @@ export class KaminoManager {
    * This method updates the vault reserve allocation cofnig for an exiting vault reserve, or adds a new reserve to the vault if it does not exist.
    * @param vault - vault to be updated
    * @param reserveAllocationConfig - new reserve allocation config
-   * @returns - a list of instructions
+   * @returns - a struct of instructions
    */
   async updateVaultReserveAllocationIxs(
     vault: KaminoVault,
     reserveAllocationConfig: ReserveAllocationConfig
-  ): Promise<TransactionInstruction> {
+  ): Promise<UpdateReserveAllocationIxs> {
     return this._vaultClient.updateReserveAllocationIxs(vault, reserveAllocationConfig);
   }
 
@@ -331,21 +338,28 @@ export class KaminoManager {
     return this._vaultClient.depositIxs(user, vault, tokenAmount, vaultReservesMap);
   }
 
-  async updateVaultConfigIx(
+  /**
+   * Update a field of the vault. If the field is a pubkey it will return an extra instruction to add that account into the lookup table
+   * @param vault the vault to update
+   * @param mode the field to update (based on VaultConfigFieldKind enum)
+   * @param value the value to update the field with
+   * @returns a struct that contains the instruction to update the field and an optional list of instructions to update the lookup table
+   */
+  async updateVaultConfigIxs(
     vault: KaminoVault,
     mode: VaultConfigFieldKind,
     value: string
-  ): Promise<TransactionInstruction> {
-    return this._vaultClient.updateVaultConfigIx(vault, mode, value);
+  ): Promise<UpdateVaultConfigIxs> {
+    return this._vaultClient.updateVaultConfigIxs(vault, mode, value);
   }
 
   /**
-   * This function creates the instruction for the `pendingAdmin` of the vault to accept to become the owner of the vault (step 2/2 of the ownership transfer)
+   * This function creates the instruction for the `pendingAdmin` of the vault to accept to become the owner of the vault (step 2/2 of the ownership transfer) and the instructions to sync the vault LUT to the new state
    * @param vault - vault to change the ownership for
    * @returns - an instruction to be used to be executed
    */
-  async acceptVaultOwnershipIx(vault: KaminoVault): Promise<TransactionInstruction> {
-    return this._vaultClient.acceptVaultOwnershipIx(vault);
+  async acceptVaultOwnershipIxs(vault: KaminoVault): Promise<AcceptVaultOwnershipIxs> {
+    return this._vaultClient.acceptVaultOwnershipIxs(vault);
   }
 
   /**
@@ -383,6 +397,30 @@ export class KaminoManager {
    */
   async withdrawPendingFeesIxs(vault: KaminoVault, slot: number): Promise<TransactionInstruction[]> {
     return this._vaultClient.withdrawPendingFeesIxs(vault, slot);
+  }
+
+  /**
+   * This method append the given keys to the lookup table
+   * @param payer - the owner of the lookup table
+   * @param slot - the LUT into which the keys will be inserted
+   * @param keys - the keys to be inserted
+   * @returns - list of instructions to insert the keys into the lookup table
+   */
+  async insertIntoLUT(payer: PublicKey, lut: PublicKey, keys: PublicKey[]): Promise<TransactionInstruction[]> {
+    return this._vaultClient.insertIntoLookupTableIxs(payer, lut, keys);
+  }
+
+  /**
+   * Sync a vault for lookup table; create and set the LUT for the vault if needed and fill it with all the needed accounts
+   * @param vault the vault to sync and set the LUT for if needed
+   * @param vaultReserves optional; the state of the reserves in the vault allocation
+   * @returns a struct that contains a list of ix to create the LUT and assign it to the vault if needed + a list of ixs to insert all the accounts in the LUT
+   */
+  async syncVaultLUT(
+    vault: KaminoVault,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<SyncVaultLUTIxs> {
+    return this._vaultClient.syncVaultLookupTable(vault, vaultReserves);
   }
 
   /**
@@ -437,6 +475,15 @@ export class KaminoManager {
    */
   getVaultFeesPct(vaultState: VaultState): VaultFeesPct {
     return this._vaultClient.getVaultFeesPct(vaultState);
+  }
+
+  /**
+   * This method returns the vault name
+   * @param vault - vault to retrieve the onchain name for
+   * @returns - the vault name as string
+   */
+  getDecodedVaultName(vaultState: VaultState): string {
+    return this._vaultClient.decodeVaultName(vaultState.name);
   }
 
   /**
