@@ -76,79 +76,73 @@ export const calcFlashRepayAmount = (props: {
 };
 
 export function calcMaxWithdrawCollateral(
-  kaminoMarket: KaminoMarket,
+  market: KaminoMarket,
+  obligation: KaminoObligation,
   collReserveAddr: PublicKey,
   debtReserveAddr: PublicKey,
-  obligation: KaminoObligation,
   repayAmountLamports: Decimal
 ): {
-  canWithdrawRemainingColl: boolean;
+  repayAmountLamports: Decimal;
   withdrawableCollLamports: Decimal;
+  canWithdrawAllColl: boolean;
+  repayingAllDebt: boolean;
 } {
-  const collReserve = kaminoMarket.getReserveByAddress(collReserveAddr)!;
-  const collOraclePx = collReserve.getOracleMarketPrice();
-  const { maxLtv: collMaxLtv } = obligation.getLtvForReserve(kaminoMarket, collReserve);
+  const deposit = obligation.getDepositByReserve(collReserveAddr)!;
+  const borrow = obligation.getBorrowByReserve(debtReserveAddr)!;
+  const depositReserve = market.getReserveByAddress(deposit.reserveAddress)!;
+  const debtReserve = market.getReserveByAddress(borrow.reserveAddress)!;
+  const depositTotalLamports = deposit.amount.floor();
 
-  const collPosition = obligation.getDepositByReserve(collReserve.address)!;
-  const initialCollValue = collPosition.amount.floor().div(collReserve.getMintFactor()).mul(collOraclePx);
-
-  let totalRemainingDebtValue = new Decimal(0);
-  const borrows = obligation.getBorrows();
-  for (const debtPosition of borrows) {
-    const debtReserve = kaminoMarket.getReserveByAddress(debtPosition.reserveAddress)!;
-    const debtOraclePx = debtReserve.getOracleMarketPrice();
-    const debtBorrowFactor = debtReserve.getBorrowFactor();
-    let remainingDebtAmountLamports = debtPosition.amount;
-    if (debtPosition.reserveAddress.equals(debtReserveAddr)) {
-      remainingDebtAmountLamports = remainingDebtAmountLamports.sub(repayAmountLamports);
-    }
-    const remainingDebtBfWeightedValue = remainingDebtAmountLamports
-      .ceil()
-      .div(debtReserve.getMintFactor())
-      .mul(debtBorrowFactor)
-      .mul(debtOraclePx);
-    totalRemainingDebtValue = totalRemainingDebtValue.add(remainingDebtBfWeightedValue);
+  const remainingBorrowLamports = borrow.amount.sub(repayAmountLamports).ceil();
+  const remainingBorrowAmount = remainingBorrowLamports.div(debtReserve.getMintFactor());
+  let remainingBorrowsValue = remainingBorrowAmount.mul(debtReserve.getOracleMarketPrice());
+  if (obligation.getBorrows().length > 1) {
+    remainingBorrowsValue = obligation
+      .getBorrows()
+      .filter((p) => !p.reserveAddress.equals(borrow.reserveAddress))
+      .reduce((acc, b) => acc.add(b.marketValueRefreshed), new Decimal('0'));
   }
 
-  let canWithdrawRemainingColl = false;
-  if (totalRemainingDebtValue.lte(new Decimal(0)) && borrows.length === 1) {
-    canWithdrawRemainingColl = true;
+  let remainingDepositsValueWithLtv = new Decimal('0');
+  if (obligation.getDeposits().length > 1) {
+    remainingDepositsValueWithLtv = obligation
+      .getDeposits()
+      .filter((p) => !p.reserveAddress.equals(deposit.reserveAddress))
+      .reduce((acc, d) => {
+        const { maxLtv } = obligation.getLtvForReserve(market, market.getReserveByAddress(d.reserveAddress)!);
+        return acc.add(d.marketValueRefreshed.mul(maxLtv));
+      }, new Decimal('0'));
   }
 
-  const deposits = obligation.getDeposits();
-  const otherCollDeposits = deposits.filter((deposit) => !deposit.reserveAddress.equals(collReserve.address));
-
-  let totalOtherCollateralValue = new Decimal(0);
-  for (const d of otherCollDeposits) {
-    const otherCollReserve = kaminoMarket.getReserveByAddress(d.reserveAddress)!;
-    const otherCollOraclePx = otherCollReserve.getOracleMarketPrice();
-    const otherCollMaxLtv = obligation.getLtvForReserve(kaminoMarket, otherCollReserve).maxLtv;
-    const otherCollValue = d.amount
-      .floor()
-      .div(otherCollReserve.getMintFactor())
-      .mul(otherCollOraclePx)
-      .mul(otherCollMaxLtv);
-    totalOtherCollateralValue = totalOtherCollateralValue.add(otherCollValue);
-  }
-
-  const numerator = initialCollValue.mul(collMaxLtv).add(totalOtherCollateralValue).sub(totalRemainingDebtValue);
-
-  // If all collateral cannot cover the remaining debt
-  if (numerator.lte('0')) {
-    return { canWithdrawRemainingColl: false, withdrawableCollLamports: new Decimal(0) };
-  }
-
-  const denominator = collOraclePx.mul(collMaxLtv);
-  const maxCollWithdrawAmount = numerator.div(denominator);
-  const maxCollateralWithdrawalAmountLamports = maxCollWithdrawAmount.mul(collReserve.getMintFactor()).floor();
-
-  let withdrawableCollLamports: Decimal;
-  if (canWithdrawRemainingColl) {
-    withdrawableCollLamports = Decimal.min(maxCollateralWithdrawalAmountLamports, collPosition.amount).floor();
+  // can withdraw all coll
+  if (remainingDepositsValueWithLtv.gte(remainingBorrowsValue)) {
+    return {
+      repayAmountLamports: repayAmountLamports,
+      withdrawableCollLamports: depositTotalLamports,
+      canWithdrawAllColl: true,
+      repayingAllDebt: repayAmountLamports.gte(borrow.amount),
+    };
   } else {
-    withdrawableCollLamports = Decimal.max(new Decimal(0), maxCollateralWithdrawalAmountLamports);
+    const { maxLtv: collMaxLtv } = obligation.getLtvForReserve(
+      market,
+      market.getReserveByAddress(depositReserve.address)!
+    );
+    const numerator = deposit.marketValueRefreshed
+      .mul(collMaxLtv)
+      .add(remainingDepositsValueWithLtv)
+      .sub(remainingBorrowsValue);
+
+    const denominator = depositReserve.getOracleMarketPrice().mul(collMaxLtv);
+    const maxCollWithdrawAmount = numerator.div(denominator);
+    const withdrawableCollLamports = maxCollWithdrawAmount.mul(depositReserve.getMintFactor()).floor();
+
+    return {
+      repayAmountLamports: repayAmountLamports,
+      withdrawableCollLamports,
+      canWithdrawAllColl: false,
+      repayingAllDebt: repayAmountLamports.gte(borrow.amount),
+    };
   }
-  return { canWithdrawRemainingColl, withdrawableCollLamports };
 }
 
 export function estimateDebtRepaymentWithColl(props: {

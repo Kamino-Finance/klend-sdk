@@ -1045,7 +1045,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
 
     const swapInputAmount = toLamports(
       !collIsKtoken ? calcs.borrowAmount : calcs.amountToFlashBorrowDebt,
-      debtReserve.stats.decimals,
+      debtReserve.stats.decimals
     ).ceil();
 
     const swapInputsForQuote: SwapInputs = {

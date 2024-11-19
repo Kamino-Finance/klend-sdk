@@ -29,6 +29,13 @@ export type RepayWithCollIxsResponse<QuoteResponse> = {
 export type InitialInputs<QuoteResponse> = {
   debtRepayAmountLamports: Decimal;
   flashRepayAmountLamports: Decimal;
+  /**
+   * The amount of collateral available to withdraw, if this is less than the swap input amount, then the swap may fail due to slippage, or tokens may be debited from the user's ATA, so the caller needs to check this
+   */
+  maxCollateralWithdrawLamports: Decimal;
+  /**
+   * The quote from the provided quoter
+   */
   swapQuote: SwapQuote<QuoteResponse>;
   currentSlot: number;
   klendAccounts: Array<PublicKey>;
@@ -93,9 +100,9 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
   }
   const { withdrawableCollLamports } = calcMaxWithdrawCollateral(
     kaminoMarket,
+    obligation,
     collReserve.address,
     debtReserve.address,
-    obligation,
     repayAmountLamports
   );
 
@@ -156,6 +163,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
     initialInputs: {
       debtRepayAmountLamports: repayAmountLamports,
       flashRepayAmountLamports,
+      maxCollateralWithdrawLamports: withdrawableCollLamports,
       swapQuote,
       currentSlot,
       klendAccounts: uniqueKlendAccounts,
@@ -196,18 +204,30 @@ export async function getRepayWithCollIxs<QuoteResponse>({
     budgetAndPriorityFeeIxs,
     scopeRefresh,
   });
-  const { debtRepayAmountLamports, flashRepayAmountLamports, swapQuote } = initialInputs;
+  const { debtRepayAmountLamports, flashRepayAmountLamports, maxCollateralWithdrawLamports, swapQuote } = initialInputs;
   const { inputAmountLamports: collSwapInLamports } = swapInputs;
 
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint)!;
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint)!;
 
+  // the client should use these values to prevent this input, but the tx may succeed, so we don't want to fail
+  // there is also a chance that the tx will consume debt token from the user's ata which they would not expect
+  if (collSwapInLamports.greaterThan(maxCollateralWithdrawLamports)) {
+    logger(
+      `Collateral swap in amount ${collSwapInLamports} exceeds max withdrawable collateral ${maxCollateralWithdrawLamports}, tx may fail with slippage`
+    );
+    swapInputs.inputAmountLamports = maxCollateralWithdrawLamports;
+  }
+
+  const actualSwapInLamports = Decimal.min(collSwapInLamports, maxCollateralWithdrawLamports);
   logger(
-    `Expected to swap in: ${collSwapInLamports.div(collReserve.getMintFactor())} ${
+    `Expected to swap in: ${actualSwapInLamports.div(collReserve.getMintFactor())} ${
       collReserve.symbol
     }, for: ${flashRepayAmountLamports.div(debtReserve.getMintFactor())} ${debtReserve.symbol}, quoter px: ${
       swapQuote.priceAInB
-    } ${debtReserve.symbol}/${collReserve.symbol}`
+    } ${debtReserve.symbol}/${collReserve.symbol}, required px: ${flashRepayAmountLamports
+      .div(debtReserve.getMintFactor())
+      .div(actualSwapInLamports.div(collReserve.getMintFactor()))} ${debtReserve.symbol}/${collReserve.symbol}`
   );
 
   const swapResponse = await swapper(swapInputs, initialInputs.klendAccounts, swapQuote);
