@@ -53,6 +53,7 @@ import {
   PerformanceFeeBps,
 } from './idl_codegen_kamino_vault/types/VaultConfigField';
 import { getAccountOwner } from './utils/rpc';
+import { Farms, FarmState, getUserStatePDA } from '@kamino-finance/farms-sdk';
 
 dotenv.config({
   path: `.env${process.env.ENV ? '.' + process.env.ENV : ''}`,
@@ -520,6 +521,56 @@ async function main() {
     });
 
   commands
+    .command('stake')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption('--farm <string>', 'Farm address')
+    .requiredOption('--amount <string>', 'The number of kTokens to stake')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ vault, farm, amount, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
+      const vaultAddress = new PublicKey(vault);
+      const farmAddress = new PublicKey(farm);
+
+      const farmClient = new Farms(env.connection);
+
+      const farmState = await FarmState.fetch(env.connection, farmAddress);
+      const vaultState = await new KaminoVault(vaultAddress, undefined, env.kVaultProgramId).getState(env.connection);
+
+      const scopePricesArg = farmState!.scopePrices.equals(PublicKey.default)
+        ? farmClient.getProgramID()
+        : farmState!.scopePrices;
+
+      const ixns: TransactionInstruction[] = [];
+      const userState = getUserStatePDA(farmClient.getProgramID(), farmAddress, env.provider.publicKey);
+      if (!userState) {
+        const createUserIx = await farmClient.createNewUserIx(env.provider.publicKey, farmAddress);
+        ixns.push(createUserIx);
+      }
+
+      // todo: fix in farms sdk to make this not async
+      const stakeIx = await farmClient.stakeIx(
+        env.payer.publicKey,
+        farmAddress,
+        new Decimal(amount),
+        vaultState.sharesMint,
+        scopePricesArg
+      );
+      ixns.push(stakeIx);
+
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+      const withdrawPendingFeesSig = await processTxn(env.client, env.payer, ixns, mode, 2500, []);
+
+      mode === 'execute' && console.log('Pending fees withdrawn:', withdrawPendingFeesSig);
+    });
+
+  commands
     .command('update-vault-reserve-allocation')
     .requiredOption('--vault <string>', 'Vault address')
     .requiredOption('--reserve <string>', 'Reserve address')
@@ -661,7 +712,7 @@ async function main() {
       for (let i = 0; i < instructions.length; i++) {
         const txInstructions: TransactionInstruction[] = [];
         txInstructions.push(instructions[i]);
-        const investReserveSig = await processTxn(env.client, env.payer, txInstructions, mode, 2500, [], 400000);
+        const investReserveSig = await processTxn(env.client, env.payer, txInstructions, mode, 2500, [], 800000);
 
         mode === 'execute' && console.log('Reserve invested:', investReserveSig);
       }
@@ -703,7 +754,7 @@ async function main() {
         kaminoVault,
         reserveWithAddress
       );
-      const investReserveSig = await processTxn(env.client, env.payer, instructions, mode, 2500, [], 400_000);
+      const investReserveSig = await processTxn(env.client, env.payer, instructions, mode, 2500, [], 800_000);
 
       mode === 'execute' && console.log('Reserve invested:', investReserveSig);
     });
@@ -1163,7 +1214,7 @@ async function processTxn(
       if (simulation.value.logs && simulation.value.logs.length > 0) {
         console.log('Simulation: \n' + simulation.value.logs);
       } else {
-        console.log('Simulation failed: \n' + simulation);
+        console.log('Simulation failed: \n' + simulation.value.err);
       }
     } else if (mode === 'inspect') {
       console.log(
@@ -1180,7 +1231,7 @@ async function processTxn(
 function createAddExtraComputeUnitFeeTransaction(units: number, microLamports: number): TransactionInstruction[] {
   const ixns: TransactionInstruction[] = [];
   ixns.push(ComputeBudgetProgram.setComputeUnitLimit({ units }));
-  ixns.push(ComputeBudgetProgram.setComputeUnitPrice({ microLamports }));
+  ixns.push(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: new Decimal(microLamports).floor().toNumber() }));
   return ixns;
 }
 

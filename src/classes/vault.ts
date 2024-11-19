@@ -829,10 +829,10 @@ export class KaminoVaultClient {
   async investSingleReserveIxs(
     payer: PublicKey,
     vault: KaminoVault,
-    reserve: ReserveWithAddress
+    reserve: ReserveWithAddress,
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<TransactionInstruction[]> {
     const vaultState = await vault.getState(this._connection);
-
     const cTokenVault = getCTokenVaultPda(vault.address, reserve.address, this._kaminoVaultProgramId);
     const lendingMarketAuth = lendingMarketAuthPda(reserve.state.lendingMarket, this._kaminoLendProgramId)[0];
 
@@ -864,10 +864,24 @@ export class KaminoVaultClient {
     const investIx = invest(investAccounts, this._kaminoVaultProgramId);
 
     const vaultReserves = this.getVaultReserves(vaultState);
-    const vaultReservesAccountMetas: AccountMeta[] = vaultReserves.map((reserve) => {
-      return { pubkey: reserve, isSigner: false, isWritable: true };
+    const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
+
+    let vaultReservesAccountMetas: AccountMeta[] = [];
+    let vaultReservesLendingMarkets: AccountMeta[] = [];
+    vaultReserves.forEach((reserve) => {
+      const reserveState = vaultReservesState.get(reserve);
+      if (reserveState === undefined) {
+        throw new Error(`Reserve ${reserve.toBase58()} not found`);
+      }
+      vaultReservesAccountMetas = vaultReservesAccountMetas.concat([
+        { pubkey: reserve, isSigner: false, isWritable: true },
+      ]);
+      vaultReservesLendingMarkets = vaultReservesLendingMarkets.concat([
+        { pubkey: reserveState.state.lendingMarket, isSigner: false, isWritable: false },
+      ]);
     });
     investIx.keys = investIx.keys.concat(vaultReservesAccountMetas);
+    investIx.keys = investIx.keys.concat(vaultReservesLendingMarkets);
 
     return [createAtaIx, investIx];
   }
