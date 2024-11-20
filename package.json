@@ -28,6 +28,7 @@
   "scripts": {
     "docs": "typedoc",
     "build": "rm -rf dist/; tsc",
+    "build:watch": "yarn tsc --watch",
     "watch": "tsc --watch",
     "coverage": "jest --coverage",
     "clean": "rm -rf dist/",
@@ -38,7 +39,9 @@
     "codegen": "yarn anchor-client-gen src/idl.json ./src/idl_codegen/ --program-id KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD",
     "codegen-jupiter-perps": "yarn anchor-client-gen src/jupiter_perps_idl.json ./src/idl_codegen_jupiter_perps/ --program-id PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu",
     "codegen-kvault": "yarn anchor-client-gen src/idl_kamino_vault.json ./src/idl_codegen_kamino_vault/ --program-id kvauTFR8qm1dhniz6pYuBZkuene3Hfrs1VQhVRgCNrr",
-    "kamino-manager": "tsx src/client_kamino_manager.ts"
+    "kamino-manager": "tsx src/client_kamino_manager.ts",
+    "dev": "concurrently \"yarn build:watch\" \"nodemon --watch dist -e js,ts --exec 'yarn dev:push-and-update'\"",
+    "dev:push-and-update": "yalc publish && cd examples && yalc update"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.28.0",
@@ -76,6 +79,7 @@
     "anchor-client-gen": "^0.28.1",
     "chai": "^4.3.7",
     "chai-bignumber": "^3.1.0",
+    "concurrently": "^9.1.0",
     "eslint": "^8.4.0",
     "eslint-config-airbnb-base": "^15.0.0",
     "eslint-config-airbnb-typescript": "^16.1.0",
@@ -85,6 +89,7 @@
     "jest": "^27.4.3",
     "jest-fetch-mock": "^3.0.3",
     "mocha": "^10.2.0",
+    "nodemon": "^3.1.7",
     "prettier": "^2.8.8",
     "start-server-and-test": "^2.0.0",
     "ts-jest": "^28.0.7",

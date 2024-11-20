@@ -21,6 +21,7 @@ import {
   PubkeyHashMap,
   CandidatePrice,
   PublicKeySet,
+  DEPOSITS_LIMIT,
 } from '../utils';
 import base58 from 'bs58';
 import { BN } from '@coral-xyz/anchor';
@@ -725,6 +726,70 @@ export class KaminoMarket {
         cumulativeBorrowRates
       );
     });
+  }
+
+  async getAllObligationsByDepositedReserve(reserve: PublicKey) {
+    const finalObligations: KaminoObligation[] = [];
+    for (let i = 0; i < DEPOSITS_LIMIT; i++) {
+      const [slot, obligations] = await Promise.all([
+        this.connection.getSlot(),
+        this.connection.getProgramAccounts(this.programId, {
+          filters: [
+            {
+              dataSize: Obligation.layout.span + 8,
+            },
+            {
+              memcmp: {
+                offset: 96 + 136 * i,
+                bytes: reserve.toBase58(),
+              },
+            },
+            {
+              memcmp: {
+                offset: 32,
+                bytes: this.address,
+              },
+            },
+          ],
+        }),
+      ]);
+
+      const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
+      const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
+
+      const obligationsBatch = obligations.map((obligation) => {
+        if (obligation.account === null) {
+          throw new Error('Invalid account');
+        }
+        if (!obligation.account.owner.equals(this.programId)) {
+          throw new Error("account doesn't belong to this program");
+        }
+
+        const obligationAccount = Obligation.decode(obligation.account.data);
+
+        if (!obligationAccount) {
+          throw Error('Could not parse obligation.');
+        }
+
+        KaminoObligation.addRatesForObligation(
+          this,
+          obligationAccount,
+          collateralExchangeRates,
+          cumulativeBorrowRates,
+          slot
+        );
+
+        return new KaminoObligation(
+          this,
+          obligation.pubkey,
+          obligationAccount,
+          collateralExchangeRates,
+          cumulativeBorrowRates
+        );
+      });
+      finalObligations.push(...obligationsBatch);
+    }
+    return finalObligations;
   }
 
   async getAllUserObligations(user: PublicKey) {

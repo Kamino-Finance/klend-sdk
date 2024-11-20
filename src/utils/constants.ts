@@ -81,3 +81,7 @@ export const SOL_DECIMALS = 9;
 export const USDC_MAINNET_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 
 export const MAINNET_BETA_CHAIN_ID = 101;
+
+export const POSITION_LIMIT = 10;
+export const BORROWS_LIMIT = 5;
+export const DEPOSITS_LIMIT = 8;

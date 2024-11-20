@@ -18,6 +18,7 @@
   - [Burn ctokens to redeem tokens from reserve](#burn-ctokens-to-redeem-tokens-from-reserve)
   - [Deposit in obligation](#deposit-in-obligation)
   - [Harvest farm rewards](#harvest-farm-rewards)
+  - [Get obligations based on reserve filter](#get-obligations-based-on-reserve-filter)
 
 ## How to run
 
@@ -146,4 +147,10 @@ yarn multiply-adjust
 
 ```bash
 yarn multiply-loan-info-and-pnl
+```
+
+#### Get obligations based on reserve filter
+
+```bash
+yarn run get-obligations-based-on-reserve-filter
 ```

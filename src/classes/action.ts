@@ -58,6 +58,7 @@ import {
   getAssociatedTokenAddress,
   ScopeRefresh,
   createAtasIdempotent,
+  POSITION_LIMIT,
 } from '../utils';
 import { KaminoMarket } from './market';
 import { KaminoObligation } from './obligation';
@@ -68,10 +69,6 @@ import { Reserve } from '../idl_codegen/accounts';
 import { VanillaObligation } from '../utils/ObligationType';
 import { PROGRAM_ID } from '../lib';
 import { U16_MAX } from '@kamino-finance/scope-sdk';
-
-export const POSITION_LIMIT = 10;
-export const BORROWS_LIMIT = 5;
-export const DEPOSITS_LIMIT = 8;
 
 const SOL_PADDING_FOR_INTEREST = new BN('1000000');
 

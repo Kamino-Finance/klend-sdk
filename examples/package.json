@@ -29,24 +29,25 @@
     "multiply-withdraw": "tsx example_multiply_withdraw_transaction.ts",
     "multiply-adjust": "tsx example_multiply_adjust_transaction.ts",
     "multiply-loan-info-and-pnl": "yarn tsx example_multiply_loan_info_and_pnl.ts",
-    "multiply_manage_position_transaction": "yarn tsx example_multiply_manage_position_transaction.ts",
+    "multiply-manage-position-transaction": "yarn tsx example_multiply_manage_position_transaction.ts",
+    "get-obligations-on-reserve-filter": "yarn tsx example_get_obligations_based_on_reserve_filter.ts",
     "build": "rm -rf dist/; tsc"
   },
   "dependencies": {
     "@kamino-finance/farms-sdk": "^2.0.3",
-    "@kamino-finance/klend-sdk": "^5.1.11",
+    "@kamino-finance/klend-sdk": "file:../",
     "@kamino-finance/scope-sdk": "^8.0.2",
-    "@solana/web3.js": "^1.95.2",
     "@solana/spl-token": "^0.4.8",
-    "axios": "^1.7.3"
+    "@solana/web3.js": "^1.87.6",
+    "axios": "^1.6.8"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.6",
     "@types/node": "^22.1.0",
-    "@types/node-fetch": "^2.6.11",
+    "@types/node-fetch": "^2.6.7",
     "prettier": "^3.3.3",
     "ts-node": "^10.9.2",
     "tsx": "^4.19.1",
-    "typescript": "^5.5.4"
+    "typescript": "^5.4.5"
   }
 }
