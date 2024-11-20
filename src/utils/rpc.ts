@@ -9,11 +9,12 @@ import {
 } from '@solana/web3.js';
 import { Buffer } from 'buffer';
 import axios from 'axios';
-import { init, decompress } from '@bokuweb/zstd-wasm';
 import { v4 as uuidv4 } from 'uuid';
+import { ZSTDDecoder } from 'zstddec';
 
+const decoder = new ZSTDDecoder();
 (async () => {
-  await init();
+  await decoder.init();
 })();
 
 /**
@@ -21,11 +22,13 @@ import { v4 as uuidv4 } from 'uuid';
  * Uses axios instead of node-fetch to work around a bug in node-fetch that causes subsequent requests with different encoding to fail
  * @param connection
  * @param programId
+ * @param structSize - the size of the decompressed account data struct
  * @param configOrCommitment
  */
 export async function getProgramAccounts(
   connection: Connection,
   programId: PublicKey,
+  structSize: number,
   configOrCommitment?: GetProgramAccountsConfig | Commitment
 ): Promise<GetProgramAccountsResponse> {
   const programIdStr = programId.toBase58();
@@ -65,7 +68,7 @@ export async function getProgramAccounts(
 
   const res = unsafeRes as RpcResult;
   const deser = res.result.map(async (account) => ({
-    account: await deserializeAccountInfo(account.account),
+    account: await deserializeAccountInfo(account.account, structSize),
     pubkey: new PublicKey(account.pubkey),
   }));
   const x = await Promise.all(deser);
@@ -80,8 +83,8 @@ export async function getAccountOwner(connection: Connection, address: PublicKey
   return acc.owner;
 }
 
-async function deserializeAccountInfo(accountInfo: AccountInfo<string[]>): Promise<AccountInfo<Buffer>> {
-  const data = decompress(Buffer.from(accountInfo.data[0], 'base64'));
+async function deserializeAccountInfo(accountInfo: AccountInfo<string[]>, size: number): Promise<AccountInfo<Buffer>> {
+  const data = decoder.decode(Buffer.from(accountInfo.data[0], 'base64'), size);
   return {
     owner: accountInfo.owner,
     lamports: accountInfo.lamports,

@@ -922,7 +922,7 @@ async function main() {
     const env = initializeClient(false, false);
     const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
 
-    const allVaults = await kaminoManager.getAllVaults(true);
+    const allVaults = await kaminoManager.getAllVaults();
     console.log('all vaults', allVaults);
   });
 

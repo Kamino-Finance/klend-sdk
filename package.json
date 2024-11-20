@@ -41,7 +41,6 @@
     "kamino-manager": "tsx src/client_kamino_manager.ts"
   },
   "dependencies": {
-    "@bokuweb/zstd-wasm": "^0.0.20",
     "@coral-xyz/anchor": "^0.28.0",
     "@coral-xyz/borsh": "^0.28.0",
     "@kamino-finance/farms-sdk": "^2.0.3",
@@ -59,7 +58,8 @@
     "commander": "^9.3.0",
     "decimal.js": "^10.4.3",
     "exponential-backoff": "^3.1.1",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "zstddec": "^0.1.0"
   },
   "devDependencies": {
     "@orca-so/sdk": "^1.2.25",
