@@ -716,25 +716,25 @@ export class UpdateMinLiquidationBonusBps {
   }
 }
 
-export interface DeleveragingMarginCallPeriodJSON {
-  kind: "DeleveragingMarginCallPeriod"
+export interface UpdateDeleveragingMarginCallPeriodJSON {
+  kind: "UpdateDeleveragingMarginCallPeriod"
 }
 
-export class DeleveragingMarginCallPeriod {
+export class UpdateDeleveragingMarginCallPeriod {
   static readonly discriminator = 31
-  static readonly kind = "DeleveragingMarginCallPeriod"
+  static readonly kind = "UpdateDeleveragingMarginCallPeriod"
   readonly discriminator = 31
-  readonly kind = "DeleveragingMarginCallPeriod"
+  readonly kind = "UpdateDeleveragingMarginCallPeriod"
 
-  toJSON(): DeleveragingMarginCallPeriodJSON {
+  toJSON(): UpdateDeleveragingMarginCallPeriodJSON {
     return {
-      kind: "DeleveragingMarginCallPeriod",
+      kind: "UpdateDeleveragingMarginCallPeriod",
     }
   }
 
   toEncodable() {
     return {
-      DeleveragingMarginCallPeriod: {},
+      UpdateDeleveragingMarginCallPeriod: {},
     }
   }
 }
@@ -808,25 +808,25 @@ export class UpdateElevationGroup {
   }
 }
 
-export interface DeleveragingThresholdSlotsPerBpsJSON {
-  kind: "DeleveragingThresholdSlotsPerBps"
+export interface UpdateDeleveragingThresholdSecsPerBpsJSON {
+  kind: "UpdateDeleveragingThresholdSecsPerBps"
 }
 
-export class DeleveragingThresholdSlotsPerBps {
+export class UpdateDeleveragingThresholdSecsPerBps {
   static readonly discriminator = 35
-  static readonly kind = "DeleveragingThresholdSlotsPerBps"
+  static readonly kind = "UpdateDeleveragingThresholdSecsPerBps"
   readonly discriminator = 35
-  readonly kind = "DeleveragingThresholdSlotsPerBps"
+  readonly kind = "UpdateDeleveragingThresholdSecsPerBps"
 
-  toJSON(): DeleveragingThresholdSlotsPerBpsJSON {
+  toJSON(): UpdateDeleveragingThresholdSecsPerBpsJSON {
     return {
-      kind: "DeleveragingThresholdSlotsPerBps",
+      kind: "UpdateDeleveragingThresholdSecsPerBps",
     }
   }
 
   toEncodable() {
     return {
-      DeleveragingThresholdSlotsPerBps: {},
+      UpdateDeleveragingThresholdSecsPerBps: {},
     }
   }
 }
@@ -1084,6 +1084,52 @@ export class UpdateHostFixedInterestRateBps {
   }
 }
 
+export interface UpdateAutodeleverageEnabledJSON {
+  kind: "UpdateAutodeleverageEnabled"
+}
+
+export class UpdateAutodeleverageEnabled {
+  static readonly discriminator = 47
+  static readonly kind = "UpdateAutodeleverageEnabled"
+  readonly discriminator = 47
+  readonly kind = "UpdateAutodeleverageEnabled"
+
+  toJSON(): UpdateAutodeleverageEnabledJSON {
+    return {
+      kind: "UpdateAutodeleverageEnabled",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateAutodeleverageEnabled: {},
+    }
+  }
+}
+
+export interface UpdateDeleveragingBonusIncreaseBpsPerDayJSON {
+  kind: "UpdateDeleveragingBonusIncreaseBpsPerDay"
+}
+
+export class UpdateDeleveragingBonusIncreaseBpsPerDay {
+  static readonly discriminator = 48
+  static readonly kind = "UpdateDeleveragingBonusIncreaseBpsPerDay"
+  readonly discriminator = 48
+  readonly kind = "UpdateDeleveragingBonusIncreaseBpsPerDay"
+
+  toJSON(): UpdateDeleveragingBonusIncreaseBpsPerDayJSON {
+    return {
+      kind: "UpdateDeleveragingBonusIncreaseBpsPerDay",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateDeleveragingBonusIncreaseBpsPerDay: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if (typeof obj !== "object") {
@@ -1183,8 +1229,8 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if ("UpdateMinLiquidationBonusBps" in obj) {
     return new UpdateMinLiquidationBonusBps()
   }
-  if ("DeleveragingMarginCallPeriod" in obj) {
-    return new DeleveragingMarginCallPeriod()
+  if ("UpdateDeleveragingMarginCallPeriod" in obj) {
+    return new UpdateDeleveragingMarginCallPeriod()
   }
   if ("UpdateBorrowFactor" in obj) {
     return new UpdateBorrowFactor()
@@ -1195,8 +1241,8 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if ("UpdateElevationGroup" in obj) {
     return new UpdateElevationGroup()
   }
-  if ("DeleveragingThresholdSlotsPerBps" in obj) {
-    return new DeleveragingThresholdSlotsPerBps()
+  if ("UpdateDeleveragingThresholdSecsPerBps" in obj) {
+    return new UpdateDeleveragingThresholdSecsPerBps()
   }
   if ("DeprecatedUpdateMultiplierSideBoost" in obj) {
     return new DeprecatedUpdateMultiplierSideBoost()
@@ -1230,6 +1276,12 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   }
   if ("UpdateHostFixedInterestRateBps" in obj) {
     return new UpdateHostFixedInterestRateBps()
+  }
+  if ("UpdateAutodeleverageEnabled" in obj) {
+    return new UpdateAutodeleverageEnabled()
+  }
+  if ("UpdateDeleveragingBonusIncreaseBpsPerDay" in obj) {
+    return new UpdateDeleveragingBonusIncreaseBpsPerDay()
   }
 
   throw new Error("Invalid enum object")
@@ -1332,8 +1384,8 @@ export function fromJSON(
     case "UpdateMinLiquidationBonusBps": {
       return new UpdateMinLiquidationBonusBps()
     }
-    case "DeleveragingMarginCallPeriod": {
-      return new DeleveragingMarginCallPeriod()
+    case "UpdateDeleveragingMarginCallPeriod": {
+      return new UpdateDeleveragingMarginCallPeriod()
     }
     case "UpdateBorrowFactor": {
       return new UpdateBorrowFactor()
@@ -1344,8 +1396,8 @@ export function fromJSON(
     case "UpdateElevationGroup": {
       return new UpdateElevationGroup()
     }
-    case "DeleveragingThresholdSlotsPerBps": {
-      return new DeleveragingThresholdSlotsPerBps()
+    case "UpdateDeleveragingThresholdSecsPerBps": {
+      return new UpdateDeleveragingThresholdSecsPerBps()
     }
     case "DeprecatedUpdateMultiplierSideBoost": {
       return new DeprecatedUpdateMultiplierSideBoost()
@@ -1379,6 +1431,12 @@ export function fromJSON(
     }
     case "UpdateHostFixedInterestRateBps": {
       return new UpdateHostFixedInterestRateBps()
+    }
+    case "UpdateAutodeleverageEnabled": {
+      return new UpdateAutodeleverageEnabled()
+    }
+    case "UpdateDeleveragingBonusIncreaseBpsPerDay": {
+      return new UpdateDeleveragingBonusIncreaseBpsPerDay()
     }
   }
 }
@@ -1416,11 +1474,11 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateDepositWithdrawalCapCurrentTotal"),
     borsh.struct([], "UpdateBadDebtLiquidationBonusBps"),
     borsh.struct([], "UpdateMinLiquidationBonusBps"),
-    borsh.struct([], "DeleveragingMarginCallPeriod"),
+    borsh.struct([], "UpdateDeleveragingMarginCallPeriod"),
     borsh.struct([], "UpdateBorrowFactor"),
     borsh.struct([], "UpdateAssetTier"),
     borsh.struct([], "UpdateElevationGroup"),
-    borsh.struct([], "DeleveragingThresholdSlotsPerBps"),
+    borsh.struct([], "UpdateDeleveragingThresholdSecsPerBps"),
     borsh.struct([], "DeprecatedUpdateMultiplierSideBoost"),
     borsh.struct([], "DeprecatedUpdateMultiplierTagBoost"),
     borsh.struct([], "UpdateReserveStatus"),
@@ -1432,6 +1490,8 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateBorrowLimitOutsideElevationGroup"),
     borsh.struct([], "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"),
     borsh.struct([], "UpdateHostFixedInterestRateBps"),
+    borsh.struct([], "UpdateAutodeleverageEnabled"),
+    borsh.struct([], "UpdateDeleveragingBonusIncreaseBpsPerDay"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

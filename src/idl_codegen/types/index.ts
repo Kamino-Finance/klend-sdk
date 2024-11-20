@@ -40,11 +40,11 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateDepositWithdrawalCapCurrentTotal
   | UpdateConfigMode.UpdateBadDebtLiquidationBonusBps
   | UpdateConfigMode.UpdateMinLiquidationBonusBps
-  | UpdateConfigMode.DeleveragingMarginCallPeriod
+  | UpdateConfigMode.UpdateDeleveragingMarginCallPeriod
   | UpdateConfigMode.UpdateBorrowFactor
   | UpdateConfigMode.UpdateAssetTier
   | UpdateConfigMode.UpdateElevationGroup
-  | UpdateConfigMode.DeleveragingThresholdSlotsPerBps
+  | UpdateConfigMode.UpdateDeleveragingThresholdSecsPerBps
   | UpdateConfigMode.DeprecatedUpdateMultiplierSideBoost
   | UpdateConfigMode.DeprecatedUpdateMultiplierTagBoost
   | UpdateConfigMode.UpdateReserveStatus
@@ -56,6 +56,8 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup
   | UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve
   | UpdateConfigMode.UpdateHostFixedInterestRateBps
+  | UpdateConfigMode.UpdateAutodeleverageEnabled
+  | UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay
 export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateLoanToValuePctJSON
   | UpdateConfigMode.UpdateMaxLiquidationBonusBpsJSON
@@ -88,11 +90,11 @@ export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateDepositWithdrawalCapCurrentTotalJSON
   | UpdateConfigMode.UpdateBadDebtLiquidationBonusBpsJSON
   | UpdateConfigMode.UpdateMinLiquidationBonusBpsJSON
-  | UpdateConfigMode.DeleveragingMarginCallPeriodJSON
+  | UpdateConfigMode.UpdateDeleveragingMarginCallPeriodJSON
   | UpdateConfigMode.UpdateBorrowFactorJSON
   | UpdateConfigMode.UpdateAssetTierJSON
   | UpdateConfigMode.UpdateElevationGroupJSON
-  | UpdateConfigMode.DeleveragingThresholdSlotsPerBpsJSON
+  | UpdateConfigMode.UpdateDeleveragingThresholdSecsPerBpsJSON
   | UpdateConfigMode.DeprecatedUpdateMultiplierSideBoostJSON
   | UpdateConfigMode.DeprecatedUpdateMultiplierTagBoostJSON
   | UpdateConfigMode.UpdateReserveStatusJSON
@@ -104,6 +106,8 @@ export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroupJSON
   | UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserveJSON
   | UpdateConfigMode.UpdateHostFixedInterestRateBpsJSON
+  | UpdateConfigMode.UpdateAutodeleverageEnabledJSON
+  | UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDayJSON
 
 export { UpdateLendingMarketConfigValue }
 
@@ -147,9 +151,11 @@ export type UpdateLendingMarketModeKind =
   | UpdateLendingMarketMode.UpdateAutodeleverageEnabled
   | UpdateLendingMarketMode.UpdateBorrowingDisabled
   | UpdateLendingMarketMode.UpdateMinNetValueObligationPostAction
-  | UpdateLendingMarketMode.UpdateMinValueSkipPriorityLiqCheck
+  | UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheck
+  | UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheck
   | UpdateLendingMarketMode.UpdatePaddingFields
   | UpdateLendingMarketMode.UpdateName
+  | UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs
 export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateOwnerJSON
   | UpdateLendingMarketMode.UpdateEmergencyModeJSON
@@ -167,9 +173,11 @@ export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateAutodeleverageEnabledJSON
   | UpdateLendingMarketMode.UpdateBorrowingDisabledJSON
   | UpdateLendingMarketMode.UpdateMinNetValueObligationPostActionJSON
-  | UpdateLendingMarketMode.UpdateMinValueSkipPriorityLiqCheckJSON
+  | UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheckJSON
+  | UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheckJSON
   | UpdateLendingMarketMode.UpdatePaddingFieldsJSON
   | UpdateLendingMarketMode.UpdateNameJSON
+  | UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecsJSON
 
 export { LastUpdate } from "./LastUpdate"
 export type { LastUpdateFields, LastUpdateJSON } from "./LastUpdate"

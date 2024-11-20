@@ -24,13 +24,18 @@ export type {
 } from "./updateReserveConfig"
 export { redeemFees } from "./redeemFees"
 export type { RedeemFeesAccounts } from "./redeemFees"
-export { socializeLoss } from "./socializeLoss"
-export type { SocializeLossArgs, SocializeLossAccounts } from "./socializeLoss"
 export { withdrawProtocolFee } from "./withdrawProtocolFee"
 export type {
   WithdrawProtocolFeeArgs,
   WithdrawProtocolFeeAccounts,
 } from "./withdrawProtocolFee"
+export { socializeLoss } from "./socializeLoss"
+export type { SocializeLossArgs, SocializeLossAccounts } from "./socializeLoss"
+export { markObligationForDeleveraging } from "./markObligationForDeleveraging"
+export type {
+  MarkObligationForDeleveragingArgs,
+  MarkObligationForDeleveragingAccounts,
+} from "./markObligationForDeleveraging"
 export { refreshReserve } from "./refreshReserve"
 export type { RefreshReserveAccounts } from "./refreshReserve"
 export { refreshReservesBatch } from "./refreshReservesBatch"
@@ -82,6 +87,11 @@ export type {
   RepayObligationLiquidityArgs,
   RepayObligationLiquidityAccounts,
 } from "./repayObligationLiquidity"
+export { repayAndWithdrawAndRedeem } from "./repayAndWithdrawAndRedeem"
+export type {
+  RepayAndWithdrawAndRedeemArgs,
+  RepayAndWithdrawAndRedeemAccounts,
+} from "./repayAndWithdrawAndRedeem"
 export { depositReserveLiquidityAndObligationCollateral } from "./depositReserveLiquidityAndObligationCollateral"
 export type {
   DepositReserveLiquidityAndObligationCollateralArgs,
@@ -113,10 +123,7 @@ export type {
   RequestElevationGroupAccounts,
 } from "./requestElevationGroup"
 export { initReferrerTokenState } from "./initReferrerTokenState"
-export type {
-  InitReferrerTokenStateArgs,
-  InitReferrerTokenStateAccounts,
-} from "./initReferrerTokenState"
+export type { InitReferrerTokenStateAccounts } from "./initReferrerTokenState"
 export { initUserMetadata } from "./initUserMetadata"
 export type {
   InitUserMetadataArgs,

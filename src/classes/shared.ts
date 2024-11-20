@@ -35,8 +35,8 @@ export type ReserveDataType = {
   liquidationThreshold: number;
   reserveDepositLimit: Decimal;
   reserveBorrowLimit: Decimal;
-  depositLimitCrossedSlot: number;
-  borrowLimitCrossedSlot: number;
+  depositLimitCrossedTimestamp: number;
+  borrowLimitCrossedTimestamp: number;
   symbol: string;
   decimals: number;
   protocolTakeRate: number;

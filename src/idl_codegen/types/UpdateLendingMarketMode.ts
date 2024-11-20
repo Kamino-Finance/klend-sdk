@@ -371,25 +371,48 @@ export class UpdateMinNetValueObligationPostAction {
   }
 }
 
-export interface UpdateMinValueSkipPriorityLiqCheckJSON {
-  kind: "UpdateMinValueSkipPriorityLiqCheck"
+export interface UpdateMinValueLtvSkipPriorityLiqCheckJSON {
+  kind: "UpdateMinValueLtvSkipPriorityLiqCheck"
 }
 
-export class UpdateMinValueSkipPriorityLiqCheck {
+export class UpdateMinValueLtvSkipPriorityLiqCheck {
   static readonly discriminator = 16
-  static readonly kind = "UpdateMinValueSkipPriorityLiqCheck"
+  static readonly kind = "UpdateMinValueLtvSkipPriorityLiqCheck"
   readonly discriminator = 16
-  readonly kind = "UpdateMinValueSkipPriorityLiqCheck"
+  readonly kind = "UpdateMinValueLtvSkipPriorityLiqCheck"
 
-  toJSON(): UpdateMinValueSkipPriorityLiqCheckJSON {
+  toJSON(): UpdateMinValueLtvSkipPriorityLiqCheckJSON {
     return {
-      kind: "UpdateMinValueSkipPriorityLiqCheck",
+      kind: "UpdateMinValueLtvSkipPriorityLiqCheck",
     }
   }
 
   toEncodable() {
     return {
-      UpdateMinValueSkipPriorityLiqCheck: {},
+      UpdateMinValueLtvSkipPriorityLiqCheck: {},
+    }
+  }
+}
+
+export interface UpdateMinValueBfSkipPriorityLiqCheckJSON {
+  kind: "UpdateMinValueBfSkipPriorityLiqCheck"
+}
+
+export class UpdateMinValueBfSkipPriorityLiqCheck {
+  static readonly discriminator = 17
+  static readonly kind = "UpdateMinValueBfSkipPriorityLiqCheck"
+  readonly discriminator = 17
+  readonly kind = "UpdateMinValueBfSkipPriorityLiqCheck"
+
+  toJSON(): UpdateMinValueBfSkipPriorityLiqCheckJSON {
+    return {
+      kind: "UpdateMinValueBfSkipPriorityLiqCheck",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateMinValueBfSkipPriorityLiqCheck: {},
     }
   }
 }
@@ -399,9 +422,9 @@ export interface UpdatePaddingFieldsJSON {
 }
 
 export class UpdatePaddingFields {
-  static readonly discriminator = 17
+  static readonly discriminator = 18
   static readonly kind = "UpdatePaddingFields"
-  readonly discriminator = 17
+  readonly discriminator = 18
   readonly kind = "UpdatePaddingFields"
 
   toJSON(): UpdatePaddingFieldsJSON {
@@ -422,9 +445,9 @@ export interface UpdateNameJSON {
 }
 
 export class UpdateName {
-  static readonly discriminator = 18
+  static readonly discriminator = 19
   static readonly kind = "UpdateName"
-  readonly discriminator = 18
+  readonly discriminator = 19
   readonly kind = "UpdateName"
 
   toJSON(): UpdateNameJSON {
@@ -436,6 +459,29 @@ export class UpdateName {
   toEncodable() {
     return {
       UpdateName: {},
+    }
+  }
+}
+
+export interface UpdateIndividualAutodeleverageMarginCallPeriodSecsJSON {
+  kind: "UpdateIndividualAutodeleverageMarginCallPeriodSecs"
+}
+
+export class UpdateIndividualAutodeleverageMarginCallPeriodSecs {
+  static readonly discriminator = 20
+  static readonly kind = "UpdateIndividualAutodeleverageMarginCallPeriodSecs"
+  readonly discriminator = 20
+  readonly kind = "UpdateIndividualAutodeleverageMarginCallPeriodSecs"
+
+  toJSON(): UpdateIndividualAutodeleverageMarginCallPeriodSecsJSON {
+    return {
+      kind: "UpdateIndividualAutodeleverageMarginCallPeriodSecs",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateIndividualAutodeleverageMarginCallPeriodSecs: {},
     }
   }
 }
@@ -494,14 +540,20 @@ export function fromDecoded(obj: any): types.UpdateLendingMarketModeKind {
   if ("UpdateMinNetValueObligationPostAction" in obj) {
     return new UpdateMinNetValueObligationPostAction()
   }
-  if ("UpdateMinValueSkipPriorityLiqCheck" in obj) {
-    return new UpdateMinValueSkipPriorityLiqCheck()
+  if ("UpdateMinValueLtvSkipPriorityLiqCheck" in obj) {
+    return new UpdateMinValueLtvSkipPriorityLiqCheck()
+  }
+  if ("UpdateMinValueBfSkipPriorityLiqCheck" in obj) {
+    return new UpdateMinValueBfSkipPriorityLiqCheck()
   }
   if ("UpdatePaddingFields" in obj) {
     return new UpdatePaddingFields()
   }
   if ("UpdateName" in obj) {
     return new UpdateName()
+  }
+  if ("UpdateIndividualAutodeleverageMarginCallPeriodSecs" in obj) {
+    return new UpdateIndividualAutodeleverageMarginCallPeriodSecs()
   }
 
   throw new Error("Invalid enum object")
@@ -559,14 +611,20 @@ export function fromJSON(
     case "UpdateMinNetValueObligationPostAction": {
       return new UpdateMinNetValueObligationPostAction()
     }
-    case "UpdateMinValueSkipPriorityLiqCheck": {
-      return new UpdateMinValueSkipPriorityLiqCheck()
+    case "UpdateMinValueLtvSkipPriorityLiqCheck": {
+      return new UpdateMinValueLtvSkipPriorityLiqCheck()
+    }
+    case "UpdateMinValueBfSkipPriorityLiqCheck": {
+      return new UpdateMinValueBfSkipPriorityLiqCheck()
     }
     case "UpdatePaddingFields": {
       return new UpdatePaddingFields()
     }
     case "UpdateName": {
       return new UpdateName()
+    }
+    case "UpdateIndividualAutodeleverageMarginCallPeriodSecs": {
+      return new UpdateIndividualAutodeleverageMarginCallPeriodSecs()
     }
   }
 }
@@ -589,9 +647,11 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateAutodeleverageEnabled"),
     borsh.struct([], "UpdateBorrowingDisabled"),
     borsh.struct([], "UpdateMinNetValueObligationPostAction"),
-    borsh.struct([], "UpdateMinValueSkipPriorityLiqCheck"),
+    borsh.struct([], "UpdateMinValueLtvSkipPriorityLiqCheck"),
+    borsh.struct([], "UpdateMinValueBfSkipPriorityLiqCheck"),
     borsh.struct([], "UpdatePaddingFields"),
     borsh.struct([], "UpdateName"),
+    borsh.struct([], "UpdateIndividualAutodeleverageMarginCallPeriodSecs"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

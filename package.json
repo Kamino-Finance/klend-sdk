@@ -36,8 +36,8 @@
     "lint": "yarn prettier --check .; yarn eslint .",
     "lint:fix": "yarn prettier --write .; yarn eslint . --fix",
     "codegen": "yarn anchor-client-gen src/idl.json ./src/idl_codegen/ --program-id KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD",
-    "codegen-kvault": "yarn anchor-client-gen src/idl_kamino_vault.json ./src/idl_codegen_kamino_vault/ --program-id kvauTFR8qm1dhniz6pYuBZkuene3Hfrs1VQhVRgCNrr",
     "codegen-jupiter-perps": "yarn anchor-client-gen src/jupiter_perps_idl.json ./src/idl_codegen_jupiter_perps/ --program-id PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu",
+    "codegen-kvault": "yarn anchor-client-gen src/idl_kamino_vault.json ./src/idl_codegen_kamino_vault/ --program-id kvauTFR8qm1dhniz6pYuBZkuene3Hfrs1VQhVRgCNrr",
     "kamino-manager": "tsx src/client_kamino_manager.ts"
   },
   "dependencies": {
@@ -45,9 +45,8 @@
     "@coral-xyz/anchor": "^0.28.0",
     "@coral-xyz/borsh": "^0.28.0",
     "@kamino-finance/farms-sdk": "^2.0.3",
-    "@kamino-finance/kliquidity-sdk": "^6.2.1",
+    "@kamino-finance/kliquidity-sdk": "^6.3.1",
     "@kamino-finance/scope-sdk": "^8.0.2",
-    "@pythnetwork/client": "^2.5.1",
     "@solana/buffer-layout": "^4.0.0",
     "@solana/spl-token": "^0.4.8",
     "@solana/web3.js": "^1.87.6",

@@ -33,7 +33,7 @@ export function withdrawObligationCollateralAndRedeemReserveCollateral(
   programId: PublicKey = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta> = [
-    { pubkey: accounts.owner, isSigner: true, isWritable: true },
+    { pubkey: accounts.owner, isSigner: true, isWritable: false },
     { pubkey: accounts.obligation, isSigner: false, isWritable: true },
     { pubkey: accounts.lendingMarket, isSigner: false, isWritable: false },
     {

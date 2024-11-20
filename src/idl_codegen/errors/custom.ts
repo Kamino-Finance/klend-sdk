@@ -111,6 +111,9 @@ export type CustomError =
   | InvalidTokenAccount
   | DepositDisabledOutsideElevationGroup
   | CannotCalculateReferralAmountDueToSlotsMismatch
+  | ObligationOwnersMustMatch
+  | ObligationsMustMatch
+  | LendingMarketsMustMatch
 
 export class InvalidMarketAuthority extends Error {
   static readonly code = 6000
@@ -1401,6 +1404,39 @@ export class CannotCalculateReferralAmountDueToSlotsMismatch extends Error {
   }
 }
 
+export class ObligationOwnersMustMatch extends Error {
+  static readonly code = 6112
+  readonly code = 6112
+  readonly name = "ObligationOwnersMustMatch"
+  readonly msg = "Obligation owners must match"
+
+  constructor(readonly logs?: string[]) {
+    super("6112: Obligation owners must match")
+  }
+}
+
+export class ObligationsMustMatch extends Error {
+  static readonly code = 6113
+  readonly code = 6113
+  readonly name = "ObligationsMustMatch"
+  readonly msg = "Obligations must match"
+
+  constructor(readonly logs?: string[]) {
+    super("6113: Obligations must match")
+  }
+}
+
+export class LendingMarketsMustMatch extends Error {
+  static readonly code = 6114
+  readonly code = 6114
+  readonly name = "LendingMarketsMustMatch"
+  readonly msg = "Lending markets must match"
+
+  constructor(readonly logs?: string[]) {
+    super("6114: Lending markets must match")
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 6000:
@@ -1627,6 +1663,12 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new DepositDisabledOutsideElevationGroup(logs)
     case 6111:
       return new CannotCalculateReferralAmountDueToSlotsMismatch(logs)
+    case 6112:
+      return new ObligationOwnersMustMatch(logs)
+    case 6113:
+      return new ObligationsMustMatch(logs)
+    case 6114:
+      return new LendingMarketsMustMatch(logs)
   }
 
   return null

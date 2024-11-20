@@ -277,9 +277,7 @@ export const encodeTokenName = (tokenName: string): number[] => {
   for (let i = 0; i < tokenNameEncoded.length; i++) {
     buffer[i] = tokenNameEncoded[i];
   }
-
-  const result = [...buffer];
-  return result;
+  return [...buffer];
 };
 
 function buildReserveConfig(fields: {
@@ -337,13 +335,15 @@ function buildReserveConfig(fields: {
     deleveragingMarginCallPeriodSecs: new BN(0),
     borrowFactorPct: new BN(100),
     elevationGroups: fields.configParams.elevationGroups,
-    deleveragingThresholdSlotsPerBps: new BN(7200),
+    deleveragingThresholdSecsPerBps: new BN(3600),
     disableUsageAsCollOutsideEmode: 0,
     utilizationLimitBlockBorrowingAbove: 0,
     hostFixedInterestRateBps: 0,
+    autodeleverageEnabled: 0,
     borrowLimitOutsideElevationGroup: new BN(0),
     borrowLimitAgainstThisCollateralInElevationGroup: Array(32).fill(new BN(0)),
-    reserved1: Array(2).fill(0),
+    deleveragingBonusIncreaseBpsPerDay: new BN(100),
+    reserved1: Array(1).fill(0),
     reserved2: Array(2).fill(0),
     reserved3: Array(8).fill(0),
   };

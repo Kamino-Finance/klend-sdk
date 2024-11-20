@@ -878,8 +878,8 @@ export class KaminoReserve {
       decimals: this.state.liquidity.mintDecimals.toNumber(),
       accumulatedProtocolFees: this.getAccumulatedProtocolFees().div(this.getMintFactor()),
       mintTotalSupply,
-      depositLimitCrossedSlot: parsedData.liquidity.depositLimitCrossedSlot.toNumber(),
-      borrowLimitCrossedSlot: parsedData.liquidity.borrowLimitCrossedSlot.toNumber(),
+      depositLimitCrossedTimestamp: parsedData.liquidity.depositLimitCrossedTimestamp.toNumber(),
+      borrowLimitCrossedTimestamp: parsedData.liquidity.borrowLimitCrossedTimestamp.toNumber(),
       borrowFactor: parsedData.config.borrowFactorPct.toNumber(),
     };
   }
@@ -1478,21 +1478,21 @@ export function parseForChangesReserveConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'deleveragingThresholdSlotsPerBps') {
+    } else if (key === 'deleveragingThresholdSecsPerBps') {
       if (reserve === undefined) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.DeleveragingThresholdSlotsPerBps.discriminator,
+          mode: UpdateConfigMode.UpdateDeleveragingThresholdSecsPerBps.discriminator,
           value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.DeleveragingThresholdSlotsPerBps.discriminator,
-            reserveConfig.deleveragingThresholdSlotsPerBps.toNumber()
+            UpdateConfigMode.UpdateDeleveragingThresholdSecsPerBps.discriminator,
+            reserveConfig.deleveragingThresholdSecsPerBps.toNumber()
           ),
         });
-      } else if (!reserve.config.deleveragingThresholdSlotsPerBps.eq(reserveConfig.deleveragingThresholdSlotsPerBps)) {
+      } else if (!reserve.config.deleveragingThresholdSecsPerBps.eq(reserveConfig.deleveragingThresholdSecsPerBps)) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.DeleveragingThresholdSlotsPerBps.discriminator,
+          mode: UpdateConfigMode.UpdateDeleveragingThresholdSecsPerBps.discriminator,
           value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.DeleveragingThresholdSlotsPerBps.discriminator,
-            reserveConfig.deleveragingThresholdSlotsPerBps.toNumber()
+            UpdateConfigMode.UpdateDeleveragingThresholdSecsPerBps.discriminator,
+            reserveConfig.deleveragingThresholdSecsPerBps.toNumber()
           ),
         });
       }
@@ -1654,17 +1654,17 @@ export function parseForChangesReserveConfigAndGetIxs(
     } else if (key === 'deleveragingMarginCallPeriodSecs') {
       if (reserve === undefined) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.DeleveragingMarginCallPeriod.discriminator,
+          mode: UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
           value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.DeleveragingMarginCallPeriod.discriminator,
+            UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
             reserveConfig.deleveragingMarginCallPeriodSecs.toNumber()
           ),
         });
       } else if (!reserve.config.deleveragingMarginCallPeriodSecs.eq(reserveConfig.deleveragingMarginCallPeriodSecs)) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.DeleveragingMarginCallPeriod.discriminator,
+          mode: UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
           value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.DeleveragingMarginCallPeriod.discriminator,
+            UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
             reserveConfig.deleveragingMarginCallPeriodSecs.toNumber()
           ),
         });
@@ -1979,9 +1979,9 @@ export function updateReserveConfigEncodedValue(
     case UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator:
     case UpdateConfigMode.UpdateDebtWithdrawalCapCurrentTotal.discriminator:
     case UpdateConfigMode.UpdateDepositWithdrawalCapCurrentTotal.discriminator:
-    case UpdateConfigMode.DeleveragingMarginCallPeriod.discriminator:
+    case UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator:
     case UpdateConfigMode.UpdateBorrowFactor.discriminator:
-    case UpdateConfigMode.DeleveragingThresholdSlotsPerBps.discriminator:
+    case UpdateConfigMode.UpdateDeleveragingThresholdSecsPerBps.discriminator:
     case UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator:
       value = value as number;
       buffer = Buffer.alloc(8);

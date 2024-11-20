@@ -1,4 +1,3 @@
-import { parsePriceData } from '@pythnetwork/client';
 import { AccountInfo, Connection, PublicKey } from '@solana/web3.js';
 import Decimal from 'decimal.js';
 import { OraclePrices, Scope } from '@kamino-finance/scope-sdk';
@@ -8,6 +7,7 @@ import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
 import { Reserve } from '../lib';
 import { batchFetch } from '@kamino-finance/kliquidity-sdk';
 import BN from 'bn.js';
+import { PriceUpdateV2 } from '../pyth/accounts';
 
 const SWITCHBOARD_V2_PROGRAM_ID = new PublicKey('SW1TCH7qEPTdLsDHRgPuMQjbQxKdH2aBStViMFnt64f');
 
@@ -166,27 +166,21 @@ export function cacheOrGetPythPrices(
     const result = oracleAccounts.get(oracle);
     if (result) {
       try {
-        const { price, timestamp, emaPrice, previousPrice, previousTimestamp, confidence } = parsePriceData(
-          result.data
-        );
+        const { priceMessage } = PriceUpdateV2.decode(result.data);
+        const { price, exponent, conf: confidence, publishTime: timestamp, emaPrice } = priceMessage;
         if (price) {
-          const px = new Decimal(price);
+          const px = new Decimal(price.toString()).div(10 ** Math.abs(exponent));
           prices.spot = {
             price: px,
-            timestamp,
-            valid: validatePythPx(px, confidence),
-          };
-        } else {
-          prices.spot = {
-            price: new Decimal(previousPrice),
-            timestamp: previousTimestamp,
-            valid: false,
+            timestamp: BigInt(timestamp.toString()),
+            valid: validatePythPx(px, confidence.toNumber()),
           };
         }
         if (emaPrice !== undefined && emaPrice !== null) {
+          const emaPx = new Decimal(emaPrice.toString()).div(10 ** Math.abs(exponent));
           prices.twap = {
-            price: new Decimal(emaPrice.value),
-            timestamp,
+            price: emaPx,
+            timestamp: BigInt(timestamp.toString()),
             valid: true,
           };
         }

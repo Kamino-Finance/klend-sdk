@@ -99,7 +99,7 @@ export class Reserve {
     types.ReserveCollateral.layout("collateral"),
     borsh.array(borsh.u64(), 150, "reserveCollateralPadding"),
     types.ReserveConfig.layout("config"),
-    borsh.array(borsh.u64(), 117, "configPadding"),
+    borsh.array(borsh.u64(), 116, "configPadding"),
     borsh.u64("borrowedAmountOutsideElevationGroup"),
     borsh.array(
       borsh.u64(),

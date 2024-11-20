@@ -42,12 +42,10 @@ export const getInitAllReferrerTokenStateIxns = async ({
   tokenStatesToCreate.forEach(([referrerTokenStateAddress, reserveAddress]) => {
     const initReferrerTokenStateIx = initReferrerTokenState(
       {
-        referrer,
-      },
-      {
         lendingMarket: kaminoMarket.getAddress(),
         payer,
         reserve: reserveAddress,
+        referrer,
         referrerTokenState: referrerTokenStateAddress,
         rent: SYSVAR_RENT_PUBKEY,
         systemProgram: SystemProgram.programId,

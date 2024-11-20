@@ -21,6 +21,13 @@ export interface LendingMarketFields {
   /** Referral fee for the lending market, as bps out of the total protocol fee */
   referralFeeBps: number
   emergencyMode: number
+  /**
+   * Whether the obligations on this market should be subject to auto-deleveraging after deposit
+   * or borrow limit is crossed.
+   * Besides this flag, the particular reserve's flag also needs to be enabled (logical `AND`).
+   * **NOTE:** the manual "target LTV" deleveraging (enabled by the risk council for individual
+   * obligations) is NOT affected by this flag.
+   */
   autodeleverageEnabled: number
   borrowDisabled: number
   /**
@@ -50,9 +57,12 @@ export interface LendingMarketFields {
   elevationGroupPadding: Array<BN>
   /** Min net value accepted to be found in a position after any lending action in an obligation (scaled by quote currency decimals) */
   minNetValueInObligationSf: BN
-  minValueSkipLiquidationLtvBfChecks: BN
+  /** Minimum value to enforce smallest ltv priority checks on the collateral reserves on liquidation */
+  minValueSkipLiquidationLtvChecks: BN
   /** Market name, zero-padded. */
   name: Array<number>
+  /** Minimum value to enforce highest borrow factor priority checks on the debt reserves on liquidation */
+  minValueSkipLiquidationBfChecks: BN
   padding1: Array<BN>
 }
 
@@ -73,6 +83,13 @@ export interface LendingMarketJSON {
   /** Referral fee for the lending market, as bps out of the total protocol fee */
   referralFeeBps: number
   emergencyMode: number
+  /**
+   * Whether the obligations on this market should be subject to auto-deleveraging after deposit
+   * or borrow limit is crossed.
+   * Besides this flag, the particular reserve's flag also needs to be enabled (logical `AND`).
+   * **NOTE:** the manual "target LTV" deleveraging (enabled by the risk council for individual
+   * obligations) is NOT affected by this flag.
+   */
   autodeleverageEnabled: number
   borrowDisabled: number
   /**
@@ -102,9 +119,12 @@ export interface LendingMarketJSON {
   elevationGroupPadding: Array<string>
   /** Min net value accepted to be found in a position after any lending action in an obligation (scaled by quote currency decimals) */
   minNetValueInObligationSf: string
-  minValueSkipLiquidationLtvBfChecks: string
+  /** Minimum value to enforce smallest ltv priority checks on the collateral reserves on liquidation */
+  minValueSkipLiquidationLtvChecks: string
   /** Market name, zero-padded. */
   name: Array<number>
+  /** Minimum value to enforce highest borrow factor priority checks on the debt reserves on liquidation */
+  minValueSkipLiquidationBfChecks: string
   padding1: Array<string>
 }
 
@@ -125,6 +145,13 @@ export class LendingMarket {
   /** Referral fee for the lending market, as bps out of the total protocol fee */
   readonly referralFeeBps: number
   readonly emergencyMode: number
+  /**
+   * Whether the obligations on this market should be subject to auto-deleveraging after deposit
+   * or borrow limit is crossed.
+   * Besides this flag, the particular reserve's flag also needs to be enabled (logical `AND`).
+   * **NOTE:** the manual "target LTV" deleveraging (enabled by the risk council for individual
+   * obligations) is NOT affected by this flag.
+   */
   readonly autodeleverageEnabled: number
   readonly borrowDisabled: number
   /**
@@ -154,9 +181,12 @@ export class LendingMarket {
   readonly elevationGroupPadding: Array<BN>
   /** Min net value accepted to be found in a position after any lending action in an obligation (scaled by quote currency decimals) */
   readonly minNetValueInObligationSf: BN
-  readonly minValueSkipLiquidationLtvBfChecks: BN
+  /** Minimum value to enforce smallest ltv priority checks on the collateral reserves on liquidation */
+  readonly minValueSkipLiquidationLtvChecks: BN
   /** Market name, zero-padded. */
   readonly name: Array<number>
+  /** Minimum value to enforce highest borrow factor priority checks on the debt reserves on liquidation */
+  readonly minValueSkipLiquidationBfChecks: BN
   readonly padding1: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -185,9 +215,10 @@ export class LendingMarket {
     borsh.array(types.ElevationGroup.layout(), 32, "elevationGroups"),
     borsh.array(borsh.u64(), 90, "elevationGroupPadding"),
     borsh.u128("minNetValueInObligationSf"),
-    borsh.u64("minValueSkipLiquidationLtvBfChecks"),
+    borsh.u64("minValueSkipLiquidationLtvChecks"),
     borsh.array(borsh.u8(), 32, "name"),
-    borsh.array(borsh.u64(), 173, "padding1"),
+    borsh.u64("minValueSkipLiquidationBfChecks"),
+    borsh.array(borsh.u64(), 172, "padding1"),
   ])
 
   constructor(fields: LendingMarketFields) {
@@ -217,9 +248,11 @@ export class LendingMarket {
     )
     this.elevationGroupPadding = fields.elevationGroupPadding
     this.minNetValueInObligationSf = fields.minNetValueInObligationSf
-    this.minValueSkipLiquidationLtvBfChecks =
-      fields.minValueSkipLiquidationLtvBfChecks
+    this.minValueSkipLiquidationLtvChecks =
+      fields.minValueSkipLiquidationLtvChecks
     this.name = fields.name
+    this.minValueSkipLiquidationBfChecks =
+      fields.minValueSkipLiquidationBfChecks
     this.padding1 = fields.padding1
   }
 
@@ -293,9 +326,9 @@ export class LendingMarket {
       ),
       elevationGroupPadding: dec.elevationGroupPadding,
       minNetValueInObligationSf: dec.minNetValueInObligationSf,
-      minValueSkipLiquidationLtvBfChecks:
-        dec.minValueSkipLiquidationLtvBfChecks,
+      minValueSkipLiquidationLtvChecks: dec.minValueSkipLiquidationLtvChecks,
       name: dec.name,
+      minValueSkipLiquidationBfChecks: dec.minValueSkipLiquidationBfChecks,
       padding1: dec.padding1,
     })
   }
@@ -327,9 +360,11 @@ export class LendingMarket {
         item.toString()
       ),
       minNetValueInObligationSf: this.minNetValueInObligationSf.toString(),
-      minValueSkipLiquidationLtvBfChecks:
-        this.minValueSkipLiquidationLtvBfChecks.toString(),
+      minValueSkipLiquidationLtvChecks:
+        this.minValueSkipLiquidationLtvChecks.toString(),
       name: this.name,
+      minValueSkipLiquidationBfChecks:
+        this.minValueSkipLiquidationBfChecks.toString(),
       padding1: this.padding1.map((item) => item.toString()),
     }
   }
@@ -365,10 +400,13 @@ export class LendingMarket {
         (item) => new BN(item)
       ),
       minNetValueInObligationSf: new BN(obj.minNetValueInObligationSf),
-      minValueSkipLiquidationLtvBfChecks: new BN(
-        obj.minValueSkipLiquidationLtvBfChecks
+      minValueSkipLiquidationLtvChecks: new BN(
+        obj.minValueSkipLiquidationLtvChecks
       ),
       name: obj.name,
+      minValueSkipLiquidationBfChecks: new BN(
+        obj.minValueSkipLiquidationBfChecks
+      ),
       padding1: obj.padding1.map((item) => new BN(item)),
     })
   }

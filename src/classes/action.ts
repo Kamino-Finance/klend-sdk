@@ -2347,12 +2347,10 @@ export class KaminoAction {
     if (!account) {
       const initReferrerTokenStateIx = initReferrerTokenState(
         {
-          referrer: this.referrer,
-        },
-        {
           lendingMarket: this.kaminoMarket.getAddress(),
           payer: this.owner,
           reserve: reserve.address,
+          referrer: this.referrer,
           referrerTokenState,
           rent: SYSVAR_RENT_PUBKEY,
           systemProgram: SystemProgram.programId,

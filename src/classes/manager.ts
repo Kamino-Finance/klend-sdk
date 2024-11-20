@@ -1013,13 +1013,23 @@ function parseForChangesMarketConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'minValueSkipLiquidationLtvBfChecks') {
-      if (!market.minValueSkipLiquidationLtvBfChecks.eq(newMarket.minValueSkipLiquidationLtvBfChecks)) {
+    } else if (key === 'minValueSkipLiquidationBfChecks') {
+      if (!market.minValueSkipLiquidationBfChecks.eq(newMarket.minValueSkipLiquidationBfChecks)) {
         updateLendingMarketIxnsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateMinValueSkipPriorityLiqCheck.discriminator,
+          mode: UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheck.discriminator,
           value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateMinValueSkipPriorityLiqCheck.discriminator,
-            newMarket.minValueSkipLiquidationLtvBfChecks.toNumber()
+            UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheck.discriminator,
+            newMarket.minValueSkipLiquidationBfChecks.toNumber()
+          ),
+        });
+      }
+    } else if (key === 'minValueSkipLiquidationLtvChecks') {
+      if (!market.minValueSkipLiquidationLtvChecks.eq(newMarket.minValueSkipLiquidationLtvChecks)) {
+        updateLendingMarketIxnsArgs.push({
+          mode: UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheck.discriminator,
+          value: updateMarketConfigEncodedValue(
+            UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheck.discriminator,
+            newMarket.minValueSkipLiquidationLtvChecks.toNumber()
           ),
         });
       }
@@ -1099,7 +1109,8 @@ function updateMarketConfigEncodedValue(
     case UpdateLendingMarketMode.UpdateGlobalAllowedBorrow.discriminator:
     case UpdateLendingMarketMode.UpdateGlobalUnhealthyBorrow.discriminator:
     case UpdateLendingMarketMode.UpdateMinFullLiquidationThreshold.discriminator:
-    case UpdateLendingMarketMode.UpdateMinValueSkipPriorityLiqCheck.discriminator:
+    case UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheck.discriminator:
+    case UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheck.discriminator:
       value = value as number;
       buffer.writeBigUint64LE(BigInt(value), 0);
       break;

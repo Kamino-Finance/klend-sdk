@@ -43,8 +43,18 @@ export interface ObligationFields {
   referrer: PublicKey
   /** Marked = 1 if borrowing disabled, 0 = borrowing enabled */
   borrowingDisabled: number
+  /**
+   * A target LTV set by the risk council when marking this obligation for deleveraging.
+   * Only effective when `deleveraging_margin_call_started_slot != 0`.
+   */
+  autodeleverageTargetLtvPct: number
   reserved: Array<number>
   highestBorrowFactorPct: BN
+  /**
+   * A timestamp at which the risk council most-recently marked this obligation for deleveraging.
+   * Zero if not currently subject to deleveraging.
+   */
+  autodeleverageMarginCallStartedTimestamp: BN
   padding3: Array<BN>
 }
 
@@ -87,8 +97,18 @@ export interface ObligationJSON {
   referrer: string
   /** Marked = 1 if borrowing disabled, 0 = borrowing enabled */
   borrowingDisabled: number
+  /**
+   * A target LTV set by the risk council when marking this obligation for deleveraging.
+   * Only effective when `deleveraging_margin_call_started_slot != 0`.
+   */
+  autodeleverageTargetLtvPct: number
   reserved: Array<number>
   highestBorrowFactorPct: string
+  /**
+   * A timestamp at which the risk council most-recently marked this obligation for deleveraging.
+   * Zero if not currently subject to deleveraging.
+   */
+  autodeleverageMarginCallStartedTimestamp: string
   padding3: Array<string>
 }
 
@@ -132,8 +152,18 @@ export class Obligation {
   readonly referrer: PublicKey
   /** Marked = 1 if borrowing disabled, 0 = borrowing enabled */
   readonly borrowingDisabled: number
+  /**
+   * A target LTV set by the risk council when marking this obligation for deleveraging.
+   * Only effective when `deleveraging_margin_call_started_slot != 0`.
+   */
+  readonly autodeleverageTargetLtvPct: number
   readonly reserved: Array<number>
   readonly highestBorrowFactorPct: BN
+  /**
+   * A timestamp at which the risk council most-recently marked this obligation for deleveraging.
+   * Zero if not currently subject to deleveraging.
+   */
+  readonly autodeleverageMarginCallStartedTimestamp: BN
   readonly padding3: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -160,9 +190,11 @@ export class Obligation {
     borsh.u8("hasDebt"),
     borsh.publicKey("referrer"),
     borsh.u8("borrowingDisabled"),
-    borsh.array(borsh.u8(), 7, "reserved"),
+    borsh.u8("autodeleverageTargetLtvPct"),
+    borsh.array(borsh.u8(), 6, "reserved"),
     borsh.u64("highestBorrowFactorPct"),
-    borsh.array(borsh.u64(), 126, "padding3"),
+    borsh.u64("autodeleverageMarginCallStartedTimestamp"),
+    borsh.array(borsh.u64(), 125, "padding3"),
   ])
 
   constructor(fields: ObligationFields) {
@@ -191,8 +223,11 @@ export class Obligation {
     this.hasDebt = fields.hasDebt
     this.referrer = fields.referrer
     this.borrowingDisabled = fields.borrowingDisabled
+    this.autodeleverageTargetLtvPct = fields.autodeleverageTargetLtvPct
     this.reserved = fields.reserved
     this.highestBorrowFactorPct = fields.highestBorrowFactorPct
+    this.autodeleverageMarginCallStartedTimestamp =
+      fields.autodeleverageMarginCallStartedTimestamp
     this.padding3 = fields.padding3
   }
 
@@ -268,8 +303,11 @@ export class Obligation {
       hasDebt: dec.hasDebt,
       referrer: dec.referrer,
       borrowingDisabled: dec.borrowingDisabled,
+      autodeleverageTargetLtvPct: dec.autodeleverageTargetLtvPct,
       reserved: dec.reserved,
       highestBorrowFactorPct: dec.highestBorrowFactorPct,
+      autodeleverageMarginCallStartedTimestamp:
+        dec.autodeleverageMarginCallStartedTimestamp,
       padding3: dec.padding3,
     })
   }
@@ -297,8 +335,11 @@ export class Obligation {
       hasDebt: this.hasDebt,
       referrer: this.referrer.toString(),
       borrowingDisabled: this.borrowingDisabled,
+      autodeleverageTargetLtvPct: this.autodeleverageTargetLtvPct,
       reserved: this.reserved,
       highestBorrowFactorPct: this.highestBorrowFactorPct.toString(),
+      autodeleverageMarginCallStartedTimestamp:
+        this.autodeleverageMarginCallStartedTimestamp.toString(),
       padding3: this.padding3.map((item) => item.toString()),
     }
   }
@@ -332,8 +373,12 @@ export class Obligation {
       hasDebt: obj.hasDebt,
       referrer: new PublicKey(obj.referrer),
       borrowingDisabled: obj.borrowingDisabled,
+      autodeleverageTargetLtvPct: obj.autodeleverageTargetLtvPct,
       reserved: obj.reserved,
       highestBorrowFactorPct: new BN(obj.highestBorrowFactorPct),
+      autodeleverageMarginCallStartedTimestamp: new BN(
+        obj.autodeleverageMarginCallStartedTimestamp
+      ),
       padding3: obj.padding3.map((item) => new BN(item)),
     })
   }
