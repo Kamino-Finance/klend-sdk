@@ -63,6 +63,11 @@ export interface LendingMarketFields {
   name: Array<number>
   /** Minimum value to enforce highest borrow factor priority checks on the debt reserves on liquidation */
   minValueSkipLiquidationBfChecks: BN
+  /**
+   * Time (in seconds) that must pass before liquidation is allowed on an obligation that has
+   * been individually marked for auto-deleveraging (by the risk council).
+   */
+  individualAutodeleverageMarginCallPeriodSecs: BN
   padding1: Array<BN>
 }
 
@@ -125,6 +130,11 @@ export interface LendingMarketJSON {
   name: Array<number>
   /** Minimum value to enforce highest borrow factor priority checks on the debt reserves on liquidation */
   minValueSkipLiquidationBfChecks: string
+  /**
+   * Time (in seconds) that must pass before liquidation is allowed on an obligation that has
+   * been individually marked for auto-deleveraging (by the risk council).
+   */
+  individualAutodeleverageMarginCallPeriodSecs: string
   padding1: Array<string>
 }
 
@@ -187,6 +197,11 @@ export class LendingMarket {
   readonly name: Array<number>
   /** Minimum value to enforce highest borrow factor priority checks on the debt reserves on liquidation */
   readonly minValueSkipLiquidationBfChecks: BN
+  /**
+   * Time (in seconds) that must pass before liquidation is allowed on an obligation that has
+   * been individually marked for auto-deleveraging (by the risk council).
+   */
+  readonly individualAutodeleverageMarginCallPeriodSecs: BN
   readonly padding1: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -218,7 +233,8 @@ export class LendingMarket {
     borsh.u64("minValueSkipLiquidationLtvChecks"),
     borsh.array(borsh.u8(), 32, "name"),
     borsh.u64("minValueSkipLiquidationBfChecks"),
-    borsh.array(borsh.u64(), 172, "padding1"),
+    borsh.u64("individualAutodeleverageMarginCallPeriodSecs"),
+    borsh.array(borsh.u64(), 171, "padding1"),
   ])
 
   constructor(fields: LendingMarketFields) {
@@ -253,6 +269,8 @@ export class LendingMarket {
     this.name = fields.name
     this.minValueSkipLiquidationBfChecks =
       fields.minValueSkipLiquidationBfChecks
+    this.individualAutodeleverageMarginCallPeriodSecs =
+      fields.individualAutodeleverageMarginCallPeriodSecs
     this.padding1 = fields.padding1
   }
 
@@ -329,6 +347,8 @@ export class LendingMarket {
       minValueSkipLiquidationLtvChecks: dec.minValueSkipLiquidationLtvChecks,
       name: dec.name,
       minValueSkipLiquidationBfChecks: dec.minValueSkipLiquidationBfChecks,
+      individualAutodeleverageMarginCallPeriodSecs:
+        dec.individualAutodeleverageMarginCallPeriodSecs,
       padding1: dec.padding1,
     })
   }
@@ -365,6 +385,8 @@ export class LendingMarket {
       name: this.name,
       minValueSkipLiquidationBfChecks:
         this.minValueSkipLiquidationBfChecks.toString(),
+      individualAutodeleverageMarginCallPeriodSecs:
+        this.individualAutodeleverageMarginCallPeriodSecs.toString(),
       padding1: this.padding1.map((item) => item.toString()),
     }
   }
@@ -406,6 +428,9 @@ export class LendingMarket {
       name: obj.name,
       minValueSkipLiquidationBfChecks: new BN(
         obj.minValueSkipLiquidationBfChecks
+      ),
+      individualAutodeleverageMarginCallPeriodSecs: new BN(
+        obj.individualAutodeleverageMarginCallPeriodSecs
       ),
       padding1: obj.padding1.map((item) => new BN(item)),
     })

@@ -1033,6 +1033,18 @@ function parseForChangesMarketConfigAndGetIxs(
           ),
         });
       }
+    } else if (key === 'individualAutodeleverageMarginCallPeriodSecs') {
+      if (
+        !market.individualAutodeleverageMarginCallPeriodSecs.eq(newMarket.individualAutodeleverageMarginCallPeriodSecs)
+      ) {
+        updateLendingMarketIxnsArgs.push({
+          mode: UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs.discriminator,
+          value: updateMarketConfigEncodedValue(
+            UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs.discriminator,
+            newMarket.individualAutodeleverageMarginCallPeriodSecs.toNumber()
+          ),
+        });
+      }
     } else if (key === 'elevationGroups') {
       let elevationGroupsDiffs = 0;
       for (let i = 0; i < market.elevationGroups.length; i++) {

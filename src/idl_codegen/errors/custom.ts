@@ -114,6 +114,7 @@ export type CustomError =
   | ObligationOwnersMustMatch
   | ObligationsMustMatch
   | LendingMarketsMustMatch
+  | ObligationAlreadyMarkedForDeleveraging
 
 export class InvalidMarketAuthority extends Error {
   static readonly code = 6000
@@ -1437,6 +1438,17 @@ export class LendingMarketsMustMatch extends Error {
   }
 }
 
+export class ObligationAlreadyMarkedForDeleveraging extends Error {
+  static readonly code = 6115
+  readonly code = 6115
+  readonly name = "ObligationAlreadyMarkedForDeleveraging"
+  readonly msg = "Obligation is already marked for deleveraging"
+
+  constructor(readonly logs?: string[]) {
+    super("6115: Obligation is already marked for deleveraging")
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 6000:
@@ -1669,6 +1681,8 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new ObligationsMustMatch(logs)
     case 6114:
       return new LendingMarketsMustMatch(logs)
+    case 6115:
+      return new ObligationAlreadyMarkedForDeleveraging(logs)
   }
 
   return null
