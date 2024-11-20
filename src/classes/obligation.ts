@@ -32,6 +32,7 @@ export type Position = {
 export type ObligationStats = {
   userTotalDeposit: Decimal;
   userTotalCollateralDeposit: Decimal;
+  userTotalLiquidatableDeposit: Decimal;
   userTotalBorrow: Decimal;
   userTotalBorrowBorrowFactorAdjusted: Decimal;
   borrowLimit: Decimal;
@@ -55,6 +56,7 @@ interface DepositStats {
   deposits: Map<PublicKey, Position>;
   userTotalDeposit: Decimal;
   userTotalCollateralDeposit: Decimal;
+  userTotalLiquidatableDeposit: Decimal;
   borrowLimit: Decimal;
   liquidationLtv: Decimal;
   borrowLiquidationLimit: Decimal;
@@ -639,7 +641,7 @@ export class KaminoObligation {
 
     newStats.netAccountValue = newStats.userTotalDeposit.minus(newStats.userTotalBorrow);
     newStats.loanToValue = valueOrZero(
-      newStats.userTotalBorrowBorrowFactorAdjusted.dividedBy(newStats.userTotalDeposit)
+      newStats.userTotalBorrowBorrowFactorAdjusted.dividedBy(newStats.userTotalCollateralDeposit)
     );
     newStats.leverage = valueOrZero(newStats.userTotalDeposit.dividedBy(newStats.netAccountValue));
 
@@ -714,6 +716,7 @@ export class KaminoObligation {
         userTotalBorrowBorrowFactorAdjusted: borrowStatsOraclePrice.userTotalBorrowBorrowFactorAdjusted,
         userTotalDeposit: depositStatsOraclePrice.userTotalDeposit,
         userTotalCollateralDeposit: depositStatsOraclePrice.userTotalCollateralDeposit,
+        userTotalLiquidatableDeposit: depositStatsOraclePrice.userTotalLiquidatableDeposit,
         liquidationLtv: depositStatsOraclePrice.liquidationLtv,
         borrowUtilization: borrowStatsOraclePrice.userTotalBorrowBorrowFactorAdjusted.dividedBy(
           depositStatsOraclePrice.borrowLimit
@@ -721,7 +724,7 @@ export class KaminoObligation {
         netAccountValue: netAccountValueScopeRefreshed,
         leverage: depositStatsOraclePrice.userTotalDeposit.dividedBy(netAccountValueScopeRefreshed),
         loanToValue: borrowStatsOraclePrice.userTotalBorrowBorrowFactorAdjusted.dividedBy(
-          depositStatsOraclePrice.userTotalDeposit
+          depositStatsOraclePrice.userTotalCollateralDeposit
         ),
         potentialElevationGroupUpdate,
       },
@@ -737,6 +740,7 @@ export class KaminoObligation {
   ): DepositStats {
     let userTotalDeposit = new Decimal(0);
     let userTotalCollateralDeposit = new Decimal(0);
+    let userTotalLiquidatableDeposit = new Decimal(0);
     let borrowLimit = new Decimal(0);
     let borrowLiquidationLimit = new Decimal(0);
 
@@ -770,6 +774,10 @@ export class KaminoObligation {
         userTotalCollateralDeposit = userTotalCollateralDeposit.add(depositValueUsd);
       }
 
+      if (!liquidationLtv.eq('0')) {
+        userTotalLiquidatableDeposit = userTotalLiquidatableDeposit.add(depositValueUsd);
+      }
+
       borrowLimit = borrowLimit.add(depositValueUsd.mul(maxLtv));
       borrowLiquidationLimit = borrowLiquidationLimit.add(depositValueUsd.mul(liquidationLtv));
 
@@ -786,8 +794,9 @@ export class KaminoObligation {
       deposits,
       userTotalDeposit,
       userTotalCollateralDeposit,
+      userTotalLiquidatableDeposit,
       borrowLimit,
-      liquidationLtv: valueOrZero(borrowLiquidationLimit.div(userTotalDeposit)),
+      liquidationLtv: valueOrZero(borrowLiquidationLimit.div(userTotalLiquidatableDeposit)),
       borrowLiquidationLimit,
     };
   }
@@ -865,7 +874,7 @@ export class KaminoObligation {
     const getOraclePx = (reserve: KaminoReserve) => reserve.getOracleMarketPrice();
     const { collateralExchangeRates } = KaminoObligation.getRatesForObligation(market, this.state, slot);
 
-    const { borrowLimit, userTotalDeposit } = KaminoObligation.calculateObligationDeposits(
+    const { borrowLimit, userTotalCollateralDeposit } = KaminoObligation.calculateObligationDeposits(
       market,
       this.state.deposits,
       collateralExchangeRates,
@@ -873,11 +882,11 @@ export class KaminoObligation {
       getOraclePx
     );
 
-    if (borrowLimit.eq(0) || userTotalDeposit.eq(0)) {
+    if (borrowLimit.eq(0) || userTotalCollateralDeposit.eq(0)) {
       return new Decimal(0);
     }
 
-    return borrowLimit.div(userTotalDeposit);
+    return borrowLimit.div(userTotalCollateralDeposit);
   }
 
   /*
