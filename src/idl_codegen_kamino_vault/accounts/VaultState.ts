@@ -36,6 +36,8 @@ export interface VaultStateFields {
   name: Array<number>
   vaultLookupTable: PublicKey
   vaultFarm: PublicKey
+  creationTimestamp: BN
+  padding1: BN
   padding2: Array<BN>
 }
 
@@ -71,6 +73,8 @@ export interface VaultStateJSON {
   name: Array<number>
   vaultLookupTable: string
   vaultFarm: string
+  creationTimestamp: string
+  padding1: string
   padding2: Array<string>
 }
 
@@ -106,6 +110,8 @@ export class VaultState {
   readonly name: Array<number>
   readonly vaultLookupTable: PublicKey
   readonly vaultFarm: PublicKey
+  readonly creationTimestamp: BN
+  readonly padding1: BN
   readonly padding2: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -144,7 +150,9 @@ export class VaultState {
     borsh.array(borsh.u8(), 40, "name"),
     borsh.publicKey("vaultLookupTable"),
     borsh.publicKey("vaultFarm"),
-    borsh.array(borsh.u128(), 245, "padding2"),
+    borsh.u64("creationTimestamp"),
+    borsh.u64("padding1"),
+    borsh.array(borsh.u128(), 244, "padding2"),
   ])
 
   constructor(fields: VaultStateFields) {
@@ -181,6 +189,8 @@ export class VaultState {
     this.name = fields.name
     this.vaultLookupTable = fields.vaultLookupTable
     this.vaultFarm = fields.vaultFarm
+    this.creationTimestamp = fields.creationTimestamp
+    this.padding1 = fields.padding1
     this.padding2 = fields.padding2
   }
 
@@ -263,6 +273,8 @@ export class VaultState {
       name: dec.name,
       vaultLookupTable: dec.vaultLookupTable,
       vaultFarm: dec.vaultFarm,
+      creationTimestamp: dec.creationTimestamp,
+      padding1: dec.padding1,
       padding2: dec.padding2,
     })
   }
@@ -302,6 +314,8 @@ export class VaultState {
       name: this.name,
       vaultLookupTable: this.vaultLookupTable.toString(),
       vaultFarm: this.vaultFarm.toString(),
+      creationTimestamp: this.creationTimestamp.toString(),
+      padding1: this.padding1.toString(),
       padding2: this.padding2.map((item) => item.toString()),
     }
   }
@@ -341,6 +355,8 @@ export class VaultState {
       name: obj.name,
       vaultLookupTable: new PublicKey(obj.vaultLookupTable),
       vaultFarm: new PublicKey(obj.vaultFarm),
+      creationTimestamp: new BN(obj.creationTimestamp),
+      padding1: new BN(obj.padding1),
       padding2: obj.padding2.map((item) => new BN(item)),
     })
   }

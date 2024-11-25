@@ -994,11 +994,19 @@
             "type": "publicKey"
           },
           {
+            "name": "creationTimestamp",
+            "type": "u64"
+          },
+          {
+            "name": "padding1",
+            "type": "u64"
+          },
+          {
             "name": "padding2",
             "type": {
               "array": [
                 "u128",
-                245
+                244
               ]
             }
           }
@@ -1898,11 +1906,15 @@
             "type": "u64"
           },
           {
+            "name": "ctokenVaultBump",
+            "type": "u64"
+          },
+          {
             "name": "configPadding",
             "type": {
               "array": [
                 "u64",
-                128
+                127
               ]
             }
           },
