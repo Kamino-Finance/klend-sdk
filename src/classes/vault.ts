@@ -58,7 +58,7 @@ import { withdraw } from '../idl_codegen_kamino_vault/instructions';
 import { PROGRAM_ID } from '../idl_codegen/programId';
 import { DEFAULT_RECENT_SLOT_DURATION_MS, ReserveWithAddress } from './reserve';
 import { Fraction } from './fraction';
-import { createAtasIdempotent, lendingMarketAuthPda, PublicKeySet } from '../utils';
+import { createAtasIdempotent, lendingMarketAuthPda, PublicKeySet, SECONDS_PER_YEAR } from '../utils';
 import bs58 from 'bs58';
 import { getAccountOwner, getProgramAccounts } from '../utils/rpc';
 import {
@@ -69,6 +69,7 @@ import {
   UpdateVaultConfigIxs,
 } from './types';
 import { collToLamportsDecimal } from '@kamino-finance/kliquidity-sdk';
+import { FullBPSDecimal } from '@kamino-finance/kliquidity-sdk/dist/utils/CreationParameters';
 
 export const kaminoVaultId = new PublicKey('kvauTFR8qm1dhniz6pYuBZkuene3Hfrs1VQhVRgCNrr');
 export const kaminoVaultStagingId = new PublicKey('STkvh7ostar39Fwr4uZKASs1RNNuYMFMTsE77FiRsL2');
@@ -1922,6 +1923,70 @@ export class KaminoVaultClient {
     const netYieldLamports = new Fraction(vaultState.cumulativeEarnedInterestSf).toDecimal();
     return lamportsToDecimal(netYieldLamports, vaultState.tokenMintDecimals.toString());
   }
+
+  /**
+   * Simulate the current holdings of the vault and the earned interest
+   * @param vaultState the kamino vault state to get simulated holdings and earnings for
+   * @param vaultReserves optional; the state of the reserves in the vault allocation
+   * @returns a struct of simulated vault holdings and earned interest
+   */
+  async calculateSimulatedHoldingsWithInterest(
+    vaultState: VaultState,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<SimulatedVaultHoldingsWithEarnedInterest> {
+    const latestUpdateTs = vaultState.lastFeeChargeTimestamp.toNumber();
+    const lastUpdateSlot = latestUpdateTs / this.recentSlotDurationMs;
+
+    const currentSlot = await this._connection.getSlot('confirmed');
+
+    const lastUpdateHoldingsPromise = this.getVaultHoldings(vaultState, lastUpdateSlot, vaultReserves);
+    const currentHoldingsPromise = this.getVaultHoldings(vaultState, currentSlot, vaultReserves);
+    const [lastUpdateHoldings, currentHoldings] = await Promise.all([
+      lastUpdateHoldingsPromise,
+      currentHoldingsPromise,
+    ]);
+
+    const earnedInterest = currentHoldings.total.sub(lastUpdateHoldings.total);
+
+    return {
+      holdings: currentHoldings,
+      earnedInterest: earnedInterest,
+    };
+  }
+
+  /**
+   * Simulate the current holdings and compute the fees that would be charged
+   * @param vaultState the kamino vault state to get simulated fees for
+   * @param simulatedCurrentHoldingsWithInterest optional; the simulated holdings and interest earned by the vault
+   * @returns a struct of simulated management and interest fees
+   */
+  async calculateSimulatedFees(
+    vaultState: VaultState,
+    simulatedCurrentHoldingsWithInterest?: SimulatedVaultHoldingsWithEarnedInterest
+  ): Promise<VaultFees> {
+    const timestampNow = new Date().getTime();
+    const timestampLastUpdate = vaultState.lastFeeChargeTimestamp.toNumber();
+    const timeElapsed = timestampNow - timestampLastUpdate;
+
+    const simulatedCurrentHoldings = simulatedCurrentHoldingsWithInterest
+      ? simulatedCurrentHoldingsWithInterest
+      : await this.calculateSimulatedHoldingsWithInterest(vaultState);
+
+    const performanceFee = simulatedCurrentHoldings.earnedInterest.mul(
+      new Decimal(vaultState.performanceFeeBps.toString()).div(FullBPSDecimal)
+    );
+
+    const managementFeeFactor = new Decimal(timeElapsed)
+      .mul(new Decimal(vaultState.managementFeeBps.toString()))
+      .div(new Decimal(SECONDS_PER_YEAR));
+    const prevAUM = new Fraction(vaultState.prevAumSf).toDecimal();
+    const mgmtFee = prevAUM.mul(managementFeeFactor);
+
+    return {
+      managementFee: mgmtFee,
+      performanceFee: performanceFee,
+    };
+  }
 } // KaminoVaultClient
 
 export class KaminoVault {
@@ -2042,6 +2107,11 @@ export type VaultHoldings = {
   total: Decimal;
 };
 
+export type SimulatedVaultHoldingsWithEarnedInterest = {
+  holdings: VaultHoldings;
+  earnedInterest: Decimal;
+};
+
 export type VaultHoldingsWithUSDValue = {
   holdings: VaultHoldings;
   availableUSD: Decimal;
@@ -2090,4 +2160,9 @@ export type VaultOverview = {
 export type VaultFeesPct = {
   managementFeePct: Decimal;
   performanceFeePct: Decimal;
+};
+
+export type VaultFees = {
+  managementFee: Decimal;
+  performanceFee: Decimal;
 };

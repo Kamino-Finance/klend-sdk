@@ -8,6 +8,8 @@ export const U64_MAX = '18446744073709551615';
 const INITIAL_COLLATERAL_RATIO = 1;
 export const INITIAL_COLLATERAL_RATE = new Decimal(INITIAL_COLLATERAL_RATIO);
 
+export const SECONDS_PER_YEAR = 365.242_199 * 24.0 * 60.0 * 60.0;
+
 export type ENV = 'mainnet-beta' | 'devnet' | 'localnet';
 
 export function isENV(value: any): value is ENV {

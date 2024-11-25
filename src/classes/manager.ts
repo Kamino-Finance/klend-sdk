@@ -17,6 +17,8 @@ import {
   MarketOverview,
   ReserveAllocationConfig,
   ReserveOverview,
+  SimulatedVaultHoldingsWithEarnedInterest,
+  VaultFees,
   VaultFeesPct,
   VaultHolder,
   VaultHoldings,
@@ -699,6 +701,32 @@ export class KaminoManager {
    */
   async getVaultTotalNetYield(vaultState: VaultState) {
     return this._vaultClient.getVaultCumulativeInterest(vaultState);
+  }
+
+  /**
+   * Simulate the current holdings of the vault and the earned interest
+   * @param vaultState the kamino vault state to get simulated holdings and earnings for
+   * @param vaultReserves optional; the state of the reserves in the vault allocation
+   * @returns a struct of simulated vault holdings and earned interest
+   */
+  async calculateSimulatedHoldingsWithInterest(
+    vaultState: VaultState,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<SimulatedVaultHoldingsWithEarnedInterest> {
+    return this._vaultClient.calculateSimulatedHoldingsWithInterest(vaultState, vaultReserves);
+  }
+
+  /**
+   * Simulate the current holdings and compute the fees that would be charged
+   * @param vaultState the kamino vault state to get simulated fees for
+   * @param simulatedCurrentHoldingsWithInterest optional; the simulated holdings and interest earned by the vault
+   * @returns a struct of simulated management and interest fees
+   */
+  async calculateSimulatedFees(
+    vaultState: VaultState,
+    simulatedCurrentHoldingsWithInterest?: SimulatedVaultHoldingsWithEarnedInterest
+  ): Promise<VaultFees> {
+    return this._vaultClient.calculateSimulatedFees(vaultState, simulatedCurrentHoldingsWithInterest);
   }
 
   /**
