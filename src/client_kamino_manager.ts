@@ -649,7 +649,7 @@ async function main() {
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const instructions = await kaminoManager.depositToVaultIxs(env.payer.publicKey, kaminoVault, amount);
 
-      const depositSig = await processTxn(env.client, env.payer, instructions, mode, 2500, []);
+      const depositSig = await processTxn(env.client, env.payer, instructions, mode, 2500, [], 800_000);
 
       mode === 'execute' && console.log('User deposit:', depositSig);
     });
@@ -675,14 +675,14 @@ async function main() {
       const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
-      const instructions = await kaminoManager.withdrawFromVaultIxs(
+      const withdrawIxs = await kaminoManager.withdrawFromVaultIxs(
         env.payer.publicKey,
         kaminoVault,
         new Decimal(amount),
         await env.connection.getSlot('confirmed')
       );
 
-      const depositSig = await processTxn(env.client, env.payer, instructions, mode, 2500, []);
+      const depositSig = await processTxn(env.client, env.payer, withdrawIxs, mode, 2500, [], 800_000);
 
       mode === 'execute' && console.log('User withdraw:', depositSig);
     });
@@ -754,7 +754,7 @@ async function main() {
         kaminoVault,
         reserveWithAddress
       );
-      const investReserveSig = await processTxn(env.client, env.payer, instructions, mode, 2500, [], 800_000);
+      const investReserveSig = await processTxn(env.client, env.payer, instructions, mode, 2500, [], 400_000);
 
       mode === 'execute' && console.log('Reserve invested:', investReserveSig);
     });
@@ -924,6 +924,17 @@ async function main() {
 
     const allVaults = await kaminoManager.getAllVaults();
     console.log('all vaults', allVaults);
+  });
+
+  commands.command('get-all-vaults-pks').action(async () => {
+    const env = initializeClient(false, false);
+    const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+    const allVaults = await kaminoManager.getAllVaults();
+    console.log(
+      'all vaults',
+      allVaults.map((vault) => vault.address.toBase58())
+    );
   });
 
   commands

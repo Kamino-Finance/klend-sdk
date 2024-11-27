@@ -676,8 +676,8 @@ export class KaminoVaultClient {
     const kaminoVault = new KaminoVault(vault.address, vaultState, vault.programId);
 
     // if the vault has allocations withdraw otherwise wtihdraw from available ix
-    const vaultAllocation = vaultState.vaultAllocationStrategy.find(
-      (allocation) => ~allocation.reserve.equals(PublicKey.default)
+    const vaultAllocation = vaultState.vaultAllocationStrategy.find((allocation) =>
+      allocation.reserve.equals(PublicKey.default)
     );
 
     if (vaultAllocation) {
@@ -735,18 +735,25 @@ export class KaminoVaultClient {
       },
     ]);
 
-    const tokensToWithdraw = shareAmount.mul(await this.getTokensPerShareSingleVault(vault, slot));
+    const shareLamportsToWithdraw = collToLamportsDecimal(shareAmount, vaultState.sharesMintDecimals.toNumber());
+    const tokensPerShare = await this.getTokensPerShareSingleVault(vault, slot);
+    const sharesPerToken = new Decimal(1).div(tokensPerShare);
+    const tokensToWithdraw = shareLamportsToWithdraw.mul(tokensPerShare);
     let tokenLeftToWithdraw = tokensToWithdraw;
+    const availableTokens = new Decimal(vaultState.tokenAvailable.toString());
+    tokenLeftToWithdraw = tokenLeftToWithdraw.sub(availableTokens);
 
-    tokenLeftToWithdraw = tokenLeftToWithdraw.sub(new Decimal(vaultState.tokenAvailable.toString()));
+    type ReserveWithTokensToWithdraw = { reserve: PublicKey; shares: Decimal };
 
-    const reservesToWithdraw: PublicKey[] = [];
-    const amountToWithdraw: Decimal[] = [];
-    amountToWithdraw.push(new Decimal(vaultState.tokenAvailable.toString()));
+    const reserveWithSharesAmountToWithdraw: ReserveWithTokensToWithdraw[] = [];
+    let isFirstWithdraw = true;
 
     if (tokenLeftToWithdraw.lte(0)) {
       // Availabe enough to withdraw all - using first reserve as it does not matter
-      reservesToWithdraw.push(vaultState.vaultAllocationStrategy[0].reserve);
+      reserveWithSharesAmountToWithdraw.push({
+        reserve: vaultState.vaultAllocationStrategy[0].reserve,
+        shares: shareLamportsToWithdraw,
+      });
     } else {
       // Get decreasing order sorted available liquidity to withdraw from each reserve allocated to
       const reserveAllocationAvailableLiquidityToWithdraw = await this.getReserveAllocationAvailableLiquidityToWithdraw(
@@ -755,15 +762,22 @@ export class KaminoVaultClient {
         vaultReservesState
       );
       // sort
-      const reserveAllocationAvailableLiquidityToWithdrawSorted = new PubkeyHashMap(
-        [...reserveAllocationAvailableLiquidityToWithdraw.entries()].sort((a, b) => b[1].sub(a[1]).toNumber())
-      );
+      const reserveAllocationAvailableLiquidityToWithdrawSorted = [
+        ...reserveAllocationAvailableLiquidityToWithdraw.entries(),
+      ].sort((a, b) => b[1].sub(a[1]).toNumber());
 
-      reserveAllocationAvailableLiquidityToWithdrawSorted.forEach((availableLiquidityToWithdraw, key) => {
+      reserveAllocationAvailableLiquidityToWithdrawSorted.forEach(([key, availableLiquidityToWithdraw], _) => {
         if (tokenLeftToWithdraw.gt(0)) {
-          reservesToWithdraw.push(key);
-          tokenLeftToWithdraw = tokenLeftToWithdraw.sub(availableLiquidityToWithdraw);
-          amountToWithdraw.push(Decimal.min(tokenLeftToWithdraw, availableLiquidityToWithdraw));
+          let tokensToWithdrawFromReserve = Decimal.min(tokenLeftToWithdraw, availableLiquidityToWithdraw);
+          if (isFirstWithdraw) {
+            tokensToWithdrawFromReserve = tokensToWithdrawFromReserve.add(availableTokens);
+            isFirstWithdraw = false;
+          }
+          // round up to the nearest integer the shares to withdraw
+          const sharesToWithdrawFromReserve = tokensToWithdrawFromReserve.mul(sharesPerToken).ceil();
+          reserveWithSharesAmountToWithdraw.push({ reserve: key, shares: sharesToWithdrawFromReserve });
+
+          tokenLeftToWithdraw = tokenLeftToWithdraw.sub(tokensToWithdrawFromReserve);
         }
       });
     }
@@ -771,26 +785,35 @@ export class KaminoVaultClient {
     const withdrawIxns: TransactionInstruction[] = [];
     withdrawIxns.push(createAtaIx);
 
-    reservesToWithdraw.forEach((reserve, index) => {
-      const reserveState = vaultReservesState.get(reserve);
+    // let sharesLeftToWithdraw = shareAmount;
+    for (let reserveIndex = 0; reserveIndex < reserveWithSharesAmountToWithdraw.length; reserveIndex++) {
+      const reserveWithTokens = reserveWithSharesAmountToWithdraw[reserveIndex];
+      const reserveState = vaultReservesState.get(reserveWithTokens.reserve);
       if (reserveState === undefined) {
-        throw new Error(`Reserve ${reserve.toBase58()} not found in vault reserves map`);
+        throw new Error(`Reserve ${reserveWithTokens.reserve.toBase58()} not found in vault reserves map`);
       }
-
       const marketAddress = reserveState.state.lendingMarket;
+
+      const isLastWithdraw = reserveIndex === reserveWithSharesAmountToWithdraw.length - 1;
+      // if it is not last withdraw it means that we can pass all shares as we are withdrawing everything from that reserve
+      let sharesToWithdraw = shareAmount;
+      if (isLastWithdraw) {
+        sharesToWithdraw = reserveWithTokens.shares;
+      }
+      
       const withdrawFromReserveIx = this.withdrawIxn(
         user,
         vault,
         vaultState,
         marketAddress,
-        { address: reserve, state: reserveState.state },
+        { address: reserveWithTokens.reserve, state: reserveState.state },
         userSharesAta,
         userTokenAta,
-        amountToWithdraw[index],
+        sharesToWithdraw,
         vaultReservesState
       );
       withdrawIxns.push(withdrawFromReserveIx);
-    });
+    }
 
     return withdrawIxns;
   }
@@ -1484,18 +1507,23 @@ export class KaminoVaultClient {
 
     const reserveAllocationAvailableLiquidityToWithdraw = new PubkeyHashMap<PublicKey, Decimal>();
     vaultState.vaultAllocationStrategy.forEach((allocationStrategy) => {
+      if (allocationStrategy.reserve.equals(PublicKey.default)) {
+        return;
+      }
       const reserve = reserves.get(allocationStrategy.reserve);
       if (reserve === undefined) {
         throw new Error(`Reserve ${allocationStrategy.reserve.toBase58()} not found`);
       }
-      const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(
-        slot,
-        new Fraction(reserve.state.liquidity.absoluteReferralRateSf)
+      let referralFeeBps = 0;
+      const denominator = reserve.state.config.protocolTakeRatePct / 100;
+      if (denominator > 0) {
+        referralFeeBps = new Fraction(reserve.state.liquidity.absoluteReferralRateSf)
           .toDecimal()
-          .div(reserve.state.config.protocolTakeRatePct / 100)
+          .div(denominator)
           .floor()
-          .toNumber()
-      );
+          .toNumber();
+      }
+      const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, referralFeeBps);
       const reserveAllocationLiquidityAmount = new Decimal(allocationStrategy.ctokenAllocation.toString()).div(
         reserveCollExchangeRate
       );
