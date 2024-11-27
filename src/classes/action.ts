@@ -2023,7 +2023,7 @@ export class KaminoAction {
     const borrowReservesReferrerTokenStates = borrowReservesList
       .map((reserve) => {
         if (this.referrer.equals(PublicKey.default)) {
-          return { pubkey: this.kaminoMarket.programId, isSigner: false, isWritable: true };
+          return { pubkey: this.kaminoMarket.programId, isSigner: false, isWritable: false };
         }
         const referrerTokenStateAddress = referrerTokenStatePda(this.referrer, reserve, this.kaminoMarket.programId)[0];
         return { pubkey: referrerTokenStateAddress, isSigner: false, isWritable: true };
@@ -2081,7 +2081,7 @@ export class KaminoAction {
     const borrowReservesReferrerTokenStates = borrowReservesList
       .map((reserve) => {
         if (this.referrer.equals(PublicKey.default)) {
-          return { pubkey: this.kaminoMarket.programId, isSigner: false, isWritable: true };
+          return { pubkey: this.kaminoMarket.programId, isSigner: false, isWritable: false };
         }
         const reserveState = this.kaminoMarket.getReserveByAddress(reserve)!;
         const referrerTokenStateAddress = referrerTokenStatePda(
