@@ -800,7 +800,7 @@ export class KaminoVaultClient {
       if (isLastWithdraw) {
         sharesToWithdraw = reserveWithTokens.shares;
       }
-      
+
       const withdrawFromReserveIx = this.withdrawIxn(
         user,
         vault,

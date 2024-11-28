@@ -1478,21 +1478,23 @@ export function parseForChangesReserveConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'deleveragingThresholdSecsPerBps') {
+    } else if (key === 'deleveragingThresholdDecreaseBpsPerDay') {
       if (reserve === undefined) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDeleveragingThresholdSecsPerBps.discriminator,
+          mode: UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
           value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDeleveragingThresholdSecsPerBps.discriminator,
-            reserveConfig.deleveragingThresholdSecsPerBps.toNumber()
+            UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
+            reserveConfig.deleveragingThresholdDecreaseBpsPerDay.toNumber()
           ),
         });
-      } else if (!reserve.config.deleveragingThresholdSecsPerBps.eq(reserveConfig.deleveragingThresholdSecsPerBps)) {
+      } else if (
+        !reserve.config.deleveragingThresholdDecreaseBpsPerDay.eq(reserveConfig.deleveragingThresholdDecreaseBpsPerDay)
+      ) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDeleveragingThresholdSecsPerBps.discriminator,
+          mode: UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
           value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDeleveragingThresholdSecsPerBps.discriminator,
-            reserveConfig.deleveragingThresholdSecsPerBps.toNumber()
+            UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
+            reserveConfig.deleveragingThresholdDecreaseBpsPerDay.toNumber()
           ),
         });
       }
@@ -1981,7 +1983,7 @@ export function updateReserveConfigEncodedValue(
     case UpdateConfigMode.UpdateDepositWithdrawalCapCurrentTotal.discriminator:
     case UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator:
     case UpdateConfigMode.UpdateBorrowFactor.discriminator:
-    case UpdateConfigMode.UpdateDeleveragingThresholdSecsPerBps.discriminator:
+    case UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator:
     case UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator:
       value = value as number;
       buffer = Buffer.alloc(8);

@@ -44,7 +44,7 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateBorrowFactor
   | UpdateConfigMode.UpdateAssetTier
   | UpdateConfigMode.UpdateElevationGroup
-  | UpdateConfigMode.UpdateDeleveragingThresholdSecsPerBps
+  | UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay
   | UpdateConfigMode.DeprecatedUpdateMultiplierSideBoost
   | UpdateConfigMode.DeprecatedUpdateMultiplierTagBoost
   | UpdateConfigMode.UpdateReserveStatus
@@ -94,7 +94,7 @@ export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateBorrowFactorJSON
   | UpdateConfigMode.UpdateAssetTierJSON
   | UpdateConfigMode.UpdateElevationGroupJSON
-  | UpdateConfigMode.UpdateDeleveragingThresholdSecsPerBpsJSON
+  | UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDayJSON
   | UpdateConfigMode.DeprecatedUpdateMultiplierSideBoostJSON
   | UpdateConfigMode.DeprecatedUpdateMultiplierTagBoostJSON
   | UpdateConfigMode.UpdateReserveStatusJSON

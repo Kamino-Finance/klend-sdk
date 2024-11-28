@@ -2847,7 +2847,7 @@
             "name": "UpdateElevationGroup"
           },
           {
-            "name": "UpdateDeleveragingThresholdSecsPerBps"
+            "name": "UpdateDeleveragingThresholdDecreaseBpsPerDay"
           },
           {
             "name": "DeprecatedUpdateMultiplierSideBoost"
@@ -3487,10 +3487,9 @@
             "type": "u64"
           },
           {
-            "name": "deleveragingThresholdSecsPerBps",
+            "name": "deleveragingThresholdDecreaseBpsPerDay",
             "docs": [
-              "The rate at which the deleveraging threshold decreases in seconds per bps",
-              "e.g. 1 bps per hour would be denoted by `3600` here.",
+              "The rate at which the deleveraging threshold decreases, in bps per day.",
               "Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case."
             ],
             "type": "u64"

@@ -808,25 +808,25 @@ export class UpdateElevationGroup {
   }
 }
 
-export interface UpdateDeleveragingThresholdSecsPerBpsJSON {
-  kind: "UpdateDeleveragingThresholdSecsPerBps"
+export interface UpdateDeleveragingThresholdDecreaseBpsPerDayJSON {
+  kind: "UpdateDeleveragingThresholdDecreaseBpsPerDay"
 }
 
-export class UpdateDeleveragingThresholdSecsPerBps {
+export class UpdateDeleveragingThresholdDecreaseBpsPerDay {
   static readonly discriminator = 35
-  static readonly kind = "UpdateDeleveragingThresholdSecsPerBps"
+  static readonly kind = "UpdateDeleveragingThresholdDecreaseBpsPerDay"
   readonly discriminator = 35
-  readonly kind = "UpdateDeleveragingThresholdSecsPerBps"
+  readonly kind = "UpdateDeleveragingThresholdDecreaseBpsPerDay"
 
-  toJSON(): UpdateDeleveragingThresholdSecsPerBpsJSON {
+  toJSON(): UpdateDeleveragingThresholdDecreaseBpsPerDayJSON {
     return {
-      kind: "UpdateDeleveragingThresholdSecsPerBps",
+      kind: "UpdateDeleveragingThresholdDecreaseBpsPerDay",
     }
   }
 
   toEncodable() {
     return {
-      UpdateDeleveragingThresholdSecsPerBps: {},
+      UpdateDeleveragingThresholdDecreaseBpsPerDay: {},
     }
   }
 }
@@ -1241,8 +1241,8 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if ("UpdateElevationGroup" in obj) {
     return new UpdateElevationGroup()
   }
-  if ("UpdateDeleveragingThresholdSecsPerBps" in obj) {
-    return new UpdateDeleveragingThresholdSecsPerBps()
+  if ("UpdateDeleveragingThresholdDecreaseBpsPerDay" in obj) {
+    return new UpdateDeleveragingThresholdDecreaseBpsPerDay()
   }
   if ("DeprecatedUpdateMultiplierSideBoost" in obj) {
     return new DeprecatedUpdateMultiplierSideBoost()
@@ -1396,8 +1396,8 @@ export function fromJSON(
     case "UpdateElevationGroup": {
       return new UpdateElevationGroup()
     }
-    case "UpdateDeleveragingThresholdSecsPerBps": {
-      return new UpdateDeleveragingThresholdSecsPerBps()
+    case "UpdateDeleveragingThresholdDecreaseBpsPerDay": {
+      return new UpdateDeleveragingThresholdDecreaseBpsPerDay()
     }
     case "DeprecatedUpdateMultiplierSideBoost": {
       return new DeprecatedUpdateMultiplierSideBoost()
@@ -1478,7 +1478,7 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateBorrowFactor"),
     borsh.struct([], "UpdateAssetTier"),
     borsh.struct([], "UpdateElevationGroup"),
-    borsh.struct([], "UpdateDeleveragingThresholdSecsPerBps"),
+    borsh.struct([], "UpdateDeleveragingThresholdDecreaseBpsPerDay"),
     borsh.struct([], "DeprecatedUpdateMultiplierSideBoost"),
     borsh.struct([], "DeprecatedUpdateMultiplierTagBoost"),
     borsh.struct([], "UpdateReserveStatus"),

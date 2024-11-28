@@ -105,7 +105,7 @@
   "elevationGroups": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   "autodeleverageEnabled": 1,
   "deleveragingBonusIncreaseBpsPerDay": 100,
-  "deleveragingThresholdSecsPerBps": "3600",
+  "deleveragingThresholdDecreaseBpsPerDay": "24",
   "multiplierTagBoost": [1, 1, 1, 1, 1, 1, 1, 1],
   "disableUsageAsCollOutsideEmode": 0,
   "utilizationLimitBlockBorrowingAbove": 80,

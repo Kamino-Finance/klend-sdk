@@ -231,7 +231,7 @@ export class VaultState {
   }
 
   static decode(data: Buffer): VaultState {
-    if (!VaultState.discriminator.equals(data.slice(0, 8))) {
+    if (!data.slice(0, 8).equals(VaultState.discriminator)) {
       throw new Error("invalid account discriminator")
     }
 

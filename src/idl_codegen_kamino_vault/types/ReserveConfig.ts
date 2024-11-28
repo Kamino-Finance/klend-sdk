@@ -38,11 +38,10 @@ export interface ReserveConfigFields {
    */
   deleveragingMarginCallPeriodSecs: BN
   /**
-   * The rate at which the deleveraging threshold decreases in seconds per bps
-   * e.g. 1 bps per hour would be denoted by `3600` here.
+   * The rate at which the deleveraging threshold decreases, in bps per day.
    * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
    */
-  deleveragingThresholdSecsPerBps: BN
+  deleveragingThresholdDecreaseBpsPerDay: BN
   /** Program owner fees assessed, separate from gains due to interest accrual */
   fees: types.ReserveFeesFields
   /** Borrow rate curve based on utilization */
@@ -126,11 +125,10 @@ export interface ReserveConfigJSON {
    */
   deleveragingMarginCallPeriodSecs: string
   /**
-   * The rate at which the deleveraging threshold decreases in seconds per bps
-   * e.g. 1 bps per hour would be denoted by `3600` here.
+   * The rate at which the deleveraging threshold decreases, in bps per day.
    * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
    */
-  deleveragingThresholdSecsPerBps: string
+  deleveragingThresholdDecreaseBpsPerDay: string
   /** Program owner fees assessed, separate from gains due to interest accrual */
   fees: types.ReserveFeesJSON
   /** Borrow rate curve based on utilization */
@@ -215,11 +213,10 @@ export class ReserveConfig {
    */
   readonly deleveragingMarginCallPeriodSecs: BN
   /**
-   * The rate at which the deleveraging threshold decreases in seconds per bps
-   * e.g. 1 bps per hour would be denoted by `3600` here.
+   * The rate at which the deleveraging threshold decreases, in bps per day.
    * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
    */
-  readonly deleveragingThresholdSecsPerBps: BN
+  readonly deleveragingThresholdDecreaseBpsPerDay: BN
   /** Program owner fees assessed, separate from gains due to interest accrual */
   readonly fees: types.ReserveFees
   /** Borrow rate curve based on utilization */
@@ -282,8 +279,8 @@ export class ReserveConfig {
     this.badDebtLiquidationBonusBps = fields.badDebtLiquidationBonusBps
     this.deleveragingMarginCallPeriodSecs =
       fields.deleveragingMarginCallPeriodSecs
-    this.deleveragingThresholdSecsPerBps =
-      fields.deleveragingThresholdSecsPerBps
+    this.deleveragingThresholdDecreaseBpsPerDay =
+      fields.deleveragingThresholdDecreaseBpsPerDay
     this.fees = new types.ReserveFees({ ...fields.fees })
     this.borrowRateCurve = new types.BorrowRateCurve({
       ...fields.borrowRateCurve,
@@ -328,7 +325,7 @@ export class ReserveConfig {
         borsh.u16("maxLiquidationBonusBps"),
         borsh.u16("badDebtLiquidationBonusBps"),
         borsh.u64("deleveragingMarginCallPeriodSecs"),
-        borsh.u64("deleveragingThresholdSecsPerBps"),
+        borsh.u64("deleveragingThresholdDecreaseBpsPerDay"),
         types.ReserveFees.layout("fees"),
         types.BorrowRateCurve.layout("borrowRateCurve"),
         borsh.u64("borrowFactorPct"),
@@ -370,7 +367,8 @@ export class ReserveConfig {
       maxLiquidationBonusBps: obj.maxLiquidationBonusBps,
       badDebtLiquidationBonusBps: obj.badDebtLiquidationBonusBps,
       deleveragingMarginCallPeriodSecs: obj.deleveragingMarginCallPeriodSecs,
-      deleveragingThresholdSecsPerBps: obj.deleveragingThresholdSecsPerBps,
+      deleveragingThresholdDecreaseBpsPerDay:
+        obj.deleveragingThresholdDecreaseBpsPerDay,
       fees: types.ReserveFees.fromDecoded(obj.fees),
       borrowRateCurve: types.BorrowRateCurve.fromDecoded(obj.borrowRateCurve),
       borrowFactorPct: obj.borrowFactorPct,
@@ -412,7 +410,8 @@ export class ReserveConfig {
       maxLiquidationBonusBps: fields.maxLiquidationBonusBps,
       badDebtLiquidationBonusBps: fields.badDebtLiquidationBonusBps,
       deleveragingMarginCallPeriodSecs: fields.deleveragingMarginCallPeriodSecs,
-      deleveragingThresholdSecsPerBps: fields.deleveragingThresholdSecsPerBps,
+      deleveragingThresholdDecreaseBpsPerDay:
+        fields.deleveragingThresholdDecreaseBpsPerDay,
       fees: types.ReserveFees.toEncodable(fields.fees),
       borrowRateCurve: types.BorrowRateCurve.toEncodable(
         fields.borrowRateCurve
@@ -457,8 +456,8 @@ export class ReserveConfig {
       badDebtLiquidationBonusBps: this.badDebtLiquidationBonusBps,
       deleveragingMarginCallPeriodSecs:
         this.deleveragingMarginCallPeriodSecs.toString(),
-      deleveragingThresholdSecsPerBps:
-        this.deleveragingThresholdSecsPerBps.toString(),
+      deleveragingThresholdDecreaseBpsPerDay:
+        this.deleveragingThresholdDecreaseBpsPerDay.toString(),
       fees: this.fees.toJSON(),
       borrowRateCurve: this.borrowRateCurve.toJSON(),
       borrowFactorPct: this.borrowFactorPct.toString(),
@@ -501,8 +500,8 @@ export class ReserveConfig {
       deleveragingMarginCallPeriodSecs: new BN(
         obj.deleveragingMarginCallPeriodSecs
       ),
-      deleveragingThresholdSecsPerBps: new BN(
-        obj.deleveragingThresholdSecsPerBps
+      deleveragingThresholdDecreaseBpsPerDay: new BN(
+        obj.deleveragingThresholdDecreaseBpsPerDay
       ),
       fees: types.ReserveFees.fromJSON(obj.fees),
       borrowRateCurve: types.BorrowRateCurve.fromJSON(obj.borrowRateCurve),
