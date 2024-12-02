@@ -128,7 +128,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "^0.28.0",
     "@coral-xyz/borsh": "^0.28.0",
-    "@kamino-finance/farms-sdk": "^2.1.0",
+    "@kamino-finance/farms-sdk": "^2.2.0",
     "@kamino-finance/kliquidity-sdk": "^6.3.1",
     "@kamino-finance/scope-sdk": "^8.0.2",
     "@solana/buffer-layout": "^4.0.0",
@@ -181,10 +181,5 @@
     "typedoc": "^0.22.10",
     "typescript": "^5.4.5",
     "typescript-eslint": "^0.0.1-alpha.0"
-  },
-  "resolutions": {
-    "@kamino-finance/farms-sdk": "^2.0.3",
-    "@kamino-finance/kliquidity-sdk": "^6.2.1"
-  },
-  "packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610"
+  }
 }
