@@ -25,9 +25,86 @@
     "src/**/*.ts"
   ],
   "exports": {
-    ".": "./src/index.ts",
-    "./dist/idl_codegen/types": "./src/idl_codegen/types/index.ts",
-    "./dist/*": "./src/*"
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./src/index.ts"
+    },
+    "./dist": {
+      "require": "./dist/index.js",
+      "import": "./src/index.ts"
+    },
+    "./dist/idl_codegen/accounts": {
+      "require": "./dist/idl_codegen/accounts/index.js",
+      "import": "./src/idl_codegen/accounts/index.ts"
+    },
+    "./dist/idl_codegen/errors": {
+      "require": "./dist/idl_codegen/errors/index.js",
+      "import": "./src/idl_codegen/errors/index.ts"
+    },
+    "./dist/idl_codegen/instructions": {
+      "require": "./dist/idl_codegen/instructions/index.js",
+      "import": "./src/idl_codegen/instructions/index.ts"
+    },
+    "./dist/idl_codegen/types": {
+      "require": "./dist/idl_codegen/types/index.js",
+      "import": "./src/idl_codegen/types/index.ts"
+    },
+    "./dist/idl_codegen/zero_padding": {
+      "require": "./dist/idl_codegen/zero_padding/index.js",
+      "import": "./src/idl_codegen/zero_padding/index.ts"
+    },
+    "./dist/idl_codegen/errors/custom": {
+      "require": "./dist/idl_codegen/errors/custom.js",
+      "import": "./src/idl_codegen/errors/custom.ts"
+    },
+    "./dist/idl_codegen/errors/anchor": {
+      "require": "./dist/idl_codegen/errors/anchor.js",
+      "import": "./src/idl_codegen/errors/anchor.ts"
+    },
+    "./dist/lending_operations": {
+      "require": "./dist/lending_operations/index.js",
+      "import": "./src/lending_operations/index.ts"
+    },
+    "./dist/leverage": {
+      "require": "./dist/leverage/index.js",
+      "import": "./src/leverage/index.ts"
+    },
+    "./dist/pyth/accounts": {
+      "require": "./dist/pyth/accounts/index.js",
+      "import": "./src/pyth/accounts/index.ts"
+    },
+    "./dist/pyth/types": {
+      "require": "./dist/pyth/types/index.js",
+      "import": "./src/pyth/types/index.ts"
+    },
+    "./dist/referrals": {
+      "require": "./dist/referrals/index.js",
+      "import": "./src/referrals/index.ts"
+    },
+    "./dist/utils": {
+      "require": "./dist/utils/index.js",
+      "import": "./src/utils/index.ts"
+    },
+    "./dist/utils/rpc": {
+      "require": "./dist/utils/rpc.js",
+      "import": "./src/utils/rpc.ts"
+    },
+    "./dist/utils/api": {
+      "require": "./dist/utils/api.js",
+      "import": "./src/utils/api.ts"
+    },
+    "./dist/utils/oracle": {
+      "require": "./dist/utils/oracle.js",
+      "import": "./src/utils/oracle.ts"
+    },
+    "./dist/utils/ObligationType": {
+      "require": "./dist/utils/ObligationType.js",
+      "import": "./src/utils/ObligationType.ts"
+    },
+    "./dist/classes": {
+      "require": "./dist/classes/index.js",
+      "import": "./src/classes/index.ts"
+    }
   },
   "license": "MIT",
   "scripts": {
