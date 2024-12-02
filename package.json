@@ -22,6 +22,7 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
+    "src/**/*.json",
     "src/**/*.ts"
   ],
   "exports": {
