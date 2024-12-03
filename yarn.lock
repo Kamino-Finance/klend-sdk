@@ -666,25 +666,6 @@
   resolved "https://registry.yarnpkg.com/@hubbleprotocol/hubble-config/-/hubble-config-5.0.0.tgz#cf95bae0165b853cdb9ebd053ea2d749b23993ca"
   integrity sha512-oLdS2SwdYN8sggZhIesN+Kk8KQXGrbYn0kvnvTnk5Wh4pck1kR458ze5gh0XrMDpRVTdgwItf4mXhqiLXvQCKQ==
 
-"@hubbleprotocol/hubble-config@^7.0.0":
-  version "7.0.0"
-  resolved "https://registry.yarnpkg.com/@hubbleprotocol/hubble-config/-/hubble-config-7.0.0.tgz#ca6a66b08199c1ad71d1b14721c8d59b6e513ff8"
-  integrity sha512-40oPQ/rVLrJwvNmfAXwVbPWkwCfMIdrP8Yd7tZtI6bZFX4gg0s094dlPUHDUYNCOTzdBmQfE2B7djPxiArNPgQ==
-  dependencies:
-    "@solana/web3.js" "^1.78.4"
-
-"@hubbleprotocol/scope-sdk@^7.0.0":
-  version "7.0.0"
-  resolved "https://registry.yarnpkg.com/@hubbleprotocol/scope-sdk/-/scope-sdk-7.0.0.tgz#ac0ab998fa1fe0bd6d89eab0d3cafb0518b83f7d"
-  integrity sha512-77hpT2R9j9FzGOsX+emPrC6jk9mwzCNIyTZb23qhLQu4TPc3CBBQu5viDuLXwbuounNrK4pqq0Qbwo3Yk34Ytg==
-  dependencies:
-    "@coral-xyz/anchor" "^0.29.0"
-    "@hubbleprotocol/hubble-config" "^7.0.0"
-    "@solana/buffer-layout" "^4.0.1"
-    "@solana/web3.js" "^1.78.4"
-    bn.js "^5.2.1"
-    decimal.js "^10.3.1"
-
 "@humanwhocodes/config-array@^0.13.0":
   version "0.13.0"
   resolved "https://registry.yarnpkg.com/@humanwhocodes/config-array/-/config-array-0.13.0.tgz#fb907624df3256d04b9aa2df50d7aa97ec648748"
@@ -979,16 +960,16 @@
   resolved "https://registry.yarnpkg.com/@jup-ag/api/-/api-6.0.30.tgz#1beb8876affb803bea8ff18a24259b48272a3cf2"
   integrity sha512-+LSo5yXR150kXg+iyVhNCSwK+PSL+MsB9Wvl930zgeeW0LWUTGyMhibz6wcqcViol+F0RMAVOYh6ryJYO1kkZw==
 
-"@kamino-finance/farms-sdk@^2.2.0":
-  version "2.2.0"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-2.2.0.tgz#658b078b330a06bbe7a009fb2b2827eefe728b28"
-  integrity sha512-LeTYuGXR8miUi0SGxzRyOk+Mj86tMpYRZEVIFsNG4LVnbSIhuZksdSdLeRnVRBrbQVWk907UhpC2y/VKvdyyoA==
+"@kamino-finance/farms-sdk@^2.2.0", "@kamino-finance/farms-sdk@^2.3.0":
+  version "2.3.0"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-2.3.0.tgz#e7c49be5f52e6b2c849a26e345a85ce8ec42b90c"
+  integrity sha512-6rhoilK8/hJPLq9zLOXeqngMkSnkk+dBVVr/OlhXXJLx/jblDWwftv45wL5X6XqkLNKrWSSmGS4p2CknlzpEjQ==
   dependencies:
     "@coral-xyz/anchor" "^0.28.0"
     "@coral-xyz/borsh" "^0.28.0"
-    "@hubbleprotocol/scope-sdk" "^7.0.0"
-    "@kamino-finance/klend-sdk" "^5.6.0"
-    "@kamino-finance/kliquidity-sdk" "^6.3.1"
+    "@kamino-finance/klend-sdk" "^5.8.0"
+    "@kamino-finance/kliquidity-sdk" "^6.4.0"
+    "@kamino-finance/scope-sdk" "^8.0.2"
     "@solana/spl-token" "^0.4.9"
     "@solana/web3.js" "^1.95.5"
     base58-js "1.0.5"
@@ -998,15 +979,15 @@
     commander "^9.3.0"
     decimal.js "^10.4.3"
 
-"@kamino-finance/klend-sdk@^5.6.0":
-  version "5.7.0"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/klend-sdk/-/klend-sdk-5.7.0.tgz#c717a5a3d52ff8ecdc2b71d0388727f75ca82e98"
-  integrity sha512-4pAcvoehs/rm6pVt6wmzy3Uw0Etg/fk9SUtwo70/j3uFvy3lhoPOg/wJGMEeVhJCYG4dZO2tjK71GQMSm3j7zQ==
+"@kamino-finance/klend-sdk@^5.8.0":
+  version "5.8.0"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/klend-sdk/-/klend-sdk-5.8.0.tgz#db73c6c2a49eedd0e1da7c353b9cb37594a104c9"
+  integrity sha512-IECp2HNcy+MLwXgWyhoVGfnFYEwSss3JElpa+uWVKSxtgFL48jRxA9RqsUVS71EGfgkeNNIAEw5xCZj7XKHCrQ==
   dependencies:
     "@coral-xyz/anchor" "^0.28.0"
     "@coral-xyz/borsh" "^0.28.0"
     "@kamino-finance/farms-sdk" "^2.2.0"
-    "@kamino-finance/kliquidity-sdk" "^6.3.1"
+    "@kamino-finance/kliquidity-sdk" "^6.4.0"
     "@kamino-finance/scope-sdk" "^8.0.2"
     "@solana/buffer-layout" "^4.0.0"
     "@solana/spl-token" "^0.4.8"
@@ -1023,7 +1004,7 @@
     uuid "^10.0.0"
     zstddec "^0.1.0"
 
-"@kamino-finance/kliquidity-sdk@^6.3.1", "@kamino-finance/kliquidity-sdk@^6.4.0":
+"@kamino-finance/kliquidity-sdk@^6.4.0":
   version "6.4.0"
   resolved "https://registry.yarnpkg.com/@kamino-finance/kliquidity-sdk/-/kliquidity-sdk-6.4.0.tgz#3f58bb2af4202c8322b23c4b4042b722f2007c36"
   integrity sha512-TW4yRrXH9OOGLd7O8wWy587jVowroRGN5CAUCOHXpPoxvTYXi+ZjyGLDFPqh18iXdGOKetgCBE0MRjyYtHoN8g==
