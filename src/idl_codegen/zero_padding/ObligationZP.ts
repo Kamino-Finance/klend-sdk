@@ -50,8 +50,8 @@ export class ObligationZP {
   readonly borrowingDisabled: number
   /** A target LTV set by the risk council when marking this obligation for deleveraging. Only effective when `deleveraging_margin_call_started_slot != 0`. */
   readonly autodeleverageTargetLtvPct: number
-  reserved: Array<BN> = new Array(0)
-  highestBorrowFactorPct: BN
+  readonly reserved: Array<BN>;
+  readonly highestBorrowFactorPct: BN
   /** A timestamp at which the risk council most-recently marked this obligation for deleveraging. Zero if not currently subject to deleveraging. */
   readonly autodeleverageMarginCallStartedTimestamp: BN
   padding3: Array<BN> = new Array(0)
@@ -77,7 +77,7 @@ export class ObligationZP {
     borsh.publicKey("referrer"),
     borsh.u8("borrowingDisabled"),
     borsh.u8("autodeleverageTargetLtvPct"),
-    borsh.array(borsh.u8(), 7, "reserved"),
+    borsh.array(borsh.u8(), 6, "reserved"),
     borsh.u64("highestBorrowFactorPct"),
     borsh.u64("autodeleverageMarginCallStartedTimestamp"),
   ])
@@ -109,7 +109,7 @@ export class ObligationZP {
     this.referrer = fields.referrer
     this.borrowingDisabled = fields.borrowingDisabled
     this.autodeleverageTargetLtvPct = fields.autodeleverageTargetLtvPct
-    this.reserved = new Array<BN>(0);
+    this.reserved = fields.reserved.map((num) => new BN(num))
     this.highestBorrowFactorPct = fields.highestBorrowFactorPct
     this.autodeleverageMarginCallStartedTimestamp = fields.autodeleverageMarginCallStartedTimestamp
     this.padding3 = new Array<BN>(0);
@@ -187,9 +187,9 @@ export class ObligationZP {
       referrer: dec.referrer,
       borrowingDisabled: dec.borrowingDisabled,
       autodeleverageTargetLtvPct: dec.autodeleverageTargetLtvPct,
+      reserved: dec.reserved,
       highestBorrowFactorPct: dec.highestBorrowFactorPct,
       autodeleverageMarginCallStartedTimestamp: dec.autodeleverageMarginCallStartedTimestamp,
-      reserved: [],
       padding3: [],
     })
   }
