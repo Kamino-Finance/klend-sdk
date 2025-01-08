@@ -2104,19 +2104,21 @@ export class KaminoVaultClient {
    * Simulate the current holdings of the vault and the earned interest
    * @param vaultState the kamino vault state to get simulated holdings and earnings for
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [currentSlot] - the current slot. Optional. If not provided it will fetch the current slot
    * @returns a struct of simulated vault holdings and earned interest
    */
   async calculateSimulatedHoldingsWithInterest(
     vaultState: VaultState,
-    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>,
+    currentSlot?: number
   ): Promise<SimulatedVaultHoldingsWithEarnedInterest> {
     const latestUpdateTs = vaultState.lastFeeChargeTimestamp.toNumber();
     const lastUpdateSlot = latestUpdateTs / this.recentSlotDurationMs;
 
-    const currentSlot = await this.getConnection().getSlot('confirmed');
+    const slot = currentSlot ? currentSlot : await this.getConnection().getSlot('confirmed');
 
     const lastUpdateHoldingsPromise = this.getVaultHoldings(vaultState, lastUpdateSlot, vaultReservesMap);
-    const currentHoldingsPromise = this.getVaultHoldings(vaultState, currentSlot, vaultReservesMap);
+    const currentHoldingsPromise = this.getVaultHoldings(vaultState, slot, vaultReservesMap);
     const [lastUpdateHoldings, currentHoldings] = await Promise.all([
       lastUpdateHoldingsPromise,
       currentHoldingsPromise,
@@ -2133,14 +2135,16 @@ export class KaminoVaultClient {
   /**
    * Simulate the current holdings and compute the fees that would be charged
    * @param vaultState the kamino vault state to get simulated fees for
-   * @param simulatedCurrentHoldingsWithInterest the simulated holdings and interest earned by the vault. Optional
+   * @param [simulatedCurrentHoldingsWithInterest] the simulated holdings and interest earned by the vault. Optional
+   * @param [currentTimestamp] the current timestamp. Optional. If not provided it will fetch the current unix timestamp
    * @returns a VaultFees struct of simulated management and interest fees
    */
   async calculateSimulatedFees(
     vaultState: VaultState,
-    simulatedCurrentHoldingsWithInterest?: SimulatedVaultHoldingsWithEarnedInterest
+    simulatedCurrentHoldingsWithInterest?: SimulatedVaultHoldingsWithEarnedInterest,
+    currentTimestamp?: number
   ): Promise<VaultFees> {
-    const timestampNow = new Date().getTime();
+    const timestampNow = currentTimestamp ? currentTimestamp : Date.now();
     const timestampLastUpdate = vaultState.lastFeeChargeTimestamp.toNumber();
     const timeElapsed = timestampNow - timestampLastUpdate;
 

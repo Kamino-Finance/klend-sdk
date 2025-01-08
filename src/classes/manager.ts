@@ -744,26 +744,30 @@ export class KaminoManager {
    * Simulate the current holdings of the vault and the earned interest
    * @param vaultState the kamino vault state to get simulated holdings and earnings for
    * @param vaultReserves optional; the state of the reserves in the vault allocation
+   * @param [currentSlot] - the current slot. Optional. If not provided it will fetch the current slot
    * @returns a struct of simulated vault holdings and earned interest
    */
   async calculateSimulatedHoldingsWithInterest(
     vaultState: VaultState,
-    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>,
+    currentSlot?: number
   ): Promise<SimulatedVaultHoldingsWithEarnedInterest> {
-    return this._vaultClient.calculateSimulatedHoldingsWithInterest(vaultState, vaultReserves);
+    return this._vaultClient.calculateSimulatedHoldingsWithInterest(vaultState, vaultReserves, currentSlot);
   }
 
   /**
    * Simulate the current holdings and compute the fees that would be charged
    * @param vaultState the kamino vault state to get simulated fees for
    * @param simulatedCurrentHoldingsWithInterest optional; the simulated holdings and interest earned by the vault
+   * @param [currentTimestamp] the current timestamp. Optional. If not provided it will fetch the current unix timestamp
    * @returns a struct of simulated management and interest fees
    */
   async calculateSimulatedFees(
     vaultState: VaultState,
-    simulatedCurrentHoldingsWithInterest?: SimulatedVaultHoldingsWithEarnedInterest
+    simulatedCurrentHoldingsWithInterest?: SimulatedVaultHoldingsWithEarnedInterest,
+    currentTimestamp?: number
   ): Promise<VaultFees> {
-    return this._vaultClient.calculateSimulatedFees(vaultState, simulatedCurrentHoldingsWithInterest);
+    return this._vaultClient.calculateSimulatedFees(vaultState, simulatedCurrentHoldingsWithInterest, currentTimestamp);
   }
 
   /**
