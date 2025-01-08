@@ -960,7 +960,26 @@
   resolved "https://registry.yarnpkg.com/@jup-ag/api/-/api-6.0.30.tgz#1beb8876affb803bea8ff18a24259b48272a3cf2"
   integrity sha512-+LSo5yXR150kXg+iyVhNCSwK+PSL+MsB9Wvl930zgeeW0LWUTGyMhibz6wcqcViol+F0RMAVOYh6ryJYO1kkZw==
 
-"@kamino-finance/farms-sdk@^2.2.0", "@kamino-finance/farms-sdk@^2.3.0":
+"@kamino-finance/farms-sdk@2.3.4":
+  version "2.3.4"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-2.3.4.tgz#2a3f8b883cf8025ebf9358210a566f2f5fb0ee9b"
+  integrity sha512-fWamSJ6X1aHQtYr8UaY0NszQjaqDvIYDtXWhgr+94P4KvHpw8uUYwA4T5Cm9G5eqt8lSm2ckm4ZmF7nXf4I2ew==
+  dependencies:
+    "@coral-xyz/anchor" "^0.28.0"
+    "@coral-xyz/borsh" "^0.28.0"
+    "@kamino-finance/klend-sdk" "^5.8.0"
+    "@kamino-finance/kliquidity-sdk" "^6.4.0"
+    "@kamino-finance/scope-sdk" "^8.0.2"
+    "@solana/spl-token" "^0.4.9"
+    "@solana/web3.js" "^1.95.5"
+    base58-js "1.0.5"
+    bn.js "^5.2.1"
+    bs58 "^4.0.1"
+    cli-color "^2.0.4"
+    commander "^9.3.0"
+    decimal.js "^10.4.3"
+
+"@kamino-finance/farms-sdk@^2.2.0":
   version "2.3.0"
   resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-2.3.0.tgz#e7c49be5f52e6b2c849a26e345a85ce8ec42b90c"
   integrity sha512-6rhoilK8/hJPLq9zLOXeqngMkSnkk+dBVVr/OlhXXJLx/jblDWwftv45wL5X6XqkLNKrWSSmGS4p2CknlzpEjQ==

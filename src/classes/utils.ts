@@ -240,3 +240,13 @@ export function getTokenBalanceFromAccountInfoLamports(accountInfo: AccountInfo<
 export function bpsToPct(bps: Decimal): Decimal {
   return bps.div(100);
 }
+
+/**
+ * Truncate ( not round ) number to keep up to max amount of decimals
+ * @param num
+ * @param maxDecimals
+ */
+export function truncateDecimals(num: Decimal.Value, maxDecimals: number): Decimal {
+  const factor = new Decimal(10).pow(maxDecimals);
+  return new Decimal(num).times(factor).floor().dividedBy(factor);
+}

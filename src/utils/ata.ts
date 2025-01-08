@@ -150,6 +150,7 @@ export async function getTokenAccountBalance(provider: AnchorProvider, tokenAcco
   return Number(tokenAccountBalance.value.amount).valueOf();
 }
 
+/// Get the balance of a token account in decimal format (tokens, not lamports)
 export async function getTokenAccountBalanceDecimal(
   connection: Connection,
   mint: PublicKey,

@@ -47,7 +47,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "^0.28.0",
     "@coral-xyz/borsh": "^0.28.0",
-    "@kamino-finance/farms-sdk": "^2.3.0",
+    "@kamino-finance/farms-sdk": "2.3.4",
     "@kamino-finance/kliquidity-sdk": "^6.4.0",
     "@kamino-finance/scope-sdk": "^8.0.2",
     "@solana/buffer-layout": "^4.0.0",

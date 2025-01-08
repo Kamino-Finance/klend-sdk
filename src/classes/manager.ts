@@ -69,11 +69,15 @@ import { getProgramAccounts } from '../utils/rpc';
 import { VaultConfigFieldKind } from '../idl_codegen_kamino_vault/types';
 import {
   AcceptVaultOwnershipIxs,
+  DepositIxs,
   InitVaultIxs,
   SyncVaultLUTIxs,
   UpdateReserveAllocationIxs,
   UpdateVaultConfigIxs,
+  UserSharesForVault,
+  WithdrawIxs,
 } from './types';
+import { FarmState } from '@kamino-finance/farms-sdk/dist';
 
 /**
  * KaminoManager is a class that provides a high-level interface to interact with the Kamino Lend and Kamino Vault programs, in order to create and manage a market, as well as vaults
@@ -198,7 +202,6 @@ export class KaminoManager {
   /**
    * This method will create a vault with a given config. The config can be changed later on, but it is recommended to set it up correctly from the start
    * @param vaultConfig - the config object used to create a vault
-   * @returns vault - keypair, should be used to sign the transaction which creates the vault account
    * @returns vault: the keypair of the vault, used to sign the initialization transaction; initVaultIxs: a struct with ixs to initialize the vault and its lookup table + populateLUTIxs, a list to populate the lookup table which has to be executed in a separate transaction
    */
   async createVaultIxs(vaultConfig: KaminoVaultConfig): Promise<{ vault: Keypair; initVaultIxs: InitVaultIxs }> {
@@ -209,7 +212,7 @@ export class KaminoManager {
    * This method updates the vault reserve allocation cofnig for an exiting vault reserve, or adds a new reserve to the vault if it does not exist.
    * @param vault - vault to be updated
    * @param reserveAllocationConfig - new reserve allocation config
-   * @returns - a struct of instructions
+   * @returns - a struct with an instruction to update the reserve allocation and an optional list of instructions to update the lookup table for the allocation changes
    */
   async updateVaultReserveAllocationIxs(
     vault: KaminoVault,
@@ -325,19 +328,36 @@ export class KaminoManager {
   /**
    * This function creates instructions to deposit into a vault. It will also create ATA creation instructions for the vault shares that the user receives in return
    * @param user - user to deposit
-   * @param vault - vault to deposit into
+   * @param vault - vault to deposit into (if the state is not provided, it will be fetched)
    * @param tokenAmount - token amount to be deposited, in decimals (will be converted in lamports)
-   * @param tokenProgramIDOverride - optional param; should be passed if token to be deposited is token22
-   * @param vaultReservesMap - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
-   * @returns - an array of instructions to be used to be executed
+   * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
+   * @returns - an instance of DepositIxs which contains the instructions to deposit in vault and the instructions to stake the shares in the farm if the vault has a farm
    */
   async depositToVaultIxs(
     user: PublicKey,
     vault: KaminoVault,
     tokenAmount: Decimal,
     vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
-  ): Promise<TransactionInstruction[]> {
+  ): Promise<DepositIxs> {
     return this._vaultClient.depositIxs(user, vault, tokenAmount, vaultReservesMap);
+  }
+
+  /**
+   * This function creates instructions to stake the shares in the vault farm if the vault has a farm
+   * @param user - user to stake
+   * @param vault - vault to deposit into its farm (if the state is not provided, it will be fetched)
+   * @param [sharesAmount] - token amount to be deposited, in decimals (will be converted in lamports). Optional. If not provided, the user's share balance will be used
+   * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
+   * @returns - a list of instructions for the user to stake shares into the vault's farm, including the creation of prerequisite accounts if needed
+   */
+  async stakeSharesIxs(
+    user: PublicKey,
+    vault: KaminoVault,
+    sharesAmount?: Decimal,
+    farmState?: FarmState
+  ): Promise<TransactionInstruction[]> {
+    return this._vaultClient.stakeSharesIxs(user, vault, sharesAmount, farmState);
   }
 
   /**
@@ -355,10 +375,23 @@ export class KaminoManager {
     return this._vaultClient.updateVaultConfigIxs(vault, mode, value);
   }
 
+  /** Sets the farm where the shares can be staked. This is store in vault state and a vault can only have one farm, so the new farm will ovveride the old farm
+   * @param vault - vault to set the farm for
+   * @param farm - the farm where the vault shares can be staked
+   * @param [errorOnOverride] - if true, the function will throw an error if the vault already has a farm. If false, it will override the farm
+   */
+  async setVaultFarm(
+    vault: KaminoVault,
+    farm: PublicKey,
+    errorOnOverride: boolean = true
+  ): Promise<UpdateVaultConfigIxs> {
+    return this._vaultClient.setVaultFarm(vault, farm, errorOnOverride);
+  }
+
   /**
-   * This function creates the instruction for the `pendingAdmin` of the vault to accept to become the owner of the vault (step 2/2 of the ownership transfer) and the instructions to sync the vault LUT to the new state
+   * This function creates the instruction for the `pendingAdmin` of the vault to accept to become the owner of the vault (step 2/2 of the ownership transfer)
    * @param vault - vault to change the ownership for
-   * @returns - an instruction to be used to be executed
+   * @returns - an instruction to accept the ownership of the vault and a list of instructions to update the lookup table
    */
   async acceptVaultOwnershipIxs(vault: KaminoVault): Promise<AcceptVaultOwnershipIxs> {
     return this._vaultClient.acceptVaultOwnershipIxs(vault);
@@ -368,7 +401,7 @@ export class KaminoManager {
    * This function creates the instruction for the admin to give up a part of the pending fees (which will be accounted as part of the vault)
    * @param vault - vault to give up pending fees for
    * @param maxAmountToGiveUp - the maximum amount of fees to give up, in tokens
-   * @returns - an instruction to be used to be executed
+   * @returns - an instruction to give up the specified pending fees
    */
   async giveUpPendingFeesIx(vault: KaminoVault, maxAmountToGiveUp: Decimal): Promise<TransactionInstruction> {
     return this._vaultClient.giveUpPendingFeesIx(vault, maxAmountToGiveUp);
@@ -380,14 +413,15 @@ export class KaminoManager {
    * @param vault - vault to withdraw from
    * @param shareAmount - share amount to withdraw, in order to withdraw everything, any value > user share amount
    * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
-   * @returns an array of instructions to be executed
+   * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @returns an array of instructions to create missing ATAs if needed and the withdraw instructions
    */
   async withdrawFromVaultIxs(
     user: PublicKey,
     vault: KaminoVault,
     shareAmount: Decimal,
     slot: number
-  ): Promise<TransactionInstruction[]> {
+  ): Promise<WithdrawIxs> {
     return this._vaultClient.withdrawIxs(user, vault, shareAmount, slot);
   }
 
@@ -395,20 +429,22 @@ export class KaminoManager {
    * This method withdraws all the pending fees from the vault to the owner's token ATA
    * @param vault - vault for which the admin withdraws the pending fees
    * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
-   * @returns - list of instructions to withdraw all pending fees
+   * @param [vaultReservesMap] - a hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @returns - list of instructions to withdraw all pending fees, including the ATA creation instructions if needed
    */
   async withdrawPendingFeesIxs(vault: KaminoVault, slot: number): Promise<TransactionInstruction[]> {
     return this._vaultClient.withdrawPendingFeesIxs(vault, slot);
   }
 
   /**
-   * This method append the given keys to the lookup table
-   * @param payer - the owner of the lookup table
-   * @param slot - the LUT into which the keys will be inserted
-   * @param keys - the keys to be inserted
-   * @returns - list of instructions to insert the keys into the lookup table
+   * This method inserts the missing keys from the provided keys into an existent lookup table
+   * @param payer - payer wallet pubkey
+   * @param lookupTable - lookup table to insert the keys into
+   * @param keys - keys to insert into the lookup table
+   * @param [accountsInLUT] - the existent accounts in the lookup table. Optional. If provided, the function will not fetch the accounts in the lookup table
+   * @returns - an array of instructions to insert the missing keys into the lookup table
    */
-  async insertIntoLUT(payer: PublicKey, lut: PublicKey, keys: PublicKey[]): Promise<TransactionInstruction[]> {
+  async insertIntoLUTIxs(payer: PublicKey, lut: PublicKey, keys: PublicKey[]): Promise<TransactionInstruction[]> {
     return this._vaultClient.insertIntoLookupTableIxs(payer, lut, keys);
   }
 
@@ -416,13 +452,14 @@ export class KaminoManager {
    * Sync a vault for lookup table; create and set the LUT for the vault if needed and fill it with all the needed accounts
    * @param vault the vault to sync and set the LUT for if needed
    * @param vaultReserves optional; the state of the reserves in the vault allocation
+   * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @returns a struct that contains a list of ix to create the LUT and assign it to the vault if needed + a list of ixs to insert all the accounts in the LUT
    */
-  async syncVaultLUT(
+  async syncVaultLUTIxs(
     vault: KaminoVault,
     vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<SyncVaultLUTIxs> {
-    return this._vaultClient.syncVaultLookupTable(vault, vaultReserves);
+    return this._vaultClient.syncVaultLookupTableIxs(vault, vaultReserves);
   }
 
   /**
@@ -451,9 +488,9 @@ export class KaminoManager {
    * This method returns the user shares balance for a given vault
    * @param user - user to calculate the shares balance for
    * @param vault - vault to calculate shares balance for
-   * @returns - user share balance in decimal (not lamports)
+   * @returns - a struct of user share balance (staked in vault farm if the vault has a farm and unstaked) in decimal (not lamports)
    */
-  async getUserSharesBalanceSingleVault(user: PublicKey, vault: KaminoVault): Promise<Decimal> {
+  async getUserSharesBalanceSingleVault(user: PublicKey, vault: KaminoVault): Promise<UserSharesForVault> {
     return this._vaultClient.getUserSharesBalanceSingleVault(user, vault);
   }
 
@@ -466,7 +503,7 @@ export class KaminoManager {
   async getUserSharesBalanceAllVaults(
     user: PublicKey,
     vaultsOverride?: KaminoVault[]
-  ): Promise<PubkeyHashMap<PublicKey, Decimal>> {
+  ): Promise<PubkeyHashMap<PublicKey, UserSharesForVault>> {
     return this._vaultClient.getUserSharesBalanceAllVaults(user, vaultsOverride);
   }
 
@@ -777,16 +814,19 @@ export class KaminoManager {
 
   /**
    * This will trigger invest by balancing, based on weights, the reserve allocation of the vault. It can either withdraw or deposit into the given reserve to balance it
-   * @param kaminoVault - vault to invest from
+   * @param payer wallet pubkey
+   * @param vault - vault to invest from
    * @param reserve - reserve to invest into or disinvest from
+   * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @returns - an array of invest instructions for each invest action required for the vault reserves
    */
   async investSingleReserve(
     payer: PublicKey,
     kaminoVault: KaminoVault,
-    reserveWithAddress: ReserveWithAddress
+    reserveWithAddress: ReserveWithAddress,
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<TransactionInstruction[]> {
-    return this._vaultClient.investSingleReserveIxs(payer, kaminoVault, reserveWithAddress);
+    return this._vaultClient.investSingleReserveIxs(payer, kaminoVault, reserveWithAddress, vaultReservesMap);
   }
 
   /**

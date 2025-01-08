@@ -53,7 +53,6 @@ import {
   PerformanceFeeBps,
 } from './idl_codegen_kamino_vault/types/VaultConfigField';
 import { getAccountOwner } from './utils/rpc';
-import { Farms, FarmState, getUserStatePDA } from '@kamino-finance/farms-sdk';
 
 dotenv.config({
   path: `.env${process.env.ENV ? '.' + process.env.ENV : ''}`,
@@ -351,7 +350,7 @@ async function main() {
 
       const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
 
-      const instructions = await kaminoManager.insertIntoLUT(env.payer.publicKey, lutAddress, addressesArr);
+      const instructions = await kaminoManager.insertIntoLUTIxs(env.payer.publicKey, lutAddress, addressesArr);
 
       const updateVaultConfigSig = await processTxn(env.client, env.payer, instructions, mode, 2500, []);
 
@@ -378,7 +377,7 @@ async function main() {
       const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
-      const syncLUTIxs = await kaminoManager.syncVaultLUT(kaminoVault);
+      const syncLUTIxs = await kaminoManager.syncVaultLUTIxs(kaminoVault);
 
       // if we need to create the LUT we have to do that in a separate tx and wait a little bit after
       if (syncLUTIxs.setupLUTIfNeededIxs.length > 0) {
@@ -523,51 +522,29 @@ async function main() {
   commands
     .command('stake')
     .requiredOption('--vault <string>', 'Vault address')
-    .requiredOption('--farm <string>', 'Farm address')
-    .requiredOption('--amount <string>', 'The number of kTokens to stake')
     .requiredOption(
       `--mode <string>`,
       'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ vault, farm, amount, mode, staging, multisig }) => {
+    .action(async ({ vault, mode, staging, multisig }) => {
       const env = initializeClient(mode === 'multisig', staging);
       const vaultAddress = new PublicKey(vault);
-      const farmAddress = new PublicKey(farm);
 
-      const farmClient = new Farms(env.connection);
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
 
-      const farmState = await FarmState.fetch(env.connection, farmAddress);
-      const vaultState = await new KaminoVault(vaultAddress, undefined, env.kVaultProgramId).getState(env.connection);
-
-      const scopePricesArg = farmState!.scopePrices.equals(PublicKey.default)
-        ? farmClient.getProgramID()
-        : farmState!.scopePrices;
-
-      const ixns: TransactionInstruction[] = [];
-      const userState = getUserStatePDA(farmClient.getProgramID(), farmAddress, env.provider.publicKey);
-      if (!userState) {
-        const createUserIx = await farmClient.createNewUserIx(env.provider.publicKey, farmAddress);
-        ixns.push(createUserIx);
-      }
-
-      // todo: fix in farms sdk to make this not async
-      const stakeIx = await farmClient.stakeIx(
+      const stakeIxs = await new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId).stakeSharesIxs(
         env.payer.publicKey,
-        farmAddress,
-        new Decimal(amount),
-        vaultState.sharesMint,
-        scopePricesArg
+        kaminoVault
       );
-      ixns.push(stakeIx);
 
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
-      const withdrawPendingFeesSig = await processTxn(env.client, env.payer, ixns, mode, 2500, []);
+      const withdrawPendingFeesSig = await processTxn(env.client, env.payer, stakeIxs, mode, 2500, []);
 
-      mode === 'execute' && console.log('Pending fees withdrawn:', withdrawPendingFeesSig);
+      mode === 'execute' && console.log('Stake into vault farm:', withdrawPendingFeesSig);
     });
 
   commands
@@ -647,7 +624,8 @@ async function main() {
       const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
-      const instructions = await kaminoManager.depositToVaultIxs(env.payer.publicKey, kaminoVault, amount);
+      const depositInstructions = await kaminoManager.depositToVaultIxs(env.payer.publicKey, kaminoVault, amount);
+      const instructions = [...depositInstructions.depositIxs, ...depositInstructions.stakeInFarmIfNeededIxs];
 
       const depositSig = await processTxn(env.client, env.payer, instructions, mode, 2500, [], 800_000);
 
@@ -682,7 +660,15 @@ async function main() {
         await env.connection.getSlot('confirmed')
       );
 
-      const depositSig = await processTxn(env.client, env.payer, withdrawIxs, mode, 2500, [], 800_000);
+      const depositSig = await processTxn(
+        env.client,
+        env.payer,
+        [...withdrawIxs.unstakeFromFarmIfNeededIxs, ...withdrawIxs.withdrawIxs],
+        mode,
+        2500,
+        [],
+        800_000
+      );
 
       mode === 'execute' && console.log('User withdraw:', depositSig);
     });
