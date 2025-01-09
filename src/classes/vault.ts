@@ -2136,17 +2136,17 @@ export class KaminoVaultClient {
    * Simulate the current holdings and compute the fees that would be charged
    * @param vaultState the kamino vault state to get simulated fees for
    * @param [simulatedCurrentHoldingsWithInterest] the simulated holdings and interest earned by the vault. Optional
-   * @param [currentTimestamp] the current timestamp. Optional. If not provided it will fetch the current unix timestamp
+   * @param [currentTimestamp] the current date. Optional. If not provided it will fetch the current unix timestamp
    * @returns a VaultFees struct of simulated management and interest fees
    */
   async calculateSimulatedFees(
     vaultState: VaultState,
     simulatedCurrentHoldingsWithInterest?: SimulatedVaultHoldingsWithEarnedInterest,
-    currentTimestamp?: number
+    currentTimestamp?: Date
   ): Promise<VaultFees> {
-    const timestampNow = currentTimestamp ? currentTimestamp : Date.now();
+    const timestampNowInSeconds = currentTimestamp ? currentTimestamp.valueOf() / 1000 : Date.now() / 1000;
     const timestampLastUpdate = vaultState.lastFeeChargeTimestamp.toNumber();
-    const timeElapsed = timestampNow - timestampLastUpdate;
+    const timeElapsed = timestampNowInSeconds - timestampLastUpdate;
 
     const simulatedCurrentHoldings = simulatedCurrentHoldingsWithInterest
       ? simulatedCurrentHoldingsWithInterest
@@ -2158,7 +2158,8 @@ export class KaminoVaultClient {
 
     const managementFeeFactor = new Decimal(timeElapsed)
       .mul(new Decimal(vaultState.managementFeeBps.toString()))
-      .div(new Decimal(SECONDS_PER_YEAR));
+      .div(new Decimal(SECONDS_PER_YEAR))
+      .div(FullBPSDecimal);
     const prevAUM = new Fraction(vaultState.prevAumSf).toDecimal();
     const mgmtFee = prevAUM.mul(managementFeeFactor);
 
