@@ -82,6 +82,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
   priceAinB,
   isKtoken,
   quoter,
+  elevationGroupOverride,
 }: DepositWithLeverageSwapInputsProps<QuoteResponse>): Promise<{
   swapInputs: SwapInputs;
   initialInputs: DepositLeverageInitialInputs<QuoteResponse>;
@@ -145,7 +146,8 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
       lookupTables: [],
     },
     strategy,
-    collIsKtoken
+    collIsKtoken,
+    elevationGroupOverride
   );
 
   const uniqueKlendAccounts = uniqueAccounts(klendIxs);
@@ -308,6 +310,7 @@ export async function getDepositWithLeverageIxns<QuoteResponse>({
   isKtoken,
   quoter,
   swapper,
+  elevationGroupOverride,
 }: DepositWithLeverageProps<QuoteResponse>): Promise<DepsoitLeverageIxsResponse<QuoteResponse>> {
   const { swapInputs, initialInputs } = await getDepositWithLeverageSwapInputs({
     owner,
@@ -384,7 +387,8 @@ export async function getDepositWithLeverageIxns<QuoteResponse>({
       lookupTables: lookupTables,
     },
     initialInputs.strategy,
-    initialInputs.collIsKtoken
+    initialInputs.collIsKtoken,
+    elevationGroupOverride
   );
 
   return {
@@ -409,7 +413,8 @@ async function buildDepositWithLeverageIxns(
   budgetAndPriorityFeeIxs: TransactionInstruction[] | undefined,
   swapQuoteIxs: SwapQuoteIxs,
   strategy: StrategyWithAddress | undefined,
-  collIsKtoken: boolean
+  collIsKtoken: boolean,
+  elevationGroupOverride?: number
 ): Promise<TransactionInstruction[]> {
   const budgetIxns = budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxns(3000000);
   const collTokenMint = collReserve.getLiquidityMint();
@@ -522,7 +527,7 @@ async function buildDepositWithLeverageIxns(
     obligation!,
     0,
     false,
-    true, // emode
+    elevationGroupOverride === 0 ? false : true, // emode
     false, // to be checked and created in a setup tx in the UI
     referrer,
     currentSlot,

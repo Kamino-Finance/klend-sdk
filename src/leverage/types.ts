@@ -87,6 +87,9 @@ export interface DepositWithLeverageSwapInputsProps<QuoteResponse> {
   priceAinB: PriceAinBProvider;
   isKtoken: IsKtokenProvider;
   quoter: SwapQuoteProvider<QuoteResponse>;
+  // currently only used to disable requesting elevation group when this value is 0
+  // to be implemented properly in the future
+  elevationGroupOverride?: number;
 }
 
 export interface DepositWithLeverageProps<QuoteResponse> extends DepositWithLeverageSwapInputsProps<QuoteResponse> {
