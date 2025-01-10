@@ -1376,7 +1376,11 @@ export class KaminoVaultClient {
   async getUserSharesBalanceSingleVault(user: PublicKey, vault: KaminoVault): Promise<UserSharesForVault> {
     const vaultState = await vault.getState(this.getConnection());
 
-    const userShares: UserSharesForVault = { unstakedShares: new Decimal(0), stakedShares: new Decimal(0) };
+    const userShares: UserSharesForVault = {
+      unstakedShares: new Decimal(0),
+      stakedShares: new Decimal(0),
+      totalShares: new Decimal(0),
+    };
     const userSharesAta = getAssociatedTokenAddress(vaultState.sharesMint, user);
     const userSharesAccountInfo = await this.getConnection().getAccountInfo(userSharesAta);
     if (userSharesAccountInfo) {
@@ -1398,6 +1402,7 @@ export class KaminoVaultClient {
       userShares.stakedShares = userSharesInFarm;
     }
 
+    userShares.totalShares = userShares.unstakedShares.add(userShares.stakedShares);
     return userShares;
   }
 
@@ -1437,13 +1442,18 @@ export class KaminoVaultClient {
     ]);
 
     userSharesAtaAccounts.forEach((userShareAtaAccount, index) => {
-      const userSharesForVault = { unstakedShares: new Decimal(0), stakedShares: new Decimal(0) };
+      const userSharesForVault: UserSharesForVault = {
+        unstakedShares: new Decimal(0),
+        stakedShares: new Decimal(0),
+        totalShares: new Decimal(0),
+      };
       if (!userShareAtaAccount) {
         vaultUserShareBalance.set(vaults[index].address, userSharesForVault);
       } else {
         userSharesForVault.unstakedShares = getTokenBalanceFromAccountInfoLamports(userShareAtaAccount).div(
           new Decimal(10).pow(vaults[index].state!.sharesMintDecimals.toString())
         );
+        userSharesForVault.totalShares = userSharesForVault.unstakedShares.add(userSharesForVault.stakedShares);
         vaultUserShareBalance.set(vaults[index].address, userSharesForVault);
       }
     });

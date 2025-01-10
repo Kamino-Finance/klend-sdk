@@ -28,11 +28,13 @@ export type SyncVaultLUTIxs = {
   syncLUTIxs: TransactionInstruction[];
 };
 
+/** If the stakeInFarmIfNeededIxs exist they have to be executed after the deposit so the shares received from the deposit are staked in the vault farm */
 export type DepositIxs = {
   depositIxs: TransactionInstruction[];
   stakeInFarmIfNeededIxs: TransactionInstruction[];
 };
 
+/** the ixs to unstake shares from farm and withdraw them from the vault. The `unstakeFromFarmIfNeededIxs` should be in the tx before `withdrawIxs`*/
 export type WithdrawIxs = {
   unstakeFromFarmIfNeededIxs: TransactionInstruction[];
   withdrawIxs: TransactionInstruction[];
@@ -42,4 +44,5 @@ export type WithdrawIxs = {
 export type UserSharesForVault = {
   unstakedShares: Decimal;
   stakedShares: Decimal;
+  totalShares: Decimal;
 };
