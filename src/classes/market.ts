@@ -792,7 +792,7 @@ export class KaminoMarket {
     return finalObligations;
   }
 
-  async getAllUserObligations(user: PublicKey) {
+  async getAllUserObligations(user: PublicKey, commitment = this.connection.commitment): Promise<KaminoObligation[]> {
     const [currentSlot, obligations] = await Promise.all([
       this.connection.getSlot(),
       this.connection.getProgramAccounts(this.programId, {
@@ -819,6 +819,7 @@ export class KaminoMarket {
             },
           },
         ],
+        commitment,
       }),
     ]);
 
