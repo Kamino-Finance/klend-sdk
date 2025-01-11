@@ -5,7 +5,7 @@ import Decimal from 'decimal.js';
 import { getLookupTableAccounts, getTokenAccountBalanceDecimal } from '../utils';
 import { numberToLamportsDecimal } from '../classes/utils';
 import BN from 'bn.js';
-import { PriceAinBProvider, SwapInputs, SwapQuote, SwapQuoteIxs, SwapQuoteIxsProvider } from './types';
+import { PriceAinBProvider, SwapInputs, SwapQuote, SwapIxs, SwapIxsProvider } from './types';
 
 export interface KaminoSwapperIxBuilder {
   (
@@ -30,15 +30,15 @@ export async function getTokenToKtokenSwapper<QuoteResponse>(
   kamino: Kamino,
   depositor: PublicKey,
   slippagePct: Decimal,
-  swapper: SwapQuoteIxsProvider<QuoteResponse>,
+  swapper: SwapIxsProvider<QuoteResponse>,
   priceAinB: PriceAinBProvider,
   includeAtaIxns: boolean = true
-): Promise<SwapQuoteIxsProvider<QuoteResponse>> {
+): Promise<SwapIxsProvider<QuoteResponse>> {
   return async (
     inputs: SwapInputs,
     klendAccounts: Array<PublicKey>,
     quote: SwapQuote<QuoteResponse>
-  ): Promise<SwapQuoteIxs> => {
+  ): Promise<SwapIxs> => {
     const slippageBps = new Decimal(slippagePct).mul('100');
     const mintInDecimals = kaminoMarket.getReserveByMint(inputs.inputMint)!.state.liquidity.mintDecimals.toNumber();
     const amountIn = lamportsToNumberDecimal(inputs.inputAmountLamports, mintInDecimals);
@@ -82,7 +82,7 @@ export async function getKtokenDepositIxs<QuoteResponse>(
   amountToDeposit: Decimal,
   slippageBps: Decimal,
   amountExpectedDepositAtaBalance: Decimal,
-  swapper: SwapQuoteIxsProvider<QuoteResponse>,
+  swapper: SwapIxsProvider<QuoteResponse>,
   priceAinB: PriceAinBProvider,
   includeAtaIxns: boolean = true,
   klendAccounts: Array<PublicKey>,
@@ -131,8 +131,8 @@ export async function getKtokenToTokenSwapper<QuoteResponse>(
   kaminoMarket: KaminoMarket,
   kamino: Kamino,
   depositor: PublicKey,
-  swapper: SwapQuoteIxsProvider<QuoteResponse>
-): Promise<SwapQuoteIxsProvider<QuoteResponse>> {
+  swapper: SwapIxsProvider<QuoteResponse>
+): Promise<SwapIxsProvider<QuoteResponse>> {
   return async (inputs: SwapInputs, klendAccounts: Array<PublicKey>, quote: SwapQuote<QuoteResponse>) => {
     const amountInDecimals = kaminoMarket.getReserveByMint(inputs.inputMint)!.state.liquidity.mintDecimals.toNumber();
     const amountToWithdraw = lamportsToNumberDecimal(inputs.inputAmountLamports, amountInDecimals);
@@ -251,7 +251,7 @@ export async function getKtokenWithdrawEstimatesAndPrice(
 }
 
 export function swapProviderToKaminoSwapProvider<QuoteResponse>(
-  swapper: SwapQuoteIxsProvider<QuoteResponse>,
+  swapper: SwapIxsProvider<QuoteResponse>,
   klendAccounts: Array<PublicKey>,
   swapQuote: SwapQuote<QuoteResponse>
 ): KaminoSwapperIxBuilder {

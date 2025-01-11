@@ -9,18 +9,18 @@ export type SwapQuoteProvider<QuoteResponse> = (
   klendAccounts: Array<PublicKey>
 ) => Promise<SwapQuote<QuoteResponse>>;
 
-export type SwapQuoteIxsProvider<QuoteResponse> = (
+export type SwapIxsProvider<QuoteResponse> = (
   inputs: SwapInputs,
   klendAccounts: Array<PublicKey>,
   quote: SwapQuote<QuoteResponse>
-) => Promise<SwapQuoteIxs>;
+) => Promise<SwapIxs>;
 
 export type SwapQuote<QuoteResponse> = {
   priceAInB: Decimal;
   quoteResponse?: QuoteResponse;
 };
 
-export type SwapQuoteIxs = {
+export type SwapIxs = {
   preActionIxs: TransactionInstruction[];
   swapIxs: TransactionInstruction[];
   lookupTables: AddressLookupTableAccount[];
@@ -93,7 +93,7 @@ export interface DepositWithLeverageSwapInputsProps<QuoteResponse> {
 }
 
 export interface DepositWithLeverageProps<QuoteResponse> extends DepositWithLeverageSwapInputsProps<QuoteResponse> {
-  swapper: SwapQuoteIxsProvider<QuoteResponse>;
+  swapper: SwapIxsProvider<QuoteResponse>;
 }
 
 export type DepositLeverageCalcsResult = {
@@ -149,7 +149,7 @@ export interface WithdrawWithLeverageSwapInputsProps<QuoteResponse> {
 }
 
 export interface WithdrawWithLeverageProps<QuoteResponse> extends WithdrawWithLeverageSwapInputsProps<QuoteResponse> {
-  swapper: SwapQuoteIxsProvider<QuoteResponse>;
+  swapper: SwapIxsProvider<QuoteResponse>;
 }
 
 export type WithdrawLeverageCalcsResult = {
@@ -202,7 +202,7 @@ export interface AdjustLeverageSwapInputsProps<QuoteResponse> {
 }
 
 export interface AdjustLeverageProps<QuoteResponse> extends AdjustLeverageSwapInputsProps<QuoteResponse> {
-  swapper: SwapQuoteIxsProvider<QuoteResponse>;
+  swapper: SwapIxsProvider<QuoteResponse>;
 }
 
 export type AdjustLeverageCalcsResult = {

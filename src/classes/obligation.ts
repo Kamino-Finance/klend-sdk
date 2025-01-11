@@ -262,6 +262,11 @@ export class KaminoObligation {
     return undefined;
   }
 
+  getBorrowAmountByReserve(reserve: KaminoReserve): Decimal {
+    const amountLamports = this.getBorrowByMint(reserve.getLiquidityMint())?.amount ?? new Decimal(0);
+    return amountLamports.div(reserve.getMintFactor());
+  }
+
   getDepositByMint(mint: PublicKey): Position | undefined {
     for (const value of this.deposits.values()) {
       if (value.mintAddress.equals(mint)) {
@@ -269,6 +274,11 @@ export class KaminoObligation {
       }
     }
     return undefined;
+  }
+
+  getDepositAmountByReserve(reserve: KaminoReserve): Decimal {
+    const amountLamports = this.getDepositByMint(reserve.getLiquidityMint())?.amount ?? new Decimal(0);
+    return amountLamports.div(reserve.getMintFactor());
   }
 
   /**
@@ -650,6 +660,71 @@ export class KaminoObligation {
       deposits: newDeposits,
       borrows: newBorrows,
     };
+  }
+
+  /**
+   * Calculates the stats of the obligation after a hypothetical collateral swap.
+   */
+  getPostSwapCollObligationStats(params: {
+    withdrawAmountLamports: Decimal;
+    withdrawReserveAddress: PublicKey;
+    depositAmountLamports: Decimal;
+    depositReserveAddress: PublicKey;
+    newElevationGroup: number;
+    market: KaminoMarket;
+    slot: number;
+  }): ObligationStats {
+    const {
+      withdrawAmountLamports,
+      withdrawReserveAddress,
+      depositAmountLamports,
+      depositReserveAddress,
+      newElevationGroup,
+      market,
+      slot,
+    } = params;
+
+    const additionalReserves = [withdrawReserveAddress, depositReserveAddress].filter(
+      (reserveAddress) => !market.isReserveInObligation(this, reserveAddress)
+    );
+
+    const { collateralExchangeRates } = KaminoObligation.getRatesForObligation(
+      market,
+      this.state,
+      slot,
+      additionalReserves
+    );
+
+    let newObligationDeposits = this.state.deposits;
+    newObligationDeposits = this.simulateDepositChange(
+      newObligationDeposits,
+      withdrawAmountLamports.neg().toNumber(),
+      withdrawReserveAddress,
+      collateralExchangeRates
+    );
+    newObligationDeposits = this.simulateDepositChange(
+      newObligationDeposits,
+      depositAmountLamports.toNumber(),
+      depositReserveAddress,
+      collateralExchangeRates
+    );
+
+    const { refreshedStats } = this.calculatePositions(
+      market,
+      newObligationDeposits,
+      this.state.borrows,
+      newElevationGroup,
+      collateralExchangeRates,
+      null
+    );
+
+    const newStats = refreshedStats;
+    newStats.netAccountValue = newStats.userTotalDeposit.minus(newStats.userTotalBorrow);
+    newStats.loanToValue = valueOrZero(
+      newStats.userTotalBorrowBorrowFactorAdjusted.dividedBy(newStats.userTotalCollateralDeposit)
+    );
+    newStats.leverage = valueOrZero(newStats.userTotalDeposit.dividedBy(newStats.netAccountValue));
+    return newStats;
   }
 
   estimateObligationInterestRate = (

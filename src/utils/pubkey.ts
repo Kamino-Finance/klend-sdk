@@ -30,8 +30,21 @@ export class PublicKeySet<T extends PublicKey> {
     }
   }
 
+  remove(item: T): boolean {
+    const index = this.indexOf(item);
+    if (index == -1) {
+      return false;
+    }
+    this.items.splice(index, 1);
+    return true;
+  }
+
   contains(item: T): boolean {
-    return this.items.some((existingItem) => this.equals(existingItem, item));
+    return this.indexOf(item) != -1;
+  }
+
+  private indexOf(item: T): number {
+    return this.items.findIndex((existingItem) => this.equals(existingItem, item));
   }
 
   private equals(item1: T, item2: T): boolean {
@@ -39,7 +52,11 @@ export class PublicKeySet<T extends PublicKey> {
   }
 
   isEmpty(): boolean {
-    return this.items.length === 0;
+    return this.size() === 0;
+  }
+
+  size(): number {
+    return this.items.length;
   }
 
   toArray(): T[] {

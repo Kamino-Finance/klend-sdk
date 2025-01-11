@@ -147,7 +147,7 @@ export function userMetadataPda(user: PublicKey, programId: PublicKey = PROGRAM_
 /**
  * Returns the PDA and bump for the referrer account for a mint
  * @param referrer
- * @param mint
+ * @param reserve
  * @param programId
  * @returns [pda, bump]
  */

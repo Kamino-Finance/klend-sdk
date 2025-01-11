@@ -87,3 +87,5 @@ export const MAINNET_BETA_CHAIN_ID = 101;
 export const POSITION_LIMIT = 10;
 export const BORROWS_LIMIT = 5;
 export const DEPOSITS_LIMIT = 8;
+
+export const DEFAULT_MAX_COMPUTE_UNITS = 1_400_000;

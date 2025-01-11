@@ -3,8 +3,8 @@ import {
   getFlashLoanInstructions,
   SwapInputs,
   SwapQuote,
-  SwapQuoteIxs,
-  SwapQuoteIxsProvider,
+  SwapIxs,
+  SwapIxsProvider,
   SwapQuoteProvider,
 } from '../leverage';
 import {
@@ -23,10 +23,10 @@ export type RepayWithCollIxsResponse<QuoteResponse> = {
   ixs: TransactionInstruction[];
   lookupTables: AddressLookupTableAccount[];
   swapInputs: SwapInputs;
-  initialInputs: InitialInputs<QuoteResponse>;
+  initialInputs: RepayWithCollInitialInputs<QuoteResponse>;
 };
 
-export type InitialInputs<QuoteResponse> = {
+export type RepayWithCollInitialInputs<QuoteResponse> = {
   debtRepayAmountLamports: Decimal;
   flashRepayAmountLamports: Decimal;
   /**
@@ -69,15 +69,15 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
   scopeRefresh,
 }: RepayWithCollSwapInputsProps<QuoteResponse>): Promise<{
   swapInputs: SwapInputs;
-  initialInputs: InitialInputs<QuoteResponse>;
+  initialInputs: RepayWithCollInitialInputs<QuoteResponse>;
 }> {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
   if (!collReserve) {
-    throw new Error(`Collateral reserve with mint ${collReserve} not found in market ${kaminoMarket.getAddress()}`);
+    throw new Error(`Collateral reserve with mint ${collTokenMint} not found in market ${kaminoMarket.getAddress()}`);
   }
   if (!debtReserve) {
-    throw new Error(`Debt reserve with mint ${debtReserve} not found in market ${kaminoMarket.getAddress()}`);
+    throw new Error(`Debt reserve with mint ${debtTokenMint} not found in market ${kaminoMarket.getAddress()}`);
   }
 
   const {
@@ -172,7 +172,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
 }
 
 interface RepayWithCollIxsProps<QuoteResponse> extends RepayWithCollSwapInputsProps<QuoteResponse> {
-  swapper: SwapQuoteIxsProvider<QuoteResponse>;
+  swapper: SwapIxsProvider<QuoteResponse>;
   logger?: (msg: string, ...extra: any[]) => void;
 }
 
@@ -263,7 +263,7 @@ async function buildRepayWithCollateralIxs(
   currentSlot: number,
   budgetAndPriorityFeeIxs: TransactionInstruction[] | undefined,
   scopeRefresh: ScopeRefresh | undefined,
-  swapQuoteIxs: SwapQuoteIxs,
+  swapQuoteIxs: SwapIxs,
   isClosingPosition: boolean,
   debtRepayAmountLamports: Decimal,
   collWithdrawLamports: Decimal
@@ -288,6 +288,7 @@ async function buildRepayWithCollateralIxs(
     reserve: debtReserve,
     amountLamports: debtRepayAmountLamports,
     destinationAta: debtTokenAta,
+    // TODO(referrals): once we support referrals, we will have to replace the placeholder args below:
     referrerAccount: market.programId,
     referrerTokenState: market.programId,
     programId: market.programId,

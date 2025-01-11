@@ -169,6 +169,26 @@ export class KaminoMarket {
     return this.state.elevationGroups[elevationGroup - 1];
   }
 
+  /**
+   * Returns this market's elevation group of the given ID, or `null` for the default group `0`, or throws an error
+   * (including the given description) if the requested group does not exist.
+   */
+  getExistingElevationGroup(
+    elevationGroupId: number,
+    description: string = 'Requested'
+  ): ElevationGroupDescription | null {
+    if (elevationGroupId === 0) {
+      return null;
+    }
+    const elevationGroup = this.getMarketElevationGroupDescriptions().find(
+      (candidate) => candidate.elevationGroup === elevationGroupId
+    );
+    if (elevationGroup === undefined) {
+      throw new Error(`${description} elevation group ${elevationGroupId} not found in market ${this.getAddress()}`);
+    }
+    return elevationGroup;
+  }
+
   getMinNetValueObligation(): Decimal {
     return new Fraction(this.state.minNetValueInObligationSf).toDecimal();
   }
@@ -399,13 +419,25 @@ export class KaminoMarket {
     return this.reserves.get(address);
   }
 
-  getReserveByMint(address: PublicKey) {
+  getReserveByMint(address: PublicKey): KaminoReserve | undefined {
     for (const reserve of this.reserves.values()) {
       if (reserve.getLiquidityMint().equals(address)) {
         return reserve;
       }
     }
     return undefined;
+  }
+
+  /**
+   * Returns this market's reserve of the given mint address, or throws an error (including the given description) if
+   * such reserve does not exist.
+   */
+  getExistingReserveByMint(address: PublicKey, description: string = 'Requested'): KaminoReserve {
+    const reserve = this.getReserveByMint(address);
+    if (!reserve) {
+      throw new Error(`${description} reserve with mint ${address} not found in market ${this.getAddress()}`);
+    }
+    return reserve;
   }
 
   getReserveBySymbol(symbol: string) {
@@ -1297,6 +1329,7 @@ export class KaminoMarket {
         debtReserve: elevationGroup.debtReserve,
         debtLiquidityMint: PublicKey.default,
         elevationGroup: elevationGroup.id,
+        maxReservesAsCollateral: elevationGroup.maxReservesAsCollateral,
       });
     }
 
@@ -1392,6 +1425,7 @@ export type ElevationGroupDescription = {
   debtReserve: PublicKey;
   debtLiquidityMint: PublicKey;
   elevationGroup: number;
+  maxReservesAsCollateral: number;
 };
 
 export type KlendPrices = {

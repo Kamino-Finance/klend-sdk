@@ -2,8 +2,8 @@ import {
   KaminoReserve,
   SwapInputs,
   SwapQuote,
-  SwapQuoteIxs,
-  SwapQuoteIxsProvider,
+  SwapIxs,
+  SwapIxsProvider,
   SwapQuoteProvider,
 } from '@kamino-finance/klend-sdk';
 import { AddressLookupTableAccount, Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
@@ -139,12 +139,12 @@ export function getJupiterQuoter(
   return quoter;
 }
 
-export function getJupiterSwapper(connection: Connection, payer: PublicKey): SwapQuoteIxsProvider<QuoteResponse> {
-  const swapper: SwapQuoteIxsProvider<QuoteResponse> = async (
+export function getJupiterSwapper(connection: Connection, payer: PublicKey): SwapIxsProvider<QuoteResponse> {
+  const swapper: SwapIxsProvider<QuoteResponse> = async (
     inputs: SwapInputs,
     klendAccounts: Array<PublicKey>,
     quote: SwapQuote<QuoteResponse>
-  ): Promise<SwapQuoteIxs> => {
+  ): Promise<SwapIxs> => {
     const scaledQuoteResponse = scaleJupQuoteResponse(quote.quoteResponse!, new Decimal(inputs.inputAmountLamports));
     const { swapTxs, swapLookupTableAccounts } = await swapTxFromQuote(connection, payer, scaledQuoteResponse, {
       slippageBps: 100,
@@ -168,7 +168,7 @@ async function swapTxFromQuote(
 ): Promise<SwapTxResponse> {
   let swap: SwapInstructionsResponse;
   const quoteApi = createJupiterApiClient({
-    basePath: JUPITER_PRICE_API,
+    basePath: DEFAULT_JUP_V6_BASE_URL,
   });
   try {
     const swapParameters: SwapInstructionsPostRequest = {

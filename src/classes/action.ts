@@ -411,7 +411,7 @@ export class KaminoAction {
     obligation: KaminoObligation | ObligationType,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
-    requestElevationGroup: boolean = false,
+    requestElevationGroup: boolean = false, // to be requested *before* the deposit
     includeUserMetadata: boolean = true, // if true it includes user metadata
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
@@ -855,11 +855,17 @@ export class KaminoAction {
     obligation: KaminoObligation | ObligationType,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
-    requestElevationGroup: boolean = false,
+    requestElevationGroup: boolean = false, // to be requested *after* the withdraw
     includeUserMetadata: boolean = true, // if true it includes user metadata
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
-    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
+    scopeRefresh: ScopeRefresh | undefined = undefined,
+    overrideElevationGroupRequest?: number,
+    // Optional customizations which may be needed if the obligation was mutated by some previous ixn.
+    obligationCustomizations?: {
+      // Any newly-added deposit reserves.
+      addedDepositReserves?: PublicKey[];
+    }
   ) {
     const axn = await KaminoAction.initialize(
       'withdraw',
@@ -877,6 +883,8 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
+    axn.depositReserves.push(...(obligationCustomizations?.addedDepositReserves || []));
+
     const allReserves = new PublicKeySet<PublicKey>([
       ...axn.depositReserves,
       ...axn.borrowReserves,
@@ -884,7 +892,7 @@ export class KaminoAction {
     ]).toArray();
     const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
 
-    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
+    if (tokenIds.length > 0 && scopeRefresh && scopeRefresh.includeScopeRefresh) {
       await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
     }
 
@@ -893,7 +901,9 @@ export class KaminoAction {
       includeAtaIxns,
       requestElevationGroup,
       includeUserMetadata,
-      addInitObligationForFarm
+      addInitObligationForFarm,
+      false,
+      overrideElevationGroupRequest
     );
     await axn.addWithdrawIx();
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
@@ -1827,6 +1837,16 @@ export class KaminoAction {
           this.addRefreshReserveIxs(allReservesExcludingCurrent, addAsSupportIx);
           this.addRefreshReserveIxs(currentReserveAddresses.toArray(), addAsSupportIx);
           this.addRefreshObligationIx(addAsSupportIx);
+        } else if (
+          action === 'withdraw' &&
+          overrideElevationGroupRequest !== undefined
+          // Note: contrary to the 'deposit' case above, we allow requesting the same group as in the [stale, cached] obligation state, since our current use-case is "deposit X, withdraw Y"
+        ) {
+          console.log('Withdraw: Requesting elevation group', overrideElevationGroupRequest);
+          // Skip the withdrawn reserve if we are in the process of closing it:
+          const skipReserveIfClosing = this.amount.eq(new BN(U64_MAX)) ? [this.reserve.address] : [];
+          this.addRefreshObligationIx('cleanup', skipReserveIfClosing);
+          this.addRequestElevationIx(overrideElevationGroupRequest, 'cleanup', skipReserveIfClosing);
         }
       }
 
@@ -1996,7 +2016,7 @@ export class KaminoAction {
     });
   }
 
-  private addRefreshObligationIx(addAsSupportIx: AuxiliaryIx = 'setup', borrowReservesToSkip: PublicKey[] = []) {
+  private addRefreshObligationIx(addAsSupportIx: AuxiliaryIx = 'setup', skipReserves: PublicKey[] = []) {
     const marketAddress = this.kaminoMarket.getAddress();
     const obligationPda = this.getObligationPda();
     const refreshObligationIx = refreshObligation(
@@ -2007,15 +2027,16 @@ export class KaminoAction {
       this.kaminoMarket.programId
     );
 
-    const depositReservesList = this.getAdditionalDepositReservesList();
+    const skipReservesSet = new PublicKeySet(skipReserves);
 
+    const depositReservesList = this.getAdditionalDepositReservesList().filter(
+      (reserve) => !skipReservesSet.contains(reserve)
+    );
     const depositReserveAccountMetas = depositReservesList.map((reserve) => {
       return { pubkey: reserve, isSigner: false, isWritable: true };
     });
 
-    const skipBorrowsSet = new PublicKeySet(borrowReservesToSkip);
-    const borrowReservesList = this.borrowReserves.filter((reserve) => !skipBorrowsSet.contains(reserve));
-
+    const borrowReservesList = this.borrowReserves.filter((reserve) => !skipReservesSet.contains(reserve));
     const borrowReserveAccountMetas = borrowReservesList.map((reserve) => {
       return { pubkey: reserve, isSigner: false, isWritable: true };
     });
@@ -2048,11 +2069,7 @@ export class KaminoAction {
     }
   }
 
-  private addRequestElevationIx(
-    elevationGroup: number,
-    addAsSupportIx: AuxiliaryIx,
-    skipBorrowReserves: PublicKey[] = []
-  ) {
+  private addRequestElevationIx(elevationGroup: number, addAsSupportIx: AuxiliaryIx, skipReserves: PublicKey[] = []) {
     const obligationPda = this.getObligationPda();
     const args: RequestElevationGroupArgs = {
       elevationGroup,
@@ -2065,15 +2082,16 @@ export class KaminoAction {
 
     const requestElevationGroupIx = requestElevationGroup(args, accounts, this.kaminoMarket.programId);
 
-    const depositReservesList = this.getAdditionalDepositReservesList();
+    const skipReservesSet = new PublicKeySet<PublicKey>(skipReserves);
 
+    const depositReservesList = this.getAdditionalDepositReservesList().filter(
+      (reserve) => !skipReservesSet.contains(reserve)
+    );
     const depositReserveAccountMetas = depositReservesList.map((reserve) => {
       return { pubkey: reserve, isSigner: false, isWritable: true };
     });
 
-    const skipBorrowReservesSet = new PublicKeySet<PublicKey>(skipBorrowReserves);
-    const borrowReservesList = this.borrowReserves.filter((reserve) => !skipBorrowReservesSet.contains(reserve));
-
+    const borrowReservesList = this.borrowReserves.filter((reserve) => !skipReservesSet.contains(reserve));
     const borrowReserveAccountMetas = borrowReservesList.map((reserve) => {
       return { pubkey: reserve, isSigner: false, isWritable: true };
     });

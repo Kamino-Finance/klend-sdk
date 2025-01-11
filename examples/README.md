@@ -34,61 +34,61 @@ export RPC_ENDPOINT=YOUR_RPC_URL_HERE
 
 ## Examples
 
-#### Get loan info deposits / borrows
+### Get loan info deposits / borrows
 
 ```bash
 yarn tsx-node ./example_loan_info.ts
 ```
 
-#### Get loan value (deposited/borrowed/net value)
+### Get loan value (deposited/borrowed/net value)
 
 ```bash
 yarn run loan-value
 ```
 
-#### Get loan LTV
+### Get loan LTV
 
 ```bash
 yarn run loan-ltv
 ```
 
-#### Get user loans
+### Get user loans
 
 ```bash
 yarn run user-loans
 ```
 
-#### Get list of market reserves
+### Get list of market reserves
 
 ```bash
 yarn run market-reserves
 ```
 
-#### Get reserve APY (supply/borrow/rewards APY)
+### Get reserve APY (supply/borrow/rewards APY)
 
 ```bash
 yarn run reserve-apy
 ```
 
-#### Get reserve rewards APY
+### Get reserve rewards APY
 
 ```bash
 yarn run reserve-rewards-apy
 ```
 
-#### Get reserve APY history
+### Get reserve APY history
 
 ```bash
 yarn run reserve-apy-history
 ```
 
-#### Get reserve caps
+### Get reserve caps
 
 ```bash
 yarn run reserve-caps
 ```
 
-#### Get reserve total supplied and borrowed
+### Get reserve total supplied and borrowed
 
 ```bash
 yarn run reserve-supply-borrow
@@ -149,8 +149,15 @@ yarn multiply-adjust
 yarn multiply-loan-info-and-pnl
 ```
 
-#### Get obligations based on reserve filter
+### Get obligations based on reserve filter
 
 ```bash
 yarn run get-obligations-based-on-reserve-filter
+```
+
+### Swap collateral from one token to another (print simulation)
+
+```bash
+export KEYPAIR_FILE=YOUR_PATH_TO_YOUR_KEYPAIR_FILE
+tsx example_swap_coll_simulation.ts
 ```

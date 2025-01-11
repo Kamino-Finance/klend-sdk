@@ -52,8 +52,8 @@ import {
   DepsoitLeverageIxsResponse,
   PriceAinBProvider,
   SwapInputs,
-  SwapQuoteIxs,
-  SwapQuoteIxsProvider,
+  SwapIxs,
+  SwapIxsProvider,
   WithdrawLeverageCalcsResult,
   WithdrawLeverageInitialInputs,
   WithdrawLeverageIxsResponse,
@@ -335,7 +335,7 @@ export async function getDepositWithLeverageIxns<QuoteResponse>({
     quoter,
   });
 
-  let depositSwapper: SwapQuoteIxsProvider<QuoteResponse>;
+  let depositSwapper: SwapIxsProvider<QuoteResponse>;
 
   if (!initialInputs.collIsKtoken) {
     depositSwapper = swapper;
@@ -411,7 +411,7 @@ async function buildDepositWithLeverageIxns(
   scopeFeed: string | undefined,
   calcs: DepositLeverageCalcsResult,
   budgetAndPriorityFeeIxs: TransactionInstruction[] | undefined,
-  swapQuoteIxs: SwapQuoteIxs,
+  swapQuoteIxs: SwapIxs,
   strategy: StrategyWithAddress | undefined,
   collIsKtoken: boolean,
   elevationGroupOverride?: number
@@ -506,6 +506,7 @@ async function buildDepositWithLeverageIxns(
       !collIsKtoken ? collReserve.stats.decimals : debtReserve.stats.decimals
     ),
     destinationAta: !collIsKtoken ? collTokenAta : debtTokenAta,
+    // TODO(referrals): once we support referrals, we will have to replace the placeholder args below:
     referrerAccount: market.programId,
     referrerTokenState: market.programId,
     programId: market.programId,
@@ -748,7 +749,7 @@ export async function getWithdrawWithLeverageIxns<QuoteResponse>({
     quoter,
   });
 
-  let withdrawSwapper: SwapQuoteIxsProvider<QuoteResponse>;
+  let withdrawSwapper: SwapIxsProvider<QuoteResponse>;
 
   if (initialInputs.collIsKtoken) {
     if (kamino === undefined) {
@@ -821,7 +822,7 @@ export async function buildWithdrawWithLeverageIxns(
   scopeFeed: string | undefined,
   calcs: WithdrawLeverageCalcsResult,
   budgetAndPriorityFeeIxs: TransactionInstruction[] | undefined,
-  swapQuoteIxs: SwapQuoteIxs,
+  swapQuoteIxs: SwapIxs,
   strategy: StrategyWithAddress | undefined,
   collIsKtoken: boolean
 ): Promise<TransactionInstruction[]> {
@@ -917,6 +918,7 @@ export async function buildWithdrawWithLeverageIxns(
     reserve: debtReserve!,
     amountLamports: toLamports(calcs.repayAmount, debtReserve!.stats.decimals),
     destinationAta: debtTokenAta,
+    // TODO(referrals): once we support referrals, we will have to replace the placeholder args below:
     referrerAccount: market.programId,
     referrerTokenState: market.programId,
     programId: market.programId,
@@ -1258,7 +1260,7 @@ export async function getAdjustLeverageIxns<QuoteResponse>({
 
   // leverage increased so we need to deposit and borrow more
   if (initialInputs.isDeposit) {
-    let depositSwapper: SwapQuoteIxsProvider<QuoteResponse>;
+    let depositSwapper: SwapIxsProvider<QuoteResponse>;
 
     if (initialInputs.collIsKtoken) {
       if (kamino === undefined) {
@@ -1312,7 +1314,7 @@ export async function getAdjustLeverageIxns<QuoteResponse>({
   } else {
     console.log('Decreasing leverage');
 
-    let withdrawSwapper: SwapQuoteIxsProvider<QuoteResponse>;
+    let withdrawSwapper: SwapIxsProvider<QuoteResponse>;
 
     if (initialInputs.collIsKtoken) {
       if (kamino === undefined) {
@@ -1374,7 +1376,7 @@ async function buildIncreaseLeverageIxns(
   strategy: StrategyWithAddress | undefined,
   scopeFeed: string | undefined,
   collIsKtoken: boolean,
-  swapQuoteIxs: SwapQuoteIxs,
+  swapQuoteIxs: SwapIxs,
   budgetAndPriorityFeeIxns: TransactionInstruction[] | undefined
 ): Promise<TransactionInstruction[]> {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
@@ -1455,6 +1457,7 @@ async function buildIncreaseLeverageIxns(
       !collIsKtoken ? collReserve!.stats.decimals : debtReserve!.stats.decimals
     ),
     destinationAta: !collIsKtoken ? collTokenAta : debtTokenAta,
+    // TODO(referrals): once we support referrals, we will have to replace the placeholder args below:
     referrerAccount: kaminoMarket.programId,
     referrerTokenState: kaminoMarket.programId,
     programId: kaminoMarket.programId,
@@ -1539,7 +1542,7 @@ async function buildDecreaseLeverageIxns(
   strategy: StrategyWithAddress | undefined,
   scopeFeed: string | undefined,
   collIsKtoken: boolean,
-  swapQuoteIxs: SwapQuoteIxs,
+  swapQuoteIxs: SwapIxs,
   budgetAndPriorityFeeIxns: TransactionInstruction[] | undefined
 ): Promise<TransactionInstruction[]> {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
@@ -1626,6 +1629,7 @@ async function buildDecreaseLeverageIxns(
     reserve: debtReserve!,
     amountLamports: toLamports(Decimal.abs(calcs.adjustBorrowPosition), debtReserve!.stats.decimals),
     destinationAta: debtTokenAta,
+    // TODO(referrals): once we support referrals, we will have to replace the placeholder args below:
     referrerAccount: kaminoMarket.programId,
     referrerTokenState: kaminoMarket.programId,
     programId: kaminoMarket.programId,
