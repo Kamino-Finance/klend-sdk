@@ -2222,7 +2222,10 @@ export class KaminoVaultClient {
       .mul(new Decimal(vaultState.managementFeeBps.toString()))
       .div(new Decimal(SECONDS_PER_YEAR))
       .div(FullBPSDecimal);
-    const prevAUM = new Fraction(vaultState.prevAumSf).toDecimal();
+    const prevAUM = lamportsToDecimal(
+      new Fraction(vaultState.prevAumSf).toDecimal(),
+      vaultState.tokenMintDecimals.toNumber()
+    );
     const mgmtFee = prevAUM.mul(managementFeeFactor);
 
     return {
