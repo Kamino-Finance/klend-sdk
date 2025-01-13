@@ -1,4 +1,4 @@
-import { SLOTS_PER_SECOND, SLOTS_PER_YEAR } from '../utils';
+import { PubkeyHashMap, SLOTS_PER_SECOND, SLOTS_PER_YEAR } from '../utils';
 import Decimal from 'decimal.js';
 import { AccountInfo, PublicKey } from '@solana/web3.js';
 import { SOL_MINTS } from '../lib';
@@ -249,4 +249,25 @@ export function bpsToPct(bps: Decimal): Decimal {
 export function truncateDecimals(num: Decimal.Value, maxDecimals: number): Decimal {
   const factor = new Decimal(10).pow(maxDecimals);
   return new Decimal(num).times(factor).floor().dividedBy(factor);
+}
+
+/**Convert an u8 array to a string */
+export function decodeVaultName(token: number[]): string {
+  const maxArray = new Uint8Array(token);
+  let s: string = new TextDecoder().decode(maxArray);
+  // Remove trailing zeros and spaces
+  s = s.replace(/[\0 ]+$/, '');
+  return s;
+}
+
+export function pubkeyHashMapToJson(map: PubkeyHashMap<PublicKey, any>): { [key: string]: string } {
+  const obj: { [key: string]: any } = {};
+  map.forEach((value, key) => {
+    obj[key.toBase58()] = value.toString();
+  });
+  return obj;
+}
+
+export function printPubkeyHashMap<V>(map: PubkeyHashMap<PublicKey, V>) {
+  console.log(pubkeyHashMapToJson(map));
 }

@@ -53,6 +53,7 @@ import {
   PerformanceFeeBps,
 } from './idl_codegen_kamino_vault/types/VaultConfigField';
 import { getAccountOwner } from './utils/rpc';
+import { printHoldings } from './classes/types_utils';
 
 dotenv.config({
   path: `.env${process.env.ENV ? '.' + process.env.ENV : ''}`,
@@ -280,6 +281,42 @@ async function main() {
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const instructions = await kaminoManager.updateVaultConfigIxs(kaminoVault, new PendingVaultAdmin(), newAdmin);
+
+      const updateVaultPendingAdminSig = await processTxn(
+        env.client,
+        env.payer,
+        [instructions.updateVaultConfigIx, ...instructions.updateLUTIxs],
+        mode,
+        2500,
+        []
+      );
+
+      mode === 'execute' && console.log('Pending admin updated:', updateVaultPendingAdminSig);
+    });
+
+  commands
+    .command('update-vault-config')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption('--field <string>', 'The field to update')
+    .requiredOption('--value <string>', 'The value to update the field to')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ vault, field, value, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
+      const vaultAddress = new PublicKey(vault);
+
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
+      const instructions = await kaminoManager.updateVaultConfigIxs(kaminoVault, field, value);
 
       const updateVaultPendingAdminSig = await processTxn(
         env.client,
@@ -796,8 +833,8 @@ async function main() {
       const vaultState = await new KaminoVault(vaultAddress, undefined, env.kVaultProgramId).getState(env.connection);
       const vaultOverview = await kaminoManager.getVaultOverview(
         vaultState,
-        await env.connection.getSlot('confirmed'),
-        new Decimal(1.0)
+        new Decimal(1.0),
+        await env.connection.getSlot('confirmed')
       );
 
       console.log('vaultOverview', vaultOverview);
@@ -890,8 +927,11 @@ async function main() {
       const sharesIssued = new Decimal(vaultState.sharesIssued.toString()!).div(
         new Decimal(vaultState.sharesMintDecimals.toString())
       );
+
+      console.log('farm', vaultState.vaultFarm.toString());
+      console.log('Name: ', kaminoManager.getDecodedVaultName(kaminoVault.state!));
       console.log('Shares issued: ', sharesIssued);
-      console.log('Holdings: ', holdings);
+      printHoldings(holdings);
       console.log(`Tokens per share for vault ${vaultAddress.toBase58()}: ${tokensPerShare}`);
     });
 
@@ -937,7 +977,6 @@ async function main() {
       const simulatedHoldings = await kaminoManager.calculateSimulatedHoldingsWithInterest(vaultState);
 
       console.log('Simulated holdings with interest', simulatedHoldings);
-
       const simulatedFees = await kaminoManager.calculateSimulatedFees(vaultState, simulatedHoldings);
 
       console.log('Simulated fees', simulatedFees);

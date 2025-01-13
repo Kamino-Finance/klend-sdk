@@ -53,7 +53,13 @@ import {
 import { VaultConfigField, VaultConfigFieldKind } from '../idl_codegen_kamino_vault/types';
 import { VaultState } from '../idl_codegen_kamino_vault/accounts';
 import Decimal from 'decimal.js';
-import { bpsToPct, getTokenBalanceFromAccountInfoLamports, numberToLamportsDecimal, parseTokenSymbol } from './utils';
+import {
+  bpsToPct,
+  decodeVaultName,
+  getTokenBalanceFromAccountInfoLamports,
+  numberToLamportsDecimal,
+  parseTokenSymbol,
+} from './utils';
 import { deposit } from '../idl_codegen_kamino_vault/instructions';
 import { withdraw } from '../idl_codegen_kamino_vault/instructions';
 import { PROGRAM_ID } from '../idl_codegen/programId';
@@ -83,6 +89,7 @@ import {
   getSharesInFarmUserPosition,
   getUserSharesInFarm,
 } from './farm_utils';
+import { printHoldings } from './types_utils';
 
 export const kaminoVaultId = new PublicKey('kvauTFR8qm1dhniz6pYuBZkuene3Hfrs1VQhVRgCNrr');
 export const kaminoVaultStagingId = new PublicKey('STkvh7ostar39Fwr4uZKASs1RNNuYMFMTsE77FiRsL2');
@@ -123,6 +130,36 @@ export class KaminoVaultClient {
 
   hasFarm() {
     return;
+  }
+
+  /**
+   * Prints a vault in a human readable form
+   * @param vaultPubkey - the address of the vault
+   * @param [vaultState] - optional parameter to pass the vault state directly; this will save a network call
+   * @returns - void; prints the vault to the console
+   */
+  async printVault(vaultPubkey: PublicKey, vaultState?: VaultState) {
+    const vault = vaultState ? vaultState : await VaultState.fetch(this.getConnection(), vaultPubkey);
+
+    if (!vault) {
+      console.log(`Vault ${vaultPubkey.toString()} not found`);
+      return;
+    }
+
+    const kaminoVault = new KaminoVault(vaultPubkey, vault, this._kaminoVaultProgramId);
+    const vaultName = this.decodeVaultName(vault.name);
+    const slot = await this.getConnection().getSlot('confirmed');
+    const tokensPerShare = await this.getTokensPerShareSingleVault(kaminoVault, slot);
+    const holdings = await this.getVaultHoldings(vault);
+
+    const sharesIssued = new Decimal(vault.sharesIssued.toString()!).div(
+      new Decimal(vault.sharesMintDecimals.toString())
+    );
+
+    console.log('Name: ', vaultName);
+    console.log('Shares issued: ', sharesIssued);
+    printHoldings(holdings);
+    console.log('Tokens per share: ', tokensPerShare);
   }
 
   /**
@@ -1058,11 +1095,7 @@ export class KaminoVaultClient {
 
   /**Convert an u8 array to a string */
   decodeVaultName(token: number[]): string {
-    const maxArray = new Uint8Array(token);
-    let s: string = new TextDecoder().decode(maxArray);
-    // Remove trailing zeros and spaces
-    s = s.replace(/[\0 ]+$/, '');
-    return s;
+    return decodeVaultName(token);
   }
 
   private withdrawIxn(
@@ -1491,15 +1524,15 @@ export class KaminoVaultClient {
   }
 
   /**
-   * This method calculates the token per shar value. This will always change based on interest earned from the vault, but calculating it requires a bunch of rpc requests. Caching this for a short duration would be optimal
+   * This method calculates the token per share value. This will always change based on interest earned from the vault, but calculating it requires a bunch of rpc requests. Caching this for a short duration would be optimal
    * @param vault - vault to calculate tokensPerShare for
-   * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
+   * @param [slot] - the slot at which we retrieve the tokens per share. Optional. If not provided, the function will fetch the current slot
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @returns - token per share value
    */
   async getTokensPerShareSingleVault(
     vault: KaminoVault,
-    slot: number,
+    slot?: number,
     vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<Decimal> {
     const vaultState = await vault.getState(this.getConnection());
@@ -1514,11 +1547,7 @@ export class KaminoVaultClient {
       vaultState.sharesMintDecimals.toString()
     );
 
-    const holdings = await this.getVaultHoldings(
-      vaultState,
-      await this.getConnection().getSlot('confirmed'),
-      vaultReservesState
-    );
+    const holdings = await this.getVaultHoldings(vaultState, slot, vaultReservesState);
 
     return holdings.total.div(sharesDecimal);
   }
@@ -1759,7 +1788,7 @@ export class KaminoVaultClient {
   /**
    * This will retrieve all the tokens that can be used as collateral by the users who borrow the token in the vault alongside details about the min and max loan to value ratio
    * @param vaultState - the vault state to load reserves for
-   * @param slot - current slot
+   * @param [slot] - the slot for which to retrieve the vault collaterals for. Optional. If not provided the function will fetch the current slot
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [kaminoMarkets] - a list of all the kamino markets. Optional. If provided the function will be significantly faster as it will not have to fetch the markets
    * @returns a hashmap from each reserve pubkey to the market overview of the collaterals that can be used and the min and max loan to value ratio in that market
@@ -1831,13 +1860,13 @@ export class KaminoVaultClient {
   /**
    * This will return an VaultHoldings object which contains the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
    * @param vault - the kamino vault to get available liquidity to withdraw for
-   * @param slot - current slot
-   * @param vaultReserves - a hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [slot] - the slot for which to calculate the holdings. Optional. If not provided the function will fetch the current slot
+   * @param [vaultReserves] - a hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @returns an VaultHoldings object representing the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
    */
   async getVaultHoldings(
     vault: VaultState,
-    slot: number,
+    slot?: number,
     vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<VaultHoldings> {
     const vaultHoldings: VaultHoldings = {
@@ -1860,7 +1889,12 @@ export class KaminoVaultClient {
         throw new Error(`Reserve ${allocationStrategy.reserve.toBase58()} not found`);
       }
 
-      const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, 0);
+      let reserveCollExchangeRate: Decimal;
+      if (slot) {
+        reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, 0);
+      } else {
+        reserveCollExchangeRate = reserve.getCollateralExchangeRate();
+      }
       const reserveAllocationLiquidityAmount = new Decimal(allocationStrategy.ctokenAllocation.toString()).div(
         reserveCollExchangeRate
       );
@@ -1883,17 +1917,18 @@ export class KaminoVaultClient {
   }
 
   /**
-   * This will return an VaultHoldingsWithUSDValue object which contains an holdings field representing the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve and additional fields for the total USD value of the available and invested amounts
+   * This will return an VaultOverview object that encapsulates all the information about the vault, including the holdings, reserves details, theoretical APY, utilization ratio and total borrowed amount
    * @param vault - the kamino vault to get available liquidity to withdraw for
-   * @param slot - current slot
    * @param price - the price of the token in the vault (e.g. USDC)
+   * @param [slot] - the slot for which to retrieve the vault overview for. Optional. If not provided the function will fetch the current slot
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
-   * @returns an VaultHoldingsWithUSDValue object with details about the tokens available and invested in the vault, denominated in tokens and USD
+   * @param [kaminoMarkets] - a list of all kamino markets. Optional. If provided the function will be significantly faster as it will not have to fetch the markets
+   * @returns an VaultOverview object with details about the tokens available and invested in the vault, denominated in tokens and USD
    */
   async getVaultHoldingsWithPrice(
     vault: VaultState,
-    slot: number,
     price: Decimal,
+    slot?: number,
     vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<VaultHoldingsWithUSDValue> {
     const holdings = await this.getVaultHoldings(vault, slot, vaultReservesMap);
@@ -1914,16 +1949,16 @@ export class KaminoVaultClient {
   /**
    * This will return an VaultOverview object that encapsulates all the information about the vault, including the holdings, reserves details, theoretical APY, utilization ratio and total borrowed amount
    * @param vault - the kamino vault to get available liquidity to withdraw for
-   * @param slot - current slot
    * @param price - the price of the token in the vault (e.g. USDC)
+   * @param [slot] - the slot for which to retrieve the vault overview for. Optional. If not provided the function will fetch the current slot
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [kaminoMarkets] - a list of all kamino markets. Optional. If provided the function will be significantly faster as it will not have to fetch the markets
    * @returns an VaultOverview object with details about the tokens available and invested in the vault, denominated in tokens and USD
    */
   async getVaultOverview(
     vault: VaultState,
-    slot: number,
     price: Decimal,
+    slot?: number,
     vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>,
     kaminoMarkets?: KaminoMarket[]
   ): Promise<VaultOverview> {
@@ -1931,14 +1966,26 @@ export class KaminoVaultClient {
 
     const vaultHoldingsWithUSDValuePromise = await this.getVaultHoldingsWithPrice(
       vault,
-      slot,
       price,
+      slot,
       vaultReservesState
     );
-    const vaultTheoreticalAPYPromise = await this.getVaultTheoreticalAPY(vault, slot, vaultReservesState);
-    const totalInvestedAndBorrowedPromise = await this.getTotalBorrowedAndInvested(vault, slot, vaultReservesState);
-    const vaultCollateralsPromise = await this.getVaultCollaterals(vault, slot, vaultReservesState, kaminoMarkets);
-    const reservesOverviewPromise = await this.getVaultReservesDetails(vault, slot, vaultReservesState);
+
+    const currentSlot = slot ? slot : await this.getConnection().getSlot();
+
+    const vaultTheoreticalAPYPromise = await this.getVaultTheoreticalAPY(vault, currentSlot, vaultReservesState);
+    const totalInvestedAndBorrowedPromise = await this.getTotalBorrowedAndInvested(
+      vault,
+      currentSlot,
+      vaultReservesState
+    );
+    const vaultCollateralsPromise = await this.getVaultCollaterals(
+      vault,
+      currentSlot,
+      vaultReservesState,
+      kaminoMarkets
+    );
+    const reservesOverviewPromise = await this.getVaultReservesDetails(vault, currentSlot, vaultReservesState);
 
     // all the async part of the functions above just read the vaultReservesState which is read beforehand, so excepting vaultCollateralsPromise they should do no additional network calls
     const [
@@ -2115,26 +2162,31 @@ export class KaminoVaultClient {
    * @param vaultState the kamino vault state to get simulated holdings and earnings for
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [currentSlot] - the current slot. Optional. If not provided it will fetch the current slot
+   * @param [previousTotalAUM] - the previous AUM of the vault to compute the earned interest relative to this value. Optional. If not provided the function will estimate the total AUM at the slot of the last state update on chain
    * @returns a struct of simulated vault holdings and earned interest
    */
   async calculateSimulatedHoldingsWithInterest(
     vaultState: VaultState,
     vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>,
-    currentSlot?: number
+    currentSlot?: number,
+    previousTotalAUM?: Decimal
   ): Promise<SimulatedVaultHoldingsWithEarnedInterest> {
-    const latestUpdateTs = vaultState.lastFeeChargeTimestamp.toNumber();
-    const lastUpdateSlot = latestUpdateTs / this.recentSlotDurationMs;
+    let prevAUM: Decimal;
+
+    if (previousTotalAUM) {
+      prevAUM = previousTotalAUM;
+    } else {
+      const latestUpdateTs = vaultState.lastFeeChargeTimestamp.toNumber();
+      const lastUpdateSlot = latestUpdateTs / this.recentSlotDurationMs;
+
+      const lastUpdateHoldings = await this.getVaultHoldings(vaultState, lastUpdateSlot, vaultReservesMap);
+      prevAUM = lastUpdateHoldings.total;
+    }
 
     const slot = currentSlot ? currentSlot : await this.getConnection().getSlot('confirmed');
 
-    const lastUpdateHoldingsPromise = this.getVaultHoldings(vaultState, lastUpdateSlot, vaultReservesMap);
-    const currentHoldingsPromise = this.getVaultHoldings(vaultState, slot, vaultReservesMap);
-    const [lastUpdateHoldings, currentHoldings] = await Promise.all([
-      lastUpdateHoldingsPromise,
-      currentHoldingsPromise,
-    ]);
-
-    const earnedInterest = currentHoldings.total.sub(lastUpdateHoldings.total);
+    const currentHoldings = await this.getVaultHoldings(vaultState, slot, vaultReservesMap);
+    const earnedInterest = currentHoldings.total.sub(prevAUM);
 
     return {
       holdings: currentHoldings,
