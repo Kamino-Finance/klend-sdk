@@ -16,9 +16,9 @@ export interface UpdateReserveAllocationAccounts {
   reserveCollateralMint: PublicKey
   reserve: PublicKey
   ctokenVault: PublicKey
+  reserveCollateralTokenProgram: PublicKey
   systemProgram: PublicKey
   rent: PublicKey
-  tokenProgram: PublicKey
 }
 
 export const layout = borsh.struct([borsh.u64("weight"), borsh.u64("cap")])
@@ -39,9 +39,13 @@ export function updateReserveAllocation(
     },
     { pubkey: accounts.reserve, isSigner: false, isWritable: false },
     { pubkey: accounts.ctokenVault, isSigner: false, isWritable: true },
+    {
+      pubkey: accounts.reserveCollateralTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
     { pubkey: accounts.systemProgram, isSigner: false, isWritable: false },
     { pubkey: accounts.rent, isSigner: false, isWritable: false },
-    { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
   ]
   const identifier = Buffer.from([5, 54, 213, 112, 75, 232, 117, 37])
   const buffer = Buffer.alloc(1000)

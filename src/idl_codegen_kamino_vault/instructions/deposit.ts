@@ -20,7 +20,6 @@ export interface DepositAccounts {
   klendProgram: PublicKey
   tokenProgram: PublicKey
   sharesTokenProgram: PublicKey
-  instructionSysvarAccount: PublicKey
 }
 
 export const layout = borsh.struct([borsh.u64("maxAmount")])
@@ -42,11 +41,6 @@ export function deposit(
     { pubkey: accounts.klendProgram, isSigner: false, isWritable: false },
     { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
     { pubkey: accounts.sharesTokenProgram, isSigner: false, isWritable: false },
-    {
-      pubkey: accounts.instructionSysvarAccount,
-      isSigner: false,
-      isWritable: false,
-    },
   ]
   const identifier = Buffer.from([242, 35, 198, 137, 82, 225, 242, 182])
   const buffer = Buffer.alloc(1000)

@@ -60,7 +60,8 @@ export interface ReserveConfigFields {
   debtWithdrawalCap: types.WithdrawalCapsFields
   elevationGroups: Array<number>
   disableUsageAsCollOutsideEmode: number
-  utilizationLimitBlockBorrowingAbove: number
+  /** Utilization (in percentage) above which borrowing is blocked. 0 to disable. */
+  utilizationLimitBlockBorrowingAbovePct: number
   /**
    * Whether this reserve should be subject to auto-deleveraging after deposit or borrow limit is
    * crossed.
@@ -147,7 +148,8 @@ export interface ReserveConfigJSON {
   debtWithdrawalCap: types.WithdrawalCapsJSON
   elevationGroups: Array<number>
   disableUsageAsCollOutsideEmode: number
-  utilizationLimitBlockBorrowingAbove: number
+  /** Utilization (in percentage) above which borrowing is blocked. 0 to disable. */
+  utilizationLimitBlockBorrowingAbovePct: number
   /**
    * Whether this reserve should be subject to auto-deleveraging after deposit or borrow limit is
    * crossed.
@@ -235,7 +237,8 @@ export class ReserveConfig {
   readonly debtWithdrawalCap: types.WithdrawalCaps
   readonly elevationGroups: Array<number>
   readonly disableUsageAsCollOutsideEmode: number
-  readonly utilizationLimitBlockBorrowingAbove: number
+  /** Utilization (in percentage) above which borrowing is blocked. 0 to disable. */
+  readonly utilizationLimitBlockBorrowingAbovePct: number
   /**
    * Whether this reserve should be subject to auto-deleveraging after deposit or borrow limit is
    * crossed.
@@ -297,8 +300,8 @@ export class ReserveConfig {
     })
     this.elevationGroups = fields.elevationGroups
     this.disableUsageAsCollOutsideEmode = fields.disableUsageAsCollOutsideEmode
-    this.utilizationLimitBlockBorrowingAbove =
-      fields.utilizationLimitBlockBorrowingAbove
+    this.utilizationLimitBlockBorrowingAbovePct =
+      fields.utilizationLimitBlockBorrowingAbovePct
     this.autodeleverageEnabled = fields.autodeleverageEnabled
     this.reserved1 = fields.reserved1
     this.borrowLimitOutsideElevationGroup =
@@ -336,7 +339,7 @@ export class ReserveConfig {
         types.WithdrawalCaps.layout("debtWithdrawalCap"),
         borsh.array(borsh.u8(), 20, "elevationGroups"),
         borsh.u8("disableUsageAsCollOutsideEmode"),
-        borsh.u8("utilizationLimitBlockBorrowingAbove"),
+        borsh.u8("utilizationLimitBlockBorrowingAbovePct"),
         borsh.u8("autodeleverageEnabled"),
         borsh.array(borsh.u8(), 1, "reserved1"),
         borsh.u64("borrowLimitOutsideElevationGroup"),
@@ -383,8 +386,8 @@ export class ReserveConfig {
       ),
       elevationGroups: obj.elevationGroups,
       disableUsageAsCollOutsideEmode: obj.disableUsageAsCollOutsideEmode,
-      utilizationLimitBlockBorrowingAbove:
-        obj.utilizationLimitBlockBorrowingAbove,
+      utilizationLimitBlockBorrowingAbovePct:
+        obj.utilizationLimitBlockBorrowingAbovePct,
       autodeleverageEnabled: obj.autodeleverageEnabled,
       reserved1: obj.reserved1,
       borrowLimitOutsideElevationGroup: obj.borrowLimitOutsideElevationGroup,
@@ -428,8 +431,8 @@ export class ReserveConfig {
       ),
       elevationGroups: fields.elevationGroups,
       disableUsageAsCollOutsideEmode: fields.disableUsageAsCollOutsideEmode,
-      utilizationLimitBlockBorrowingAbove:
-        fields.utilizationLimitBlockBorrowingAbove,
+      utilizationLimitBlockBorrowingAbovePct:
+        fields.utilizationLimitBlockBorrowingAbovePct,
       autodeleverageEnabled: fields.autodeleverageEnabled,
       reserved1: fields.reserved1,
       borrowLimitOutsideElevationGroup: fields.borrowLimitOutsideElevationGroup,
@@ -468,8 +471,8 @@ export class ReserveConfig {
       debtWithdrawalCap: this.debtWithdrawalCap.toJSON(),
       elevationGroups: this.elevationGroups,
       disableUsageAsCollOutsideEmode: this.disableUsageAsCollOutsideEmode,
-      utilizationLimitBlockBorrowingAbove:
-        this.utilizationLimitBlockBorrowingAbove,
+      utilizationLimitBlockBorrowingAbovePct:
+        this.utilizationLimitBlockBorrowingAbovePct,
       autodeleverageEnabled: this.autodeleverageEnabled,
       reserved1: this.reserved1,
       borrowLimitOutsideElevationGroup:
@@ -515,8 +518,8 @@ export class ReserveConfig {
       debtWithdrawalCap: types.WithdrawalCaps.fromJSON(obj.debtWithdrawalCap),
       elevationGroups: obj.elevationGroups,
       disableUsageAsCollOutsideEmode: obj.disableUsageAsCollOutsideEmode,
-      utilizationLimitBlockBorrowingAbove:
-        obj.utilizationLimitBlockBorrowingAbove,
+      utilizationLimitBlockBorrowingAbovePct:
+        obj.utilizationLimitBlockBorrowingAbovePct,
       autodeleverageEnabled: obj.autodeleverageEnabled,
       reserved1: obj.reserved1,
       borrowLimitOutsideElevationGroup: new BN(

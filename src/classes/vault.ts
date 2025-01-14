@@ -295,7 +295,7 @@ export class KaminoVaultClient {
       ctokenVault: cTokenVault,
       systemProgram: SystemProgram.programId,
       rent: SYSVAR_RENT_PUBKEY,
-      tokenProgram: TOKEN_PROGRAM_ID,
+      reserveCollateralTokenProgram: vaultState.tokenProgram
     };
 
     const updateReserveAllocationArgs: UpdateReserveAllocationArgs = {
@@ -720,7 +720,6 @@ export class KaminoVaultClient {
       userTokenAta: userTokenAta,
       userSharesAta: userSharesAta,
       tokenProgram: tokenProgramID,
-      instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
       klendProgram: this._kaminoLendProgramId,
       sharesTokenProgram: TOKEN_PROGRAM_ID,
     };

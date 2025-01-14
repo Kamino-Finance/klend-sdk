@@ -41,6 +41,8 @@ export type CustomError =
   | WithdrawResultsInZeroShares
   | CannotWithdrawZeroShares
   | ManagementFeeGreaterThanMaxAllowed
+  | VaultAUMZero
+  | MissingReserveForBatchRefresh
 
 export class DepositAmountsZero extends Error {
   static readonly code = 7000
@@ -504,6 +506,28 @@ export class ManagementFeeGreaterThanMaxAllowed extends Error {
   }
 }
 
+export class VaultAUMZero extends Error {
+  static readonly code = 7042
+  readonly code = 7042
+  readonly name = "VaultAUMZero"
+  readonly msg = "Vault assets under management are empty"
+
+  constructor(readonly logs?: string[]) {
+    super("7042: Vault assets under management are empty")
+  }
+}
+
+export class MissingReserveForBatchRefresh extends Error {
+  static readonly code = 7043
+  readonly code = 7043
+  readonly name = "MissingReserveForBatchRefresh"
+  readonly msg = "Missing reserve for batch refresh"
+
+  constructor(readonly logs?: string[]) {
+    super("7043: Missing reserve for batch refresh")
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 7000:
@@ -590,6 +614,10 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new CannotWithdrawZeroShares(logs)
     case 7041:
       return new ManagementFeeGreaterThanMaxAllowed(logs)
+    case 7042:
+      return new VaultAUMZero(logs)
+    case 7043:
+      return new MissingReserveForBatchRefresh(logs)
   }
 
   return null

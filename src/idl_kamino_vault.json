@@ -92,17 +92,17 @@
           "isSigner": false
         },
         {
+          "name": "reserveCollateralTokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
           "name": "systemProgram",
           "isMut": false,
           "isSigner": false
         },
         {
           "name": "rent",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "tokenProgram",
           "isMut": false,
           "isSigner": false
         }
@@ -173,11 +173,6 @@
         },
         {
           "name": "sharesTokenProgram",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "instructionSysvarAccount",
           "isMut": false,
           "isSigner": false
         }
@@ -1332,7 +1327,10 @@
             "type": "u8"
           },
           {
-            "name": "utilizationLimitBlockBorrowingAbove",
+            "name": "utilizationLimitBlockBorrowingAbovePct",
+            "docs": [
+              "Utilization (in percentage) above which borrowing is blocked. 0 to disable."
+            ],
             "type": "u8"
           },
           {
@@ -2152,6 +2150,16 @@
       "code": 7041,
       "name": "ManagementFeeGreaterThanMaxAllowed",
       "msg": "Management fee is greater than maximum allowed"
+    },
+    {
+      "code": 7042,
+      "name": "VaultAUMZero",
+      "msg": "Vault assets under management are empty"
+    },
+    {
+      "code": 7043,
+      "name": "MissingReserveForBatchRefresh",
+      "msg": "Missing reserve for batch refresh"
     }
   ]
 }
