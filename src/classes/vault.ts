@@ -295,7 +295,7 @@ export class KaminoVaultClient {
       ctokenVault: cTokenVault,
       systemProgram: SystemProgram.programId,
       rent: SYSVAR_RENT_PUBKEY,
-      reserveCollateralTokenProgram: vaultState.tokenProgram
+      reserveCollateralTokenProgram: vaultState.tokenProgram,
     };
 
     const updateReserveAllocationArgs: UpdateReserveAllocationArgs = {

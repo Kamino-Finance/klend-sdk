@@ -40,6 +40,7 @@
     "codegen": "yarn anchor-client-gen src/idl.json ./src/idl_codegen/ --program-id KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD",
     "codegen-jupiter-perps": "yarn anchor-client-gen src/jupiter_perps_idl.json ./src/idl_codegen_jupiter_perps/ --program-id PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu",
     "codegen-kvault": "yarn anchor-client-gen src/idl_kamino_vault.json ./src/idl_codegen_kamino_vault/ --program-id kvauTFR8qm1dhniz6pYuBZkuene3Hfrs1VQhVRgCNrr",
+    "cli": "tsx --no-deprecation src/client.ts",
     "kamino-manager": "tsx src/client_kamino_manager.ts",
     "dev": "concurrently \"yarn build:watch\" \"nodemon --watch dist -e js,ts --exec 'yarn dev:push-and-update'\"",
     "dev:push-and-update": "yalc publish && cd examples && yalc update"

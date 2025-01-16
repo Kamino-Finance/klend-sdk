@@ -96,8 +96,32 @@ await sendTransactionFromAction(env, sendTransaction); // sendTransaction from w
 ```
 
 ## CLI
-* npx tsx src/client.ts deposit --url <RPC> --owner ./keypair.json --token USDH --amount 10
-* npx tsx src/client.ts deposit --url <RPC> --owner ./keypair.json --token SOL --amount 10
+
+### Depositing
+
+```sh
+yarn cli deposit --url <RPC> --owner ./keypair.json --token USDH --amount 10
+yarn cli deposit --url <RPC> --owner ./keypair.json --token SOL --amount 10
+```
+
+### Printing all obligations
+
+The following will **print all obligations' raw account data JSONs**:
+
+```sh
+yarn cli print-all-obligation-accounts --rpc <RPC>
+```
+
+The output is a stream of consecutive JSON documents, which makes it appropriate for further processing using `jq`, with
+the following gotchas:
+- use `yarn`'s `-s` option to skip the yarn version metadata from garbling the JSON output,
+- use `jq`'s `--stream` mode to avoid buffering the entire output.
+
+With this in mind, the following will **print the last update slot of every obligation, one per line**:
+
+```sh
+yarn -s cli print-all-obligation-accounts --rpc <RPC> | jq -cn --stream 'fromstream(1|truncate_stream(inputs)) | .lastUpdate.slot'
+```
 
 ## Codegen
 * Copy the new `idl` from the kamino-lending program to `src/idl.json`

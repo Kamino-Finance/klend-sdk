@@ -9,6 +9,7 @@ import {
   getAllUserMetadatasWithFilter,
   getProgramId,
   toJson,
+  getAllObligationAccounts,
 } from './lib';
 import * as fs from 'fs';
 import { Connection, GetProgramAccountsFilter, Keypair, PublicKey } from '@solana/web3.js';
@@ -63,6 +64,16 @@ async function main() {
       const kaminoMarket = await getMarket(connection, cluster);
       const kaminoObligation = await KaminoObligation.load(kaminoMarket, new PublicKey(obligation));
       console.log(toJson(kaminoObligation?.refreshedStats));
+    });
+
+  commands
+    .command('print-all-obligation-accounts')
+    .option(`--rpc <string>`, 'The RPC URL')
+    .action(async ({ rpc }) => {
+      const connection = new Connection(rpc, {});
+      for await (const obligationAccount of getAllObligationAccounts(connection)) {
+        console.log(toJson(obligationAccount.toJSON()));
+      }
     });
 
   commands
