@@ -245,14 +245,21 @@ async function main() {
         admin: mode === 'multisig' ? multisigPk : env.payer.publicKey,
         tokenMint: tokenMint,
         tokenMintProgramId: tokenProgramID,
-        performanceFeeRate: new Decimal(0.0),
-        managementFeeRate: new Decimal(0.0),
+        performanceFeeRatePercentage: new Decimal(0.0),
+        managementFeeRatePercentage: new Decimal(0.0),
         name,
       });
 
       const { vault: vaultKp, initVaultIxs: instructions } = await kaminoManager.createVaultIxs(kaminoVaultConfig);
 
-      const _createVaultSig = await processTxn(env.client, env.payer, instructions.initVaultIxs, mode, 2500, [vaultKp]);
+      const _createVaultSig = await processTxn(
+        env.client,
+        env.payer,
+        [...instructions.initVaultIxs, instructions.createLUTIx],
+        mode,
+        2500,
+        [vaultKp]
+      );
       await sleep(5000);
       const _populateLUTSig = await processTxn(env.client, env.payer, instructions.populateLUTIxs, mode, 2500, []);
 
@@ -327,7 +334,7 @@ async function main() {
         []
       );
 
-      mode === 'execute' && console.log('Pending admin updated:', updateVaultPendingAdminSig);
+      mode === 'execute' && console.log('Vault updated:', updateVaultPendingAdminSig);
     });
 
   commands
@@ -777,7 +784,7 @@ async function main() {
         kaminoVault,
         reserveWithAddress
       );
-      const investReserveSig = await processTxn(env.client, env.payer, instructions, mode, 2500, [], 400_000);
+      const investReserveSig = await processTxn(env.client, env.payer, instructions, mode, 2500, [], 800_000);
 
       mode === 'execute' && console.log('Reserve invested:', investReserveSig);
     });

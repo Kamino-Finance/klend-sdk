@@ -4,12 +4,14 @@ import Decimal from 'decimal.js/decimal';
 /** the populateLUTIxs should be executed in a separate transaction as we cannot create and populate a lookup table in the same tx */
 export type InitVaultIxs = {
   initVaultIxs: TransactionInstruction[];
+  createLUTIx: TransactionInstruction;
   populateLUTIxs: TransactionInstruction[];
 };
 
 export type AcceptVaultOwnershipIxs = {
   acceptVaultOwnershipIx: TransactionInstruction;
-  updateLUTIxs: TransactionInstruction[];
+  initNewLUTIx: TransactionInstruction;
+  updateLUTIxs: TransactionInstruction[]; // this has to be executed in a transaction after the initNewLUTIx is executed
 };
 
 export type UpdateReserveAllocationIxs = {
@@ -45,4 +47,10 @@ export type UserSharesForVault = {
   unstakedShares: Decimal;
   stakedShares: Decimal;
   totalShares: Decimal;
+};
+
+export type ReserveAllocationOverview = {
+  targetWeight: Decimal;
+  tokenAllocationCap: Decimal;
+  ctokenAllocation: Decimal;
 };

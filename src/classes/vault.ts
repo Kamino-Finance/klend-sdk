@@ -72,6 +72,7 @@ import {
   AcceptVaultOwnershipIxs,
   DepositIxs,
   InitVaultIxs,
+  ReserveAllocationOverview,
   SyncVaultLUTIxs,
   UpdateReserveAllocationIxs,
   UpdateVaultConfigIxs,
@@ -234,7 +235,7 @@ export class KaminoVaultClient {
       lut.toString()
     );
 
-    const ixns = [createVaultIx, initVaultIx, createLUTIx, setLUTIx];
+    const ixns = [createVaultIx, initVaultIx, setLUTIx];
 
     if (vaultConfig.getPerformanceFeeBps() > 0) {
       const setPerformanceFeeIx = this.updateUninitialisedVaultConfigIx(
@@ -264,7 +265,7 @@ export class KaminoVaultClient {
       ixns.push(setNameIx);
     }
 
-    return { vault: vaultState, initVaultIxs: { initVaultIxs: ixns, populateLUTIxs: insertIntoLUTIxs } };
+    return { vault: vaultState, initVaultIxs: { initVaultIxs: ixns, createLUTIx, populateLUTIxs: insertIntoLUTIxs } };
   }
 
   /**
@@ -337,12 +338,14 @@ export class KaminoVaultClient {
    * @param vault the vault to update
    * @param mode the field to update (based on VaultConfigFieldKind enum)
    * @param value the value to update the field with
+   * @param [signer] the signer of the transaction. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to batch multiple ixs in the same tx
    * @returns a struct that contains the instruction to update the field and an optional list of instructions to update the lookup table
    */
   async updateVaultConfigIxs(
     vault: KaminoVault,
     mode: VaultConfigFieldKind,
-    value: string
+    value: string,
+    signer?: PublicKey
   ): Promise<UpdateVaultConfigIxs> {
     const vaultState: VaultState = await vault.getState(this.getConnection());
 
@@ -351,6 +354,9 @@ export class KaminoVaultClient {
       vaultState: vault.address,
       klendProgram: this._kaminoLendProgramId,
     };
+    if (signer) {
+      updateVaultConfigAccs.adminAuthority = signer;
+    }
 
     const updateVaultConfigArgs: UpdateVaultConfigArgs = {
       entry: mode,
@@ -525,12 +531,12 @@ export class KaminoVaultClient {
 
     const LUTIxs = [];
     const [initNewLUTIx, newLUT] = initLookupTableIx(vaultState.pendingAdmin, await this.getConnection().getSlot());
-    LUTIxs.push(initNewLUTIx);
 
     const insertIntoLUTIxs = await this.insertIntoLookupTableIxs(
       vaultState.pendingAdmin,
       newLUT,
-      accountsInExistentLUT
+      accountsInExistentLUT,
+      []
     );
 
     LUTIxs.push(...insertIntoLUTIxs);
@@ -538,13 +544,15 @@ export class KaminoVaultClient {
     const updateVaultConfigIxs = await this.updateVaultConfigIxs(
       vault,
       new VaultConfigField.LookupTable(),
-      newLUT.toString()
+      newLUT.toString(),
+      vaultState.pendingAdmin
     );
     LUTIxs.push(updateVaultConfigIxs.updateVaultConfigIx);
     LUTIxs.push(...updateVaultConfigIxs.updateLUTIxs);
 
     const acceptVaultOwnershipIxs: AcceptVaultOwnershipIxs = {
       acceptVaultOwnershipIx,
+      initNewLUTIx,
       updateLUTIxs: LUTIxs,
     };
 
@@ -801,7 +809,7 @@ export class KaminoVaultClient {
    * This function will return a struct with the instructions to unstake from the farm if necessary and the instructions for the missing ATA creation instructions, as well as one or multiple withdraw instructions, based on how many reserves it's needed to withdraw from. This might have to be split in multiple transactions
    * @param user - user to withdraw
    * @param vault - vault to withdraw from
-   * @param shareAmount - share amount to withdraw, in order to withdraw everything, any value > user share amount
+   * @param shareAmount - share amount to withdraw (in tokens, not lamports), in order to withdraw everything, any value > user share amount
    * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
    * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
@@ -838,8 +846,8 @@ export class KaminoVaultClient {
     }
 
     // if the vault has allocations withdraw otherwise wtihdraw from available ix
-    const vaultAllocation = vaultState.vaultAllocationStrategy.find((allocation) =>
-      allocation.reserve.equals(PublicKey.default)
+    const vaultAllocation = vaultState.vaultAllocationStrategy.find(
+      (allocation) => !allocation.reserve.equals(PublicKey.default)
     );
 
     if (vaultAllocation) {
@@ -989,7 +997,6 @@ export class KaminoVaultClient {
     return withdrawIxns;
   }
 
-  // todo: make sure we also check the ata of the investor for the vault token exists
   /**
    * This will trigger invest by balancing, based on weights, the reserve allocations of the vault. It can either withdraw or deposit into reserves to balance them. This is a function that should be cranked
    * @param payer wallet that pays the tx
@@ -997,20 +1004,87 @@ export class KaminoVaultClient {
    * @returns - an array of invest instructions for each invest action required for the vault reserves
    */
   async investAllReservesIxs(payer: PublicKey, vault: KaminoVault): Promise<TransactionInstruction[]> {
-    //TODO: Order invest ixns by - invest that removes first, then invest that adds
     const vaultState = await vault.getState(this.getConnection());
-    const vaultReserves = this.getVaultReserves(vaultState);
+    const allReserves = this.getAllVaultReserves(vaultState);
+    if (allReserves.length === 0) {
+      throw new Error('No reserves found for the vault, please select at least one reserve for the vault');
+    }
+
+    const [allReservesStateMap, computedReservesAllocation] = await Promise.all([
+      this.loadVaultReserves(vaultState),
+      this.getVaultComputedReservesAllocation(vaultState),
+    ]);
+
+    const tokenProgram = await getAccountOwner(this.getConnection(), vaultState.tokenMint);
+    const [{ ata: _payerTokenAta, createAtaIx }] = createAtasIdempotent(payer, [
+      { mint: vaultState.tokenMint, tokenProgram },
+    ]);
+
+    // compute total vault holdings and expected distribution based on weights
+    const curentVaultAllocations = this.getVaultAllocations(vaultState);
+
+    const reservesToDisinvestFrom: PublicKey[] = [];
+
+    for (let index = 0; index < allReserves.length; index++) {
+      const reservePubkey = allReserves[index];
+      const reserveState = allReservesStateMap.get(reservePubkey)!;
+      const computedAllocation = computedReservesAllocation.get(reservePubkey)!;
+      const currentCTokenAllocation = curentVaultAllocations.get(reservePubkey)!.ctokenAllocation;
+
+      const reserveCollExchangeRate = reserveState.getCollateralExchangeRate();
+      const reserveAllocationLiquidityAmount = lamportsToDecimal(
+        currentCTokenAllocation.div(reserveCollExchangeRate),
+        vaultState.tokenMintDecimals.toNumber()
+      );
+
+      if (computedAllocation.lt(reserveAllocationLiquidityAmount)) {
+        reservesToDisinvestFrom.push(reservePubkey);
+      }
+    }
+
     const investIxnsPromises: Promise<TransactionInstruction[]>[] = [];
-    for (const reserve of vaultReserves) {
-      const reserveState = await Reserve.fetch(this.getConnection(), reserve, this._kaminoLendProgramId);
+    // invest first the reserves from which we disinvest, then the other ones
+    for (const reserve of reservesToDisinvestFrom) {
+      const reserveState = allReservesStateMap.get(reserve);
       if (reserveState === null) {
         throw new Error(`Reserve ${reserve.toBase58()} not found`);
       }
-      const investIxsPromise = this.investSingleReserveIxs(payer, vault, { address: reserve, state: reserveState });
+      const investIxsPromise = this.investSingleReserveIxs(
+        payer,
+        vault,
+        {
+          address: reserve,
+          state: reserveState!.state,
+        },
+        allReservesStateMap,
+        false
+      );
       investIxnsPromises.push(investIxsPromise);
     }
 
-    const investIxns = await Promise.all(investIxnsPromises).then((ixns) => ixns.flat());
+    for (const reserve of allReserves) {
+      if (!reservesToDisinvestFrom.includes(reserve)) {
+        const reserveState = allReservesStateMap.get(reserve);
+        if (reserveState === null) {
+          throw new Error(`Reserve ${reserve.toBase58()} not found`);
+        }
+        const investIxsPromise = this.investSingleReserveIxs(
+          payer,
+          vault,
+          {
+            address: reserve,
+            state: reserveState!.state,
+          },
+          allReservesStateMap,
+          false
+        );
+        investIxnsPromises.push(investIxsPromise);
+      }
+    }
+
+    let investIxns: TransactionInstruction[] = [];
+    investIxns.push(createAtaIx);
+    investIxns = await Promise.all(investIxnsPromises).then((ixns) => ixns.flat());
 
     return investIxns;
   }
@@ -1028,16 +1102,23 @@ export class KaminoVaultClient {
     payer: PublicKey,
     vault: KaminoVault,
     reserve: ReserveWithAddress,
-    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>,
+    createAtaIfNeeded: boolean = true
   ): Promise<TransactionInstruction[]> {
+    console.log('create invest ix for reserve', reserve.address.toBase58());
     const vaultState = await vault.getState(this.getConnection());
     const cTokenVault = getCTokenVaultPda(vault.address, reserve.address, this._kaminoVaultProgramId);
     const lendingMarketAuth = lendingMarketAuthPda(reserve.state.lendingMarket, this._kaminoLendProgramId)[0];
+
+    const ixs: TransactionInstruction[] = [];
 
     const tokenProgram = await getAccountOwner(this.getConnection(), vaultState.tokenMint);
     const [{ ata: payerTokenAta, createAtaIx }] = createAtasIdempotent(payer, [
       { mint: vaultState.tokenMint, tokenProgram },
     ]);
+    if (createAtaIfNeeded) {
+      ixs.push(createAtaIx);
+    }
 
     const investAccounts: InvestAccounts = {
       payer,
@@ -1399,6 +1480,49 @@ export class KaminoVaultClient {
     return ixns;
   }
 
+  /** Read the total holdings of a vault and the reserve weights and returns a map from each reserve to how many tokens should be deposited.
+   * @param vaultState - the vault state to calculate the allocation for
+   * @returns - a map from each reserve to how many tokens should be invested into
+   */
+  async getVaultComputedReservesAllocation(vaultState: VaultState): Promise<PubkeyHashMap<PublicKey, Decimal>> {
+    const holdings = await this.getVaultHoldings(vaultState);
+    const initialVaultAllocations = this.getVaultAllocations(vaultState);
+
+    const allReserves = this.getAllVaultReserves(vaultState);
+
+    let totalAllocation = new Decimal(0);
+    initialVaultAllocations.forEach((allocation) => {
+      totalAllocation = totalAllocation.add(allocation.targetWeight);
+    });
+    const expectedHoldingsDistribution = new PubkeyHashMap<PublicKey, Decimal>();
+
+    let totalLeftToInvest = holdings.total;
+    let currentAllocationSum = totalAllocation;
+    const ZERO = new Decimal(0);
+    while (totalLeftToInvest.gt(ZERO)) {
+      const totalLeftover = totalLeftToInvest;
+      for (const reserve of allReserves) {
+        const reserveWithWeight = initialVaultAllocations.get(reserve);
+        const targetAllocation = reserveWithWeight!.targetWeight.mul(totalLeftover).div(currentAllocationSum);
+        const reserveCap = reserveWithWeight!.tokenAllocationCap;
+        // todo: check if both target and reserveCap
+        const amountToInvest = Decimal.min(targetAllocation, reserveCap, totalLeftToInvest);
+        totalLeftToInvest = totalLeftToInvest.sub(amountToInvest);
+        if (amountToInvest.eq(reserveCap)) {
+          currentAllocationSum = currentAllocationSum.sub(reserveWithWeight!.targetWeight);
+        }
+        const reserveHasPreallocation = expectedHoldingsDistribution.has(reserve);
+        if (reserveHasPreallocation) {
+          expectedHoldingsDistribution.set(reserve, expectedHoldingsDistribution.get(reserve)!.add(amountToInvest));
+        } else {
+          expectedHoldingsDistribution.set(reserve, amountToInvest);
+        }
+      }
+    }
+
+    return expectedHoldingsDistribution;
+  }
+
   /**
    * This method returns the user shares balance for a given vault
    * @param user - user to calculate the shares balance for
@@ -1651,7 +1775,7 @@ export class KaminoVaultClient {
   /**
    * This will return the a map between reserve pubkey and the pct of the vault invested amount in each reserve
    * @param vaultState - the kamino vault to get reserves distribution for
-   * @returns a ma between reserve pubkey and the allocation pct for the reserve
+   * @returns a map between reserve pubkey and the allocation pct for the reserve
    */
   getAllocationsDistribuionPct(vaultState: VaultState): PubkeyHashMap<PublicKey, Decimal> {
     const allocationsDistributionPct = new PubkeyHashMap<PublicKey, Decimal>();
@@ -1660,7 +1784,6 @@ export class KaminoVaultClient {
     const filteredAllocations = vaultState.vaultAllocationStrategy.filter(
       (allocation) => !allocation.reserve.equals(PublicKey.default)
     );
-    console.log('filteredAllocations length', filteredAllocations.length);
     filteredAllocations.forEach((allocation) => {
       totalAllocation = totalAllocation.add(new Decimal(allocation.targetAllocationWeight.toString()));
     });
@@ -1673,6 +1796,30 @@ export class KaminoVaultClient {
     });
 
     return allocationsDistributionPct;
+  }
+
+  /**
+   * This will return the a map between reserve pubkey and the allocation overview for the reserve
+   * @param vaultState - the kamino vault to get reserves allocation overview for
+   * @returns a map between reserve pubkey and the allocation overview for the reserve
+   */
+  getVaultAllocations(vaultState: VaultState): PubkeyHashMap<PublicKey, ReserveAllocationOverview> {
+    const vaultAllocations = new PubkeyHashMap<PublicKey, ReserveAllocationOverview>();
+
+    vaultState.vaultAllocationStrategy.map((allocation) => {
+      if (allocation.reserve.equals(PublicKey.default)) {
+        return;
+      }
+
+      const allocationOverview: ReserveAllocationOverview = {
+        targetWeight: new Decimal(allocation.targetAllocationWeight.toString()),
+        tokenAllocationCap: new Decimal(allocation.tokenAllocationCap.toString()),
+        ctokenAllocation: new Decimal(allocation.ctokenAllocation.toString()),
+      };
+      vaultAllocations.set(allocation.reserve, allocationOverview);
+    });
+
+    return vaultAllocations;
   }
 
   /**
@@ -1727,7 +1874,11 @@ export class KaminoVaultClient {
    * @returns a hashmap from each reserve pubkey to the reserve state
    */
   getAllVaultReserves(vault: VaultState): PublicKey[] {
-    return vault.vaultAllocationStrategy.map((vaultAllocation) => vaultAllocation.reserve);
+    return vault.vaultAllocationStrategy
+      .map((vaultAllocation) => vaultAllocation.reserve)
+      .filter((reserve) => {
+        return !reserve.equals(PublicKey.default);
+      });
   }
 
   /**
@@ -2282,10 +2433,10 @@ export class KaminoVaultConfig {
   readonly tokenMint: PublicKey;
   /** The token mint program id */
   readonly tokenMintProgramId: PublicKey;
-  /** The performance fee rate of the vault, expressed as a decimal */
-  readonly performanceFeeRate: Decimal;
-  /** The management fee rate of the vault, expressed as a decimal */
-  readonly managementFeeRate: Decimal;
+  /** The performance fee rate of the vault, as percents, expressed as a decimal */
+  readonly performanceFeeRatePercentage: Decimal;
+  /** The management fee rate of the vault, as percents, expressed as a decimal */
+  readonly managementFeeRatePercentage: Decimal;
   /** The name to be stored on cain for the vault (max 40 characters). */
   readonly name: string;
 
@@ -2293,24 +2444,24 @@ export class KaminoVaultConfig {
     admin: PublicKey;
     tokenMint: PublicKey;
     tokenMintProgramId: PublicKey;
-    performanceFeeRate: Decimal;
-    managementFeeRate: Decimal;
+    performanceFeeRatePercentage: Decimal;
+    managementFeeRatePercentage: Decimal;
     name: string;
   }) {
     this.admin = args.admin;
     this.tokenMint = args.tokenMint;
-    this.performanceFeeRate = args.performanceFeeRate;
-    this.managementFeeRate = args.managementFeeRate;
+    this.performanceFeeRatePercentage = args.performanceFeeRatePercentage;
+    this.managementFeeRatePercentage = args.managementFeeRatePercentage;
     this.tokenMintProgramId = args.tokenMintProgramId;
     this.name = args.name;
   }
 
   getPerformanceFeeBps(): number {
-    return this.performanceFeeRate.mul(100).toNumber();
+    return this.performanceFeeRatePercentage.mul(100).toNumber();
   }
 
   getManagementFeeBps(): number {
-    return this.managementFeeRate.mul(100).toNumber();
+    return this.managementFeeRatePercentage.mul(100).toNumber();
   }
 }
 

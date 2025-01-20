@@ -71,6 +71,7 @@ import {
   AcceptVaultOwnershipIxs,
   DepositIxs,
   InitVaultIxs,
+  ReserveAllocationOverview,
   SyncVaultLUTIxs,
   UpdateReserveAllocationIxs,
   UpdateVaultConfigIxs,
@@ -416,7 +417,7 @@ export class KaminoManager {
    * This function will return the missing ATA creation instructions, as well as one or multiple withdraw instructions, based on how many reserves it's needed to withdraw from. This might have to be split in multiple transactions
    * @param user - user to withdraw
    * @param vault - vault to withdraw from
-   * @param shareAmount - share amount to withdraw, in order to withdraw everything, any value > user share amount
+   * @param shareAmount - share amount to withdraw (in tokens, not lamports), in order to withdraw everything, any value > user share amount
    * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
    * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @returns an array of instructions to create missing ATAs if needed and the withdraw instructions
@@ -853,10 +854,19 @@ export class KaminoManager {
   /**
    * This will return the a map between reserve pubkey and the pct of the vault invested amount in each reserve
    * @param vaultState - the kamino vault to get reserves distribution for
-   * @returns a ma between reserve pubkey and the allocation pct for the reserve
+   * @returns a map between reserve pubkey and the allocation pct for the reserve
    */
   getAllocationsDistribuionPct(vaultState: VaultState): PubkeyHashMap<PublicKey, Decimal> {
     return this._vaultClient.getAllocationsDistribuionPct(vaultState);
+  }
+
+  /**
+   * This will return the a map between reserve pubkey and the allocation overview for the reserve
+   * @param vaultState - the kamino vault to get reserves allocation overview for
+   * @returns a map between reserve pubkey and the allocation overview for the reserve
+   */
+  getVaultAllocations(vaultState: VaultState): PubkeyHashMap<PublicKey, ReserveAllocationOverview> {
+    return this._vaultClient.getVaultAllocations(vaultState);
   }
 
   /**
