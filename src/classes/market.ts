@@ -270,7 +270,7 @@ export class KaminoMarket {
         groupsDebt.has(item) &&
         item !== 0 &&
         this.state.elevationGroups[item - 1].allowNewLoans !== 0 &&
-        collReserve.state.config.borrowLimitAgainstThisCollateralInElevationGroup[item - 1] !== new BN(0)
+        collReserve.state.config.borrowLimitAgainstThisCollateralInElevationGroup[item - 1].gt(new BN(0))
     );
 
     // Ltv factor for coll token
