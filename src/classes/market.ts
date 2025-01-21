@@ -265,7 +265,13 @@ export class KaminoMarket {
 
     const groupsColl = new Set(collReserve.state.config.elevationGroups);
     const groupsDebt = new Set(debtReserve.state.config.elevationGroups);
-    const commonElevationGroups = [...groupsColl].filter((item) => groupsDebt.has(item) && item !== 0);
+    const commonElevationGroups = [...groupsColl].filter(
+      (item) =>
+        groupsDebt.has(item) &&
+        item !== 0 &&
+        this.state.elevationGroups[item - 1].allowNewLoans !== 0 &&
+        collReserve.state.config.borrowLimitAgainstThisCollateralInElevationGroup[item - 1] !== new BN(0)
+    );
 
     // Ltv factor for coll token
     const maxCollateralLtv =
