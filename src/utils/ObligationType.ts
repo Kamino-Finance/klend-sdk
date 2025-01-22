@@ -19,16 +19,18 @@ export type InitObligationArgsModel = {
 
 export class VanillaObligation {
   readonly programId: PublicKey;
+  readonly id: number;
   static tag = 0;
 
-  constructor(programId: PublicKey) {
+  constructor(programId: PublicKey, id?: number) {
     this.programId = programId;
+    this.id = id ?? 0;
   }
 
   toArgs() {
     const initObligationArgs: InitObligationArgsModel = {
       tag: VanillaObligation.tag,
-      id: 0,
+      id: this.id,
       seed1: PublicKey.default,
       seed2: PublicKey.default,
     };
@@ -45,18 +47,20 @@ export class MultiplyObligation {
   readonly collToken: PublicKey;
   readonly debtToken: PublicKey;
   readonly programId: PublicKey;
+  readonly id: number;
   static tag = 1;
 
-  constructor(collToken: PublicKey, debtToken: PublicKey, programId: PublicKey) {
+  constructor(collToken: PublicKey, debtToken: PublicKey, programId: PublicKey, id?: number) {
     this.collToken = collToken;
     this.debtToken = debtToken;
     this.programId = programId;
+    this.id = id ?? 0;
   }
 
   toArgs() {
     const initObligationArgs: InitObligationArgsModel = {
       tag: MultiplyObligation.tag,
-      id: 0,
+      id: this.id,
       seed1: this.collToken,
       seed2: this.debtToken,
     };
@@ -73,18 +77,20 @@ export class LeverageObligation {
   readonly collToken: PublicKey;
   readonly debtToken: PublicKey;
   readonly programId: PublicKey;
+  readonly id: number;
   static tag = 3;
 
-  constructor(collToken: PublicKey, debtToken: PublicKey, programId: PublicKey) {
+  constructor(collToken: PublicKey, debtToken: PublicKey, programId: PublicKey, id?: number) {
     this.collToken = collToken;
     this.debtToken = debtToken;
     this.programId = programId;
+    this.id = id ?? 0;
   }
 
   toArgs() {
     const initObligationArgs: InitObligationArgsModel = {
       tag: LeverageObligation.tag,
-      id: 0,
+      id: this.id,
       seed1: this.collToken,
       seed2: this.debtToken,
     };
@@ -100,11 +106,13 @@ export class LeverageObligation {
 export class LendingObligation {
   readonly token: PublicKey;
   readonly programId: PublicKey;
+  readonly id: number;
   static tag = 2;
 
-  constructor(token: PublicKey, programId: PublicKey) {
+  constructor(token: PublicKey, programId: PublicKey, id?: number) {
     this.token = token;
     this.programId = programId;
+    this.id = id ?? 0;
   }
 
   toArgs() {
@@ -123,7 +131,7 @@ export class LendingObligation {
   }
 }
 
-function getObligationPdaWithArgs(
+export function getObligationPdaWithArgs(
   market: PublicKey,
   user: PublicKey,
   args: InitObligationArgsModel,
@@ -141,6 +149,39 @@ function getObligationPdaWithArgs(
   return obligationAddress;
 }
 
+export function getObligationType(
+  kaminoMarket: KaminoMarket,
+  obligationTag: ObligationTypeTag,
+  mintAddress1: PublicKey = PublicKey.default,
+  mintAddress2: PublicKey = PublicKey.default
+): ObligationType {
+  switch (obligationTag) {
+    case VanillaObligation.tag: {
+      return new VanillaObligation(kaminoMarket.programId);
+    }
+    case MultiplyObligation.tag: {
+      return new MultiplyObligation(
+        mintAddress1,
+        mintAddress2,
+        kaminoMarket.programId
+      );
+    }
+    case LeverageObligation.tag: {
+      return new LeverageObligation(
+        mintAddress1,
+        mintAddress2,
+        kaminoMarket.programId
+      );
+    }
+    case LendingObligation.tag: {
+      return new LendingObligation(mintAddress1, kaminoMarket.programId);
+    }
+    default: {
+      throw new Error('Invalid obligation type');
+    }
+  }
+}
+
 export function getObligationTypeFromObligation(
   kaminoMarket: KaminoMarket,
   obligation: KaminoObligation
@@ -148,7 +189,6 @@ export function getObligationTypeFromObligation(
   switch (obligation.obligationTag) {
     case VanillaObligation.tag: {
       return new VanillaObligation(kaminoMarket.programId);
-      break;
     }
     case MultiplyObligation.tag: {
       return new MultiplyObligation(
@@ -156,7 +196,6 @@ export function getObligationTypeFromObligation(
         obligation.getBorrows()[0].mintAddress,
         kaminoMarket.programId
       );
-      break;
     }
     case LeverageObligation.tag: {
       return new LeverageObligation(
@@ -164,11 +203,9 @@ export function getObligationTypeFromObligation(
         obligation.getBorrows()[0].mintAddress,
         kaminoMarket.programId
       );
-      break;
     }
     case LendingObligation.tag: {
       return new LendingObligation(obligation.getDeposits()[0].mintAddress, kaminoMarket.programId);
-      break;
     }
     default: {
       throw new Error('Invalid obligation type');

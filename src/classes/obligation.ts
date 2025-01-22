@@ -13,7 +13,14 @@ import {
   ObligationLiquidityFields,
 } from '../idl_codegen/types';
 import { positiveOrZero, valueOrZero } from './utils';
-import { isNotNullPubkey, PubkeyHashMap, U64_MAX } from '../utils';
+import {
+  getObligationPdaWithArgs,
+  getObligationType,
+  isNotNullPubkey,
+  PubkeyHashMap,
+  TOTAL_NUMBER_OF_IDS_TO_CHECK,
+  U64_MAX,
+} from '../utils';
 import { ActionType } from './action';
 
 export type Position = {
@@ -110,6 +117,39 @@ export class KaminoObligation {
     this.borrows = borrows;
     this.refreshedStats = refreshedStats;
     this.obligationTag = obligation.tag.toNumber();
+  }
+
+  getObligationId(
+    market: KaminoMarket,
+    mintAddress1: PublicKey = PublicKey.default,
+    mintAddress2: PublicKey = PublicKey.default
+  ) {
+    if (!this.state.lendingMarket.equals(new PublicKey(market.address))) {
+      throw new Error('Obligation does not belong to this market');
+    }
+    let obligationId = undefined;
+    const type = getObligationType(market, this.obligationTag, mintAddress1, mintAddress2);
+    const baseArgs = type.toArgs();
+
+    for (let i = 0; i < TOTAL_NUMBER_OF_IDS_TO_CHECK; i++) {
+      const pda = getObligationPdaWithArgs(
+        new PublicKey(market.address),
+        this.state.owner,
+        {
+          ...baseArgs,
+          id: i,
+        },
+        market.programId
+      );
+      if (pda.equals(this.obligationAddress)) {
+        obligationId = i;
+        break;
+      }
+    }
+    if (obligationId == undefined) {
+      throw new Error(`obligation id not found for obligation ${this.obligationAddress.toString()}`);
+    }
+    return obligationId;
   }
 
   static async load(kaminoMarket: KaminoMarket, obligationAddress: PublicKey): Promise<KaminoObligation | null> {

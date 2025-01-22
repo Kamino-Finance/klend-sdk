@@ -1215,7 +1215,7 @@ export function updateEntireReserveConfigIx(
   const args: UpdateReserveConfigArgs = {
     mode: new anchor.BN(25),
     value: value,
-    skipValidation: true,
+    skipValidation: false,
   };
 
   const accounts: UpdateReserveConfigAccounts = {

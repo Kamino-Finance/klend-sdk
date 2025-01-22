@@ -10,6 +10,8 @@ export const INITIAL_COLLATERAL_RATE = new Decimal(INITIAL_COLLATERAL_RATIO);
 
 export const SECONDS_PER_YEAR = 365.242_199 * 24.0 * 60.0 * 60.0;
 
+export const TOTAL_NUMBER_OF_IDS_TO_CHECK = 25;
+
 export type ENV = 'mainnet-beta' | 'devnet' | 'localnet';
 
 export function isENV(value: any): value is ENV {
