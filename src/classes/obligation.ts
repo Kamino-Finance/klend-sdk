@@ -127,7 +127,7 @@ export class KaminoObligation {
     if (!this.state.lendingMarket.equals(new PublicKey(market.address))) {
       throw new Error('Obligation does not belong to this market');
     }
-    let obligationId = undefined;
+    let obligationId: number | undefined;
     const type = getObligationType(market, this.obligationTag, mintAddress1, mintAddress2);
     const baseArgs = type.toArgs();
 
@@ -146,7 +146,7 @@ export class KaminoObligation {
         break;
       }
     }
-    if (obligationId == undefined) {
+    if (obligationId === undefined) {
       throw new Error(`obligation id not found for obligation ${this.obligationAddress.toString()}`);
     }
     return obligationId;
@@ -524,7 +524,7 @@ export class KaminoObligation {
     const collateralReservePk = mintCollateral ? market.getReserveByMint(mintCollateral)!.address : undefined;
     const debtReservePk = mintDebt ? market.getReserveByMint(mintDebt)!.address : undefined;
 
-    const additionalReserves = [];
+    const additionalReserves: PublicKey[] = [];
     if (collateralReservePk !== undefined) {
       additionalReserves.push(collateralReservePk);
     }

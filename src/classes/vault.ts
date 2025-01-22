@@ -338,7 +338,7 @@ export class KaminoVaultClient {
    * @param vault the vault to update
    * @param mode the field to update (based on VaultConfigFieldKind enum)
    * @param value the value to update the field with
-   * @param [signer] the signer of the transaction. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to batch multiple ixs in the same tx
+   * @param [signer] the signer of the transaction. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx
    * @returns a struct that contains the instruction to update the field and an optional list of instructions to update the lookup table
    */
   async updateVaultConfigIxs(
@@ -404,7 +404,7 @@ export class KaminoVaultClient {
     updateVaultConfigIx.keys = updateVaultConfigIx.keys.concat(vaultReservesAccountMetas);
     updateVaultConfigIx.keys = updateVaultConfigIx.keys.concat(vaultReservesLendingMarkets);
 
-    const updateLUTIxs = [];
+    const updateLUTIxs: TransactionInstruction[] = [];
 
     if (mode.kind === new VaultConfigField.PendingVaultAdmin().kind) {
       const newPubkey = new PublicKey(value);
@@ -529,7 +529,7 @@ export class KaminoVaultClient {
       (account) => !account.equals(vaultState.adminAuthority)
     );
 
-    const LUTIxs = [];
+    const LUTIxs: TransactionInstruction[] = [];
     const [initNewLUTIx, newLUT] = initLookupTableIx(vaultState.pendingAdmin, await this.getConnection().getSlot());
 
     const insertIntoLUTIxs = await this.insertIntoLookupTableIxs(
@@ -1005,7 +1005,7 @@ export class KaminoVaultClient {
    */
   async investAllReservesIxs(payer: PublicKey, vault: KaminoVault): Promise<TransactionInstruction[]> {
     const vaultState = await vault.getState(this.getConnection());
-    const allReserves = this.getAllVaultReserves(vaultState);
+    const allReserves = this.getVaultReserves(vaultState);
     if (allReserves.length === 0) {
       throw new Error('No reserves found for the vault, please select at least one reserve for the vault');
     }
@@ -1488,7 +1488,7 @@ export class KaminoVaultClient {
     const holdings = await this.getVaultHoldings(vaultState);
     const initialVaultAllocations = this.getVaultAllocations(vaultState);
 
-    const allReserves = this.getAllVaultReserves(vaultState);
+    const allReserves = this.getVaultReserves(vaultState);
 
     let totalAllocation = new Decimal(0);
     initialVaultAllocations.forEach((allocation) => {
@@ -1746,14 +1746,16 @@ export class KaminoVaultClient {
    * @returns vault amount supplied in reserve in decimal
    */
   getSuppliedInReserve(vaultState: VaultState, slot: number, reserve: KaminoReserve): Decimal {
-    const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(
-      slot,
-      new Fraction(reserve.state.liquidity.absoluteReferralRateSf)
+    let referralFeeBps = 0;
+    const denominator = reserve.state.config.protocolTakeRatePct / 100;
+    if (denominator > 0) {
+      referralFeeBps = new Fraction(reserve.state.liquidity.absoluteReferralRateSf)
         .toDecimal()
-        .div(reserve.state.config.protocolTakeRatePct / 100)
+        .div(denominator)
         .floor()
-        .toNumber()
-    );
+        .toNumber();
+    }
+    const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, referralFeeBps);
 
     const reserveAllocation = vaultState.vaultAllocationStrategy.find((allocation) =>
       allocation.reserve.equals(reserve.address)
@@ -1866,19 +1868,6 @@ export class KaminoVaultClient {
     });
 
     return reserveAllocationAvailableLiquidityToWithdraw;
-  }
-
-  /**
-   * This will get the list of all reserve pubkeys that the vault has allocations for
-   * @param vault - the vault state to load reserves for
-   * @returns a hashmap from each reserve pubkey to the reserve state
-   */
-  getAllVaultReserves(vault: VaultState): PublicKey[] {
-    return vault.vaultAllocationStrategy
-      .map((vaultAllocation) => vaultAllocation.reserve)
-      .filter((reserve) => {
-        return !reserve.equals(PublicKey.default);
-      });
   }
 
   /**
@@ -2212,6 +2201,9 @@ export class KaminoVaultClient {
     if (!totalInvested.isZero()) {
       utilizationRatio = totalBorrowed.div(totalInvested.add(totalAvailable));
     }
+
+    console.log('totalInvested', totalInvested.toString());
+    console.log('totalBorrowed', totalBorrowed.toString());
     return {
       totalInvested: totalInvested,
       totalBorrowed: totalBorrowed,
@@ -2245,11 +2237,13 @@ export class KaminoVaultClient {
       }
 
       const suppliedInReserve = this.getSuppliedInReserve(vault, slot, reserve);
+      const utilizationRatio = new Decimal(reserve.getEstimatedUtilizationRatio(slot, 0));
       const reserveOverview: ReserveOverview = {
         supplyAPY: new Decimal(reserve.totalSupplyAPY(slot)),
-        utilizationRatio: new Decimal(reserve.getEstimatedUtilizationRatio(slot, 0)),
+        utilizationRatio: utilizationRatio,
         liquidationThresholdPct: new Decimal(reserve.state.config.liquidationThresholdPct),
-        borrowedAmount: reserve.getBorrowedAmount(),
+        totalBorrowedAmount: reserve.getBorrowedAmount(),
+        amountBorrowedFromSupplied: suppliedInReserve.mul(utilizationRatio),
         market: reserve.state.lendingMarket,
         suppliedAmount: suppliedInReserve,
       };
@@ -2508,6 +2502,9 @@ export type VaultHoldings = {
   total: Decimal;
 };
 
+/**
+ * earnedInterest represents the interest earned from now until the slot provided in the future
+ */
 export type SimulatedVaultHoldingsWithEarnedInterest = {
   holdings: VaultHoldings;
   earnedInterest: Decimal;
@@ -2525,7 +2522,8 @@ export type ReserveOverview = {
   supplyAPY: Decimal;
   utilizationRatio: Decimal;
   liquidationThresholdPct: Decimal;
-  borrowedAmount: Decimal;
+  totalBorrowedAmount: Decimal;
+  amountBorrowedFromSupplied: Decimal;
   suppliedAmount: Decimal;
   market: PublicKey;
 };

@@ -737,7 +737,7 @@ async function main() {
       const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
-      const instructions = await kaminoManager.investAllReserves(env.payer.publicKey, kaminoVault);
+      const instructions = await kaminoManager.investAllReservesIxs(env.payer.publicKey, kaminoVault);
 
       for (let i = 0; i < instructions.length; i++) {
         const txInstructions: TransactionInstruction[] = [];
@@ -779,7 +779,7 @@ async function main() {
         state: reserveState,
       };
 
-      const instructions = await kaminoManager.investSingleReserve(
+      const instructions = await kaminoManager.investSingleReserveIxs(
         env.payer.publicKey,
         kaminoVault,
         reserveWithAddress

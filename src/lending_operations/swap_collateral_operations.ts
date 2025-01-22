@@ -319,7 +319,7 @@ function getAtaCreationIxns(context: SwapCollContext<any>) {
 }
 
 function getAtaCloseIxns(context: SwapCollContext<any>) {
-  const ataCloseIxns = [];
+  const ataCloseIxns: TransactionInstruction[] = [];
   if (
     context.sourceCollReserve.getLiquidityMint().equals(WRAPPED_SOL_MINT) ||
     context.targetCollReserve.getLiquidityMint().equals(WRAPPED_SOL_MINT)

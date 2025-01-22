@@ -339,9 +339,10 @@ export class KaminoManager {
     user: PublicKey,
     vault: KaminoVault,
     tokenAmount: Decimal,
-    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>,
+    farmState?: FarmState
   ): Promise<DepositIxs> {
-    return this._vaultClient.depositIxs(user, vault, tokenAmount, vaultReservesMap);
+    return this._vaultClient.depositIxs(user, vault, tokenAmount, vaultReservesMap, farmState);
   }
 
   /**
@@ -366,19 +367,21 @@ export class KaminoManager {
    * @param vault the vault to update
    * @param mode the field to update (based on VaultConfigFieldKind enum)
    * @param value the value to update the field with
+   * @param [signer] the signer of the transaction. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx
    * @returns a struct that contains the instruction to update the field and an optional list of instructions to update the lookup table
    */
   async updateVaultConfigIxs(
     vault: KaminoVault,
     mode: VaultConfigFieldKind | string,
-    value: string
+    value: string,
+    signer?: PublicKey
   ): Promise<UpdateVaultConfigIxs> {
     if (typeof mode === 'string') {
       const field = VaultConfigField.fromDecoded({ [mode]: '' });
-      return this._vaultClient.updateVaultConfigIxs(vault, field, value);
+      return this._vaultClient.updateVaultConfigIxs(vault, field, value, signer);
     }
 
-    return this._vaultClient.updateVaultConfigIxs(vault, mode, value);
+    return this._vaultClient.updateVaultConfigIxs(vault, mode, value, signer);
   }
 
   /** Sets the farm where the shares can be staked. This is store in vault state and a vault can only have one farm, so the new farm will ovveride the old farm
@@ -420,15 +423,18 @@ export class KaminoManager {
    * @param shareAmount - share amount to withdraw (in tokens, not lamports), in order to withdraw everything, any value > user share amount
    * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
    * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
    * @returns an array of instructions to create missing ATAs if needed and the withdraw instructions
    */
   async withdrawFromVaultIxs(
     user: PublicKey,
     vault: KaminoVault,
     shareAmount: Decimal,
-    slot: number
+    slot: number,
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>,
+    farmState?: FarmState
   ): Promise<WithdrawIxs> {
-    return this._vaultClient.withdrawIxs(user, vault, shareAmount, slot);
+    return this._vaultClient.withdrawIxs(user, vault, shareAmount, slot, vaultReservesMap, farmState);
   }
 
   /**
@@ -447,7 +453,6 @@ export class KaminoManager {
    * @param payer - payer wallet pubkey
    * @param lookupTable - lookup table to insert the keys into
    * @param keys - keys to insert into the lookup table
-   * @param [accountsInLUT] - the existent accounts in the lookup table. Optional. If provided, the function will not fetch the accounts in the lookup table
    * @returns - an array of instructions to insert the missing keys into the lookup table
    */
   async insertIntoLUTIxs(payer: PublicKey, lut: PublicKey, keys: PublicKey[]): Promise<TransactionInstruction[]> {
@@ -698,6 +703,16 @@ export class KaminoManager {
   }
 
   /**
+   * Prints a vault in a human readable form
+   * @param vaultPubkey - the address of the vault
+   * @param [vaultState] - optional parameter to pass the vault state directly; this will save a network call
+   * @returns - void; prints the vault to the console
+   */
+  async printVault(vaultPubkey: PublicKey, vaultState?: VaultState) {
+    return this._vaultClient.printVault(vaultPubkey, vaultState);
+  }
+
+  /**
    * This will return an aggregation of the current state of the vault with all the invested amounts and the utilization ratio of the vault
    * @param vault - the kamino vault to get available liquidity to withdraw for
    * @param slot - current slot
@@ -798,15 +813,6 @@ export class KaminoManager {
   }
 
   /**
-   * This will get the list of all reserve pubkeys that the vault has allocations for
-   * @param vaultState - the vault state to load reserves for
-   * @returns a hashmap from each reserve pubkey to the reserve state
-   */
-  getAllVaultReserves(vault: VaultState): PublicKey[] {
-    return this._vaultClient.getAllVaultReserves(vault);
-  }
-
-  /**
    * This will load the onchain state for all the reserves that the vault has allocations for
    * @param vaultState - the vault state to load reserves for
    * @returns a hashmap from each reserve pubkey to the reserve state
@@ -830,7 +836,7 @@ export class KaminoManager {
    * @param kaminoVault - vault to invest from
    * @returns - an array of invest instructions for each invest action required for the vault reserves
    */
-  async investAllReserves(payer: PublicKey, kaminoVault: KaminoVault): Promise<TransactionInstruction[]> {
+  async investAllReservesIxs(payer: PublicKey, kaminoVault: KaminoVault): Promise<TransactionInstruction[]> {
     return this._vaultClient.investAllReservesIxs(payer, kaminoVault);
   }
 
@@ -842,7 +848,7 @@ export class KaminoManager {
    * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @returns - an array of invest instructions for each invest action required for the vault reserves
    */
-  async investSingleReserve(
+  async investSingleReserveIxs(
     payer: PublicKey,
     kaminoVault: KaminoVault,
     reserveWithAddress: ReserveWithAddress,

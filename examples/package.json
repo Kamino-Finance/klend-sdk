@@ -34,7 +34,7 @@
     "build": "rm -rf dist/; tsc"
   },
   "dependencies": {
-    "@kamino-finance/farms-sdk": "^2.0.3",
+    "@kamino-finance/farms-sdk": "^2.3.4",
     "@kamino-finance/klend-sdk": "file:../",
     "@kamino-finance/scope-sdk": "^8.0.2",
     "@solana/spl-token": "^0.4.8",

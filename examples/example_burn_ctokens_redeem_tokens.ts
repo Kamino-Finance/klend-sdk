@@ -24,7 +24,7 @@ import { loadReserveData } from './utils/helpers';
   });
   const cUsdcMint = usdcReserve.getCTokenMint();
 
-  const cUsdcAta = await getAssociatedTokenAddress(cUsdcMint, wallet.publicKey, false, TOKEN_PROGRAM_ID);
+  const cUsdcAta = getAssociatedTokenAddress(cUsdcMint, wallet.publicKey, false, TOKEN_PROGRAM_ID);
 
   const cUsdcBalance = (await connection.getTokenAccountBalance(cUsdcAta)).value.amount;
 

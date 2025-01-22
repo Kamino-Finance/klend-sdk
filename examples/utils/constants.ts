@@ -17,3 +17,6 @@ export const JLP_MINT = new PublicKey('27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJi
 
 export const JUP_QUOTE_BUFFER_BPS = 1000;
 export const EXAMPLE_OBLIGATION = new PublicKey('4w1qUuYbXpwYkqWzuovJFvP3TRt9EgEzYQv7kYY1nM3J');
+
+// vault constants
+export const EXAMPLE_USDC_VAULT = new PublicKey('GJZhNhQHFn3NpLhPgQjeyivNzAn548rGYg4EcuaxeCEf');
