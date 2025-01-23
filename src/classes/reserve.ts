@@ -541,7 +541,7 @@ export class KaminoReserve {
 
     maxBorrowAmount = maxBorrowAmount.sub(borrowFee);
 
-    const utilizationRatioLimit = this.state.config.utilizationLimitBlockBorrowingAbove / 100;
+    const utilizationRatioLimit = this.state.config.utilizationLimitBlockBorrowingAbovePct / 100;
     const currentUtilizationRatio = this.calculateUtilizationRatio();
 
     if (utilizationRatioLimit > 0 && currentUtilizationRatio > utilizationRatioLimit) {
@@ -988,7 +988,7 @@ export class KaminoReserve {
 
   getBorrowCapForReserve(market: KaminoMarket): BorrowCapsAndCounters {
     // Utilization cap
-    const utilizationCap = this.state.config.utilizationLimitBlockBorrowingAbove;
+    const utilizationCap = this.state.config.utilizationLimitBlockBorrowingAbovePct;
     const utilizationCurrentValue = this.calculateUtilizationRatio();
 
     // Daily borrow cap
@@ -1458,23 +1458,23 @@ export function parseForChangesReserveConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'utilizationLimitBlockBorrowingAbove') {
+    } else if (key === 'utilizationLimitBlockBorrowingAbovePct') {
       if (reserve === undefined) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBlockBorrowingAboveUtilization.discriminator,
+          mode: UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
           value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateBlockBorrowingAboveUtilization.discriminator,
-            reserveConfig.utilizationLimitBlockBorrowingAbove
+            UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
+            reserveConfig.utilizationLimitBlockBorrowingAbovePct
           ),
         });
       } else if (
-        reserve.config.utilizationLimitBlockBorrowingAbove !== reserveConfig.utilizationLimitBlockBorrowingAbove
+        reserve.config.utilizationLimitBlockBorrowingAbovePct !== reserveConfig.utilizationLimitBlockBorrowingAbovePct
       ) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBlockBorrowingAboveUtilization.discriminator,
+          mode: UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
           value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateBlockBorrowingAboveUtilization.discriminator,
-            reserveConfig.utilizationLimitBlockBorrowingAbove
+            UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
+            reserveConfig.utilizationLimitBlockBorrowingAbovePct
           ),
         });
       }
@@ -1958,7 +1958,7 @@ export function updateReserveConfigEncodedValue(
     case UpdateConfigMode.UpdateAssetTier.discriminator:
     case UpdateConfigMode.UpdateReserveStatus.discriminator:
     case UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator:
-    case UpdateConfigMode.UpdateBlockBorrowingAboveUtilization.discriminator:
+    case UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator:
     case UpdateConfigMode.UpdateBlockPriceUsage.discriminator:
       buffer = Buffer.alloc(1);
       buffer.writeUIntLE(value as number, 0, 1);

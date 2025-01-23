@@ -1282,7 +1282,7 @@ export class KaminoObligation {
 
     maxBorrowAmount = maxBorrowAmount.sub(borrowFee);
 
-    const utilizationRatioLimit = reserve.state.config.utilizationLimitBlockBorrowingAbove / 100;
+    const utilizationRatioLimit = reserve.state.config.utilizationLimitBlockBorrowingAbovePct / 100;
     const currentUtilizationRatio = reserve.calculateUtilizationRatio();
 
     if (utilizationRatioLimit > 0 && currentUtilizationRatio > utilizationRatioLimit) {

@@ -160,18 +160,10 @@ export function getObligationType(
       return new VanillaObligation(kaminoMarket.programId);
     }
     case MultiplyObligation.tag: {
-      return new MultiplyObligation(
-        mintAddress1,
-        mintAddress2,
-        kaminoMarket.programId
-      );
+      return new MultiplyObligation(mintAddress1, mintAddress2, kaminoMarket.programId);
     }
     case LeverageObligation.tag: {
-      return new LeverageObligation(
-        mintAddress1,
-        mintAddress2,
-        kaminoMarket.programId
-      );
+      return new LeverageObligation(mintAddress1, mintAddress2, kaminoMarket.programId);
     }
     case LendingObligation.tag: {
       return new LendingObligation(mintAddress1, kaminoMarket.programId);

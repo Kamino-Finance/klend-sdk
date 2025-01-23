@@ -969,25 +969,25 @@ export class UpdateDisableUsageAsCollateralOutsideEmode {
   }
 }
 
-export interface UpdateBlockBorrowingAboveUtilizationJSON {
-  kind: "UpdateBlockBorrowingAboveUtilization"
+export interface UpdateBlockBorrowingAboveUtilizationPctJSON {
+  kind: "UpdateBlockBorrowingAboveUtilizationPct"
 }
 
-export class UpdateBlockBorrowingAboveUtilization {
+export class UpdateBlockBorrowingAboveUtilizationPct {
   static readonly discriminator = 42
-  static readonly kind = "UpdateBlockBorrowingAboveUtilization"
+  static readonly kind = "UpdateBlockBorrowingAboveUtilizationPct"
   readonly discriminator = 42
-  readonly kind = "UpdateBlockBorrowingAboveUtilization"
+  readonly kind = "UpdateBlockBorrowingAboveUtilizationPct"
 
-  toJSON(): UpdateBlockBorrowingAboveUtilizationJSON {
+  toJSON(): UpdateBlockBorrowingAboveUtilizationPctJSON {
     return {
-      kind: "UpdateBlockBorrowingAboveUtilization",
+      kind: "UpdateBlockBorrowingAboveUtilizationPct",
     }
   }
 
   toEncodable() {
     return {
-      UpdateBlockBorrowingAboveUtilization: {},
+      UpdateBlockBorrowingAboveUtilizationPct: {},
     }
   }
 }
@@ -1262,8 +1262,8 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if ("UpdateDisableUsageAsCollateralOutsideEmode" in obj) {
     return new UpdateDisableUsageAsCollateralOutsideEmode()
   }
-  if ("UpdateBlockBorrowingAboveUtilization" in obj) {
-    return new UpdateBlockBorrowingAboveUtilization()
+  if ("UpdateBlockBorrowingAboveUtilizationPct" in obj) {
+    return new UpdateBlockBorrowingAboveUtilizationPct()
   }
   if ("UpdateBlockPriceUsage" in obj) {
     return new UpdateBlockPriceUsage()
@@ -1417,8 +1417,8 @@ export function fromJSON(
     case "UpdateDisableUsageAsCollateralOutsideEmode": {
       return new UpdateDisableUsageAsCollateralOutsideEmode()
     }
-    case "UpdateBlockBorrowingAboveUtilization": {
-      return new UpdateBlockBorrowingAboveUtilization()
+    case "UpdateBlockBorrowingAboveUtilizationPct": {
+      return new UpdateBlockBorrowingAboveUtilizationPct()
     }
     case "UpdateBlockPriceUsage": {
       return new UpdateBlockPriceUsage()
@@ -1485,7 +1485,7 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateFarmCollateral"),
     borsh.struct([], "UpdateFarmDebt"),
     borsh.struct([], "UpdateDisableUsageAsCollateralOutsideEmode"),
-    borsh.struct([], "UpdateBlockBorrowingAboveUtilization"),
+    borsh.struct([], "UpdateBlockBorrowingAboveUtilizationPct"),
     borsh.struct([], "UpdateBlockPriceUsage"),
     borsh.struct([], "UpdateBorrowLimitOutsideElevationGroup"),
     borsh.struct([], "UpdateBorrowLimitsInElevationGroupAgainstThisReserve"),

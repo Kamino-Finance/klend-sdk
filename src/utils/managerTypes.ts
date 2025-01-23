@@ -337,7 +337,7 @@ function buildReserveConfig(fields: {
     elevationGroups: fields.configParams.elevationGroups,
     deleveragingThresholdDecreaseBpsPerDay: new BN(24),
     disableUsageAsCollOutsideEmode: 0,
-    utilizationLimitBlockBorrowingAbove: 0,
+    utilizationLimitBlockBorrowingAbovePct: 0,
     hostFixedInterestRateBps: 0,
     autodeleverageEnabled: 0,
     borrowLimitOutsideElevationGroup: new BN(0),

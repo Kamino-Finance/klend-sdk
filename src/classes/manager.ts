@@ -1075,16 +1075,6 @@ function parseForChangesMarketConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'globalUnhealthyBorrowValue') {
-      if (!market.globalUnhealthyBorrowValue.eq(newMarket.globalUnhealthyBorrowValue)) {
-        updateLendingMarketIxnsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateGlobalUnhealthyBorrow.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateGlobalUnhealthyBorrow.discriminator,
-            newMarket.globalUnhealthyBorrowValue.toNumber()
-          ),
-        });
-      }
     } else if (key === 'globalAllowedBorrowValue') {
       if (!market.globalAllowedBorrowValue.eq(newMarket.globalAllowedBorrowValue)) {
         updateLendingMarketIxnsArgs.push({
@@ -1221,7 +1211,6 @@ function updateMarketConfigEncodedValue(
       break;
     case UpdateLendingMarketMode.UpdateLiquidationMaxValue.discriminator:
     case UpdateLendingMarketMode.UpdateGlobalAllowedBorrow.discriminator:
-    case UpdateLendingMarketMode.UpdateGlobalUnhealthyBorrow.discriminator:
     case UpdateLendingMarketMode.UpdateMinFullLiquidationThreshold.discriminator:
     case UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheck.discriminator:
     case UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheck.discriminator:
@@ -1259,7 +1248,6 @@ function updateMarketConfigIx(
   value: Buffer,
   programId: PublicKey
 ): TransactionInstruction {
-  value;
   const accounts: UpdateLendingMarketAccounts = {
     lendingMarketOwner: marketWithAddress.state.lendingMarketOwner,
     lendingMarket: marketWithAddress.address,

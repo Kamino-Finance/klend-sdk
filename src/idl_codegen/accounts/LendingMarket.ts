@@ -44,8 +44,8 @@ export interface LendingMarketFields {
   minFullLiquidationValueThreshold: BN
   /** Max allowed liquidation value in one ix call */
   maxLiquidatableDebtMarketValueAtOnce: BN
-  /** Global maximum unhealthy borrow value allowed for any obligation */
-  globalUnhealthyBorrowValue: BN
+  /** [DEPRECATED] Global maximum unhealthy borrow value allowed for any obligation */
+  reserved0: Array<number>
   /** Global maximum allowed borrow value allowed for any obligation */
   globalAllowedBorrowValue: BN
   /** The address of the risk council, in charge of making parameter and risk decisions on behalf of the protocol */
@@ -111,8 +111,8 @@ export interface LendingMarketJSON {
   minFullLiquidationValueThreshold: string
   /** Max allowed liquidation value in one ix call */
   maxLiquidatableDebtMarketValueAtOnce: string
-  /** Global maximum unhealthy borrow value allowed for any obligation */
-  globalUnhealthyBorrowValue: string
+  /** [DEPRECATED] Global maximum unhealthy borrow value allowed for any obligation */
+  reserved0: Array<number>
   /** Global maximum allowed borrow value allowed for any obligation */
   globalAllowedBorrowValue: string
   /** The address of the risk council, in charge of making parameter and risk decisions on behalf of the protocol */
@@ -178,8 +178,8 @@ export class LendingMarket {
   readonly minFullLiquidationValueThreshold: BN
   /** Max allowed liquidation value in one ix call */
   readonly maxLiquidatableDebtMarketValueAtOnce: BN
-  /** Global maximum unhealthy borrow value allowed for any obligation */
-  readonly globalUnhealthyBorrowValue: BN
+  /** [DEPRECATED] Global maximum unhealthy borrow value allowed for any obligation */
+  readonly reserved0: Array<number>
   /** Global maximum allowed borrow value allowed for any obligation */
   readonly globalAllowedBorrowValue: BN
   /** The address of the risk council, in charge of making parameter and risk decisions on behalf of the protocol */
@@ -223,7 +223,7 @@ export class LendingMarket {
     borsh.u8("insolvencyRiskUnhealthyLtvPct"),
     borsh.u64("minFullLiquidationValueThreshold"),
     borsh.u64("maxLiquidatableDebtMarketValueAtOnce"),
-    borsh.u64("globalUnhealthyBorrowValue"),
+    borsh.array(borsh.u8(), 8, "reserved0"),
     borsh.u64("globalAllowedBorrowValue"),
     borsh.publicKey("riskCouncil"),
     borsh.array(borsh.u8(), 8, "reserved1"),
@@ -255,7 +255,7 @@ export class LendingMarket {
       fields.minFullLiquidationValueThreshold
     this.maxLiquidatableDebtMarketValueAtOnce =
       fields.maxLiquidatableDebtMarketValueAtOnce
-    this.globalUnhealthyBorrowValue = fields.globalUnhealthyBorrowValue
+    this.reserved0 = fields.reserved0
     this.globalAllowedBorrowValue = fields.globalAllowedBorrowValue
     this.riskCouncil = fields.riskCouncil
     this.reserved1 = fields.reserved1
@@ -333,7 +333,7 @@ export class LendingMarket {
       minFullLiquidationValueThreshold: dec.minFullLiquidationValueThreshold,
       maxLiquidatableDebtMarketValueAtOnce:
         dec.maxLiquidatableDebtMarketValueAtOnce,
-      globalUnhealthyBorrowValue: dec.globalUnhealthyBorrowValue,
+      reserved0: dec.reserved0,
       globalAllowedBorrowValue: dec.globalAllowedBorrowValue,
       riskCouncil: dec.riskCouncil,
       reserved1: dec.reserved1,
@@ -371,7 +371,7 @@ export class LendingMarket {
         this.minFullLiquidationValueThreshold.toString(),
       maxLiquidatableDebtMarketValueAtOnce:
         this.maxLiquidatableDebtMarketValueAtOnce.toString(),
-      globalUnhealthyBorrowValue: this.globalUnhealthyBorrowValue.toString(),
+      reserved0: this.reserved0,
       globalAllowedBorrowValue: this.globalAllowedBorrowValue.toString(),
       riskCouncil: this.riskCouncil.toString(),
       reserved1: this.reserved1,
@@ -411,7 +411,7 @@ export class LendingMarket {
       maxLiquidatableDebtMarketValueAtOnce: new BN(
         obj.maxLiquidatableDebtMarketValueAtOnce
       ),
-      globalUnhealthyBorrowValue: new BN(obj.globalUnhealthyBorrowValue),
+      reserved0: obj.reserved0,
       globalAllowedBorrowValue: new BN(obj.globalAllowedBorrowValue),
       riskCouncil: new PublicKey(obj.riskCouncil),
       reserved1: obj.reserved1,

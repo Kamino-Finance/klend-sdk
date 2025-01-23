@@ -108,7 +108,7 @@
   "deleveragingThresholdDecreaseBpsPerDay": "24",
   "multiplierTagBoost": [1, 1, 1, 1, 1, 1, 1, 1],
   "disableUsageAsCollOutsideEmode": 0,
-  "utilizationLimitBlockBorrowingAbove": 80,
+  "utilizationLimitBlockBorrowingAbovePct": 80,
   "hostFixedInterestRateBps": 0,
   "borrowLimitOutsideElevationGroup": "18446744073709551615",
   "borrowLimitAgainstThisCollateralInElevationGroup": [

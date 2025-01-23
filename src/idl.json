@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "1.8.0",
   "name": "kamino_lending",
   "instructions": [
     {
@@ -384,6 +384,74 @@
       ]
     },
     {
+      "name": "socializeLossV2",
+      "accounts": [
+        {
+          "name": "socializeLossAccounts",
+          "accounts": [
+            {
+              "name": "riskCouncil",
+              "isMut": false,
+              "isSigner": true
+            },
+            {
+              "name": "obligation",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarket",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "reserve",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "instructionSysvarAccount",
+              "isMut": false,
+              "isSigner": false
+            }
+          ]
+        },
+        {
+          "name": "farmsAccounts",
+          "accounts": [
+            {
+              "name": "obligationFarmUserState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "reserveFarmState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            }
+          ]
+        },
+        {
+          "name": "lendingMarketAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "farmsProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "liquidityAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "markObligationForDeleveraging",
       "accounts": [
         {
@@ -730,38 +798,43 @@
       "accounts": [
         {
           "name": "crank",
-          "isMut": true,
+          "isMut": false,
           "isSigner": true
         },
         {
-          "name": "obligation",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "lendingMarketAuthority",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "reserve",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "reserveFarmState",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "obligationFarmUserState",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "lendingMarket",
-          "isMut": false,
-          "isSigner": false
+          "name": "baseAccounts",
+          "accounts": [
+            {
+              "name": "obligation",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarketAuthority",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserve",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "reserveFarmState",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "obligationFarmUserState",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarket",
+              "isMut": false,
+              "isSigner": false
+            }
+          ]
         },
         {
           "name": "farmsProgram",
@@ -854,6 +927,89 @@
       ]
     },
     {
+      "name": "depositObligationCollateralV2",
+      "accounts": [
+        {
+          "name": "depositAccounts",
+          "accounts": [
+            {
+              "name": "owner",
+              "isMut": false,
+              "isSigner": true
+            },
+            {
+              "name": "obligation",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarket",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "depositReserve",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveDestinationCollateral",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "userSourceCollateral",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "tokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "instructionSysvarAccount",
+              "isMut": false,
+              "isSigner": false
+            }
+          ]
+        },
+        {
+          "name": "lendingMarketAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "farmsAccounts",
+          "accounts": [
+            {
+              "name": "obligationFarmUserState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "reserveFarmState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            }
+          ]
+        },
+        {
+          "name": "farmsProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "collateralAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "withdrawObligationCollateral",
       "accounts": [
         {
@@ -898,6 +1054,89 @@
         },
         {
           "name": "instructionSysvarAccount",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "collateralAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "withdrawObligationCollateralV2",
+      "accounts": [
+        {
+          "name": "withdrawAccounts",
+          "accounts": [
+            {
+              "name": "owner",
+              "isMut": false,
+              "isSigner": true
+            },
+            {
+              "name": "obligation",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarket",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarketAuthority",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "withdrawReserve",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveSourceCollateral",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "userDestinationCollateral",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "tokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "instructionSysvarAccount",
+              "isMut": false,
+              "isSigner": false
+            }
+          ]
+        },
+        {
+          "name": "farmsAccounts",
+          "accounts": [
+            {
+              "name": "obligationFarmUserState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "reserveFarmState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            }
+          ]
+        },
+        {
+          "name": "farmsProgram",
           "isMut": false,
           "isSigner": false
         }
@@ -982,6 +1221,105 @@
       ]
     },
     {
+      "name": "borrowObligationLiquidityV2",
+      "accounts": [
+        {
+          "name": "borrowAccounts",
+          "accounts": [
+            {
+              "name": "owner",
+              "isMut": false,
+              "isSigner": true
+            },
+            {
+              "name": "obligation",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarket",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarketAuthority",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "borrowReserve",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "borrowReserveLiquidityMint",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveSourceLiquidity",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "borrowReserveLiquidityFeeReceiver",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "userDestinationLiquidity",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "referrerTokenState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "tokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "instructionSysvarAccount",
+              "isMut": false,
+              "isSigner": false
+            }
+          ]
+        },
+        {
+          "name": "farmsAccounts",
+          "accounts": [
+            {
+              "name": "obligationFarmUserState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "reserveFarmState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            }
+          ]
+        },
+        {
+          "name": "farmsProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "liquidityAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "repayObligationLiquidity",
       "accounts": [
         {
@@ -1026,6 +1364,94 @@
         },
         {
           "name": "instructionSysvarAccount",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "liquidityAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "repayObligationLiquidityV2",
+      "accounts": [
+        {
+          "name": "repayAccounts",
+          "accounts": [
+            {
+              "name": "owner",
+              "isMut": false,
+              "isSigner": true
+            },
+            {
+              "name": "obligation",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarket",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "repayReserve",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveLiquidityMint",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveDestinationLiquidity",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "userSourceLiquidity",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "tokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "instructionSysvarAccount",
+              "isMut": false,
+              "isSigner": false
+            }
+          ]
+        },
+        {
+          "name": "farmsAccounts",
+          "accounts": [
+            {
+              "name": "obligationFarmUserState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "reserveFarmState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            }
+          ]
+        },
+        {
+          "name": "lendingMarketAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "farmsProgram",
           "isMut": false,
           "isSigner": false
         }
@@ -1179,6 +1605,191 @@
       ]
     },
     {
+      "name": "repayAndWithdrawAndRedeemV2",
+      "accounts": [
+        {
+          "name": "repayAndWithdrawAccounts",
+          "accounts": [
+            {
+              "name": "repayAccounts",
+              "accounts": [
+                {
+                  "name": "owner",
+                  "isMut": false,
+                  "isSigner": true
+                },
+                {
+                  "name": "obligation",
+                  "isMut": true,
+                  "isSigner": false
+                },
+                {
+                  "name": "lendingMarket",
+                  "isMut": false,
+                  "isSigner": false
+                },
+                {
+                  "name": "repayReserve",
+                  "isMut": true,
+                  "isSigner": false
+                },
+                {
+                  "name": "reserveLiquidityMint",
+                  "isMut": true,
+                  "isSigner": false
+                },
+                {
+                  "name": "reserveDestinationLiquidity",
+                  "isMut": true,
+                  "isSigner": false
+                },
+                {
+                  "name": "userSourceLiquidity",
+                  "isMut": true,
+                  "isSigner": false
+                },
+                {
+                  "name": "tokenProgram",
+                  "isMut": false,
+                  "isSigner": false
+                },
+                {
+                  "name": "instructionSysvarAccount",
+                  "isMut": false,
+                  "isSigner": false
+                }
+              ]
+            },
+            {
+              "name": "withdrawAccounts",
+              "accounts": [
+                {
+                  "name": "owner",
+                  "isMut": false,
+                  "isSigner": true
+                },
+                {
+                  "name": "obligation",
+                  "isMut": true,
+                  "isSigner": false
+                },
+                {
+                  "name": "lendingMarket",
+                  "isMut": false,
+                  "isSigner": false
+                },
+                {
+                  "name": "lendingMarketAuthority",
+                  "isMut": false,
+                  "isSigner": false
+                },
+                {
+                  "name": "withdrawReserve",
+                  "isMut": true,
+                  "isSigner": false
+                },
+                {
+                  "name": "reserveLiquidityMint",
+                  "isMut": true,
+                  "isSigner": false
+                },
+                {
+                  "name": "reserveSourceCollateral",
+                  "isMut": true,
+                  "isSigner": false
+                },
+                {
+                  "name": "reserveCollateralMint",
+                  "isMut": true,
+                  "isSigner": false
+                },
+                {
+                  "name": "reserveLiquiditySupply",
+                  "isMut": true,
+                  "isSigner": false
+                },
+                {
+                  "name": "userDestinationLiquidity",
+                  "isMut": true,
+                  "isSigner": false
+                },
+                {
+                  "name": "placeholderUserDestinationCollateral",
+                  "isMut": false,
+                  "isSigner": false,
+                  "isOptional": true
+                },
+                {
+                  "name": "collateralTokenProgram",
+                  "isMut": false,
+                  "isSigner": false
+                },
+                {
+                  "name": "liquidityTokenProgram",
+                  "isMut": false,
+                  "isSigner": false
+                },
+                {
+                  "name": "instructionSysvarAccount",
+                  "isMut": false,
+                  "isSigner": false
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "collateralFarmsAccounts",
+          "accounts": [
+            {
+              "name": "obligationFarmUserState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "reserveFarmState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            }
+          ]
+        },
+        {
+          "name": "debtFarmsAccounts",
+          "accounts": [
+            {
+              "name": "obligationFarmUserState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "reserveFarmState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            }
+          ]
+        },
+        {
+          "name": "farmsProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "repayAmount",
+          "type": "u64"
+        },
+        {
+          "name": "withdrawCollateralAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "depositReserveLiquidityAndObligationCollateral",
       "accounts": [
         {
@@ -1261,6 +1872,115 @@
       ]
     },
     {
+      "name": "depositReserveLiquidityAndObligationCollateralV2",
+      "accounts": [
+        {
+          "name": "depositAccounts",
+          "accounts": [
+            {
+              "name": "owner",
+              "isMut": true,
+              "isSigner": true
+            },
+            {
+              "name": "obligation",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarket",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarketAuthority",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "reserve",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveLiquidityMint",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveLiquiditySupply",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveCollateralMint",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveDestinationDepositCollateral",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "userSourceLiquidity",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "placeholderUserDestinationCollateral",
+              "isMut": false,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "collateralTokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "liquidityTokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "instructionSysvarAccount",
+              "isMut": false,
+              "isSigner": false
+            }
+          ]
+        },
+        {
+          "name": "farmsAccounts",
+          "accounts": [
+            {
+              "name": "obligationFarmUserState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "reserveFarmState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            }
+          ]
+        },
+        {
+          "name": "farmsProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "liquidityAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "withdrawObligationCollateralAndRedeemReserveCollateral",
       "accounts": [
         {
@@ -1331,6 +2051,115 @@
         },
         {
           "name": "instructionSysvarAccount",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "collateralAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "withdrawObligationCollateralAndRedeemReserveCollateralV2",
+      "accounts": [
+        {
+          "name": "withdrawAccounts",
+          "accounts": [
+            {
+              "name": "owner",
+              "isMut": false,
+              "isSigner": true
+            },
+            {
+              "name": "obligation",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarket",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarketAuthority",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "withdrawReserve",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveLiquidityMint",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveSourceCollateral",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveCollateralMint",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveLiquiditySupply",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "userDestinationLiquidity",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "placeholderUserDestinationCollateral",
+              "isMut": false,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "collateralTokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "liquidityTokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "instructionSysvarAccount",
+              "isMut": false,
+              "isSigner": false
+            }
+          ]
+        },
+        {
+          "name": "farmsAccounts",
+          "accounts": [
+            {
+              "name": "obligationFarmUserState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "reserveFarmState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            }
+          ]
+        },
+        {
+          "name": "farmsProgram",
           "isMut": false,
           "isSigner": false
         }
@@ -1442,6 +2271,169 @@
         },
         {
           "name": "instructionSysvarAccount",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "liquidityAmount",
+          "type": "u64"
+        },
+        {
+          "name": "minAcceptableReceivedLiquidityAmount",
+          "type": "u64"
+        },
+        {
+          "name": "maxAllowedLtvOverridePercent",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "liquidateObligationAndRedeemReserveCollateralV2",
+      "accounts": [
+        {
+          "name": "liquidationAccounts",
+          "accounts": [
+            {
+              "name": "liquidator",
+              "isMut": false,
+              "isSigner": true
+            },
+            {
+              "name": "obligation",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarket",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarketAuthority",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "repayReserve",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "repayReserveLiquidityMint",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "repayReserveLiquiditySupply",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "withdrawReserve",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "withdrawReserveLiquidityMint",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "withdrawReserveCollateralMint",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "withdrawReserveCollateralSupply",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "withdrawReserveLiquiditySupply",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "withdrawReserveLiquidityFeeReceiver",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "userSourceLiquidity",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "userDestinationCollateral",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "userDestinationLiquidity",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "collateralTokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "repayLiquidityTokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "withdrawLiquidityTokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "instructionSysvarAccount",
+              "isMut": false,
+              "isSigner": false
+            }
+          ]
+        },
+        {
+          "name": "collateralFarmsAccounts",
+          "accounts": [
+            {
+              "name": "obligationFarmUserState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "reserveFarmState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            }
+          ]
+        },
+        {
+          "name": "debtFarmsAccounts",
+          "accounts": [
+            {
+              "name": "obligationFarmUserState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "reserveFarmState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            }
+          ]
+        },
+        {
+          "name": "farmsProgram",
           "isMut": false,
           "isSigner": false
         }
@@ -2155,11 +3147,16 @@
             "type": "u64"
           },
           {
-            "name": "globalUnhealthyBorrowValue",
+            "name": "reserved0",
             "docs": [
-              "Global maximum unhealthy borrow value allowed for any obligation"
+              "[DEPRECATED] Global maximum unhealthy borrow value allowed for any obligation"
             ],
-            "type": "u64"
+            "type": {
+              "array": [
+                "u8",
+                8
+              ]
+            }
           },
           {
             "name": "globalAllowedBorrowValue",
@@ -2868,7 +3865,7 @@
             "name": "UpdateDisableUsageAsCollateralOutsideEmode"
           },
           {
-            "name": "UpdateBlockBorrowingAboveUtilization"
+            "name": "UpdateBlockBorrowingAboveUtilizationPct"
           },
           {
             "name": "UpdateBlockPriceUsage"
@@ -2983,7 +3980,7 @@
             "name": "UpdateLiquidationMaxValue"
           },
           {
-            "name": "UpdateGlobalUnhealthyBorrow"
+            "name": "DeprecatedUpdateGlobalUnhealthyBorrow"
           },
           {
             "name": "UpdateGlobalAllowedBorrow"
@@ -3574,7 +4571,10 @@
             "type": "u8"
           },
           {
-            "name": "utilizationLimitBlockBorrowingAbove",
+            "name": "utilizationLimitBlockBorrowingAbovePct",
+            "docs": [
+              "Utilization (in percentage) above which borrowing is blocked. 0 to disable."
+            ],
             "type": "u8"
           },
           {
@@ -4411,8 +5411,8 @@
     },
     {
       "code": 6059,
-      "name": "InvalidObligationId",
-      "msg": "Obligation id must be 0"
+      "name": "DeprecatedInvalidObligationId",
+      "msg": "[DEPRECATED] Obligation id must be 0"
     },
     {
       "code": 6060,
@@ -4691,8 +5691,13 @@
     },
     {
       "code": 6115,
-      "name": "ObligationAlreadyMarkedForDeleveraging",
-      "msg": "Obligation is already marked for deleveraging"
+      "name": "ObligationCurrentlyMarkedForDeleveraging",
+      "msg": "Obligation is currently marked for deleveraging"
+    },
+    {
+      "code": 6116,
+      "name": "FarmAccountsMissing",
+      "msg": "Farm accounts to refresh are missing"
     }
   ]
 }

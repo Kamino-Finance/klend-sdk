@@ -95,25 +95,25 @@ export class UpdateLiquidationMaxValue {
   }
 }
 
-export interface UpdateGlobalUnhealthyBorrowJSON {
-  kind: "UpdateGlobalUnhealthyBorrow"
+export interface DeprecatedUpdateGlobalUnhealthyBorrowJSON {
+  kind: "DeprecatedUpdateGlobalUnhealthyBorrow"
 }
 
-export class UpdateGlobalUnhealthyBorrow {
+export class DeprecatedUpdateGlobalUnhealthyBorrow {
   static readonly discriminator = 4
-  static readonly kind = "UpdateGlobalUnhealthyBorrow"
+  static readonly kind = "DeprecatedUpdateGlobalUnhealthyBorrow"
   readonly discriminator = 4
-  readonly kind = "UpdateGlobalUnhealthyBorrow"
+  readonly kind = "DeprecatedUpdateGlobalUnhealthyBorrow"
 
-  toJSON(): UpdateGlobalUnhealthyBorrowJSON {
+  toJSON(): DeprecatedUpdateGlobalUnhealthyBorrowJSON {
     return {
-      kind: "UpdateGlobalUnhealthyBorrow",
+      kind: "DeprecatedUpdateGlobalUnhealthyBorrow",
     }
   }
 
   toEncodable() {
     return {
-      UpdateGlobalUnhealthyBorrow: {},
+      DeprecatedUpdateGlobalUnhealthyBorrow: {},
     }
   }
 }
@@ -504,8 +504,8 @@ export function fromDecoded(obj: any): types.UpdateLendingMarketModeKind {
   if ("UpdateLiquidationMaxValue" in obj) {
     return new UpdateLiquidationMaxValue()
   }
-  if ("UpdateGlobalUnhealthyBorrow" in obj) {
-    return new UpdateGlobalUnhealthyBorrow()
+  if ("DeprecatedUpdateGlobalUnhealthyBorrow" in obj) {
+    return new DeprecatedUpdateGlobalUnhealthyBorrow()
   }
   if ("UpdateGlobalAllowedBorrow" in obj) {
     return new UpdateGlobalAllowedBorrow()
@@ -575,8 +575,8 @@ export function fromJSON(
     case "UpdateLiquidationMaxValue": {
       return new UpdateLiquidationMaxValue()
     }
-    case "UpdateGlobalUnhealthyBorrow": {
-      return new UpdateGlobalUnhealthyBorrow()
+    case "DeprecatedUpdateGlobalUnhealthyBorrow": {
+      return new DeprecatedUpdateGlobalUnhealthyBorrow()
     }
     case "UpdateGlobalAllowedBorrow": {
       return new UpdateGlobalAllowedBorrow()
@@ -635,7 +635,7 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateEmergencyMode"),
     borsh.struct([], "UpdateLiquidationCloseFactor"),
     borsh.struct([], "UpdateLiquidationMaxValue"),
-    borsh.struct([], "UpdateGlobalUnhealthyBorrow"),
+    borsh.struct([], "DeprecatedUpdateGlobalUnhealthyBorrow"),
     borsh.struct([], "UpdateGlobalAllowedBorrow"),
     borsh.struct([], "UpdateRiskCouncil"),
     borsh.struct([], "UpdateMinFullLiquidationThreshold"),

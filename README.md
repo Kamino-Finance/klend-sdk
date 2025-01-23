@@ -104,6 +104,38 @@ yarn cli deposit --url <RPC> --owner ./keypair.json --token USDH --amount 10
 yarn cli deposit --url <RPC> --owner ./keypair.json --token SOL --amount 10
 ```
 
+### Printing all lending markets
+
+The following will **print all lending markets' raw account data JSONs**:
+
+```sh
+yarn cli print-all-lending-market-accounts --rpc <RPC>
+```
+
+The output is a stream of consecutive JSON documents, which makes it appropriate for further processing using `jq`. Use
+`yarn`'s `-s` option to skip the yarn version metadata from garbling the JSON output - e.g. the following will **print
+the autodeleverage enabled flag of every market, one per line**:
+
+```sh
+yarn -s cli print-all-lending-market-accounts --rpc <RPC> | jq '.autodeleverageEnabled'
+```
+
+### Printing all reserves
+
+The following will **print all reserves' raw account data JSONs**:
+
+```sh
+yarn cli print-all-reserve-accounts --rpc <RPC>
+```
+
+The output is a stream of consecutive JSON documents, which makes it appropriate for further processing using `jq`. Use
+`yarn`'s `-s` option to skip the yarn version metadata from garbling the JSON output - e.g. the following will **print
+the last update slot of every reserve, one per line**:
+
+```sh
+yarn -s cli print-all-reserve-accounts --rpc <RPC> | jq '.lastUpdate.slot'
+```
+
 ### Printing all obligations
 
 The following will **print all obligations' raw account data JSONs**:

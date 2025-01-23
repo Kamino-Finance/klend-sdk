@@ -58,7 +58,7 @@ export type CustomError =
   | InvalidScopePriceAccount
   | ObligationCollateralLtvZero
   | InvalidObligationSeedsValue
-  | InvalidObligationId
+  | DeprecatedInvalidObligationId
   | InvalidBorrowRateCurvePoint
   | InvalidUtilizationRate
   | CannotSocializeObligationWithCollateral
@@ -114,7 +114,8 @@ export type CustomError =
   | ObligationOwnersMustMatch
   | ObligationsMustMatch
   | LendingMarketsMustMatch
-  | ObligationAlreadyMarkedForDeleveraging
+  | ObligationCurrentlyMarkedForDeleveraging
+  | FarmAccountsMissing
 
 export class InvalidMarketAuthority extends Error {
   static readonly code = 6000
@@ -774,14 +775,14 @@ export class InvalidObligationSeedsValue extends Error {
   }
 }
 
-export class InvalidObligationId extends Error {
+export class DeprecatedInvalidObligationId extends Error {
   static readonly code = 6059
   readonly code = 6059
-  readonly name = "InvalidObligationId"
-  readonly msg = "Obligation id must be 0"
+  readonly name = "DeprecatedInvalidObligationId"
+  readonly msg = "[DEPRECATED] Obligation id must be 0"
 
   constructor(readonly logs?: string[]) {
-    super("6059: Obligation id must be 0")
+    super("6059: [DEPRECATED] Obligation id must be 0")
   }
 }
 
@@ -1438,14 +1439,25 @@ export class LendingMarketsMustMatch extends Error {
   }
 }
 
-export class ObligationAlreadyMarkedForDeleveraging extends Error {
+export class ObligationCurrentlyMarkedForDeleveraging extends Error {
   static readonly code = 6115
   readonly code = 6115
-  readonly name = "ObligationAlreadyMarkedForDeleveraging"
-  readonly msg = "Obligation is already marked for deleveraging"
+  readonly name = "ObligationCurrentlyMarkedForDeleveraging"
+  readonly msg = "Obligation is currently marked for deleveraging"
 
   constructor(readonly logs?: string[]) {
-    super("6115: Obligation is already marked for deleveraging")
+    super("6115: Obligation is currently marked for deleveraging")
+  }
+}
+
+export class FarmAccountsMissing extends Error {
+  static readonly code = 6116
+  readonly code = 6116
+  readonly name = "FarmAccountsMissing"
+  readonly msg = "Farm accounts to refresh are missing"
+
+  constructor(readonly logs?: string[]) {
+    super("6116: Farm accounts to refresh are missing")
   }
 }
 
@@ -1570,7 +1582,7 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
     case 6058:
       return new InvalidObligationSeedsValue(logs)
     case 6059:
-      return new InvalidObligationId(logs)
+      return new DeprecatedInvalidObligationId(logs)
     case 6060:
       return new InvalidBorrowRateCurvePoint(logs)
     case 6061:
@@ -1682,7 +1694,9 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
     case 6114:
       return new LendingMarketsMustMatch(logs)
     case 6115:
-      return new ObligationAlreadyMarkedForDeleveraging(logs)
+      return new ObligationCurrentlyMarkedForDeleveraging(logs)
+    case 6116:
+      return new FarmAccountsMissing(logs)
   }
 
   return null

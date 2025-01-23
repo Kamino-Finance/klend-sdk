@@ -51,7 +51,7 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateFarmCollateral
   | UpdateConfigMode.UpdateFarmDebt
   | UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode
-  | UpdateConfigMode.UpdateBlockBorrowingAboveUtilization
+  | UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct
   | UpdateConfigMode.UpdateBlockPriceUsage
   | UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup
   | UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve
@@ -101,7 +101,7 @@ export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateFarmCollateralJSON
   | UpdateConfigMode.UpdateFarmDebtJSON
   | UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmodeJSON
-  | UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationJSON
+  | UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPctJSON
   | UpdateConfigMode.UpdateBlockPriceUsageJSON
   | UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroupJSON
   | UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserveJSON
@@ -139,7 +139,7 @@ export type UpdateLendingMarketModeKind =
   | UpdateLendingMarketMode.UpdateEmergencyMode
   | UpdateLendingMarketMode.UpdateLiquidationCloseFactor
   | UpdateLendingMarketMode.UpdateLiquidationMaxValue
-  | UpdateLendingMarketMode.UpdateGlobalUnhealthyBorrow
+  | UpdateLendingMarketMode.DeprecatedUpdateGlobalUnhealthyBorrow
   | UpdateLendingMarketMode.UpdateGlobalAllowedBorrow
   | UpdateLendingMarketMode.UpdateRiskCouncil
   | UpdateLendingMarketMode.UpdateMinFullLiquidationThreshold
@@ -161,7 +161,7 @@ export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateEmergencyModeJSON
   | UpdateLendingMarketMode.UpdateLiquidationCloseFactorJSON
   | UpdateLendingMarketMode.UpdateLiquidationMaxValueJSON
-  | UpdateLendingMarketMode.UpdateGlobalUnhealthyBorrowJSON
+  | UpdateLendingMarketMode.DeprecatedUpdateGlobalUnhealthyBorrowJSON
   | UpdateLendingMarketMode.UpdateGlobalAllowedBorrowJSON
   | UpdateLendingMarketMode.UpdateRiskCouncilJSON
   | UpdateLendingMarketMode.UpdateMinFullLiquidationThresholdJSON

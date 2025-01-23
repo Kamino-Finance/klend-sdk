@@ -2174,12 +2174,14 @@ export class KaminoAction {
         const args: RefreshObligationFarmsForReserveArgs = { mode: arg[0].discriminator };
         const accounts: RefreshObligationFarmsForReserveAccounts = {
           crank,
-          obligation: this.getObligationPda(),
-          lendingMarketAuthority: this.kaminoMarket.getLendingMarketAuthority(),
-          reserve: arg[3].address,
-          reserveFarmState: arg[1],
-          obligationFarmUserState: arg[2],
-          lendingMarket: this.kaminoMarket.getAddress(),
+          baseAccounts: {
+            obligation: this.getObligationPda(),
+            lendingMarketAuthority: this.kaminoMarket.getLendingMarketAuthority(),
+            reserve: arg[3].address,
+            reserveFarmState: arg[1],
+            obligationFarmUserState: arg[2],
+            lendingMarket: this.kaminoMarket.getAddress(),
+          },
           farmsProgram: farmsId,
           rent: SYSVAR_RENT_PUBKEY,
           systemProgram: SystemProgram.programId,

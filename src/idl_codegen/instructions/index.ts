@@ -31,6 +31,11 @@ export type {
 } from "./withdrawProtocolFee"
 export { socializeLoss } from "./socializeLoss"
 export type { SocializeLossArgs, SocializeLossAccounts } from "./socializeLoss"
+export { socializeLossV2 } from "./socializeLossV2"
+export type {
+  SocializeLossV2Args,
+  SocializeLossV2Accounts,
+} from "./socializeLossV2"
 export { markObligationForDeleveraging } from "./markObligationForDeleveraging"
 export type {
   MarkObligationForDeleveragingArgs,
@@ -72,41 +77,81 @@ export type {
   DepositObligationCollateralArgs,
   DepositObligationCollateralAccounts,
 } from "./depositObligationCollateral"
+export { depositObligationCollateralV2 } from "./depositObligationCollateralV2"
+export type {
+  DepositObligationCollateralV2Args,
+  DepositObligationCollateralV2Accounts,
+} from "./depositObligationCollateralV2"
 export { withdrawObligationCollateral } from "./withdrawObligationCollateral"
 export type {
   WithdrawObligationCollateralArgs,
   WithdrawObligationCollateralAccounts,
 } from "./withdrawObligationCollateral"
+export { withdrawObligationCollateralV2 } from "./withdrawObligationCollateralV2"
+export type {
+  WithdrawObligationCollateralV2Args,
+  WithdrawObligationCollateralV2Accounts,
+} from "./withdrawObligationCollateralV2"
 export { borrowObligationLiquidity } from "./borrowObligationLiquidity"
 export type {
   BorrowObligationLiquidityArgs,
   BorrowObligationLiquidityAccounts,
 } from "./borrowObligationLiquidity"
+export { borrowObligationLiquidityV2 } from "./borrowObligationLiquidityV2"
+export type {
+  BorrowObligationLiquidityV2Args,
+  BorrowObligationLiquidityV2Accounts,
+} from "./borrowObligationLiquidityV2"
 export { repayObligationLiquidity } from "./repayObligationLiquidity"
 export type {
   RepayObligationLiquidityArgs,
   RepayObligationLiquidityAccounts,
 } from "./repayObligationLiquidity"
+export { repayObligationLiquidityV2 } from "./repayObligationLiquidityV2"
+export type {
+  RepayObligationLiquidityV2Args,
+  RepayObligationLiquidityV2Accounts,
+} from "./repayObligationLiquidityV2"
 export { repayAndWithdrawAndRedeem } from "./repayAndWithdrawAndRedeem"
 export type {
   RepayAndWithdrawAndRedeemArgs,
   RepayAndWithdrawAndRedeemAccounts,
 } from "./repayAndWithdrawAndRedeem"
+export { repayAndWithdrawAndRedeemV2 } from "./repayAndWithdrawAndRedeemV2"
+export type {
+  RepayAndWithdrawAndRedeemV2Args,
+  RepayAndWithdrawAndRedeemV2Accounts,
+} from "./repayAndWithdrawAndRedeemV2"
 export { depositReserveLiquidityAndObligationCollateral } from "./depositReserveLiquidityAndObligationCollateral"
 export type {
   DepositReserveLiquidityAndObligationCollateralArgs,
   DepositReserveLiquidityAndObligationCollateralAccounts,
 } from "./depositReserveLiquidityAndObligationCollateral"
+export { depositReserveLiquidityAndObligationCollateralV2 } from "./depositReserveLiquidityAndObligationCollateralV2"
+export type {
+  DepositReserveLiquidityAndObligationCollateralV2Args,
+  DepositReserveLiquidityAndObligationCollateralV2Accounts,
+} from "./depositReserveLiquidityAndObligationCollateralV2"
 export { withdrawObligationCollateralAndRedeemReserveCollateral } from "./withdrawObligationCollateralAndRedeemReserveCollateral"
 export type {
   WithdrawObligationCollateralAndRedeemReserveCollateralArgs,
   WithdrawObligationCollateralAndRedeemReserveCollateralAccounts,
 } from "./withdrawObligationCollateralAndRedeemReserveCollateral"
+export { withdrawObligationCollateralAndRedeemReserveCollateralV2 } from "./withdrawObligationCollateralAndRedeemReserveCollateralV2"
+export type {
+  WithdrawObligationCollateralAndRedeemReserveCollateralV2Args,
+  WithdrawObligationCollateralAndRedeemReserveCollateralV2Accounts,
+} from "./withdrawObligationCollateralAndRedeemReserveCollateralV2"
 export { liquidateObligationAndRedeemReserveCollateral } from "./liquidateObligationAndRedeemReserveCollateral"
 export type {
   LiquidateObligationAndRedeemReserveCollateralArgs,
   LiquidateObligationAndRedeemReserveCollateralAccounts,
 } from "./liquidateObligationAndRedeemReserveCollateral"
+export { liquidateObligationAndRedeemReserveCollateralV2 } from "./liquidateObligationAndRedeemReserveCollateralV2"
+export type {
+  LiquidateObligationAndRedeemReserveCollateralV2Args,
+  LiquidateObligationAndRedeemReserveCollateralV2Accounts,
+} from "./liquidateObligationAndRedeemReserveCollateralV2"
 export { flashRepayReserveLiquidity } from "./flashRepayReserveLiquidity"
 export type {
   FlashRepayReserveLiquidityArgs,

@@ -10,6 +10,8 @@ import {
   getProgramId,
   toJson,
   getAllObligationAccounts,
+  getAllReserveAccounts,
+  getAllLendingMarketAccounts,
 } from './lib';
 import * as fs from 'fs';
 import { Connection, GetProgramAccountsFilter, Keypair, PublicKey } from '@solana/web3.js';
@@ -55,6 +57,16 @@ async function main() {
     });
 
   commands
+    .command('print-all-lending-market-accounts')
+    .option(`--rpc <string>`, 'The RPC URL')
+    .action(async ({ rpc }) => {
+      const connection = new Connection(rpc, {});
+      for await (const lendingMarketAccount of getAllLendingMarketAccounts(connection)) {
+        console.log(toJson(lendingMarketAccount.toJSON()));
+      }
+    });
+
+  commands
     .command('print-obligation')
     .option(`--rpc <string>`, 'The rpc url')
     .option(`--cluster <string>`, 'staging or mainnet-beta')
@@ -84,6 +96,16 @@ async function main() {
     .action(async ({ url, reserve, symbol }) => {
       const connection = new Connection(url, {});
       await printReserve(connection, reserve, symbol);
+    });
+
+  commands
+    .command('print-all-reserve-accounts')
+    .option(`--rpc <string>`, 'The RPC URL')
+    .action(async ({ rpc }) => {
+      const connection = new Connection(rpc, {});
+      for await (const reserveAccount of getAllReserveAccounts(connection)) {
+        console.log(toJson(reserveAccount.toJSON()));
+      }
     });
 
   commands
