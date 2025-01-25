@@ -2,7 +2,7 @@ import { TransactionInstruction, PublicKey, AccountMeta } from "@solana/web3.js"
 import BN from "bn.js" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
-import {  KVAULTS_PROGRAM_ID as PROGRAM_ID } from "../programId"
+import { PROGRAM_ID } from "../programId"
 
 export interface UpdateSharesMetadataArgs {
   name: string

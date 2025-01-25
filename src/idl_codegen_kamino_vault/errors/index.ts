@@ -1,5 +1,5 @@
 import { PublicKey } from "@solana/web3.js"
-import { KVAULTS_PROGRAM_ID as PROGRAM_ID } from "../programId"
+import { PROGRAM_ID } from "../programId"
 import * as anchor from "./anchor"
 import * as custom from "./custom"
 
