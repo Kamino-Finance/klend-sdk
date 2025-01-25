@@ -389,12 +389,12 @@ export class KaminoManager {
    * @param farm - the farm where the vault shares can be staked
    * @param [errorOnOverride] - if true, the function will throw an error if the vault already has a farm. If false, it will override the farm
    */
-  async setVaultFarm(
+  async setVaultFarmIxs(
     vault: KaminoVault,
     farm: PublicKey,
     errorOnOverride: boolean = true
   ): Promise<UpdateVaultConfigIxs> {
-    return this._vaultClient.setVaultFarm(vault, farm, errorOnOverride);
+    return this._vaultClient.setVaultFarmIxs(vault, farm, errorOnOverride);
   }
 
   /**
@@ -656,14 +656,16 @@ export class KaminoManager {
    * @param vault - the kamino vault to get available liquidity to withdraw for
    * @param [slot] - the slot for which to calculate the holdings. Optional. If not provided the function will fetch the current slot
    * @param [vaultReserves] - a hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [currentSlot] - the latest confirmed slot. Optional. If provided the function will be  faster as it will not have to fetch the latest slot
    * @returns an VaultHoldings object
    */
   async getVaultHoldings(
     vault: VaultState,
     slot?: number,
-    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>,
+    currentSlot?: number
   ): Promise<VaultHoldings> {
-    return this._vaultClient.getVaultHoldings(vault, slot, vaultReserves);
+    return this._vaultClient.getVaultHoldings(vault, slot, vaultReserves, currentSlot);
   }
 
   /**
@@ -758,11 +760,11 @@ export class KaminoManager {
   }
 
   /**
-   * Retrive the total amount of interest earned by the vault since its inception, including what was charged as fees
+   * Retrive the total amount of interest earned by the vault since its inception, up to the last interaction with the vault on chain, including what was charged as fees
    * @param vaultState the kamino vault state to get total net yield for
-   * @returns a decimal representing the net number of tokens earned by the vault since its inception
+   * @returns a struct containing a Decimal representing the net number of tokens earned by the vault since its inception and the timestamp of the last fee charge
    */
-  async getVaultTotalNetYield(vaultState: VaultState) {
+  async getVaultCumulativeInterest(vaultState: VaultState) {
     return this._vaultClient.getVaultCumulativeInterest(vaultState);
   }
 

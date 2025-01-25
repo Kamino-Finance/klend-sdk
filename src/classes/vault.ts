@@ -79,7 +79,7 @@ import {
   UserSharesForVault,
   WithdrawIxs,
 } from './types';
-import { collToLamportsDecimal } from '@kamino-finance/kliquidity-sdk';
+import { collToLamportsDecimal, ZERO } from '@kamino-finance/kliquidity-sdk';
 import { FullBPSDecimal } from '@kamino-finance/kliquidity-sdk/dist/utils/CreationParameters';
 import { FarmState } from '@kamino-finance/farms-sdk/dist';
 import { getAccountsInLUT, initLookupTableIx } from './lut_utils';
@@ -450,7 +450,7 @@ export class KaminoVaultClient {
    * @param farm - the farm where the vault shares can be staked
    * @param [errorOnOverride] - if true, the function will throw an error if the vault already has a farm. If false, it will override the farm
    */
-  async setVaultFarm(
+  async setVaultFarmIxs(
     vault: KaminoVault,
     farm: PublicKey,
     errorOnOverride: boolean = true
@@ -648,7 +648,7 @@ export class KaminoVaultClient {
         const reserveState = reserveStates[index]!;
         const marketAddress = reserveState.lendingMarket;
 
-        return this.withdrawPendingFeesIxn(
+        return this.withdrawPendingFeesIx(
           vault,
           vaultState,
           marketAddress,
@@ -884,7 +884,7 @@ export class KaminoVaultClient {
     ]);
 
     const shareLamportsToWithdraw = collToLamportsDecimal(shareAmount, vaultState.sharesMintDecimals.toNumber());
-    const withdrawFromAvailableIxn = await this.withdrawFromAvailableIxn(
+    const withdrawFromAvailableIxn = await this.withdrawFromAvailableIx(
       user,
       kaminoVault,
       vaultState,
@@ -980,7 +980,7 @@ export class KaminoVaultClient {
         sharesToWithdraw = reserveWithTokens.shares;
       }
 
-      const withdrawFromReserveIx = this.withdrawIxn(
+      const withdrawFromReserveIx = this.withdrawIx(
         user,
         vault,
         vaultState,
@@ -1178,7 +1178,7 @@ export class KaminoVaultClient {
     return decodeVaultName(token);
   }
 
-  private withdrawIxn(
+  private withdrawIx(
     user: PublicKey,
     vault: KaminoVault,
     vaultState: VaultState,
@@ -1248,7 +1248,7 @@ export class KaminoVaultClient {
     return withdrawIxn;
   }
 
-  private async withdrawFromAvailableIxn(
+  private async withdrawFromAvailableIx(
     user: PublicKey,
     vault: KaminoVault,
     vaultState: VaultState,
@@ -1277,7 +1277,7 @@ export class KaminoVaultClient {
     return withdrawFromAvailable(withdrawFromAvailableArgs, withdrawFromAvailableAccounts, this._kaminoVaultProgramId);
   }
 
-  private async withdrawPendingFeesIxn(
+  private async withdrawPendingFeesIx(
     vault: KaminoVault,
     vaultState: VaultState,
     marketAddress: PublicKey,
@@ -1496,7 +1496,7 @@ export class KaminoVaultClient {
     });
     const expectedHoldingsDistribution = new PubkeyHashMap<PublicKey, Decimal>();
 
-    let totalLeftToInvest = holdings.total;
+    let totalLeftToInvest = holdings.totalAUMIncludingFees.sub(holdings.pendingFees);
     let currentAllocationSum = totalAllocation;
     const ZERO = new Decimal(0);
     while (totalLeftToInvest.gt(ZERO)) {
@@ -1671,8 +1671,9 @@ export class KaminoVaultClient {
     );
 
     const holdings = await this.getVaultHoldings(vaultState, slot, vaultReservesState);
+    const netAUM = holdings.totalAUMIncludingFees.sub(holdings.pendingFees);
 
-    return holdings.total.div(sharesDecimal);
+    return netAUM.div(sharesDecimal);
   }
 
   /**
@@ -2001,20 +2002,24 @@ export class KaminoVaultClient {
    * @param vault - the kamino vault to get available liquidity to withdraw for
    * @param [slot] - the slot for which to calculate the holdings. Optional. If not provided the function will fetch the current slot
    * @param [vaultReserves] - a hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [currentSlot] - the latest confirmed slot. Optional. If provided the function will be  faster as it will not have to fetch the latest slot
    * @returns an VaultHoldings object representing the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
    */
   async getVaultHoldings(
     vault: VaultState,
     slot?: number,
-    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>,
+    currentSlot?: number
   ): Promise<VaultHoldings> {
     const vaultHoldings: VaultHoldings = {
       available: new Decimal(vault.tokenAvailable.toString()),
       invested: new Decimal(0),
       investedInReserves: new PubkeyHashMap<PublicKey, Decimal>(),
-      total: new Decimal(0),
+      totalAUMIncludingFees: new Decimal(0),
+      pendingFees: new Decimal(0),
     };
 
+    const currentSlotToUse = currentSlot ? currentSlot : await this.getConnection().getSlot('confirmed');
     const vaultReservesState = vaultReserves ? vaultReserves : await this.loadVaultReserves(vault);
     const decimals = new Decimal(vault.tokenMintDecimals.toString());
 
@@ -2029,6 +2034,7 @@ export class KaminoVaultClient {
       }
 
       let reserveCollExchangeRate: Decimal;
+
       if (slot) {
         reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, 0);
       } else {
@@ -2045,13 +2051,42 @@ export class KaminoVaultClient {
       );
     });
 
+    const currentPendingFees = new Fraction(vault.pendingFeesSf).toDecimal();
+    let totalPendingFees = currentPendingFees;
+
+    // if there is a slot passed and it is in the future we need to estimate the fees from current time until that moment
+    if (slot && slot > currentSlotToUse) {
+      const currentTimestampSec = new Date().getTime() / 1000;
+      const timeAtPassedSlot = currentTimestampSec + (slot - currentSlotToUse) * this.recentSlotDurationMs;
+      const timeUntilPassedSlot = timeAtPassedSlot - currentTimestampSec;
+
+      const managementFeeFactor = new Decimal(timeUntilPassedSlot)
+        .mul(new Decimal(vault.managementFeeBps.toString()))
+        .div(new Decimal(SECONDS_PER_YEAR))
+        .div(FullBPSDecimal);
+      const prevAUM = lamportsToDecimal(new Fraction(vault.prevAumSf).toDecimal(), vault.tokenMintDecimals.toNumber());
+      const simulatedMgmtFee = prevAUM.mul(managementFeeFactor);
+      totalPendingFees = totalPendingFees.add(simulatedMgmtFee);
+
+      const simulatedEarnedInterest = vaultHoldings.invested
+        .add(vaultHoldings.available)
+        .sub(prevAUM)
+        .sub(simulatedMgmtFee);
+      const simulatedPerformanceFee = simulatedEarnedInterest
+        .mul(new Decimal(vault.performanceFeeBps.toString()))
+        .div(FullBPSDecimal);
+      totalPendingFees = totalPendingFees.add(simulatedPerformanceFee);
+    }
+
     const totalAvailableDecimal = lamportsToDecimal(vaultHoldings.available, decimals);
     const totalInvestedDecimal = lamportsToDecimal(vaultHoldings.invested, decimals);
+    const pendingFees = lamportsToDecimal(totalPendingFees, decimals);
     return {
       available: totalAvailableDecimal,
       invested: totalInvestedDecimal,
       investedInReserves: vaultHoldings.investedInReserves,
-      total: totalAvailableDecimal.add(totalInvestedDecimal),
+      totalAUMIncludingFees: totalAvailableDecimal.add(totalInvestedDecimal),
+      pendingFees: pendingFees,
     };
   }
 
@@ -2081,7 +2116,8 @@ export class KaminoVaultClient {
       availableUSD: holdings.available.mul(price),
       investedUSD: holdings.invested.mul(price),
       investedInReservesUSD: investedInReservesUSD,
-      totalUSD: holdings.total.mul(price),
+      totalUSDIncludingFees: holdings.totalAUMIncludingFees.mul(price),
+      pendingFeesUSD: holdings.pendingFees.mul(price),
     };
   }
 
@@ -2202,8 +2238,6 @@ export class KaminoVaultClient {
       utilizationRatio = totalBorrowed.div(totalInvested.add(totalAvailable));
     }
 
-    console.log('totalInvested', totalInvested.toString());
-    console.log('totalBorrowed', totalBorrowed.toString());
     return {
       totalInvested: totalInvested,
       totalBorrowed: totalBorrowed,
@@ -2288,17 +2322,26 @@ export class KaminoVaultClient {
     if (totalWeights.isZero()) {
       return new Decimal(0);
     }
-    return totalAPY.div(totalWeights);
+
+    const grossAPY = totalAPY.div(totalWeights);
+    const netAPY = grossAPY
+      .mul(new Decimal(1).sub(new Decimal(vault.performanceFeeBps.toString()).div(FullBPSDecimal)))
+      .mul(new Decimal(1).sub(new Decimal(vault.managementFeeBps.toString()).div(FullBPSDecimal)));
+    return netAPY;
   }
 
   /**
-   * Retrive the total amount of interest earned by the vault since its inception, including what was charged as fees
+   * Retrive the total amount of interest earned by the vault since its inception, up to the last interaction with the vault on chain, including what was charged as fees
    * @param vaultState the kamino vault state to get total net yield for
-   * @returns a Decimal representing the net number of tokens earned by the vault since its inception
+   * @returns a struct containing a Decimal representing the net number of tokens earned by the vault since its inception and the timestamp of the last fee charge
    */
-  async getVaultCumulativeInterest(vaultState: VaultState): Promise<Decimal> {
+  async getVaultCumulativeInterest(vaultState: VaultState): Promise<VaultCumulativeInterestWithTimestamp> {
     const netYieldLamports = new Fraction(vaultState.cumulativeEarnedInterestSf).toDecimal();
-    return lamportsToDecimal(netYieldLamports, vaultState.tokenMintDecimals.toString());
+    const cumulativeInterest = lamportsToDecimal(netYieldLamports, vaultState.tokenMintDecimals.toString());
+    return {
+      cumulativeInterest: cumulativeInterest,
+      timestamp: vaultState.lastFeeChargeTimestamp.toNumber(),
+    };
   }
 
   /**
@@ -2313,24 +2356,23 @@ export class KaminoVaultClient {
     vaultState: VaultState,
     vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>,
     currentSlot?: number,
-    previousTotalAUM?: Decimal
+    previousNetAUM?: Decimal
   ): Promise<SimulatedVaultHoldingsWithEarnedInterest> {
     let prevAUM: Decimal;
+    let pendingFees = ZERO;
 
-    if (previousTotalAUM) {
-      prevAUM = previousTotalAUM;
+    if (previousNetAUM) {
+      prevAUM = previousNetAUM;
     } else {
-      const latestUpdateTs = vaultState.lastFeeChargeTimestamp.toNumber();
-      const lastUpdateSlot = latestUpdateTs / this.recentSlotDurationMs;
-
-      const lastUpdateHoldings = await this.getVaultHoldings(vaultState, lastUpdateSlot, vaultReservesMap);
-      prevAUM = lastUpdateHoldings.total;
+      const tokenDecimals = vaultState.tokenMintDecimals.toNumber();
+      prevAUM = lamportsToDecimal(new Fraction(vaultState.prevAumSf).toDecimal(), tokenDecimals);
+      pendingFees = lamportsToDecimal(new Fraction(vaultState.pendingFeesSf).toDecimal(), tokenDecimals);
     }
 
     const slot = currentSlot ? currentSlot : await this.getConnection().getSlot('confirmed');
 
     const currentHoldings = await this.getVaultHoldings(vaultState, slot, vaultReservesMap);
-    const earnedInterest = currentHoldings.total.sub(prevAUM);
+    const earnedInterest = currentHoldings.totalAUMIncludingFees.sub(prevAUM).sub(pendingFees);
 
     return {
       holdings: currentHoldings,
@@ -2499,7 +2541,8 @@ export type VaultHoldings = {
   available: Decimal;
   invested: Decimal;
   investedInReserves: PubkeyHashMap<PublicKey, Decimal>;
-  total: Decimal;
+  pendingFees: Decimal;
+  totalAUMIncludingFees: Decimal;
 };
 
 /**
@@ -2515,7 +2558,8 @@ export type VaultHoldingsWithUSDValue = {
   availableUSD: Decimal;
   investedUSD: Decimal;
   investedInReservesUSD: PubkeyHashMap<PublicKey, Decimal>;
-  totalUSD: Decimal;
+  totalUSDIncludingFees: Decimal;
+  pendingFeesUSD: Decimal;
 };
 
 export type ReserveOverview = {
@@ -2564,4 +2608,9 @@ export type VaultFeesPct = {
 export type VaultFees = {
   managementFee: Decimal;
   performanceFee: Decimal;
+};
+
+export type VaultCumulativeInterestWithTimestamp = {
+  cumulativeInterest: Decimal;
+  timestamp: number;
 };

@@ -68,7 +68,7 @@ import { printHoldings, printHoldingsWithUSDValue, printVaultOverview } from '..
   console.log('Vault APY:', apy.toString());
 
   // read the total interest earned by the vault since its inception, including the perf fees
-  const totalInterestEarned = await kaminoManager.getVaultTotalNetYield(vaultState);
+  const totalInterestEarned = await kaminoManager.getVaultCumulativeInterest(vaultState);
   console.log('Total interest earned:', totalInterestEarned.toString());
 
   // simulate holdings and earned interest at a given slot in the future

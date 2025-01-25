@@ -5,8 +5,9 @@ export function holdingsToJson(holdings: VaultHoldings) {
   return {
     available: holdings.available.toString(),
     invested: holdings.invested.toString(),
-    total: holdings.total.toString(),
+    totalAUMIncludingFees: holdings.totalAUMIncludingFees.toString(),
     investedInReserves: pubkeyHashMapToJson(holdings.investedInReserves),
+    pendingFees: holdings.pendingFees.toString(),
   };
 }
 
@@ -14,7 +15,8 @@ export function printHoldings(holdings: VaultHoldings) {
   console.log('Holdings:');
   console.log('  Available:', holdings.available.toString());
   console.log('  Invested:', holdings.invested.toString());
-  console.log('  Total:', holdings.total.toString());
+  console.log('  Total AUM including fees:', holdings.totalAUMIncludingFees.toString());
+  console.log('  Pending fees:', holdings.pendingFees.toString());
   console.log('  Invested in reserves:', pubkeyHashMapToJson(holdings.investedInReserves));
 }
 
@@ -22,7 +24,8 @@ export function printHoldingsWithUSDValue(holdings: VaultHoldingsWithUSDValue) {
   console.log('Holdings with USD value:');
   console.log('  Available:', holdings.availableUSD.toString());
   console.log('  Invested:', holdings.investedUSD.toString());
-  console.log('  Total:', holdings.totalUSD.toString());
+  console.log('  Total including pending fees:', holdings.totalUSDIncludingFees.toString());
+  console.log('  Pending fees:', holdings.pendingFeesUSD.toString());
   console.log('  Invested in reserves:', pubkeyHashMapToJson(holdings.investedInReservesUSD));
 }
 
