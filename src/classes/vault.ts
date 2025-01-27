@@ -151,7 +151,7 @@ export class KaminoVaultClient {
     const vaultName = this.decodeVaultName(vault.name);
     const slot = await this.getConnection().getSlot('confirmed');
     const tokensPerShare = await this.getTokensPerShareSingleVault(kaminoVault, slot);
-    const holdings = await this.getVaultHoldings(vault);
+    const holdings = await this.getVaultHoldings(vault, slot);
 
     const sharesIssued = new Decimal(vault.sharesIssued.toString()!).div(
       new Decimal(vault.sharesMintDecimals.toString())
@@ -1482,10 +1482,18 @@ export class KaminoVaultClient {
 
   /** Read the total holdings of a vault and the reserve weights and returns a map from each reserve to how many tokens should be deposited.
    * @param vaultState - the vault state to calculate the allocation for
+   * @param [slot] - the slot for which to calculate the allocation. Optional. If not provided the function will fetch the current slot
+   * @param [vaultReserves] - a hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [currentSlot] - the latest confirmed slot. Optional. If provided the function will be  faster as it will not have to fetch the latest slot
    * @returns - a map from each reserve to how many tokens should be invested into
    */
-  async getVaultComputedReservesAllocation(vaultState: VaultState): Promise<PubkeyHashMap<PublicKey, Decimal>> {
-    const holdings = await this.getVaultHoldings(vaultState);
+  async getVaultComputedReservesAllocation(
+    vaultState: VaultState,
+    slot?: number,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>,
+    currentSlot?: number
+  ): Promise<PubkeyHashMap<PublicKey, Decimal>> {
+    const holdings = await this.getVaultHoldings(vaultState, slot, vaultReserves, currentSlot);
     const initialVaultAllocations = this.getVaultAllocations(vaultState);
 
     const allReserves = this.getVaultReserves(vaultState);
@@ -2096,16 +2104,17 @@ export class KaminoVaultClient {
    * @param price - the price of the token in the vault (e.g. USDC)
    * @param [slot] - the slot for which to retrieve the vault overview for. Optional. If not provided the function will fetch the current slot
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
-   * @param [kaminoMarkets] - a list of all kamino markets. Optional. If provided the function will be significantly faster as it will not have to fetch the markets
+   * @param [currentSlot] - the latest confirmed slot. Optional. If provided the function will be  faster as it will not have to fetch the latest slot
    * @returns an VaultOverview object with details about the tokens available and invested in the vault, denominated in tokens and USD
    */
   async getVaultHoldingsWithPrice(
     vault: VaultState,
     price: Decimal,
     slot?: number,
-    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>,
+    currentSlot?: number
   ): Promise<VaultHoldingsWithUSDValue> {
-    const holdings = await this.getVaultHoldings(vault, slot, vaultReservesMap);
+    const holdings = await this.getVaultHoldings(vault, slot, vaultReservesMap, currentSlot);
 
     const investedInReservesUSD = new PubkeyHashMap<PublicKey, Decimal>();
     holdings.investedInReserves.forEach((amount, reserve) => {
@@ -2128,6 +2137,7 @@ export class KaminoVaultClient {
    * @param [slot] - the slot for which to retrieve the vault overview for. Optional. If not provided the function will fetch the current slot
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [kaminoMarkets] - a list of all kamino markets. Optional. If provided the function will be significantly faster as it will not have to fetch the markets
+   * @param [currentSlot] - the latest confirmed slot. Optional. If provided the function will be  faster as it will not have to fetch the latest slot
    * @returns an VaultOverview object with details about the tokens available and invested in the vault, denominated in tokens and USD
    */
   async getVaultOverview(
@@ -2135,7 +2145,8 @@ export class KaminoVaultClient {
     price: Decimal,
     slot?: number,
     vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>,
-    kaminoMarkets?: KaminoMarket[]
+    kaminoMarkets?: KaminoMarket[],
+    currentSlot?: number
   ): Promise<VaultOverview> {
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vault);
 
@@ -2143,24 +2154,25 @@ export class KaminoVaultClient {
       vault,
       price,
       slot,
-      vaultReservesState
+      vaultReservesState,
+      currentSlot
     );
 
-    const currentSlot = slot ? slot : await this.getConnection().getSlot();
+    const slotForOverview = slot ? slot : await this.getConnection().getSlot();
 
-    const vaultTheoreticalAPYPromise = await this.getVaultTheoreticalAPY(vault, currentSlot, vaultReservesState);
+    const vaultTheoreticalAPYPromise = await this.getVaultTheoreticalAPY(vault, slotForOverview, vaultReservesState);
     const totalInvestedAndBorrowedPromise = await this.getTotalBorrowedAndInvested(
       vault,
-      currentSlot,
+      slotForOverview,
       vaultReservesState
     );
     const vaultCollateralsPromise = await this.getVaultCollaterals(
       vault,
-      currentSlot,
+      slotForOverview,
       vaultReservesState,
       kaminoMarkets
     );
-    const reservesOverviewPromise = await this.getVaultReservesDetails(vault, currentSlot, vaultReservesState);
+    const reservesOverviewPromise = await this.getVaultReservesDetails(vault, slotForOverview, vaultReservesState);
 
     // all the async part of the functions above just read the vaultReservesState which is read beforehand, so excepting vaultCollateralsPromise they should do no additional network calls
     const [
@@ -2349,14 +2361,16 @@ export class KaminoVaultClient {
    * @param vaultState the kamino vault state to get simulated holdings and earnings for
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [currentSlot] - the current slot. Optional. If not provided it will fetch the current slot
-   * @param [previousTotalAUM] - the previous AUM of the vault to compute the earned interest relative to this value. Optional. If not provided the function will estimate the total AUM at the slot of the last state update on chain
+   * @param [previousNetAUM] - the previous AUM of the vault to compute the earned interest relative to this value. Optional. If not provided the function will estimate the total AUM at the slot of the last state update on chain
+   * @param [currentSlot] - the latest confirmed slot. Optional. If provided the function will be  faster as it will not have to fetch the latest slot
    * @returns a struct of simulated vault holdings and earned interest
    */
   async calculateSimulatedHoldingsWithInterest(
     vaultState: VaultState,
     vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>,
-    currentSlot?: number,
-    previousNetAUM?: Decimal
+    slot?: number,
+    previousNetAUM?: Decimal,
+    currentSlot?: number
   ): Promise<SimulatedVaultHoldingsWithEarnedInterest> {
     let prevAUM: Decimal;
     let pendingFees = ZERO;
@@ -2369,9 +2383,9 @@ export class KaminoVaultClient {
       pendingFees = lamportsToDecimal(new Fraction(vaultState.pendingFeesSf).toDecimal(), tokenDecimals);
     }
 
-    const slot = currentSlot ? currentSlot : await this.getConnection().getSlot('confirmed');
+    const latestSlot = slot ? slot : await this.getConnection().getSlot('confirmed');
 
-    const currentHoldings = await this.getVaultHoldings(vaultState, slot, vaultReservesMap);
+    const currentHoldings = await this.getVaultHoldings(vaultState, latestSlot, vaultReservesMap, currentSlot);
     const earnedInterest = currentHoldings.totalAUMIncludingFees.sub(prevAUM).sub(pendingFees);
 
     return {
