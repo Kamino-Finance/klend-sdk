@@ -1659,12 +1659,14 @@ export class KaminoVaultClient {
    * @param vault - vault to calculate tokensPerShare for
    * @param [slot] - the slot at which we retrieve the tokens per share. Optional. If not provided, the function will fetch the current slot
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [currentSlot] - the latest confirmed slot. Optional. If provided the function will be  faster as it will not have to fetch the latest slot
    * @returns - token per share value
    */
   async getTokensPerShareSingleVault(
     vault: KaminoVault,
     slot?: number,
-    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>,
+    currentSlot?: number
   ): Promise<Decimal> {
     const vaultState = await vault.getState(this.getConnection());
     if (vaultState.sharesIssued.isZero()) {
@@ -1678,7 +1680,7 @@ export class KaminoVaultClient {
       vaultState.sharesMintDecimals.toString()
     );
 
-    const holdings = await this.getVaultHoldings(vaultState, slot, vaultReservesState);
+    const holdings = await this.getVaultHoldings(vaultState, slot, vaultReservesState, currentSlot);
     const netAUM = holdings.totalAUMIncludingFees.sub(holdings.pendingFees);
 
     return netAUM.div(sharesDecimal);
