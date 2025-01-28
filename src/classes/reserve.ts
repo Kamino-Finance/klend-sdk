@@ -1498,6 +1498,44 @@ export function parseForChangesReserveConfigAndGetIxs(
           ),
         });
       }
+    } else if (key === 'deleveragingBonusIncreaseBpsPerDay') {
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
+            reserveConfig.deleveragingBonusIncreaseBpsPerDay.toNumber()
+          ),
+        });
+      } else if (
+        !reserve.config.deleveragingBonusIncreaseBpsPerDay.eq(reserveConfig.deleveragingBonusIncreaseBpsPerDay)
+      ) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
+            reserveConfig.deleveragingBonusIncreaseBpsPerDay.toNumber()
+          ),
+        });
+      }
+    } else if (key === 'autodeleverageEnabled') {
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
+            reserveConfig.autodeleverageEnabled
+          ),
+        });
+      } else if (reserve.config.autodeleverageEnabled != reserveConfig.autodeleverageEnabled) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
+            reserveConfig.autodeleverageEnabled
+          ),
+        });
+      }
     } else if (key === 'depositWithdrawalCap') {
       if (reserve === undefined) {
         updateReserveIxnsArgs.push({
@@ -1960,6 +1998,7 @@ export function updateReserveConfigEncodedValue(
     case UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator:
     case UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator:
     case UpdateConfigMode.UpdateBlockPriceUsage.discriminator:
+    case UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator:
       buffer = Buffer.alloc(1);
       buffer.writeUIntLE(value as number, 0, 1);
       break;
@@ -1984,6 +2023,7 @@ export function updateReserveConfigEncodedValue(
     case UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator:
     case UpdateConfigMode.UpdateBorrowFactor.discriminator:
     case UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator:
+    case UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator:
     case UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator:
       value = value as number;
       buffer = Buffer.alloc(8);
