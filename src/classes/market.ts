@@ -35,8 +35,7 @@ import { chunks, KaminoPrices, MintToPriceMap } from '@kamino-finance/kliquidity
 import { parseTokenSymbol, parseZeroPaddedUtf8 } from './utils';
 import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
 import { ObligationZP } from '../idl_codegen/zero_padding';
-import { ReserveStatus } from '../idl_codegen/types';
-import { getProgramAccounts } from '../utils/rpc';
+import { getProgramAccounts } from '../utils';
 
 export interface ReserveRewardInfo {
   rewardsPerSecond: Decimal; // not lamport
@@ -1194,10 +1193,6 @@ export class KaminoMarket {
     const spot: MintToPriceMap = {};
     const twaps: MintToPriceMap = {};
     for (const reserve of this.reserves.values()) {
-      if (reserve.state.config.status === ReserveStatus.Obsolete.discriminator) {
-        // skip obsolete reserves
-        continue;
-      }
       const tokenMint = reserve.getLiquidityMint().toString();
       const tokenName = reserve.getTokenSymbol();
       const oracle = reserve.state.config.tokenInfo.scopeConfiguration.priceFeed;
@@ -1235,11 +1230,6 @@ export class KaminoMarket {
     const switchboardV2 = await SwitchboardProgram.loadMainnet(this.connection);
 
     for (const reserve of this.reserves.values()) {
-      if (reserve.state.config.status === ReserveStatus.Obsolete.discriminator) {
-        // skip obsolete reserves
-        continue;
-      }
-
       const tokenMint = reserve.getLiquidityMint().toString();
       const tokenName = reserve.getTokenSymbol();
       const scopeOracle = reserve.state.config.tokenInfo.scopeConfiguration.priceFeed;
