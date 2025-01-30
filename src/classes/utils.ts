@@ -4,6 +4,7 @@ import { AccountInfo, PublicKey } from '@solana/web3.js';
 import { MarketOverview, ReserveOverview, SOL_MINTS } from '../lib';
 import { AccountLayout } from '@solana/spl-token';
 import { ReserveAllocationOverview } from './types';
+import axios from 'axios';
 
 type ObligationFarmScoreType = {
   obligationId: string;
@@ -323,4 +324,12 @@ export function printReserveAllocationOverview(reserveAllocationOverview: Reserv
 
 export function assertNever(x: never): never {
   throw new Error('Unexpected object: ' + x);
+}
+
+/**
+ * Fetch median slot duration in milliseconds from the last 10 epochs
+ */
+export async function getMedianSlotDurationInMsFromLastEpochs() {
+  const response = await axios.get<{ recentSlotDurationInMs: number }>('https://api.kamino.finance/slots/duration');
+  return response.data.recentSlotDurationInMs;
 }
