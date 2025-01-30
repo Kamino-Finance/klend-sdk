@@ -24,6 +24,7 @@ import { FeeCalculation, Fees, ReserveDataType, ReserveFarmInfo, ReserveRewardYi
 import { Reserve, ReserveFields } from '../idl_codegen/accounts';
 import { BorrowRateCurve, CurvePointFields, ReserveConfig, UpdateConfigMode } from '../idl_codegen/types';
 import {
+  assertNever,
   calculateAPYFromAPR,
   getBorrowRate,
   lamportsToNumberDecimal,
@@ -1201,69 +1202,257 @@ export function updateReserveConfigIx(
   return ix;
 }
 
-export function updateEntireReserveConfigIx(
-  marketWithAddress: MarketWithAddress,
-  reserveAddress: PublicKey,
-  reserveConfig: ReserveConfig,
-  programId: PublicKey
-): TransactionInstruction {
-  const layout = ReserveConfig.layout();
-  const data = Buffer.alloc(1000);
-  const len = layout.encode(reserveConfig.toEncodable(), data);
-  const value = Uint8Array.from([...data.subarray(0, len)]);
+type BaseReserveConfigKey = keyof ReturnType<typeof ReserveConfig.toEncodable>;
 
-  const args: UpdateReserveConfigArgs = {
-    mode: new anchor.BN(25),
-    value: value,
-    skipValidation: false,
-  };
+// Type that excludes reserved and padding fields
+type ReserveConfigKey = Exclude<BaseReserveConfigKey, ExcludedReserveConfigKey>;
 
-  const accounts: UpdateReserveConfigAccounts = {
-    lendingMarketOwner: marketWithAddress.state.lendingMarketOwner,
-    lendingMarket: marketWithAddress.address,
-    reserve: reserveAddress,
-  };
+const EXCLUDED_RESERVE_CONFIG_KEYS = ['reserved1', 'reserved2', 'reserved3'] as const;
 
-  const ix = updateReserveConfig(args, accounts, programId);
+export type ExcludedReserveConfigKey = (typeof EXCLUDED_RESERVE_CONFIG_KEYS)[number];
 
-  return ix;
+function isExcludedReserveConfigKey(value: unknown): value is ExcludedReserveConfigKey {
+  return EXCLUDED_RESERVE_CONFIG_KEYS.includes(value as ExcludedReserveConfigKey);
 }
 
-export function parseForChangesReserveConfigAndGetIxs(
-  marketWithAddress: MarketWithAddress,
+function handleConfigUpdate(
+  key: ReserveConfigKey,
   reserve: Reserve | undefined,
-  reserveAddress: PublicKey,
   reserveConfig: ReserveConfig,
-  programId: PublicKey
-) {
-  const updateReserveIxnsArgs: { mode: number; value: Uint8Array }[] = [];
-  for (const key in reserveConfig.toEncodable()) {
-    if (key === 'borrowRateCurve') {
+  updateReserveIxnsArgs: { mode: number; value: Uint8Array }[]
+): void {
+  switch (key) {
+    case 'status':
       if (reserve === undefined) {
         updateReserveIxnsArgs.push({
-          mode: UpdateBorrowRateCurve.discriminator,
-          value: updateReserveConfigEncodedValue(UpdateBorrowRateCurve.discriminator, reserveConfig.borrowRateCurve),
+          mode: UpdateConfigMode.UpdateReserveStatus.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateReserveStatus.discriminator,
+            reserveConfig.status
+          ),
         });
-      } else {
-        for (let i = 0; i < reserveConfig.borrowRateCurve.points.length; i++) {
-          if (
-            reserve.config.borrowRateCurve.points[i].utilizationRateBps !==
-              reserveConfig.borrowRateCurve.points[i].utilizationRateBps ||
-            reserve.config.borrowRateCurve.points[i].borrowRateBps !==
-              reserveConfig.borrowRateCurve.points[i].borrowRateBps
-          ) {
-            updateReserveIxnsArgs.push({
-              mode: UpdateBorrowRateCurve.discriminator,
-              value: updateReserveConfigEncodedValue(
-                UpdateBorrowRateCurve.discriminator,
-                reserveConfig.borrowRateCurve
-              ),
-            });
-            break;
-          }
-        }
+      } else if (reserve.config.status !== reserveConfig.status) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateReserveStatus.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateReserveStatus.discriminator,
+            reserveConfig.status
+          ),
+        });
       }
-    } else if (key === 'fees') {
+      break;
+    case 'assetTier':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateAssetTier.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateAssetTier.discriminator,
+            reserveConfig.assetTier
+          ),
+        });
+      } else if (reserve.config.assetTier !== reserveConfig.assetTier) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateAssetTier.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateAssetTier.discriminator,
+            reserveConfig.assetTier
+          ),
+        });
+      }
+      break;
+    case 'hostFixedInterestRateBps':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateHostFixedInterestRateBps.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateHostFixedInterestRateBps.discriminator,
+            reserveConfig.hostFixedInterestRateBps
+          ),
+        });
+      } else if (reserve.config.hostFixedInterestRateBps !== reserveConfig.hostFixedInterestRateBps) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateHostFixedInterestRateBps.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateHostFixedInterestRateBps.discriminator,
+            reserveConfig.hostFixedInterestRateBps
+          ),
+        });
+      }
+      break;
+    case 'protocolTakeRatePct':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateProtocolTakeRate.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateProtocolTakeRate.discriminator,
+            reserveConfig.protocolTakeRatePct
+          ),
+        });
+      } else if (reserve.config.protocolTakeRatePct !== reserveConfig.protocolTakeRatePct) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateProtocolTakeRate.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateProtocolTakeRate.discriminator,
+            reserveConfig.protocolTakeRatePct
+          ),
+        });
+      }
+      break;
+    case 'protocolLiquidationFeePct':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateProtocolLiquidationFee.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateProtocolLiquidationFee.discriminator,
+            reserveConfig.protocolLiquidationFeePct
+          ),
+        });
+      } else if (reserve.config.protocolLiquidationFeePct !== reserveConfig.protocolLiquidationFeePct) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateProtocolLiquidationFee.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateProtocolLiquidationFee.discriminator,
+            reserveConfig.protocolLiquidationFeePct
+          ),
+        });
+      }
+      break;
+    case 'loanToValuePct':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateLoanToValuePct.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateLoanToValuePct.discriminator,
+            reserveConfig.loanToValuePct
+          ),
+        });
+      } else if (reserve.config.loanToValuePct !== reserveConfig.loanToValuePct) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateLoanToValuePct.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateLoanToValuePct.discriminator,
+            reserveConfig.loanToValuePct
+          ),
+        });
+      }
+      break;
+    case 'liquidationThresholdPct':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateLiquidationThresholdPct.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateLiquidationThresholdPct.discriminator,
+            reserveConfig.liquidationThresholdPct
+          ),
+        });
+      } else if (reserve.config.liquidationThresholdPct !== reserveConfig.liquidationThresholdPct) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateLiquidationThresholdPct.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateLiquidationThresholdPct.discriminator,
+            reserveConfig.liquidationThresholdPct
+          ),
+        });
+      }
+      break;
+    case 'minLiquidationBonusBps':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateMinLiquidationBonusBps.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateMinLiquidationBonusBps.discriminator,
+            reserveConfig.minLiquidationBonusBps
+          ),
+        });
+      } else if (reserve.config.minLiquidationBonusBps !== reserveConfig.minLiquidationBonusBps) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateMinLiquidationBonusBps.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateMinLiquidationBonusBps.discriminator,
+            reserveConfig.minLiquidationBonusBps
+          ),
+        });
+      }
+      break;
+    case 'maxLiquidationBonusBps':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator,
+            reserveConfig.maxLiquidationBonusBps
+          ),
+        });
+      } else if (reserve.config.maxLiquidationBonusBps !== reserveConfig.maxLiquidationBonusBps) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator,
+            reserveConfig.maxLiquidationBonusBps
+          ),
+        });
+      }
+      break;
+    case 'badDebtLiquidationBonusBps':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateBadDebtLiquidationBonusBps.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateBadDebtLiquidationBonusBps.discriminator,
+            reserveConfig.badDebtLiquidationBonusBps
+          ),
+        });
+      } else if (reserve.config.badDebtLiquidationBonusBps !== reserveConfig.badDebtLiquidationBonusBps) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateBadDebtLiquidationBonusBps.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateBadDebtLiquidationBonusBps.discriminator,
+            reserveConfig.badDebtLiquidationBonusBps
+          ),
+        });
+      }
+      break;
+    case 'deleveragingMarginCallPeriodSecs':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
+            reserveConfig.deleveragingMarginCallPeriodSecs.toNumber()
+          ),
+        });
+      } else if (!reserve.config.deleveragingMarginCallPeriodSecs.eq(reserveConfig.deleveragingMarginCallPeriodSecs)) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
+            reserveConfig.deleveragingMarginCallPeriodSecs.toNumber()
+          ),
+        });
+      }
+      break;
+    case 'deleveragingThresholdDecreaseBpsPerDay':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
+            reserveConfig.deleveragingThresholdDecreaseBpsPerDay.toNumber()
+          ),
+        });
+      } else if (
+        !reserve.config.deleveragingThresholdDecreaseBpsPerDay.eq(reserveConfig.deleveragingThresholdDecreaseBpsPerDay)
+      ) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
+            reserveConfig.deleveragingThresholdDecreaseBpsPerDay.toNumber()
+          ),
+        });
+      }
+      break;
+    case 'fees':
       if (reserve === undefined) {
         updateReserveIxnsArgs.push({
           mode: UpdateConfigMode.UpdateFeesBorrowFee.discriminator,
@@ -1296,348 +1485,34 @@ export function parseForChangesReserveConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'depositLimit') {
+      break;
+    case 'borrowRateCurve':
       if (reserve === undefined) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDepositLimit.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDepositLimit.discriminator,
-            reserveConfig.depositLimit.toNumber()
-          ),
-        });
-      } else if (!reserve.config.depositLimit.eq(reserveConfig.depositLimit)) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDepositLimit.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDepositLimit.discriminator,
-            reserveConfig.depositLimit.toNumber()
-          ),
-        });
-      }
-    } else if (key === 'borrowLimit') {
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBorrowLimit.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateBorrowLimit.discriminator,
-            reserveConfig.borrowLimit.toNumber()
-          ),
-        });
-      } else if (!reserve.config.borrowLimit.eq(reserveConfig.borrowLimit)) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBorrowLimit.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateBorrowLimit.discriminator,
-            reserveConfig.borrowLimit.toNumber()
-          ),
-        });
-      }
-    } else if (key === 'maxLiquidationBonusBps') {
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator,
-            reserveConfig.maxLiquidationBonusBps
-          ),
-        });
-      } else if (reserve.config.maxLiquidationBonusBps !== reserveConfig.maxLiquidationBonusBps) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator,
-            reserveConfig.maxLiquidationBonusBps
-          ),
-        });
-      }
-    } else if (key === 'minLiquidationBonusBps') {
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateMinLiquidationBonusBps.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateMinLiquidationBonusBps.discriminator,
-            reserveConfig.minLiquidationBonusBps
-          ),
-        });
-      } else if (reserve.config.minLiquidationBonusBps !== reserveConfig.minLiquidationBonusBps) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateMinLiquidationBonusBps.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateMinLiquidationBonusBps.discriminator,
-            reserveConfig.minLiquidationBonusBps
-          ),
-        });
-      }
-    } else if (key === 'badDebtLiquidationBonusBps') {
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBadDebtLiquidationBonusBps.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateBadDebtLiquidationBonusBps.discriminator,
-            reserveConfig.badDebtLiquidationBonusBps
-          ),
-        });
-      } else if (reserve.config.badDebtLiquidationBonusBps !== reserveConfig.badDebtLiquidationBonusBps) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBadDebtLiquidationBonusBps.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateBadDebtLiquidationBonusBps.discriminator,
-            reserveConfig.badDebtLiquidationBonusBps
-          ),
-        });
-      }
-    } else if (key === 'liquidationThresholdPct') {
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateLiquidationThresholdPct.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateLiquidationThresholdPct.discriminator,
-            reserveConfig.liquidationThresholdPct
-          ),
-        });
-      } else if (reserve.config.liquidationThresholdPct !== reserveConfig.liquidationThresholdPct) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateLiquidationThresholdPct.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateLiquidationThresholdPct.discriminator,
-            reserveConfig.liquidationThresholdPct
-          ),
-        });
-      }
-    } else if (key === 'protocolTakeRatePct') {
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateProtocolTakeRate.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateProtocolTakeRate.discriminator,
-            reserveConfig.protocolTakeRatePct
-          ),
-        });
-      } else if (reserve.config.protocolTakeRatePct !== reserveConfig.protocolTakeRatePct) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateProtocolTakeRate.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateProtocolTakeRate.discriminator,
-            reserveConfig.protocolTakeRatePct
-          ),
-        });
-      }
-    } else if (key === 'status') {
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateReserveStatus.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateReserveStatus.discriminator,
-            reserveConfig.status
-          ),
-        });
-      } else if (reserve.config.status !== reserveConfig.status) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateReserveStatus.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateReserveStatus.discriminator,
-            reserveConfig.status
-          ),
-        });
-      }
-    } else if (key === 'disableUsageAsCollOutsideEmode') {
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator,
-            reserveConfig.disableUsageAsCollOutsideEmode
-          ),
-        });
-      } else if (reserve.config.disableUsageAsCollOutsideEmode !== reserveConfig.disableUsageAsCollOutsideEmode) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator,
-            reserveConfig.disableUsageAsCollOutsideEmode
-          ),
-        });
-      }
-    } else if (key === 'utilizationLimitBlockBorrowingAbovePct') {
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
-            reserveConfig.utilizationLimitBlockBorrowingAbovePct
-          ),
-        });
-      } else if (
-        reserve.config.utilizationLimitBlockBorrowingAbovePct !== reserveConfig.utilizationLimitBlockBorrowingAbovePct
-      ) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
-            reserveConfig.utilizationLimitBlockBorrowingAbovePct
-          ),
-        });
-      }
-    } else if (key === 'deleveragingThresholdDecreaseBpsPerDay') {
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
-            reserveConfig.deleveragingThresholdDecreaseBpsPerDay.toNumber()
-          ),
-        });
-      } else if (
-        !reserve.config.deleveragingThresholdDecreaseBpsPerDay.eq(reserveConfig.deleveragingThresholdDecreaseBpsPerDay)
-      ) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
-            reserveConfig.deleveragingThresholdDecreaseBpsPerDay.toNumber()
-          ),
-        });
-      }
-    } else if (key === 'deleveragingBonusIncreaseBpsPerDay') {
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
-            reserveConfig.deleveragingBonusIncreaseBpsPerDay.toNumber()
-          ),
-        });
-      } else if (
-        !reserve.config.deleveragingBonusIncreaseBpsPerDay.eq(reserveConfig.deleveragingBonusIncreaseBpsPerDay)
-      ) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
-            reserveConfig.deleveragingBonusIncreaseBpsPerDay.toNumber()
-          ),
-        });
-      }
-    } else if (key === 'autodeleverageEnabled') {
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
-            reserveConfig.autodeleverageEnabled
-          ),
-        });
-      } else if (reserve.config.autodeleverageEnabled != reserveConfig.autodeleverageEnabled) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
-            reserveConfig.autodeleverageEnabled
-          ),
-        });
-      }
-    } else if (key === 'depositWithdrawalCap') {
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator,
-          value: updateReserveConfigEncodedValue(UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator, [
-            reserveConfig.depositWithdrawalCap.configCapacity.toNumber(),
-            reserveConfig.depositWithdrawalCap.configIntervalLengthSeconds.toNumber(),
-          ]),
-        });
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDepositWithdrawalCapCurrentTotal.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator,
-            reserveConfig.depositWithdrawalCap.currentTotal.toNumber()
-          ),
-        });
-      } else if (
-        !reserve.config.depositWithdrawalCap.configCapacity.eq(reserveConfig.depositWithdrawalCap.configCapacity) ||
-        !reserve.config.depositWithdrawalCap.configIntervalLengthSeconds.eq(
-          reserveConfig.depositWithdrawalCap.configIntervalLengthSeconds
-        )
-      ) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator,
-          value: updateReserveConfigEncodedValue(UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator, [
-            reserveConfig.depositWithdrawalCap.configCapacity.toNumber(),
-            reserveConfig.depositWithdrawalCap.configIntervalLengthSeconds.toNumber(),
-          ]),
-        });
-      } else if (
-        !reserve.config.depositWithdrawalCap.currentTotal.eq(reserveConfig.depositWithdrawalCap.currentTotal)
-      ) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDepositWithdrawalCapCurrentTotal.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator,
-            reserveConfig.depositWithdrawalCap.currentTotal.toNumber()
-          ),
-        });
-      }
-    } else if (key === 'debtWithdrawalCap') {
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator,
-          value: updateReserveConfigEncodedValue(UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator, [
-            reserveConfig.debtWithdrawalCap.configCapacity.toNumber(),
-            reserveConfig.debtWithdrawalCap.configIntervalLengthSeconds.toNumber(),
-          ]),
-        });
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDebtWithdrawalCapCurrentTotal.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator,
-            reserveConfig.debtWithdrawalCap.currentTotal.toNumber()
-          ),
-        });
-      } else if (
-        !reserve.config.debtWithdrawalCap.configCapacity.eq(reserveConfig.debtWithdrawalCap.configCapacity) ||
-        !reserve.config.debtWithdrawalCap.configIntervalLengthSeconds.eq(
-          reserveConfig.debtWithdrawalCap.configIntervalLengthSeconds
-        )
-      ) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator,
-          value: updateReserveConfigEncodedValue(UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator, [
-            reserveConfig.debtWithdrawalCap.configCapacity.toNumber(),
-            reserveConfig.debtWithdrawalCap.configIntervalLengthSeconds.toNumber(),
-          ]),
-        });
-      } else if (!reserve.config.debtWithdrawalCap.currentTotal.eq(reserveConfig.debtWithdrawalCap.currentTotal)) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDebtWithdrawalCapCurrentTotal.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator,
-            reserveConfig.debtWithdrawalCap.currentTotal.toNumber()
-          ),
-        });
-      }
-    } else if (key === 'elevationGroups') {
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateElevationGroup.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateElevationGroup.discriminator,
-            reserveConfig.elevationGroups
-          ),
+          mode: UpdateBorrowRateCurve.discriminator,
+          value: updateReserveConfigEncodedValue(UpdateBorrowRateCurve.discriminator, reserveConfig.borrowRateCurve),
         });
       } else {
-        for (let i = 0; i < reserveConfig.elevationGroups.length; i++) {
-          if (reserve.config.elevationGroups[i] !== reserveConfig.elevationGroups[i]) {
+        for (let i = 0; i < reserveConfig.borrowRateCurve.points.length; i++) {
+          if (
+            reserve.config.borrowRateCurve.points[i].utilizationRateBps !==
+              reserveConfig.borrowRateCurve.points[i].utilizationRateBps ||
+            reserve.config.borrowRateCurve.points[i].borrowRateBps !==
+              reserveConfig.borrowRateCurve.points[i].borrowRateBps
+          ) {
             updateReserveIxnsArgs.push({
-              mode: UpdateConfigMode.UpdateElevationGroup.discriminator,
+              mode: UpdateBorrowRateCurve.discriminator,
               value: updateReserveConfigEncodedValue(
-                UpdateConfigMode.UpdateElevationGroup.discriminator,
-                reserveConfig.elevationGroups
+                UpdateBorrowRateCurve.discriminator,
+                reserveConfig.borrowRateCurve
               ),
             });
             break;
           }
         }
       }
-    } else if (key === 'borrowFactorPct') {
+      break;
+    case 'borrowFactorPct':
       if (reserve === undefined) {
         updateReserveIxnsArgs.push({
           mode: UpdateConfigMode.UpdateBorrowFactor.discriminator,
@@ -1655,79 +1530,46 @@ export function parseForChangesReserveConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'loanToValuePct') {
+      break;
+    case 'depositLimit':
       if (reserve === undefined) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateLoanToValuePct.discriminator,
+          mode: UpdateConfigMode.UpdateDepositLimit.discriminator,
           value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateLoanToValuePct.discriminator,
-            reserveConfig.loanToValuePct
+            UpdateConfigMode.UpdateDepositLimit.discriminator,
+            reserveConfig.depositLimit.toNumber()
           ),
         });
-      } else if (reserve.config.loanToValuePct !== reserveConfig.loanToValuePct) {
+      } else if (!reserve.config.depositLimit.eq(reserveConfig.depositLimit)) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateLoanToValuePct.discriminator,
+          mode: UpdateConfigMode.UpdateDepositLimit.discriminator,
           value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateLoanToValuePct.discriminator,
-            reserveConfig.loanToValuePct
+            UpdateConfigMode.UpdateDepositLimit.discriminator,
+            reserveConfig.depositLimit.toNumber()
           ),
         });
       }
-    } else if (key === 'protocolLiquidationFeePct') {
+      break;
+    case 'borrowLimit':
       if (reserve === undefined) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateProtocolLiquidationFee.discriminator,
+          mode: UpdateConfigMode.UpdateBorrowLimit.discriminator,
           value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateProtocolLiquidationFee.discriminator,
-            reserveConfig.protocolLiquidationFeePct
+            UpdateConfigMode.UpdateBorrowLimit.discriminator,
+            reserveConfig.borrowLimit.toNumber()
           ),
         });
-      } else if (reserve.config.protocolLiquidationFeePct !== reserveConfig.protocolLiquidationFeePct) {
+      } else if (!reserve.config.borrowLimit.eq(reserveConfig.borrowLimit)) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateProtocolLiquidationFee.discriminator,
+          mode: UpdateConfigMode.UpdateBorrowLimit.discriminator,
           value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateProtocolLiquidationFee.discriminator,
-            reserveConfig.protocolLiquidationFeePct
+            UpdateConfigMode.UpdateBorrowLimit.discriminator,
+            reserveConfig.borrowLimit.toNumber()
           ),
         });
       }
-    } else if (key === 'deleveragingMarginCallPeriodSecs') {
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
-            reserveConfig.deleveragingMarginCallPeriodSecs.toNumber()
-          ),
-        });
-      } else if (!reserve.config.deleveragingMarginCallPeriodSecs.eq(reserveConfig.deleveragingMarginCallPeriodSecs)) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
-            reserveConfig.deleveragingMarginCallPeriodSecs.toNumber()
-          ),
-        });
-      }
-    } else if (key === 'assetTier') {
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateAssetTier.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateAssetTier.discriminator,
-            reserveConfig.assetTier
-          ),
-        });
-      } else if (reserve.config.assetTier !== reserveConfig.assetTier) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateAssetTier.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateAssetTier.discriminator,
-            reserveConfig.assetTier
-          ),
-        });
-      }
-    } else if (key === 'tokenInfo') {
+      break;
+    case 'tokenInfo':
       const tokenInfo = reserveConfig.tokenInfo;
       if (reserve === undefined) {
         updateReserveIxnsArgs.push({
@@ -1961,8 +1803,289 @@ export function parseForChangesReserveConfigAndGetIxs(
           });
         }
       }
+      break;
+    case 'depositWithdrawalCap':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator,
+          value: updateReserveConfigEncodedValue(UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator, [
+            reserveConfig.depositWithdrawalCap.configCapacity.toNumber(),
+            reserveConfig.depositWithdrawalCap.configIntervalLengthSeconds.toNumber(),
+          ]),
+        });
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDepositWithdrawalCapCurrentTotal.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator,
+            reserveConfig.depositWithdrawalCap.currentTotal.toNumber()
+          ),
+        });
+      } else if (
+        !reserve.config.depositWithdrawalCap.configCapacity.eq(reserveConfig.depositWithdrawalCap.configCapacity) ||
+        !reserve.config.depositWithdrawalCap.configIntervalLengthSeconds.eq(
+          reserveConfig.depositWithdrawalCap.configIntervalLengthSeconds
+        )
+      ) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator,
+          value: updateReserveConfigEncodedValue(UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator, [
+            reserveConfig.depositWithdrawalCap.configCapacity.toNumber(),
+            reserveConfig.depositWithdrawalCap.configIntervalLengthSeconds.toNumber(),
+          ]),
+        });
+      } else if (
+        !reserve.config.depositWithdrawalCap.currentTotal.eq(reserveConfig.depositWithdrawalCap.currentTotal)
+      ) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDepositWithdrawalCapCurrentTotal.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator,
+            reserveConfig.depositWithdrawalCap.currentTotal.toNumber()
+          ),
+        });
+      }
+      break;
+    case 'debtWithdrawalCap':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator,
+          value: updateReserveConfigEncodedValue(UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator, [
+            reserveConfig.debtWithdrawalCap.configCapacity.toNumber(),
+            reserveConfig.debtWithdrawalCap.configIntervalLengthSeconds.toNumber(),
+          ]),
+        });
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDebtWithdrawalCapCurrentTotal.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator,
+            reserveConfig.debtWithdrawalCap.currentTotal.toNumber()
+          ),
+        });
+      } else if (
+        !reserve.config.debtWithdrawalCap.configCapacity.eq(reserveConfig.debtWithdrawalCap.configCapacity) ||
+        !reserve.config.debtWithdrawalCap.configIntervalLengthSeconds.eq(
+          reserveConfig.debtWithdrawalCap.configIntervalLengthSeconds
+        )
+      ) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator,
+          value: updateReserveConfigEncodedValue(UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator, [
+            reserveConfig.debtWithdrawalCap.configCapacity.toNumber(),
+            reserveConfig.debtWithdrawalCap.configIntervalLengthSeconds.toNumber(),
+          ]),
+        });
+      } else if (!reserve.config.debtWithdrawalCap.currentTotal.eq(reserveConfig.debtWithdrawalCap.currentTotal)) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDebtWithdrawalCapCurrentTotal.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator,
+            reserveConfig.debtWithdrawalCap.currentTotal.toNumber()
+          ),
+        });
+      }
+      break;
+    case 'elevationGroups':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateElevationGroup.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateElevationGroup.discriminator,
+            reserveConfig.elevationGroups
+          ),
+        });
+      } else {
+        for (let i = 0; i < reserveConfig.elevationGroups.length; i++) {
+          if (reserve.config.elevationGroups[i] !== reserveConfig.elevationGroups[i]) {
+            updateReserveIxnsArgs.push({
+              mode: UpdateConfigMode.UpdateElevationGroup.discriminator,
+              value: updateReserveConfigEncodedValue(
+                UpdateConfigMode.UpdateElevationGroup.discriminator,
+                reserveConfig.elevationGroups
+              ),
+            });
+            break;
+          }
+        }
+      }
+      break;
+    case 'disableUsageAsCollOutsideEmode':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator,
+            reserveConfig.disableUsageAsCollOutsideEmode
+          ),
+        });
+      } else if (reserve.config.disableUsageAsCollOutsideEmode !== reserveConfig.disableUsageAsCollOutsideEmode) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator,
+            reserveConfig.disableUsageAsCollOutsideEmode
+          ),
+        });
+      }
+      break;
+    case 'utilizationLimitBlockBorrowingAbovePct':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
+            reserveConfig.utilizationLimitBlockBorrowingAbovePct
+          ),
+        });
+      } else if (
+        reserve.config.utilizationLimitBlockBorrowingAbovePct !== reserveConfig.utilizationLimitBlockBorrowingAbovePct
+      ) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
+            reserveConfig.utilizationLimitBlockBorrowingAbovePct
+          ),
+        });
+      }
+      break;
+    case 'autodeleverageEnabled':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
+            reserveConfig.autodeleverageEnabled
+          ),
+        });
+      } else if (reserve.config.autodeleverageEnabled !== reserveConfig.autodeleverageEnabled) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
+            reserveConfig.autodeleverageEnabled
+          ),
+        });
+      }
+      break;
+    case 'borrowLimitOutsideElevationGroup':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator,
+            reserveConfig.borrowLimitOutsideElevationGroup.toNumber()
+          ),
+        });
+      } else if (
+        reserve.config.borrowLimitOutsideElevationGroup.toNumber() !==
+        reserveConfig.borrowLimitOutsideElevationGroup.toNumber()
+      ) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator,
+            reserveConfig.borrowLimitOutsideElevationGroup.toNumber()
+          ),
+        });
+      }
+      break;
+    case 'borrowLimitAgainstThisCollateralInElevationGroup':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.discriminator,
+            reserveConfig.borrowLimitAgainstThisCollateralInElevationGroup.map((borrowLimit) => borrowLimit.toNumber())
+          ),
+        });
+      } else {
+        for (let i = 0; i < reserveConfig.borrowLimitAgainstThisCollateralInElevationGroup.length; i++) {
+          if (
+            reserve.config.borrowLimitAgainstThisCollateralInElevationGroup[i] !==
+            reserveConfig.borrowLimitAgainstThisCollateralInElevationGroup[i]
+          ) {
+            updateReserveIxnsArgs.push({
+              mode: UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.discriminator,
+              value: updateReserveConfigEncodedValue(
+                UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.discriminator,
+                reserveConfig.borrowLimitAgainstThisCollateralInElevationGroup.map((borrowLimit) =>
+                  borrowLimit.toNumber()
+                )
+              ),
+            });
+          }
+        }
+      }
+      break;
+    case 'deleveragingBonusIncreaseBpsPerDay':
+      if (reserve === undefined) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
+            reserveConfig.deleveragingBonusIncreaseBpsPerDay.toNumber()
+          ),
+        });
+      } else if (
+        reserve.config.deleveragingBonusIncreaseBpsPerDay.toNumber() !==
+        reserveConfig.deleveragingBonusIncreaseBpsPerDay.toNumber()
+      ) {
+        updateReserveIxnsArgs.push({
+          mode: UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
+          value: updateReserveConfigEncodedValue(
+            UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
+            reserveConfig.deleveragingBonusIncreaseBpsPerDay.toNumber()
+          ),
+        });
+      }
+      break;
+    default:
+      assertNever(key); // Will cause compile error if any case is missing
+  }
+}
+
+export function updateEntireReserveConfigIx(
+  marketWithAddress: MarketWithAddress,
+  reserveAddress: PublicKey,
+  reserveConfig: ReserveConfig,
+  programId: PublicKey
+): TransactionInstruction {
+  const layout = ReserveConfig.layout();
+  const data = Buffer.alloc(1000);
+  const len = layout.encode(reserveConfig.toEncodable(), data);
+  const value = Uint8Array.from([...data.subarray(0, len)]);
+
+  const args: UpdateReserveConfigArgs = {
+    mode: new anchor.BN(25),
+    value: value,
+    skipValidation: false,
+  };
+
+  const accounts: UpdateReserveConfigAccounts = {
+    lendingMarketOwner: marketWithAddress.state.lendingMarketOwner,
+    lendingMarket: marketWithAddress.address,
+    reserve: reserveAddress,
+  };
+
+  const ix = updateReserveConfig(args, accounts, programId);
+
+  return ix;
+}
+
+export function parseForChangesReserveConfigAndGetIxs(
+  marketWithAddress: MarketWithAddress,
+  reserve: Reserve | undefined,
+  reserveAddress: PublicKey,
+  reserveConfig: ReserveConfig,
+  programId: PublicKey
+) {
+  const updateReserveIxnsArgs: { mode: number; value: Uint8Array }[] = [];
+  for (const key in reserveConfig.toEncodable()) {
+    if (isExcludedReserveConfigKey(key)) {
+      continue;
     }
-  } // for loop
+    handleConfigUpdate(key as ReserveConfigKey, reserve, reserveConfig, updateReserveIxnsArgs);
+  }
 
   const ixns: TransactionInstruction[] = [];
 

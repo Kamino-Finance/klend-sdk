@@ -28,6 +28,7 @@ import {
 } from './vault';
 import {
   AddAssetToMarketParams,
+  assertNever,
   CreateKaminoMarketParams,
   createReserveIxs,
   DEFAULT_RECENT_SLOT_DURATION_MS,
@@ -40,6 +41,7 @@ import {
   KaminoReserve,
   LendingMarket,
   lendingMarketAuthPda,
+  LendingMarketFields,
   MarketWithAddress,
   parseForChangesReserveConfigAndGetIxs,
   parseOracleType,
@@ -992,15 +994,32 @@ export class KaminoManager {
   }
 } // KaminoManager
 
-function parseForChangesMarketConfigAndGetIxs(
-  marketWithAddress: MarketWithAddress,
-  newMarket: LendingMarket,
-  programId: PublicKey
-): TransactionInstruction[] {
-  const market = marketWithAddress.state;
+export type BaseLendingMarketKey = keyof LendingMarketFields;
+const EXCLUDED_LENDING_MARKET_KEYS = [
+  'version',
+  'bumpSeed',
+  'reserved0',
+  'reserved1',
+  'padding1',
+  'elevationGroupPadding',
+  'quoteCurrency',
+] as const;
+export type ExcludedLendingMarketKey = (typeof EXCLUDED_LENDING_MARKET_KEYS)[number];
+
+function isExcludedLendingMarketKey(value: unknown): value is ExcludedLendingMarketKey {
+  return EXCLUDED_LENDING_MARKET_KEYS.includes(value as ExcludedLendingMarketKey);
+}
+
+export type LendingMarketKey = Exclude<BaseLendingMarketKey, ExcludedLendingMarketKey>;
+
+const updateLendingMarketConfig = (
+  key: LendingMarketKey,
+  market: LendingMarket,
+  newMarket: LendingMarket
+): { mode: number; value: Buffer }[] => {
   const updateLendingMarketIxnsArgs: { mode: number; value: Buffer }[] = [];
-  for (const key in market.toJSON()) {
-    if (key === 'lendingMarketOwner') {
+  switch (key) {
+    case 'lendingMarketOwner': {
       if (!market.lendingMarketOwner.equals(newMarket.lendingMarketOwner)) {
         updateLendingMarketIxnsArgs.push({
           mode: UpdateLendingMarketMode.UpdateOwner.discriminator,
@@ -1010,7 +1029,9 @@ function parseForChangesMarketConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'lendingMarketOwnerCached') {
+      break;
+    }
+    case 'lendingMarketOwnerCached':
       if (!market.lendingMarketOwnerCached.equals(newMarket.lendingMarketOwnerCached)) {
         updateLendingMarketIxnsArgs.push({
           mode: UpdateLendingMarketMode.UpdateOwner.discriminator,
@@ -1020,7 +1041,8 @@ function parseForChangesMarketConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'referralFeeBps') {
+      break;
+    case 'referralFeeBps':
       if (market.referralFeeBps !== newMarket.referralFeeBps) {
         updateLendingMarketIxnsArgs.push({
           mode: UpdateLendingMarketMode.UpdateReferralFeeBps.discriminator,
@@ -1030,7 +1052,8 @@ function parseForChangesMarketConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'emergencyMode') {
+      break;
+    case 'emergencyMode':
       if (market.emergencyMode !== newMarket.emergencyMode) {
         updateLendingMarketIxnsArgs.push({
           mode: UpdateLendingMarketMode.UpdateEmergencyMode.discriminator,
@@ -1040,7 +1063,8 @@ function parseForChangesMarketConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'autodeleverageEnabled') {
+      break;
+    case 'autodeleverageEnabled':
       if (market.autodeleverageEnabled !== newMarket.autodeleverageEnabled) {
         updateLendingMarketIxnsArgs.push({
           mode: UpdateLendingMarketMode.UpdateAutodeleverageEnabled.discriminator,
@@ -1050,7 +1074,8 @@ function parseForChangesMarketConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'borrowDisabled') {
+      break;
+    case 'borrowDisabled':
       if (market.borrowDisabled !== newMarket.borrowDisabled) {
         updateLendingMarketIxnsArgs.push({
           mode: UpdateLendingMarketMode.UpdateBorrowingDisabled.discriminator,
@@ -1060,7 +1085,8 @@ function parseForChangesMarketConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'priceRefreshTriggerToMaxAgePct') {
+      break;
+    case 'priceRefreshTriggerToMaxAgePct':
       if (market.priceRefreshTriggerToMaxAgePct !== newMarket.priceRefreshTriggerToMaxAgePct) {
         updateLendingMarketIxnsArgs.push({
           mode: UpdateLendingMarketMode.UpdatePriceRefreshTriggerToMaxAgePct.discriminator,
@@ -1070,7 +1096,8 @@ function parseForChangesMarketConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'liquidationMaxDebtCloseFactorPct') {
+      break;
+    case 'liquidationMaxDebtCloseFactorPct':
       if (market.liquidationMaxDebtCloseFactorPct !== newMarket.liquidationMaxDebtCloseFactorPct) {
         updateLendingMarketIxnsArgs.push({
           mode: UpdateLendingMarketMode.UpdateLiquidationCloseFactor.discriminator,
@@ -1080,7 +1107,8 @@ function parseForChangesMarketConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'insolvencyRiskUnhealthyLtvPct') {
+      break;
+    case 'insolvencyRiskUnhealthyLtvPct':
       if (market.insolvencyRiskUnhealthyLtvPct !== newMarket.insolvencyRiskUnhealthyLtvPct) {
         updateLendingMarketIxnsArgs.push({
           mode: UpdateLendingMarketMode.UpdateInsolvencyRiskLtv.discriminator,
@@ -1090,7 +1118,8 @@ function parseForChangesMarketConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'minFullLiquidationValueThreshold') {
+      break;
+    case 'minFullLiquidationValueThreshold':
       if (!market.minFullLiquidationValueThreshold.eq(newMarket.minFullLiquidationValueThreshold)) {
         updateLendingMarketIxnsArgs.push({
           mode: UpdateLendingMarketMode.UpdateMinFullLiquidationThreshold.discriminator,
@@ -1100,7 +1129,8 @@ function parseForChangesMarketConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'maxLiquidatableDebtMarketValueAtOnce') {
+      break;
+    case 'maxLiquidatableDebtMarketValueAtOnce':
       if (!market.maxLiquidatableDebtMarketValueAtOnce.eq(newMarket.maxLiquidatableDebtMarketValueAtOnce)) {
         updateLendingMarketIxnsArgs.push({
           mode: UpdateLendingMarketMode.UpdateLiquidationMaxValue.discriminator,
@@ -1110,7 +1140,8 @@ function parseForChangesMarketConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'globalAllowedBorrowValue') {
+      break;
+    case 'globalAllowedBorrowValue':
       if (!market.globalAllowedBorrowValue.eq(newMarket.globalAllowedBorrowValue)) {
         updateLendingMarketIxnsArgs.push({
           mode: UpdateLendingMarketMode.UpdateGlobalAllowedBorrow.discriminator,
@@ -1120,7 +1151,8 @@ function parseForChangesMarketConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'riskCouncil') {
+      break;
+    case 'riskCouncil':
       if (!market.riskCouncil.equals(newMarket.riskCouncil)) {
         updateLendingMarketIxnsArgs.push({
           mode: UpdateLendingMarketMode.UpdateRiskCouncil.discriminator,
@@ -1130,49 +1162,8 @@ function parseForChangesMarketConfigAndGetIxs(
           ),
         });
       }
-    } else if (key === 'minNetValueInObligationSf') {
-      if (!market.minNetValueInObligationSf.eq(newMarket.minNetValueInObligationSf)) {
-        updateLendingMarketIxnsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateMinNetValueObligationPostAction.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateMinNetValueObligationPostAction.discriminator,
-            newMarket.minNetValueInObligationSf.toString()
-          ),
-        });
-      }
-    } else if (key === 'minValueSkipLiquidationBfChecks') {
-      if (!market.minValueSkipLiquidationBfChecks.eq(newMarket.minValueSkipLiquidationBfChecks)) {
-        updateLendingMarketIxnsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheck.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheck.discriminator,
-            newMarket.minValueSkipLiquidationBfChecks.toNumber()
-          ),
-        });
-      }
-    } else if (key === 'minValueSkipLiquidationLtvChecks') {
-      if (!market.minValueSkipLiquidationLtvChecks.eq(newMarket.minValueSkipLiquidationLtvChecks)) {
-        updateLendingMarketIxnsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheck.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheck.discriminator,
-            newMarket.minValueSkipLiquidationLtvChecks.toNumber()
-          ),
-        });
-      }
-    } else if (key === 'individualAutodeleverageMarginCallPeriodSecs') {
-      if (
-        !market.individualAutodeleverageMarginCallPeriodSecs.eq(newMarket.individualAutodeleverageMarginCallPeriodSecs)
-      ) {
-        updateLendingMarketIxnsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs.discriminator,
-            newMarket.individualAutodeleverageMarginCallPeriodSecs.toNumber()
-          ),
-        });
-      }
-    } else if (key === 'elevationGroups') {
+      break;
+    case 'elevationGroups':
       let elevationGroupsDiffs = 0;
       for (let i = 0; i < market.elevationGroups.length; i++) {
         if (
@@ -1197,15 +1188,81 @@ function parseForChangesMarketConfigAndGetIxs(
       if (elevationGroupsDiffs > 1) {
         throw new Error('Can only update 1 elevation group at a time');
       }
-    } else if (key === 'name') {
+      break;
+    case 'minNetValueInObligationSf':
+      if (!market.minNetValueInObligationSf.eq(newMarket.minNetValueInObligationSf)) {
+        updateLendingMarketIxnsArgs.push({
+          mode: UpdateLendingMarketMode.UpdateMinNetValueObligationPostAction.discriminator,
+          value: updateMarketConfigEncodedValue(
+            UpdateLendingMarketMode.UpdateMinNetValueObligationPostAction.discriminator,
+            newMarket.minNetValueInObligationSf.toString()
+          ),
+        });
+      }
+      break;
+    case 'minValueSkipLiquidationBfChecks':
+      if (!market.minValueSkipLiquidationBfChecks.eq(newMarket.minValueSkipLiquidationBfChecks)) {
+        updateLendingMarketIxnsArgs.push({
+          mode: UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheck.discriminator,
+          value: updateMarketConfigEncodedValue(
+            UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheck.discriminator,
+            newMarket.minValueSkipLiquidationBfChecks.toNumber()
+          ),
+        });
+      }
+      break;
+    case 'minValueSkipLiquidationLtvChecks':
+      if (!market.minValueSkipLiquidationLtvChecks.eq(newMarket.minValueSkipLiquidationLtvChecks)) {
+        updateLendingMarketIxnsArgs.push({
+          mode: UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheck.discriminator,
+          value: updateMarketConfigEncodedValue(
+            UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheck.discriminator,
+            newMarket.minValueSkipLiquidationLtvChecks.toNumber()
+          ),
+        });
+      }
+      break;
+    case 'individualAutodeleverageMarginCallPeriodSecs':
+      if (
+        market.individualAutodeleverageMarginCallPeriodSecs !== newMarket.individualAutodeleverageMarginCallPeriodSecs
+      ) {
+        updateLendingMarketIxnsArgs.push({
+          mode: UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs.discriminator,
+          value: updateMarketConfigEncodedValue(
+            UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs.discriminator,
+            newMarket.individualAutodeleverageMarginCallPeriodSecs.toNumber()
+          ),
+        });
+      }
+      break;
+    case 'name':
       if (!sameLengthArrayEquals(market.name, newMarket.name)) {
         updateLendingMarketIxnsArgs.push({
           mode: UpdateLendingMarketMode.UpdateName.discriminator,
           value: updateMarketConfigEncodedValue(UpdateLendingMarketMode.UpdateName.discriminator, newMarket.name),
         });
       }
+      break;
+    default:
+      assertNever(key);
+  }
+  return updateLendingMarketIxnsArgs;
+};
+
+function parseForChangesMarketConfigAndGetIxs(
+  marketWithAddress: MarketWithAddress,
+  newMarket: LendingMarket,
+  programId: PublicKey
+): TransactionInstruction[] {
+  const market = marketWithAddress.state;
+  const updateLendingMarketIxnsArgs: { mode: number; value: Buffer }[] = [];
+
+  for (const key in market.toJSON()) {
+    if (isExcludedLendingMarketKey(key)) {
+      continue;
     }
-  } // for loop
+    updateLendingMarketIxnsArgs.push(...updateLendingMarketConfig(key as LendingMarketKey, market, newMarket));
+  }
 
   const ixns: TransactionInstruction[] = [];
 

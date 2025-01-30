@@ -320,3 +320,7 @@ export function printReserveAllocationOverview(reserveAllocationOverview: Reserv
   console.log('  Token allocation cap:', reserveAllocationOverview.tokenAllocationCap.toString());
   console.log('  Ctoken allocation:', reserveAllocationOverview.ctokenAllocation.toString());
 }
+
+export function assertNever(x: never): never {
+  throw new Error('Unexpected object: ' + x);
+}
