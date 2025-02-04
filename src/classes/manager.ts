@@ -60,7 +60,12 @@ import {
 import { PROGRAM_ID } from '../idl_codegen/programId';
 import { Scope, TokenMetadatas, U16_MAX } from '@kamino-finance/scope-sdk';
 import BN from 'bn.js';
-import { ElevationGroup, ReserveConfig, UpdateLendingMarketMode } from '../idl_codegen/types';
+import {
+  ElevationGroup,
+  ReserveConfig,
+  UpdateLendingMarketMode,
+  UpdateLendingMarketModeKind,
+} from '../idl_codegen/types';
 import Decimal from 'decimal.js';
 import * as anchor from '@coral-xyz/anchor';
 import { VaultState } from '../idl_codegen_kamino_vault/accounts';
@@ -1281,7 +1286,7 @@ function parseForChangesMarketConfigAndGetIxs(
 }
 
 function updateMarketConfigEncodedValue(
-  discriminator: number,
+  discriminator: UpdateLendingMarketModeKind['discriminator'],
   value: number | number[] | PublicKey | ElevationGroup | string
 ): Buffer {
   let buffer: Buffer = Buffer.alloc(72);
@@ -1306,6 +1311,7 @@ function updateMarketConfigEncodedValue(
     case UpdateLendingMarketMode.UpdateMinFullLiquidationThreshold.discriminator:
     case UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheck.discriminator:
     case UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheck.discriminator:
+    case UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs.discriminator:
       value = value as number;
       buffer.writeBigUint64LE(BigInt(value), 0);
       break;
@@ -1329,6 +1335,13 @@ function updateMarketConfigEncodedValue(
         buffer.writeUIntLE(valueArray[i], i, 1);
       }
       break;
+    case UpdateLendingMarketMode.UpdatePaddingFields.discriminator:
+    case UpdateLendingMarketMode.DeprecatedUpdateGlobalUnhealthyBorrow.discriminator:
+    case UpdateLendingMarketMode.DeprecatedUpdateMultiplierPoints.discriminator:
+      // Deliberately skipped - we are not updating padding or deprecated fields using this method
+      break;
+    default:
+      assertNever(discriminator);
   }
 
   return buffer;
