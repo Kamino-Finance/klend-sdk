@@ -65,7 +65,8 @@ export async function calculateMultiplyEffects(
     debtBorrowFactorPct,
     priceCollToDebt,
     priceDebtToColl,
-  }: LeverageFormsCalcsArgs
+  }: LeverageFormsCalcsArgs,
+  logEstimations = false
 ): Promise<FormsCalcsResult> {
   // calculate estimations for deposit operation
   const {
@@ -107,18 +108,20 @@ export async function calculateMultiplyEffects(
     flashLoanFee: flashBorrowReserveFlashLoanFeePercentage, // TODO: is this the right flash borrow?
   });
 
-  console.log(
-    'Estimations',
-    toJson({
-      activeTab,
-      depositModeEstimatedDepositAmount,
-      depositModeEstimatedBorrowAmount,
-      withdrawModeEstimatedDepositTokenWithdrawn,
-      withdrawModeEstimatedBorrowTokenWithdrawn,
-      adjustModeEstimatedDepositAmount,
-      adjustModeEstimateBorrowAmount,
-    })
-  );
+  if (logEstimations) {
+    console.log(
+      'Estimations',
+      toJson({
+        activeTab,
+        depositModeEstimatedDepositAmount,
+        depositModeEstimatedBorrowAmount,
+        withdrawModeEstimatedDepositTokenWithdrawn,
+        withdrawModeEstimatedBorrowTokenWithdrawn,
+        adjustModeEstimatedDepositAmount,
+        adjustModeEstimateBorrowAmount,
+      })
+    );
+  }
 
   let [isClosingPosition, totalDeposited, totalBorrowed] = [false, new Decimal(0), new Decimal(0)];
 

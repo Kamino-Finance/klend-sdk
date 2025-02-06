@@ -105,6 +105,7 @@ export class KaminoObligation {
   ) {
     this.obligationAddress = obligationAddress;
     this.state = obligation;
+
     const { borrows, deposits, refreshedStats } = this.calculatePositions(
       market,
       obligation.deposits,
@@ -784,20 +785,23 @@ export class KaminoObligation {
     return new Decimal(0);
   };
 
+  static getOraclePx = (reserve: KaminoReserve) => {
+    return reserve.getOracleMarketPrice();
+  };
+
   private calculatePositions(
     market: KaminoMarket,
     obligationDeposits: ObligationCollateral[],
     obligationBorrows: ObligationLiquidity[],
     elevationGroup: number,
     collateralExchangeRates: Map<PublicKey, Decimal>,
-    cumulativeBorrowRates: Map<PublicKey, Decimal> | null
+    cumulativeBorrowRates: Map<PublicKey, Decimal> | null,
+    getOraclePx: (reserve: KaminoReserve) => Decimal = KaminoObligation.getOraclePx
   ): {
     borrows: Map<PublicKey, Position>;
     deposits: Map<PublicKey, Position>;
     refreshedStats: ObligationStats;
   } {
-    const getOraclePx = (reserve: KaminoReserve) => reserve.getOracleMarketPrice();
-
     const depositStatsOraclePrice = KaminoObligation.calculateObligationDeposits(
       market,
       obligationDeposits,
