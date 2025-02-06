@@ -789,7 +789,7 @@ export class KaminoObligation {
     return reserve.getOracleMarketPrice();
   };
 
-  private calculatePositions(
+  calculatePositions(
     market: KaminoMarket,
     obligationDeposits: ObligationCollateral[],
     obligationBorrows: ObligationLiquidity[],
