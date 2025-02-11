@@ -1537,7 +1537,7 @@ function handleConfigUpdate(
           mode: UpdateConfigMode.UpdateDepositLimit.discriminator,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateDepositLimit.discriminator,
-            reserveConfig.depositLimit.toNumber()
+            BigInt(reserveConfig.depositLimit.toString())
           ),
         });
       } else if (!reserve.config.depositLimit.eq(reserveConfig.depositLimit)) {
@@ -1545,7 +1545,7 @@ function handleConfigUpdate(
           mode: UpdateConfigMode.UpdateDepositLimit.discriminator,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateDepositLimit.discriminator,
-            reserveConfig.depositLimit.toNumber()
+            BigInt(reserveConfig.depositLimit.toString())
           ),
         });
       }
@@ -1556,7 +1556,7 @@ function handleConfigUpdate(
           mode: UpdateConfigMode.UpdateBorrowLimit.discriminator,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateBorrowLimit.discriminator,
-            reserveConfig.borrowLimit.toNumber()
+            BigInt(reserveConfig.borrowLimit.toString())
           ),
         });
       } else if (!reserve.config.borrowLimit.eq(reserveConfig.borrowLimit)) {
@@ -1564,7 +1564,7 @@ function handleConfigUpdate(
           mode: UpdateConfigMode.UpdateBorrowLimit.discriminator,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateBorrowLimit.discriminator,
-            reserveConfig.borrowLimit.toNumber()
+            BigInt(reserveConfig.borrowLimit.toString())
           ),
         });
       }
@@ -1976,15 +1976,12 @@ function handleConfigUpdate(
             reserveConfig.borrowLimitOutsideElevationGroup.toNumber()
           ),
         });
-      } else if (
-        reserve.config.borrowLimitOutsideElevationGroup.toNumber() !==
-        reserveConfig.borrowLimitOutsideElevationGroup.toNumber()
-      ) {
+      } else if (!reserve.config.borrowLimitOutsideElevationGroup.eq(reserveConfig.borrowLimitOutsideElevationGroup)) {
         updateReserveIxnsArgs.push({
           mode: UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator,
-            reserveConfig.borrowLimitOutsideElevationGroup.toNumber()
+            BigInt(reserveConfig.borrowLimitOutsideElevationGroup.toString())
           ),
         });
       }
@@ -2106,7 +2103,7 @@ export function parseForChangesReserveConfigAndGetIxs(
 
 export function updateReserveConfigEncodedValue(
   discriminator: number,
-  value: number | number[] | BorrowRateCurve | PublicKey
+  value: number | number[] | bigint | BorrowRateCurve | PublicKey
 ): Uint8Array {
   let buffer: Buffer;
   let valueArray: number[] = [];
@@ -2133,8 +2130,6 @@ export function updateReserveConfigEncodedValue(
       break;
     case UpdateConfigMode.UpdateFeesBorrowFee.discriminator:
     case UpdateConfigMode.UpdateFeesFlashLoanFee.discriminator:
-    case UpdateConfigMode.UpdateDepositLimit.discriminator:
-    case UpdateConfigMode.UpdateBorrowLimit.discriminator:
     case UpdateConfigMode.UpdateTokenInfoLowerHeuristic.discriminator:
     case UpdateConfigMode.UpdateTokenInfoUpperHeuristic.discriminator:
     case UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator:
@@ -2147,10 +2142,16 @@ export function updateReserveConfigEncodedValue(
     case UpdateConfigMode.UpdateBorrowFactor.discriminator:
     case UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator:
     case UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator:
-    case UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator:
       value = value as number;
       buffer = Buffer.alloc(8);
       buffer.writeBigUint64LE(BigInt(value), 0);
+      break;
+    case UpdateConfigMode.UpdateDepositLimit.discriminator:
+    case UpdateConfigMode.UpdateBorrowLimit.discriminator:
+    case UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator:
+      value = value as bigint;
+      buffer = Buffer.alloc(8);
+      buffer.writeBigUint64LE(value, 0);
       break;
     case UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator:
     case UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator:
