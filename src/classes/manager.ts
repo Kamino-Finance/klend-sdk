@@ -622,6 +622,15 @@ export class KaminoManager {
   }
 
   /**
+   * Get a list of kaminoVaults
+   * @param vaults - a list of vaults to get the states for; if not provided, all vaults will be fetched
+   * @returns a list of KaminoVaults
+   */
+  async getVaults(vaults?: Array<PublicKey>): Promise<Array<KaminoVault | null>> {
+    return this._vaultClient.getVaults(vaults);
+  }
+
+  /**
    * Get all token accounts that hold shares for a specific share mint
    * @param shareMint
    * @returns an array of all holders tokenAccounts pubkeys and their account info

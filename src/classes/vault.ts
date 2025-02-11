@@ -79,7 +79,7 @@ import {
   UserSharesForVault,
   WithdrawIxs,
 } from './types';
-import { collToLamportsDecimal, ZERO } from '@kamino-finance/kliquidity-sdk';
+import { batchFetch, collToLamportsDecimal, ZERO } from '@kamino-finance/kliquidity-sdk';
 import { FullBPSDecimal } from '@kamino-finance/kliquidity-sdk/dist/utils/CreationParameters';
 import { FarmState } from '@kamino-finance/farms-sdk/dist';
 import { getAccountsInLUT, initLookupTableIx } from './lut_utils';
@@ -1747,6 +1747,26 @@ export class KaminoVaultClient {
 
       return new KaminoVault(kaminoVault.pubkey, kaminoVaultAccount, this._kaminoVaultProgramId);
     });
+  }
+
+  /**
+   * Get a list of kaminoVaults
+   * @param vaults - a list of vaults to get the states for; if not provided, all vaults will be fetched
+   * @returns a list of vaults
+   */
+  async getVaults(vaults?: Array<PublicKey>): Promise<Array<KaminoVault | null>> {
+    if (!vaults) {
+      vaults = (await this.getAllVaults()).map((x) => x.address);
+    }
+    const vaultStates = await batchFetch(vaults, (chunk) => this.getVaultsStates(chunk));
+    return vaults.map((vault, index) => {
+      const state = vaultStates[index];
+      return state ? new KaminoVault(vault, state, this._kaminoVaultProgramId) : null;
+    });
+  }
+
+  private async getVaultsStates(vaults: PublicKey[]): Promise<Array<VaultState | null>> {
+    return await VaultState.fetchMultiple(this.getConnection(), vaults, this._kaminoVaultProgramId);
   }
 
   /**
