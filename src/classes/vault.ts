@@ -1918,7 +1918,17 @@ export class KaminoVaultClient {
    * @returns a hashmap from each reserve pubkey to the reserve state
    */
   async loadVaultReserves(vaultState: VaultState): Promise<PubkeyHashMap<PublicKey, KaminoReserve>> {
-    const vaultReservesAddresses = this.getVaultReserves(vaultState);
+    return this.loadVaultsReserves([vaultState]);
+  }
+
+  /**
+   * This will load the onchain state for all the reserves that the vaults have allocations for, deduplicating the reserves
+   * @param vaults - the vault states to load reserves for
+   * @returns a hashmap from each reserve pubkey to the reserve state
+   */
+  async loadVaultsReserves(vaults: VaultState[]): Promise<PubkeyHashMap<PublicKey, KaminoReserve>> {
+    const vaultReservesAddressesSet = new PublicKeySet(vaults.flatMap((vault) => this.getVaultReserves(vault)));
+    const vaultReservesAddresses = vaultReservesAddressesSet.toArray();
     const reserveAccounts = await this.getConnection().getMultipleAccountsInfo(vaultReservesAddresses, 'processed');
 
     const deserializedReserves = reserveAccounts.map((reserve, i) => {

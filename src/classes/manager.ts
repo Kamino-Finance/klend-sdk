@@ -864,6 +864,15 @@ export class KaminoManager {
   }
 
   /**
+   * This will load the onchain state for all the reserves that the vaults have allocations for, deduplicating the reserves
+   * @param vaults - the vault states to load reserves for
+   * @returns a hashmap from each reserve pubkey to the reserve state
+   */
+  async loadVaultsReserves(vaults: VaultState[]): Promise<PubkeyHashMap<PublicKey, KaminoReserve>> {
+    return this._vaultClient.loadVaultsReserves(vaults);
+  }
+
+  /**
    * This will load the onchain state for all the reserves that the vault has allocations for
    * @param vaultState - the vault state to load reserves for
    * @returns a hashmap from each reserve pubkey to the reserve state
