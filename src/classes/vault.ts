@@ -1493,6 +1493,21 @@ export class KaminoVaultClient {
     vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>,
     currentSlot?: number
   ): Promise<PubkeyHashMap<PublicKey, Decimal>> {
+    // if there are no vault reserves or all have weight 0 everything has to be in Available
+    const allReservesPubkeys = this.getVaultReserves(vaultState);
+    const reservesAllocations = this.getVaultAllocations(vaultState);
+    const allReservesHaveWeight0 = allReservesPubkeys.every((reserve) => {
+      const allocation = reservesAllocations.get(reserve);
+      return allocation?.targetWeight.isZero();
+    });
+    if (allReservesHaveWeight0 || allReservesPubkeys.length === 0) {
+      const computedHoldings = new PubkeyHashMap<PublicKey, Decimal>();
+      allReservesPubkeys.forEach((reserve) => {
+        computedHoldings.set(reserve, new Decimal(0));
+      });
+      return computedHoldings;
+    }
+
     const holdings = await this.getVaultHoldings(vaultState, slot, vaultReserves, currentSlot);
     const initialVaultAllocations = this.getVaultAllocations(vaultState);
 
