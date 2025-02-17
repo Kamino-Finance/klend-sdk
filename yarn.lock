@@ -871,6 +871,25 @@
     commander "^9.3.0"
     decimal.js "^10.4.3"
 
+"@kamino-finance/farms-sdk@2.4.2":
+  version "2.4.2"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-2.4.2.tgz#6ad3031c301522f37f2509252438107c406fbfdb"
+  integrity sha512-wTHfEaA1QBeTuAyOdU960PNO9yyoQkLlyW53dsjyV2mnRJw6Lp0spkmEJy3uZ/jd+jasFIbwiTA2LpZq34FwOA==
+  dependencies:
+    "@coral-xyz/anchor" "^0.28.0"
+    "@coral-xyz/borsh" "^0.28.0"
+    "@kamino-finance/klend-sdk" "^5.10.32"
+    "@kamino-finance/kliquidity-sdk" "^7.0.13"
+    "@kamino-finance/scope-sdk" "^8.0.4"
+    "@solana/spl-token" "^0.4.9"
+    "@solana/web3.js" "^1.95.5"
+    base58-js "1.0.5"
+    bn.js "^5.2.1"
+    bs58 "^4.0.1"
+    cli-color "^2.0.4"
+    commander "^9.3.0"
+    decimal.js "^10.4.3"
+
 "@kamino-finance/klend-sdk@^5.10.31":
   version "5.10.31"
   resolved "https://registry.yarnpkg.com/@kamino-finance/klend-sdk/-/klend-sdk-5.10.31.tgz#546aa67be2ca4266fb9f206202709d0c883ec164"
@@ -880,6 +899,31 @@
     "@coral-xyz/borsh" "^0.28.0"
     "@kamino-finance/farms-sdk" "2.3.4"
     "@kamino-finance/kliquidity-sdk" "^7.0.1"
+    "@kamino-finance/scope-sdk" "^8.0.3"
+    "@solana/buffer-layout" "^4.0.0"
+    "@solana/spl-token" "^0.4.8"
+    "@solana/web3.js" "^1.95.8"
+    "@switchboard-xyz/sbv2-lite" "^0.1.0"
+    axios "^1.6.8"
+    base58-js "^2.0.0"
+    bn.js "^5.2.1"
+    bs58 "^6.0.0"
+    buffer "^6.0.3"
+    commander "^9.3.0"
+    decimal.js "^10.4.3"
+    exponential-backoff "^3.1.1"
+    uuid "^10.0.0"
+    zstddec "^0.1.0"
+
+"@kamino-finance/klend-sdk@^5.10.32":
+  version "5.10.32"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/klend-sdk/-/klend-sdk-5.10.32.tgz#c8886eeca7c9a136e2a8d2752a1fb27323f44220"
+  integrity sha512-3eN+wWUXB1YZ/BUvqQY7YULocfh2dWUcxyBdU6Bw18FgyNsxRTbaLKxg33kfVj6IlIvzPcU4h2mA6dWZxPGCog==
+  dependencies:
+    "@coral-xyz/anchor" "^0.28.0"
+    "@coral-xyz/borsh" "^0.28.0"
+    "@kamino-finance/farms-sdk" "2.4.1"
+    "@kamino-finance/kliquidity-sdk" "^7.0.13"
     "@kamino-finance/scope-sdk" "^8.0.3"
     "@solana/buffer-layout" "^4.0.0"
     "@solana/spl-token" "^0.4.8"
