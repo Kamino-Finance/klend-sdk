@@ -48,8 +48,8 @@
   "dependencies": {
     "@coral-xyz/anchor": "^0.28.0",
     "@coral-xyz/borsh": "^0.28.0",
-    "@kamino-finance/farms-sdk": "2.3.4",
-    "@kamino-finance/kliquidity-sdk": "^7.0.1",
+    "@kamino-finance/farms-sdk": "2.4.1",
+    "@kamino-finance/kliquidity-sdk": "^7.0.13",
     "@kamino-finance/scope-sdk": "^8.0.3",
     "@solana/buffer-layout": "^4.0.0",
     "@solana/spl-token": "^0.4.8",
@@ -69,7 +69,7 @@
   "devDependencies": {
     "@orca-so/sdk": "^1.2.25",
     "@orca-so/whirlpool-sdk": "^0.4.2",
-    "@raydium-io/raydium-sdk": "^1.3.1-beta.54",
+    "@raydium-io/raydium-sdk-v2": "=0.1.111-alpha",
     "@types/bn.js": "^5.1.1",
     "@types/bs58": "^4.0.1",
     "@types/chai": "^4.3.5",
