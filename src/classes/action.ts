@@ -836,7 +836,10 @@ export class KaminoAction {
       addInitObligationForFarmForRepay,
       twoTokenAction
     );
-    await axn.addRepayAndWithdrawIxs();
+
+    const withdrawCollateralAmount = axn.getWithdrawCollateralAmount(axn.outflowReserve!, axn.outflowAmount!);
+
+    await axn.addRepayAndWithdrawIxs(withdrawCollateralAmount);
     await axn.addInBetweenIxs(
       'repayAndWithdraw',
       includeAtaIxns,
@@ -905,7 +908,10 @@ export class KaminoAction {
       false,
       overrideElevationGroupRequest
     );
-    await axn.addWithdrawIx();
+
+    const collateralAmount = axn.getWithdrawCollateralAmount(axn.reserve, axn.amount);
+
+    await axn.addWithdrawIx(collateralAmount);
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
 
     return axn;
@@ -1380,7 +1386,7 @@ export class KaminoAction {
     this.lendingIxs.push(borrowIx);
   }
 
-  async addRepayAndWithdrawIxs() {
+  async addRepayAndWithdrawIxs(withdrawCollateralAmount: BN) {
     this.lendingIxsLabels.push(
       `repayObligationLiquidity(reserve=${this.reserve!.address})(obligation=${this.getObligationPda()})`
     );
@@ -1424,17 +1430,10 @@ export class KaminoAction {
       throw new Error(`outflowAmount not set`);
     }
 
-    const collateralExchangeRate = this.outflowReserve.getEstimatedCollateralExchangeRate(
-      this.currentSlot,
-      this.kaminoMarket.state.referralFeeBps
-    );
-
     this.lendingIxs.push(
       withdrawObligationCollateralAndRedeemReserveCollateral(
         {
-          collateralAmount: this.outflowAmount.eq(new BN(U64_MAX))
-            ? this.outflowAmount
-            : new BN(new Decimal(this.outflowAmount.toString()).mul(collateralExchangeRate).ceil().toString()),
+          collateralAmount: withdrawCollateralAmount,
         },
         {
           owner: this.owner,
@@ -1457,21 +1456,12 @@ export class KaminoAction {
     );
   }
 
-  async addWithdrawIx() {
-    const collateralExchangeRate = this.reserve.getEstimatedCollateralExchangeRate(
-      this.currentSlot,
-      this.kaminoMarket.state.referralFeeBps
-    );
-
-    const collateralAmount = this.amount.eq(new BN(U64_MAX))
-      ? this.amount
-      : new BN(new Decimal(this.amount.toString()).mul(collateralExchangeRate).ceil().toString());
-
+  async addWithdrawIx(withdrawCollateralAmount: BN) {
     this.lendingIxsLabels.push(`withdrawObligationCollateralAndRedeemReserveCollateral`);
     this.lendingIxs.push(
       withdrawObligationCollateralAndRedeemReserveCollateral(
         {
-          collateralAmount,
+          collateralAmount: withdrawCollateralAmount,
         },
         {
           owner: this.owner,
@@ -2779,6 +2769,17 @@ export class KaminoAction {
       ),
       createAtaIxs: [createAtaIx],
     };
+  }
+
+  getWithdrawCollateralAmount(reserve: KaminoReserve, amount: BN): BN {
+    const collateralExchangeRate = reserve.getEstimatedCollateralExchangeRate(
+      this.currentSlot,
+      this.kaminoMarket.state.referralFeeBps
+    );
+
+    return amount.eq(new BN(U64_MAX))
+      ? amount
+      : new BN(new Decimal(amount.toString()).mul(collateralExchangeRate).ceil().toString());
   }
 
   getObligationPda(): PublicKey {
