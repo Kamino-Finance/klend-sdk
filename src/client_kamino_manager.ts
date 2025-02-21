@@ -260,7 +260,7 @@ async function main() {
         2500,
         [vaultKp]
       );
-      await sleep(5000);
+      await sleep(2000);
       const _populateLUTSig = await processTxn(env.client, env.payer, instructions.populateLUTIxs, mode, 2500, []);
 
       mode === 'execute' && console.log('Vault created:', vaultKp.publicKey.toBase58());
@@ -426,7 +426,7 @@ async function main() {
       // if we need to create the LUT we have to do that in a separate tx and wait a little bit after
       if (syncLUTIxs.setupLUTIfNeededIxs.length > 0) {
         const setupLUTSig = await processTxn(env.client, env.payer, syncLUTIxs.setupLUTIfNeededIxs, mode, 2500, []);
-        await sleep(5000);
+        await sleep(2000);
         mode === 'execute' && console.log('LUT created and set to the vault:', setupLUTSig);
       }
       // if there are accounts to be added to the LUT we have to do that in a separate tx

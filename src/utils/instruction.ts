@@ -38,7 +38,7 @@ export async function buildAndSendTxnWithLogs(
     });
     console.log('Transaction Hash:', withDescription, sig);
     if (withLogsIfSuccess) {
-      await sleep(5000);
+      await sleep(1000);
       const res = await c.getTransaction(sig, {
         commitment: 'confirmed',
         maxSupportedTransactionVersion: 6,
@@ -49,7 +49,6 @@ export async function buildAndSendTxnWithLogs(
   } catch (e: any) {
     console.log(e);
     process.stdout.write(e.logs.toString());
-    await sleep(5000);
     const sig = e.toString().split(' failed ')[0].split('Transaction ')[1];
     const res: VersionedTransactionResponse | null = await c.getTransaction(sig, {
       commitment: 'confirmed',
@@ -115,7 +114,6 @@ export async function simulateTxn(c: Connection, tx: Transaction, owner: Keypair
   } catch (e: any) {
     console.log(e);
     process.stdout.write(e.logs.toString());
-    await sleep(5000);
     const sig = e.toString().split(' failed ')[0].split('Transaction ')[1];
     const res: TransactionResponse | null = await c.getTransaction(sig, {
       commitment: 'confirmed',
