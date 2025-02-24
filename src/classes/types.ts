@@ -54,3 +54,8 @@ export type ReserveAllocationOverview = {
   tokenAllocationCap: Decimal;
   ctokenAllocation: Decimal;
 };
+
+export type APYs = {
+  grossAPY: Decimal;
+  netAPY: Decimal;
+}

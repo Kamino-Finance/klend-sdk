@@ -70,6 +70,7 @@ import bs58 from 'bs58';
 import { getAccountOwner, getProgramAccounts } from '../utils/rpc';
 import {
   AcceptVaultOwnershipIxs,
+  APYs,
   DepositIxs,
   InitVaultIxs,
   ReserveAllocationOverview,
@@ -98,7 +99,7 @@ export const kaminoVaultStagingId = new PublicKey('STkvh7ostar39Fwr4uZKASs1RNNuY
 const TOKEN_VAULT_SEED = 'token_vault';
 const CTOKEN_VAULT_SEED = 'ctoken_vault';
 const BASE_VAULT_AUTHORITY_SEED = 'authority';
-const SHARES_SEEDS = 'shares';
+const SHARES_SEED = 'shares';
 
 /**
  * KaminoVaultClient is a class that provides a high-level interface to interact with the Kamino Vault program.
@@ -191,7 +192,7 @@ export class KaminoVaultClient {
     )[0];
 
     const sharesMint = PublicKey.findProgramAddressSync(
-      [Buffer.from(SHARES_SEEDS), vaultState.publicKey.toBytes()],
+      [Buffer.from(SHARES_SEED), vaultState.publicKey.toBytes()],
       this._kaminoVaultProgramId
     )[0];
 
@@ -1005,6 +1006,7 @@ export class KaminoVaultClient {
    */
   async investAllReservesIxs(payer: PublicKey, vault: KaminoVault): Promise<TransactionInstruction[]> {
     const vaultState = await vault.getState(this.getConnection());
+    const minInvestAmount = vaultState.minInvestAmount;
     const allReserves = this.getVaultReserves(vaultState);
     if (allReserves.length === 0) {
       throw new Error('No reserves found for the vault, please select at least one reserve for the vault');
@@ -1024,6 +1026,7 @@ export class KaminoVaultClient {
     const curentVaultAllocations = this.getVaultAllocations(vaultState);
 
     const reservesToDisinvestFrom: PublicKey[] = [];
+    const reservesToInvestInto: PublicKey[] = [];
 
     for (let index = 0; index < allReserves.length; index++) {
       const reservePubkey = allReserves[index];
@@ -1037,8 +1040,15 @@ export class KaminoVaultClient {
         vaultState.tokenMintDecimals.toNumber()
       );
 
-      if (computedAllocation.lt(reserveAllocationLiquidityAmount)) {
-        reservesToDisinvestFrom.push(reservePubkey);
+      const diffInReserveTokens = computedAllocation.sub(reserveAllocationLiquidityAmount);
+      const diffInReserveLamports = collToLamportsDecimal(diffInReserveTokens, vaultState.tokenMintDecimals.toNumber());
+      // if the diff for the reserve is smaller than the min invest amount, we do not need to invest or disinvest
+      if (diffInReserveLamports.abs().gte(new Decimal(minInvestAmount.toString()))) {
+        if (computedAllocation.lt(reserveAllocationLiquidityAmount)) {
+          reservesToDisinvestFrom.push(reservePubkey);
+        } else {
+          reservesToInvestInto.push(reservePubkey);
+        }
       }
     }
 
@@ -1062,24 +1072,22 @@ export class KaminoVaultClient {
       investIxnsPromises.push(investIxsPromise);
     }
 
-    for (const reserve of allReserves) {
-      if (!reservesToDisinvestFrom.includes(reserve)) {
-        const reserveState = allReservesStateMap.get(reserve);
-        if (reserveState === null) {
-          throw new Error(`Reserve ${reserve.toBase58()} not found`);
-        }
-        const investIxsPromise = this.investSingleReserveIxs(
-          payer,
-          vault,
-          {
-            address: reserve,
-            state: reserveState!.state,
-          },
-          allReservesStateMap,
-          false
-        );
-        investIxnsPromises.push(investIxsPromise);
+    for (const reserve of reservesToInvestInto) {
+      const reserveState = allReservesStateMap.get(reserve);
+      if (reserveState === null) {
+        throw new Error(`Reserve ${reserve.toBase58()} not found`);
       }
+      const investIxsPromise = this.investSingleReserveIxs(
+        payer,
+        vault,
+        {
+          address: reserve,
+          state: reserveState!.state,
+        },
+        allReservesStateMap,
+        false
+      );
+      investIxnsPromises.push(investIxsPromise);
     }
 
     let investIxns: TransactionInstruction[] = [];
@@ -1500,7 +1508,7 @@ export class KaminoVaultClient {
       const allocation = reservesAllocations.get(reserve);
       return allocation?.targetWeight.isZero();
     });
-    if (allReservesHaveWeight0 || allReservesPubkeys.length === 0) {
+    if (allReservesPubkeys.length === 0 || allReservesHaveWeight0) {
       const computedHoldings = new PubkeyHashMap<PublicKey, Decimal>();
       allReservesPubkeys.forEach((reserve) => {
         computedHoldings.set(reserve, new Decimal(0));
@@ -1528,7 +1536,6 @@ export class KaminoVaultClient {
         const reserveWithWeight = initialVaultAllocations.get(reserve);
         const targetAllocation = reserveWithWeight!.targetWeight.mul(totalLeftover).div(currentAllocationSum);
         const reserveCap = reserveWithWeight!.tokenAllocationCap;
-        // todo: check if both target and reserveCap
         const amountToInvest = Decimal.min(targetAllocation, reserveCap, totalLeftToInvest);
         totalLeftToInvest = totalLeftToInvest.sub(amountToInvest);
         if (amountToInvest.eq(reserveCap)) {
@@ -2224,7 +2231,7 @@ export class KaminoVaultClient {
     // all the async part of the functions above just read the vaultReservesState which is read beforehand, so excepting vaultCollateralsPromise they should do no additional network calls
     const [
       vaultHoldingsWithUSDValue,
-      vaultTheoreticalAPY,
+      vaultTheoreticalAPYs,
       totalInvestedAndBorrowed,
       vaultCollaterals,
       reservesOverview,
@@ -2240,7 +2247,7 @@ export class KaminoVaultClient {
       holdingsUSD: vaultHoldingsWithUSDValue,
       reservesOverview: reservesOverview,
       vaultCollaterals: vaultCollaterals,
-      theoreticalSupplyAPY: vaultTheoreticalAPY,
+      theoreticalSupplyAPY: vaultTheoreticalAPYs,
       totalBorrowed: totalInvestedAndBorrowed.totalBorrowed,
       utilizationRatio: totalInvestedAndBorrowed.utilizationRatio,
       totalSupplied: totalInvestedAndBorrowed.totalInvested,
@@ -2351,13 +2358,13 @@ export class KaminoVaultClient {
    * @param vault - the kamino vault to get APY for
    * @param slot - current slot
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
-   * @returns APY for the vault
+   * @returns a struct containing estimated gross APY and net APY (gross - vault fees) for the vault
    */
   async getVaultTheoreticalAPY(
     vault: VaultState,
     slot: number,
     vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
-  ): Promise<Decimal> {
+  ): Promise<APYs> {
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vault);
 
     let totalWeights = new Decimal(0);
@@ -2379,14 +2386,20 @@ export class KaminoVaultClient {
       totalWeights = totalWeights.add(weight);
     });
     if (totalWeights.isZero()) {
-      return new Decimal(0);
+      return {
+        grossAPY: new Decimal(0),
+        netAPY: new Decimal(0),
+      };
     }
 
     const grossAPY = totalAPY.div(totalWeights);
     const netAPY = grossAPY
       .mul(new Decimal(1).sub(new Decimal(vault.performanceFeeBps.toString()).div(FullBPSDecimal)))
       .mul(new Decimal(1).sub(new Decimal(vault.managementFeeBps.toString()).div(FullBPSDecimal)));
-    return netAPY;
+    return {
+      grossAPY,
+      netAPY,
+    };
   }
 
   /**
@@ -2655,7 +2668,7 @@ export type VaultOverview = {
   holdingsUSD: VaultHoldingsWithUSDValue;
   reservesOverview: PubkeyHashMap<PublicKey, ReserveOverview>;
   vaultCollaterals: PubkeyHashMap<PublicKey, MarketOverview>;
-  theoreticalSupplyAPY: Decimal;
+  theoreticalSupplyAPY: APYs;
   totalBorrowed: Decimal;
   totalSupplied: Decimal;
   utilizationRatio: Decimal;
