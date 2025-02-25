@@ -58,7 +58,6 @@ import {
   getAssociatedTokenAddress,
   ScopeRefresh,
   createAtasIdempotent,
-  POSITION_LIMIT,
 } from '../utils';
 import { KaminoMarket } from './market';
 import { KaminoObligation } from './obligation';
@@ -321,10 +320,6 @@ export class KaminoAction {
         ...(action === 'deposit' ? [reserve] : []),
         ...(action === 'depositAndBorrow' ? [outflowReserve!] : []),
       ]).toArray().length;
-
-    if (distinctReserveCount > POSITION_LIMIT) {
-      throw Error(`Obligation already has max number of positions: ${POSITION_LIMIT}`);
-    }
 
     return {
       kaminoObligation,
@@ -2414,13 +2409,8 @@ export class KaminoAction {
         this.userTokenAccountAddress
       );
 
-      if (this.positions === POSITION_LIMIT) {
-        this.preTxnIxs.push(createUserTokenAccountIx);
-        this.preTxnIxsLabels.push(`CreateLiquidityUserAta[${this.owner}]`);
-      } else {
-        this.setupIxs.unshift(createUserTokenAccountIx);
-        this.setupIxsLabels.unshift(`CreateLiquidityUserAta[${this.owner}]`);
-      }
+      this.setupIxs.unshift(createUserTokenAccountIx);
+      this.setupIxsLabels.unshift(`CreateLiquidityUserAta[${this.owner}]`);
     }
 
     if (action === 'liquidate') {
@@ -2435,13 +2425,9 @@ export class KaminoAction {
         this.outflowReserve.getLiquidityTokenProgram(),
         this.userTokenAccountAddress
       );
-      if (this.positions === POSITION_LIMIT && this.mint.equals(WRAPPED_SOL_MINT)) {
-        this.preTxnIxs.push(createUserTokenAccountIx);
-        this.preTxnIxsLabels.push(`CreateUserAta[${this.userTokenAccountAddress.toBase58()}]`);
-      } else {
-        this.setupIxs.unshift(createUserTokenAccountIx);
-        this.setupIxsLabels.unshift(`CreateUserAta[${this.userTokenAccountAddress.toBase58()}]`);
-      }
+
+      this.setupIxs.unshift(createUserTokenAccountIx);
+      this.setupIxsLabels.unshift(`CreateUserAta[${this.userTokenAccountAddress.toBase58()}]`);
 
       const [, createUserCollateralAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
         this.owner,
@@ -2451,13 +2437,8 @@ export class KaminoAction {
         this.userCollateralAccountAddress
       );
 
-      if (this.positions === POSITION_LIMIT && this.mint.equals(WRAPPED_SOL_MINT)) {
-        this.preTxnIxs.push(createUserCollateralAccountIx);
-        this.preTxnIxsLabels.push(`CreateCollateralUserAta[${this.userCollateralAccountAddress.toString()}]`);
-      } else {
-        this.setupIxs.unshift(createUserCollateralAccountIx);
-        this.setupIxsLabels.unshift(`CreateCollateralUserAta[${this.userCollateralAccountAddress.toString()}]`);
-      }
+      this.setupIxs.unshift(createUserCollateralAccountIx);
+      this.setupIxsLabels.unshift(`CreateCollateralUserAta[${this.userCollateralAccountAddress.toString()}]`);
 
       if (!this.additionalTokenAccountAddress) {
         throw new Error(`Additional token account address not found ${this.mint}`);
@@ -2515,13 +2496,8 @@ export class KaminoAction {
         this.userCollateralAccountAddress
       );
 
-      if (this.positions === POSITION_LIMIT && this.mint.equals(WRAPPED_SOL_MINT)) {
-        this.preTxnIxs.push(createUserCollateralAccountIx);
-        this.preTxnIxsLabels.push(`CreateCollateralUserAta[${this.userCollateralAccountAddress.toString()}]`);
-      } else {
-        this.setupIxs.unshift(createUserCollateralAccountIx);
-        this.setupIxsLabels.unshift(`CreateCollateralUserAta[${this.userCollateralAccountAddress.toString()}]`);
-      }
+      this.setupIxs.unshift(createUserCollateralAccountIx);
+      this.setupIxsLabels.unshift(`CreateCollateralUserAta[${this.userCollateralAccountAddress.toString()}]`);
     }
   }
 
@@ -2623,14 +2599,6 @@ export class KaminoAction {
       postIxsLabels.push(`CloseUserAtaSOL[${userTokenAccountAddress}]`);
     }
 
-    // TODO: Consider for liquidations and other types of actions if we have to split up some ixs in 2-3 txs
-    // if (this.positions && this.positions >= POSITION_LIMIT) {
-    //   this.preTxnIxs.push(...preIxs);
-    //   this.preTxnIxsLabels.push(...preIxsLabels);
-    //   this.postTxnIxs.push(...postIxs);
-    //   this.postTxnIxsLabels.push(...postIxsLabels);
-    // } else {
-    // }
     this.setupIxs.unshift(...preIxs);
     this.setupIxsLabels.unshift(...preIxsLabels);
     this.cleanupIxs.push(...postIxs);
