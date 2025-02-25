@@ -1,8 +1,8 @@
 import { PubkeyHashMap, SLOTS_PER_SECOND, SLOTS_PER_YEAR } from '../utils';
 import Decimal from 'decimal.js';
 import { AccountInfo, PublicKey } from '@solana/web3.js';
-import { MarketOverview, ReserveOverview, SOL_MINTS } from '../lib';
-import { AccountLayout } from '@solana/spl-token';
+import { MarketOverview, ReserveOverview } from '../lib';
+import { AccountLayout, NATIVE_MINT } from '@solana/spl-token';
 import { ReserveAllocationOverview } from './types';
 import axios from 'axios';
 
@@ -188,7 +188,7 @@ export function lamportsToDecimal(amount: Decimal.Value, decimals: Decimal.Value
 }
 
 export const isSolMint = (mint: PublicKey): boolean => {
-  return SOL_MINTS.filter((m) => m.equals(mint)).length > 0;
+  return NATIVE_MINT.equals(mint);
 };
 
 export const valueOrZero = (value: Decimal): Decimal => {

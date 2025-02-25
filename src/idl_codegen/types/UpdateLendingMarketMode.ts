@@ -486,6 +486,29 @@ export class UpdateIndividualAutodeleverageMarginCallPeriodSecs {
   }
 }
 
+export interface UpdateInitialDepositAmountJSON {
+  kind: "UpdateInitialDepositAmount"
+}
+
+export class UpdateInitialDepositAmount {
+  static readonly discriminator = 21
+  static readonly kind = "UpdateInitialDepositAmount"
+  readonly discriminator = 21
+  readonly kind = "UpdateInitialDepositAmount"
+
+  toJSON(): UpdateInitialDepositAmountJSON {
+    return {
+      kind: "UpdateInitialDepositAmount",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateInitialDepositAmount: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateLendingMarketModeKind {
   if (typeof obj !== "object") {
@@ -554,6 +577,9 @@ export function fromDecoded(obj: any): types.UpdateLendingMarketModeKind {
   }
   if ("UpdateIndividualAutodeleverageMarginCallPeriodSecs" in obj) {
     return new UpdateIndividualAutodeleverageMarginCallPeriodSecs()
+  }
+  if ("UpdateInitialDepositAmount" in obj) {
+    return new UpdateInitialDepositAmount()
   }
 
   throw new Error("Invalid enum object")
@@ -626,6 +652,9 @@ export function fromJSON(
     case "UpdateIndividualAutodeleverageMarginCallPeriodSecs": {
       return new UpdateIndividualAutodeleverageMarginCallPeriodSecs()
     }
+    case "UpdateInitialDepositAmount": {
+      return new UpdateInitialDepositAmount()
+    }
   }
 }
 
@@ -652,6 +681,7 @@ export function layout(property?: string) {
     borsh.struct([], "UpdatePaddingFields"),
     borsh.struct([], "UpdateName"),
     borsh.struct([], "UpdateIndividualAutodeleverageMarginCallPeriodSecs"),
+    borsh.struct([], "UpdateInitialDepositAmount"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

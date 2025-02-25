@@ -4,11 +4,12 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
 
-export interface DepositReserveLiquidityAndObligationCollateralV2Args {
+export interface DepositAndWithdrawArgs {
   liquidityAmount: BN
+  withdrawCollateralAmount: BN
 }
 
-export interface DepositReserveLiquidityAndObligationCollateralV2Accounts {
+export interface DepositAndWithdrawAccounts {
   depositAccounts: {
     owner: PublicKey
     obligation: PublicKey
@@ -25,18 +26,41 @@ export interface DepositReserveLiquidityAndObligationCollateralV2Accounts {
     liquidityTokenProgram: PublicKey
     instructionSysvarAccount: PublicKey
   }
-  farmsAccounts: {
+  withdrawAccounts: {
+    owner: PublicKey
+    obligation: PublicKey
+    lendingMarket: PublicKey
+    lendingMarketAuthority: PublicKey
+    withdrawReserve: PublicKey
+    reserveLiquidityMint: PublicKey
+    reserveSourceCollateral: PublicKey
+    reserveCollateralMint: PublicKey
+    reserveLiquiditySupply: PublicKey
+    userDestinationLiquidity: PublicKey
+    placeholderUserDestinationCollateral: PublicKey
+    collateralTokenProgram: PublicKey
+    liquidityTokenProgram: PublicKey
+    instructionSysvarAccount: PublicKey
+  }
+  depositFarmsAccounts: {
+    obligationFarmUserState: PublicKey
+    reserveFarmState: PublicKey
+  }
+  withdrawFarmsAccounts: {
     obligationFarmUserState: PublicKey
     reserveFarmState: PublicKey
   }
   farmsProgram: PublicKey
 }
 
-export const layout = borsh.struct([borsh.u64("liquidityAmount")])
+export const layout = borsh.struct([
+  borsh.u64("liquidityAmount"),
+  borsh.u64("withdrawCollateralAmount"),
+])
 
-export function depositReserveLiquidityAndObligationCollateralV2(
-  args: DepositReserveLiquidityAndObligationCollateralV2Args,
-  accounts: DepositReserveLiquidityAndObligationCollateralV2Accounts,
+export function depositAndWithdraw(
+  args: DepositAndWithdrawArgs,
+  accounts: DepositAndWithdrawAccounts,
   programId: PublicKey = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta> = [
@@ -111,22 +135,103 @@ export function depositReserveLiquidityAndObligationCollateralV2(
       isWritable: false,
     },
     {
-      pubkey: accounts.farmsAccounts.obligationFarmUserState,
+      pubkey: accounts.withdrawAccounts.owner,
+      isSigner: true,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.withdrawAccounts.obligation,
       isSigner: false,
       isWritable: true,
     },
     {
-      pubkey: accounts.farmsAccounts.reserveFarmState,
+      pubkey: accounts.withdrawAccounts.lendingMarket,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.withdrawAccounts.lendingMarketAuthority,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.withdrawAccounts.withdrawReserve,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.withdrawAccounts.reserveLiquidityMint,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.withdrawAccounts.reserveSourceCollateral,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.withdrawAccounts.reserveCollateralMint,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.withdrawAccounts.reserveLiquiditySupply,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.withdrawAccounts.userDestinationLiquidity,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.withdrawAccounts.placeholderUserDestinationCollateral,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.withdrawAccounts.collateralTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.withdrawAccounts.liquidityTokenProgram,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.withdrawAccounts.instructionSysvarAccount,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.depositFarmsAccounts.obligationFarmUserState,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.depositFarmsAccounts.reserveFarmState,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.withdrawFarmsAccounts.obligationFarmUserState,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.withdrawFarmsAccounts.reserveFarmState,
       isSigner: false,
       isWritable: true,
     },
     { pubkey: accounts.farmsProgram, isSigner: false, isWritable: false },
   ]
-  const identifier = Buffer.from([216, 224, 191, 27, 204, 151, 102, 175])
+  const identifier = Buffer.from([141, 153, 39, 15, 64, 61, 88, 84])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
       liquidityAmount: args.liquidityAmount,
+      withdrawCollateralAmount: args.withdrawCollateralAmount,
     },
     buffer
   )

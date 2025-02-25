@@ -1134,6 +1134,7 @@ const truncateBorrowCurve = (points: CurvePointFields[]): [number, number][] => 
 export async function createReserveIxs(
   connection: Connection,
   owner: PublicKey,
+  ownerLiquiditySource: PublicKey,
   lendingMarket: PublicKey,
   liquidityMint: PublicKey,
   reserveAddress: PublicKey,
@@ -1166,6 +1167,7 @@ export async function createReserveIxs(
     feeReceiver: feeVault,
     reserveCollateralMint: collateralMint,
     reserveCollateralSupply: collateralSupplyVault,
+    initialLiquiditySource: ownerLiquiditySource,
     liquidityTokenProgram: TOKEN_PROGRAM_ID,
     collateralTokenProgram: TOKEN_PROGRAM_ID,
     systemProgram: SystemProgram.programId,

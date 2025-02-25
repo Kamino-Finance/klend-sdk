@@ -17,11 +17,10 @@ import {
   ObligationTypeTag,
   SOL_DECIMALS,
   U64_MAX,
-  WRAPPED_SOL_MINT,
   createAtasIdempotent,
   getAssociatedTokenAddress,
   getComputeBudgetAndPriorityFeeIxns,
-  getDepositWsolIxns,
+  getTransferWsolIxns,
   getLookupTableAccount,
   removeBudgetAndAtaIxns,
   uniqueAccounts,
@@ -35,7 +34,12 @@ import {
   toJson,
   withdrawLeverageCalcs,
 } from './calcs';
-import { TOKEN_PROGRAM_ID, createCloseAccountInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token';
+import {
+  NATIVE_MINT,
+  TOKEN_PROGRAM_ID,
+  createCloseAccountInstruction,
+  getAssociatedTokenAddressSync,
+} from '@solana/spl-token';
 import { Kamino, StrategyWithAddress } from '@kamino-finance/kliquidity-sdk';
 import { getExpectedTokenBalanceAfterBorrow, getKtokenToTokenSwapper, getTokenToKtokenSwapper } from './utils';
 import { FullBPS } from '@kamino-finance/kliquidity-sdk/dist/utils/CreationParameters';
@@ -89,7 +93,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
 }> {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint)!;
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint)!;
-  const solTokenReserve = kaminoMarket.getReserveByMint(WRAPPED_SOL_MINT);
+  const solTokenReserve = kaminoMarket.getReserveByMint(NATIVE_MINT);
   const flashLoanFee = collReserve.getFlashLoanFee() || new Decimal(0);
 
   const selectedTokenIsCollToken = selectedTokenMint.equals(collTokenMint);
@@ -191,7 +195,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
 
   if (collIsKtoken) {
     let futureBalanceInAta = new Decimal(0);
-    if (debtTokenMint.equals(WRAPPED_SOL_MINT)) {
+    if (debtTokenMint.equals(NATIVE_MINT)) {
       futureBalanceInAta = futureBalanceInAta.add(
         !collIsKtoken ? quotePriceCalcs.initDepositInSol : quotePriceCalcs.initDepositInSol
       );
@@ -366,7 +370,7 @@ export async function getDepositWithLeverageIxns<QuoteResponse>({
 
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
-  const solTokenReserve = kaminoMarket.getReserveByMint(WRAPPED_SOL_MINT);
+  const solTokenReserve = kaminoMarket.getReserveByMint(NATIVE_MINT);
   const depositTokenIsSol = !solTokenReserve ? false : selectedTokenMint.equals(solTokenReserve!.getLiquidityMint());
 
   const ixs = await buildDepositWithLeverageIxns(
@@ -485,9 +489,9 @@ async function buildDepositWithLeverageIxns(
   const fillWsolAtaIxns: TransactionInstruction[] = [];
   if (depositTokenIsSol) {
     fillWsolAtaIxns.push(
-      ...getDepositWsolIxns(
+      ...getTransferWsolIxns(
         owner,
-        getAssociatedTokenAddressSync(WRAPPED_SOL_MINT, owner),
+        getAssociatedTokenAddressSync(NATIVE_MINT, owner),
         toLamports(calcs.initDepositInSol, SOL_DECIMALS).ceil()
       )
     );
@@ -598,7 +602,7 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
   const collIsKtoken = await isKtoken(collTokenMint);
   const strategy = collIsKtoken ? (await kamino!.getStrategyByKTokenMint(collTokenMint))! : undefined;
 
-  const solTokenReserve = kaminoMarket.getReserveByMint(WRAPPED_SOL_MINT);
+  const solTokenReserve = kaminoMarket.getReserveByMint(NATIVE_MINT);
   const depositTokenIsSol = !solTokenReserve ? false : selectedTokenMint.equals(solTokenReserve!.getLiquidityMint());
 
   const calcs = withdrawLeverageCalcs(
@@ -724,7 +728,7 @@ export async function getWithdrawWithLeverageIxns<QuoteResponse>({
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
 
-  const solTokenReserve = kaminoMarket.getReserveByMint(WRAPPED_SOL_MINT);
+  const solTokenReserve = kaminoMarket.getReserveByMint(NATIVE_MINT);
   const depositTokenIsSol = !solTokenReserve ? false : selectedTokenMint.equals(solTokenReserve!.getLiquidityMint());
   const { swapInputs, initialInputs } = await getWithdrawWithLeverageSwapInputs({
     owner,
@@ -885,8 +889,8 @@ export async function buildWithdrawWithLeverageIxns(
   const atasAndCreateIxns = createAtasIdempotent(owner, mintsToCreateAtas);
 
   const closeWsolAtaIxns: TransactionInstruction[] = [];
-  if (depositTokenIsSol || debtTokenMint.equals(WRAPPED_SOL_MINT)) {
-    const wsolAta = getAssociatedTokenAddress(WRAPPED_SOL_MINT, owner, false);
+  if (depositTokenIsSol || debtTokenMint.equals(NATIVE_MINT)) {
+    const wsolAta = getAssociatedTokenAddress(NATIVE_MINT, owner, false);
     closeWsolAtaIxns.push(createCloseAccountInstruction(wsolAta, owner, owner, [], TOKEN_PROGRAM_ID));
   }
 
@@ -895,13 +899,13 @@ export async function buildWithdrawWithLeverageIxns(
   // TODO: Might be worth removing as it's only needed for Ktokens
   // This is here so that we have enough wsol to repay in case the kAB swapped to sol after estimates is not enough
   const fillWsolAtaIxns: TransactionInstruction[] = [];
-  if (debtTokenMint.equals(WRAPPED_SOL_MINT)) {
+  if (debtTokenMint.equals(NATIVE_MINT)) {
     const halfSolBalance = (await market.getConnection().getBalance(owner)) / LAMPORTS_PER_SOL / 2;
     const balanceToWrap = halfSolBalance < 0.1 ? halfSolBalance : 0.1;
     fillWsolAtaIxns.push(
-      ...getDepositWsolIxns(
+      ...getTransferWsolIxns(
         owner,
-        getAssociatedTokenAddressSync(WRAPPED_SOL_MINT, owner),
+        getAssociatedTokenAddressSync(NATIVE_MINT, owner),
         toLamports(balanceToWrap, SOL_DECIMALS).ceil()
       )
     );
@@ -1608,15 +1612,15 @@ async function buildDecreaseLeverageIxns(
   // This is here so that we have enough wsol to repay in case the kAB swapped to sol after estimates is not enough
   const closeWsolAtaIxns: TransactionInstruction[] = [];
   const fillWsolAtaIxns: TransactionInstruction[] = [];
-  if (debtTokenMint.equals(WRAPPED_SOL_MINT)) {
-    const wsolAta = getAssociatedTokenAddress(WRAPPED_SOL_MINT, owner, false);
+  if (debtTokenMint.equals(NATIVE_MINT)) {
+    const wsolAta = getAssociatedTokenAddress(NATIVE_MINT, owner, false);
 
     closeWsolAtaIxns.push(createCloseAccountInstruction(wsolAta, owner, owner, [], TOKEN_PROGRAM_ID));
 
     const halfSolBalance = (await kaminoMarket.getConnection().getBalance(owner)) / LAMPORTS_PER_SOL / 2;
     const balanceToWrap = halfSolBalance < 0.1 ? halfSolBalance : 0.1;
     fillWsolAtaIxns.push(
-      ...getDepositWsolIxns(owner, wsolAta, toLamports(balanceToWrap, debtReserve!.stats.decimals).ceil())
+      ...getTransferWsolIxns(owner, wsolAta, toLamports(balanceToWrap, debtReserve!.stats.decimals).ceil())
     );
   }
 

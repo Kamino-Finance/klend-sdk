@@ -37,6 +37,15 @@ export interface RepayAndWithdrawAndRedeemAccounts {
     liquidityTokenProgram: PublicKey
     instructionSysvarAccount: PublicKey
   }
+  collateralFarmsAccounts: {
+    obligationFarmUserState: PublicKey
+    reserveFarmState: PublicKey
+  }
+  debtFarmsAccounts: {
+    obligationFarmUserState: PublicKey
+    reserveFarmState: PublicKey
+  }
+  farmsProgram: PublicKey
 }
 
 export const layout = borsh.struct([
@@ -69,7 +78,7 @@ export function repayAndWithdrawAndRedeem(
     {
       pubkey: accounts.repayAccounts.reserveLiquidityMint,
       isSigner: false,
-      isWritable: true,
+      isWritable: false,
     },
     {
       pubkey: accounts.repayAccounts.reserveDestinationLiquidity,
@@ -94,7 +103,7 @@ export function repayAndWithdrawAndRedeem(
     {
       pubkey: accounts.withdrawAccounts.owner,
       isSigner: true,
-      isWritable: false,
+      isWritable: true,
     },
     {
       pubkey: accounts.withdrawAccounts.obligation,
@@ -119,7 +128,7 @@ export function repayAndWithdrawAndRedeem(
     {
       pubkey: accounts.withdrawAccounts.reserveLiquidityMint,
       isSigner: false,
-      isWritable: true,
+      isWritable: false,
     },
     {
       pubkey: accounts.withdrawAccounts.reserveSourceCollateral,
@@ -161,6 +170,27 @@ export function repayAndWithdrawAndRedeem(
       isSigner: false,
       isWritable: false,
     },
+    {
+      pubkey: accounts.collateralFarmsAccounts.obligationFarmUserState,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.collateralFarmsAccounts.reserveFarmState,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.debtFarmsAccounts.obligationFarmUserState,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.debtFarmsAccounts.reserveFarmState,
+      isSigner: false,
+      isWritable: true,
+    },
+    { pubkey: accounts.farmsProgram, isSigner: false, isWritable: false },
   ]
   const identifier = Buffer.from([2, 54, 152, 3, 148, 96, 109, 218])
   const buffer = Buffer.alloc(1000)

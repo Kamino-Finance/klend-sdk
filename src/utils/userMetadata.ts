@@ -6,11 +6,11 @@ import {
   Connection,
   GetProgramAccountsFilter,
 } from '@solana/web3.js';
+import { NATIVE_MINT } from '@solana/spl-token';
 import { KaminoMarket, KaminoObligation } from '../classes';
 import {
   LeverageObligation,
   MultiplyObligation,
-  WRAPPED_SOL_MINT,
   createLookupTableIx,
   extendLookupTableIxs,
   getAssociatedTokenAddress,
@@ -259,7 +259,7 @@ function getMultiplyObligationAndObligationFarmStateAddresses(
     const collMintString = collMint.toString();
     const debtMintString = debtMint.toString();
     if (collReserve && debtReserve) {
-      const multiplyObligation = new MultiplyObligation(collMint, WRAPPED_SOL_MINT, kaminoMarket.programId);
+      const multiplyObligation = new MultiplyObligation(collMint, NATIVE_MINT, kaminoMarket.programId);
       obligationPdas.push({
         address: multiplyObligation.toPda(kaminoMarket.getAddress(), user),
         log: 'multiply obligation coll: ' + collMintString + ' debt: ' + debtMintString,

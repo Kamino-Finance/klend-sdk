@@ -37,6 +37,7 @@ export type CreateKaminoMarketParams = {
 
 export type AddAssetToMarketParams = {
   admin: PublicKey;
+  adminLiquiditySource: PublicKey;
   marketAddress: PublicKey;
   assetConfig: AssetConfig;
 };

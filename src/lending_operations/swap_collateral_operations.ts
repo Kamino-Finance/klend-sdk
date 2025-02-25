@@ -16,11 +16,10 @@ import {
   ScopeRefresh,
   U64_MAX,
   uniqueAccounts,
-  WRAPPED_SOL_MINT,
 } from '../utils';
 import { AddressLookupTableAccount, PublicKey, TransactionInstruction } from '@solana/web3.js';
 import Decimal from 'decimal.js';
-import { createCloseAccountInstruction, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { createCloseAccountInstruction, NATIVE_MINT, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 /**
  * Inputs to the `getSwapCollIxns()` operation.
@@ -321,11 +320,11 @@ function getAtaCreationIxns(context: SwapCollContext<any>) {
 function getAtaCloseIxns(context: SwapCollContext<any>) {
   const ataCloseIxns: TransactionInstruction[] = [];
   if (
-    context.sourceCollReserve.getLiquidityMint().equals(WRAPPED_SOL_MINT) ||
-    context.targetCollReserve.getLiquidityMint().equals(WRAPPED_SOL_MINT)
+    context.sourceCollReserve.getLiquidityMint().equals(NATIVE_MINT) ||
+    context.targetCollReserve.getLiquidityMint().equals(NATIVE_MINT)
   ) {
     const owner = context.obligation.state.owner;
-    const wsolAta = getAssociatedTokenAddress(WRAPPED_SOL_MINT, owner, false);
+    const wsolAta = getAssociatedTokenAddress(NATIVE_MINT, owner, false);
     ataCloseIxns.push(createCloseAccountInstruction(wsolAta, owner, owner, [], TOKEN_PROGRAM_ID));
   }
   return ataCloseIxns;

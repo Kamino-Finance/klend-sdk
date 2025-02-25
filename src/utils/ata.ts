@@ -98,7 +98,7 @@ export function createAtasIdempotent(
   return res;
 }
 
-export function getDepositWsolIxns(owner: PublicKey, ata: PublicKey, amountLamports: Decimal) {
+export function getTransferWsolIxns(owner: PublicKey, ata: PublicKey, amountLamports: Decimal) {
   const ixns: TransactionInstruction[] = [];
 
   ixns.push(

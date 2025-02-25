@@ -115,7 +115,13 @@ export type CustomError =
   | ObligationsMustMatch
   | LendingMarketsMustMatch
   | ObligationCurrentlyMarkedForDeleveraging
+  | MaximumWithdrawValueZero
+  | ZeroMaxLtvAssetsInDeposits
+  | MinLtvAssetsPriority
+  | WorseLTVThanUnhealthyLTV
   | FarmAccountsMissing
+  | RepayTooSmallForFullLiquidation
+  | InsufficientRepayAmount
 
 export class InvalidMarketAuthority extends Error {
   static readonly code = 6000
@@ -1443,21 +1449,102 @@ export class ObligationCurrentlyMarkedForDeleveraging extends Error {
   static readonly code = 6115
   readonly code = 6115
   readonly name = "ObligationCurrentlyMarkedForDeleveraging"
-  readonly msg = "Obligation is currently marked for deleveraging"
+  readonly msg = "Obligation is already marked for deleveraging"
 
   constructor(readonly logs?: string[]) {
-    super("6115: Obligation is currently marked for deleveraging")
+    super("6115: Obligation is already marked for deleveraging")
+  }
+}
+
+export class MaximumWithdrawValueZero extends Error {
+  static readonly code = 6116
+  readonly code = 6116
+  readonly name = "MaximumWithdrawValueZero"
+  readonly msg =
+    "Maximum withdrawable value of this collateral is zero, LTV needs improved"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6116: Maximum withdrawable value of this collateral is zero, LTV needs improved"
+    )
+  }
+}
+
+export class ZeroMaxLtvAssetsInDeposits extends Error {
+  static readonly code = 6117
+  readonly code = 6117
+  readonly name = "ZeroMaxLtvAssetsInDeposits"
+  readonly msg =
+    "No max LTV 0 assets allowed in deposits for repay and withdraw"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6117: No max LTV 0 assets allowed in deposits for repay and withdraw"
+    )
+  }
+}
+
+export class MinLtvAssetsPriority extends Error {
+  static readonly code = 6118
+  readonly code = 6118
+  readonly name = "MinLtvAssetsPriority"
+  readonly msg =
+    "The operation must prioritize the collateral with the lowest LTV"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6118: The operation must prioritize the collateral with the lowest LTV"
+    )
+  }
+}
+
+export class WorseLTVThanUnhealthyLTV extends Error {
+  static readonly code = 6119
+  readonly code = 6119
+  readonly name = "WorseLTVThanUnhealthyLTV"
+  readonly msg = "Cannot get the obligation liquidatable"
+
+  constructor(readonly logs?: string[]) {
+    super("6119: Cannot get the obligation liquidatable")
   }
 }
 
 export class FarmAccountsMissing extends Error {
-  static readonly code = 6116
-  readonly code = 6116
+  static readonly code = 6120
+  readonly code = 6120
   readonly name = "FarmAccountsMissing"
   readonly msg = "Farm accounts to refresh are missing"
 
   constructor(readonly logs?: string[]) {
-    super("6116: Farm accounts to refresh are missing")
+    super("6120: Farm accounts to refresh are missing")
+  }
+}
+
+export class RepayTooSmallForFullLiquidation extends Error {
+  static readonly code = 6121
+  readonly code = 6121
+  readonly name = "RepayTooSmallForFullLiquidation"
+  readonly msg =
+    "Repay amount is too small to satisfy the mandatory full liquidation"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6121: Repay amount is too small to satisfy the mandatory full liquidation"
+    )
+  }
+}
+
+export class InsufficientRepayAmount extends Error {
+  static readonly code = 6122
+  readonly code = 6122
+  readonly name = "InsufficientRepayAmount"
+  readonly msg =
+    "Liquidator provided repay amount lower than required by liquidation rules"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6122: Liquidator provided repay amount lower than required by liquidation rules"
+    )
   }
 }
 
@@ -1696,7 +1783,19 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
     case 6115:
       return new ObligationCurrentlyMarkedForDeleveraging(logs)
     case 6116:
+      return new MaximumWithdrawValueZero(logs)
+    case 6117:
+      return new ZeroMaxLtvAssetsInDeposits(logs)
+    case 6118:
+      return new MinLtvAssetsPriority(logs)
+    case 6119:
+      return new WorseLTVThanUnhealthyLTV(logs)
+    case 6120:
       return new FarmAccountsMissing(logs)
+    case 6121:
+      return new RepayTooSmallForFullLiquidation(logs)
+    case 6122:
+      return new InsufficientRepayAmount(logs)
   }
 
   return null

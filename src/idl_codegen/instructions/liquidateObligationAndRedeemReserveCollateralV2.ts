@@ -84,7 +84,7 @@ export function liquidateObligationAndRedeemReserveCollateralV2(
     {
       pubkey: accounts.liquidationAccounts.repayReserveLiquidityMint,
       isSigner: false,
-      isWritable: true,
+      isWritable: false,
     },
     {
       pubkey: accounts.liquidationAccounts.repayReserveLiquiditySupply,
@@ -99,7 +99,7 @@ export function liquidateObligationAndRedeemReserveCollateralV2(
     {
       pubkey: accounts.liquidationAccounts.withdrawReserveLiquidityMint,
       isSigner: false,
-      isWritable: true,
+      isWritable: false,
     },
     {
       pubkey: accounts.liquidationAccounts.withdrawReserveCollateralMint,

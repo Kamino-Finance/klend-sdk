@@ -72,17 +72,7 @@ export const SLOTS_PER_YEAR = SLOTS_PER_DAY * 365;
  */
 export const MIN_AUTODELEVERAGE_BONUS_BPS = 50;
 
-/**
- * WSOL Mint
- */
-export const WRAPPED_SOL_MINT = new PublicKey('So11111111111111111111111111111111111111112');
-
 export const SOL_DECIMALS = 9;
-
-/**
- * USDC Mint
- */
-export const USDC_MAINNET_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 
 export const MAINNET_BETA_CHAIN_ID = 101;
 
@@ -90,3 +80,8 @@ export const BORROWS_LIMIT = 5;
 export const DEPOSITS_LIMIT = 8;
 
 export const DEFAULT_MAX_COMPUTE_UNITS = 1_400_000;
+
+/**
+ * Minimum initial deposit required for the initialization of a reserve
+ */
+export const MIN_INITIAL_DEPOSIT = 100_000;

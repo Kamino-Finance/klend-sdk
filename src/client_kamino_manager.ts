@@ -54,6 +54,7 @@ import {
 } from './idl_codegen_kamino_vault/types/VaultConfigField';
 import { getAccountOwner } from './utils/rpc';
 import { printHoldings } from './classes/types_utils';
+import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 
 dotenv.config({
   path: `.env${process.env.ENV ? '.' + process.env.ENV : ''}`,
@@ -87,7 +88,7 @@ async function main() {
         admin: mode === 'multisig' ? multisigPk : env.payer.publicKey,
       });
 
-      const _createMarketSig = await processTxn(env.client, env.payer, createMarketIxns, mode, 2500, [marketKp]);
+      await processTxn(env.client, env.payer, createMarketIxns, mode, 2500, [marketKp]);
 
       mode === 'execute' && console.log('Market created:', marketKp.publicKey.toBase58());
     });
@@ -122,8 +123,14 @@ async function main() {
       const reserveConfig = parseReserveConfigFromFile(reserveConfigFromFile);
       const assetConfig = new AssetReserveConfigCli(tokenMint, tokenMintProgramId, reserveConfig);
 
+      const adminAta =
+        mode === 'multisig'
+          ? getAssociatedTokenAddressSync(tokenMint, multisigPk)
+          : getAssociatedTokenAddressSync(tokenMint, env.payer.publicKey);
+
       const { reserve, txnIxns } = await kaminoManager.addAssetToMarketIxs({
         admin: mode === 'multisig' ? multisigPk : env.payer.publicKey,
+        adminLiquiditySource: adminAta,
         marketAddress: marketAddress,
         assetConfig: assetConfig,
       });

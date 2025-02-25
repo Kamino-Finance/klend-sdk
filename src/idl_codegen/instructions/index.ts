@@ -117,11 +117,11 @@ export type {
   RepayAndWithdrawAndRedeemArgs,
   RepayAndWithdrawAndRedeemAccounts,
 } from "./repayAndWithdrawAndRedeem"
-export { repayAndWithdrawAndRedeemV2 } from "./repayAndWithdrawAndRedeemV2"
+export { depositAndWithdraw } from "./depositAndWithdraw"
 export type {
-  RepayAndWithdrawAndRedeemV2Args,
-  RepayAndWithdrawAndRedeemV2Accounts,
-} from "./repayAndWithdrawAndRedeemV2"
+  DepositAndWithdrawArgs,
+  DepositAndWithdrawAccounts,
+} from "./depositAndWithdraw"
 export { depositReserveLiquidityAndObligationCollateral } from "./depositReserveLiquidityAndObligationCollateral"
 export type {
   DepositReserveLiquidityAndObligationCollateralArgs,

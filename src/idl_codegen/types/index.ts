@@ -156,6 +156,7 @@ export type UpdateLendingMarketModeKind =
   | UpdateLendingMarketMode.UpdatePaddingFields
   | UpdateLendingMarketMode.UpdateName
   | UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs
+  | UpdateLendingMarketMode.UpdateInitialDepositAmount
 export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateOwnerJSON
   | UpdateLendingMarketMode.UpdateEmergencyModeJSON
@@ -178,6 +179,7 @@ export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdatePaddingFieldsJSON
   | UpdateLendingMarketMode.UpdateNameJSON
   | UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecsJSON
+  | UpdateLendingMarketMode.UpdateInitialDepositAmountJSON
 
 export { LastUpdate } from "./LastUpdate"
 export type { LastUpdateFields, LastUpdateJSON } from "./LastUpdate"

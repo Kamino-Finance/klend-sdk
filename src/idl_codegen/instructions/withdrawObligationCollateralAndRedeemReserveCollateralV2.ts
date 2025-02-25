@@ -43,7 +43,7 @@ export function withdrawObligationCollateralAndRedeemReserveCollateralV2(
     {
       pubkey: accounts.withdrawAccounts.owner,
       isSigner: true,
-      isWritable: false,
+      isWritable: true,
     },
     {
       pubkey: accounts.withdrawAccounts.obligation,
@@ -68,7 +68,7 @@ export function withdrawObligationCollateralAndRedeemReserveCollateralV2(
     {
       pubkey: accounts.withdrawAccounts.reserveLiquidityMint,
       isSigner: false,
-      isWritable: true,
+      isWritable: false,
     },
     {
       pubkey: accounts.withdrawAccounts.reserveSourceCollateral,

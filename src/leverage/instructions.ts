@@ -1,4 +1,5 @@
 import { PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY } from '@solana/web3.js';
+import * as anchor from '@coral-xyz/anchor';
 import { KaminoReserve } from '../classes';
 import {
   FlashBorrowReserveLiquidityArgs,
@@ -9,12 +10,6 @@ import {
   flashRepayReserveLiquidity,
 } from '../lib';
 import Decimal from 'decimal.js';
-import * as anchor from '@coral-xyz/anchor';
-
-export const SOL_MINTS: Array<PublicKey> = [
-  new PublicKey('So11111111111111111111111111111111111111111'),
-  new PublicKey('So11111111111111111111111111111111111111112'),
-];
 
 export const getFlashLoanInstructions = (args: {
   borrowIxnIndex: number;

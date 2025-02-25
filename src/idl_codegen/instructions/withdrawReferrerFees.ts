@@ -27,7 +27,7 @@ export function withdrawReferrerFees(
     {
       pubkey: accounts.reserveLiquidityMint,
       isSigner: false,
-      isWritable: true,
+      isWritable: false,
     },
     {
       pubkey: accounts.reserveSupplyLiquidity,

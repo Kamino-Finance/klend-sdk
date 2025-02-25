@@ -20,17 +20,6 @@ import { getJupiterQuoter } from './utils/jup_utils';
   const collTokenReserve = market.getReserveByMint(collTokenMint);
   const slippagePct = 0.01;
 
-  // const allOlbigation = market.batchGetAllObligationsForMarket();
-
-  // for await (const obligations of allOlbigation) {
-  //   for (const obligation of obligations) {
-  //     if (obligation.borrows.has(debtTokenReserve?.address!) && obligation.deposits.has(collTokenReserve?.address!) && obligation.getNetAccountValue().toNumber() > 10000) {
-  //       console.log('Obligation', obligation.obligationAddress.toBase58());
-  //       return;
-  //     }
-  //   }
-  // }
-
   const obligation = await market.getObligationByAddress(new PublicKey('5LvkLen8kPwJvaUBaHbfmNNxFCdxYxVsPPjY6VQQQoMK'));
 
   const currentSlot = await market.getConnection().getSlot();

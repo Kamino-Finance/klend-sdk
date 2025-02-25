@@ -187,6 +187,7 @@ export class KaminoManager {
     const createReserveInstructions = await createReserveIxs(
       this._connection,
       params.admin,
+      params.adminLiquiditySource,
       params.marketAddress,
       params.assetConfig.mint,
       reserveAccount.publicKey,
@@ -1267,6 +1268,17 @@ const updateLendingMarketConfig = (
         });
       }
       break;
+    case 'minInitialDepositAmount':
+      if (!market.minInitialDepositAmount.eq(newMarket.minInitialDepositAmount)) {
+        updateLendingMarketIxnsArgs.push({
+          mode: UpdateLendingMarketMode.UpdateInitialDepositAmount.discriminator,
+          value: updateMarketConfigEncodedValue(
+            UpdateLendingMarketMode.UpdateInitialDepositAmount.discriminator,
+            newMarket.minInitialDepositAmount.toNumber()
+          ),
+        });
+      }
+      break;
     default:
       assertNever(key);
   }
@@ -1331,6 +1343,7 @@ function updateMarketConfigEncodedValue(
     case UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheck.discriminator:
     case UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheck.discriminator:
     case UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs.discriminator:
+    case UpdateLendingMarketMode.UpdateInitialDepositAmount.discriminator:
       value = value as number;
       buffer.writeBigUint64LE(BigInt(value), 0);
       break;

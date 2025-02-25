@@ -1,5 +1,5 @@
 {
-  "version": "1.8.0",
+  "version": "1.10.0",
   "name": "kamino_lending",
   "instructions": [
     {
@@ -138,6 +138,11 @@
           "isSigner": false
         },
         {
+          "name": "initialLiquiditySource",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "rent",
           "isMut": false,
           "isSigner": false
@@ -175,7 +180,7 @@
         },
         {
           "name": "lendingMarketAuthority",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -265,7 +270,7 @@
         },
         {
           "name": "reserveLiquidityMint",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -316,7 +321,7 @@
         },
         {
           "name": "reserveLiquidityMint",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -552,7 +557,7 @@
         },
         {
           "name": "reserveLiquidityMint",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -623,7 +628,7 @@
         },
         {
           "name": "reserveLiquidityMint",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -747,7 +752,7 @@
         },
         {
           "name": "lendingMarketAuthority",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -811,7 +816,7 @@
             },
             {
               "name": "lendingMarketAuthority",
-              "isMut": true,
+              "isMut": false,
               "isSigner": false
             },
             {
@@ -1178,7 +1183,7 @@
         },
         {
           "name": "borrowReserveLiquidityMint",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -1253,7 +1258,7 @@
             },
             {
               "name": "borrowReserveLiquidityMint",
-              "isMut": true,
+              "isMut": false,
               "isSigner": false
             },
             {
@@ -1344,7 +1349,7 @@
         },
         {
           "name": "reserveLiquidityMint",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -1403,7 +1408,7 @@
             },
             {
               "name": "reserveLiquidityMint",
-              "isMut": true,
+              "isMut": false,
               "isSigner": false
             },
             {
@@ -1491,7 +1496,7 @@
             },
             {
               "name": "reserveLiquidityMint",
-              "isMut": true,
+              "isMut": false,
               "isSigner": false
             },
             {
@@ -1521,7 +1526,7 @@
           "accounts": [
             {
               "name": "owner",
-              "isMut": false,
+              "isMut": true,
               "isSigner": true
             },
             {
@@ -1546,7 +1551,7 @@
             },
             {
               "name": "reserveLiquidityMint",
-              "isMut": true,
+              "isMut": false,
               "isSigner": false
             },
             {
@@ -1589,152 +1594,6 @@
               "name": "instructionSysvarAccount",
               "isMut": false,
               "isSigner": false
-            }
-          ]
-        }
-      ],
-      "args": [
-        {
-          "name": "repayAmount",
-          "type": "u64"
-        },
-        {
-          "name": "withdrawCollateralAmount",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "repayAndWithdrawAndRedeemV2",
-      "accounts": [
-        {
-          "name": "repayAndWithdrawAccounts",
-          "accounts": [
-            {
-              "name": "repayAccounts",
-              "accounts": [
-                {
-                  "name": "owner",
-                  "isMut": false,
-                  "isSigner": true
-                },
-                {
-                  "name": "obligation",
-                  "isMut": true,
-                  "isSigner": false
-                },
-                {
-                  "name": "lendingMarket",
-                  "isMut": false,
-                  "isSigner": false
-                },
-                {
-                  "name": "repayReserve",
-                  "isMut": true,
-                  "isSigner": false
-                },
-                {
-                  "name": "reserveLiquidityMint",
-                  "isMut": true,
-                  "isSigner": false
-                },
-                {
-                  "name": "reserveDestinationLiquidity",
-                  "isMut": true,
-                  "isSigner": false
-                },
-                {
-                  "name": "userSourceLiquidity",
-                  "isMut": true,
-                  "isSigner": false
-                },
-                {
-                  "name": "tokenProgram",
-                  "isMut": false,
-                  "isSigner": false
-                },
-                {
-                  "name": "instructionSysvarAccount",
-                  "isMut": false,
-                  "isSigner": false
-                }
-              ]
-            },
-            {
-              "name": "withdrawAccounts",
-              "accounts": [
-                {
-                  "name": "owner",
-                  "isMut": false,
-                  "isSigner": true
-                },
-                {
-                  "name": "obligation",
-                  "isMut": true,
-                  "isSigner": false
-                },
-                {
-                  "name": "lendingMarket",
-                  "isMut": false,
-                  "isSigner": false
-                },
-                {
-                  "name": "lendingMarketAuthority",
-                  "isMut": false,
-                  "isSigner": false
-                },
-                {
-                  "name": "withdrawReserve",
-                  "isMut": true,
-                  "isSigner": false
-                },
-                {
-                  "name": "reserveLiquidityMint",
-                  "isMut": true,
-                  "isSigner": false
-                },
-                {
-                  "name": "reserveSourceCollateral",
-                  "isMut": true,
-                  "isSigner": false
-                },
-                {
-                  "name": "reserveCollateralMint",
-                  "isMut": true,
-                  "isSigner": false
-                },
-                {
-                  "name": "reserveLiquiditySupply",
-                  "isMut": true,
-                  "isSigner": false
-                },
-                {
-                  "name": "userDestinationLiquidity",
-                  "isMut": true,
-                  "isSigner": false
-                },
-                {
-                  "name": "placeholderUserDestinationCollateral",
-                  "isMut": false,
-                  "isSigner": false,
-                  "isOptional": true
-                },
-                {
-                  "name": "collateralTokenProgram",
-                  "isMut": false,
-                  "isSigner": false
-                },
-                {
-                  "name": "liquidityTokenProgram",
-                  "isMut": false,
-                  "isSigner": false
-                },
-                {
-                  "name": "instructionSysvarAccount",
-                  "isMut": false,
-                  "isSigner": false
-                }
-              ]
             }
           ]
         },
@@ -1790,6 +1649,212 @@
       ]
     },
     {
+      "name": "depositAndWithdraw",
+      "accounts": [
+        {
+          "name": "depositAccounts",
+          "accounts": [
+            {
+              "name": "owner",
+              "isMut": true,
+              "isSigner": true
+            },
+            {
+              "name": "obligation",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarket",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarketAuthority",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "reserve",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveLiquidityMint",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "reserveLiquiditySupply",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveCollateralMint",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveDestinationDepositCollateral",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "userSourceLiquidity",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "placeholderUserDestinationCollateral",
+              "isMut": false,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "collateralTokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "liquidityTokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "instructionSysvarAccount",
+              "isMut": false,
+              "isSigner": false
+            }
+          ]
+        },
+        {
+          "name": "withdrawAccounts",
+          "accounts": [
+            {
+              "name": "owner",
+              "isMut": true,
+              "isSigner": true
+            },
+            {
+              "name": "obligation",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarket",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarketAuthority",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "withdrawReserve",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveLiquidityMint",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "reserveSourceCollateral",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveCollateralMint",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveLiquiditySupply",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "userDestinationLiquidity",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "placeholderUserDestinationCollateral",
+              "isMut": false,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "collateralTokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "liquidityTokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "instructionSysvarAccount",
+              "isMut": false,
+              "isSigner": false
+            }
+          ]
+        },
+        {
+          "name": "depositFarmsAccounts",
+          "accounts": [
+            {
+              "name": "obligationFarmUserState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "reserveFarmState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            }
+          ]
+        },
+        {
+          "name": "withdrawFarmsAccounts",
+          "accounts": [
+            {
+              "name": "obligationFarmUserState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            },
+            {
+              "name": "reserveFarmState",
+              "isMut": true,
+              "isSigner": false,
+              "isOptional": true
+            }
+          ]
+        },
+        {
+          "name": "farmsProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "liquidityAmount",
+          "type": "u64"
+        },
+        {
+          "name": "withdrawCollateralAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "depositReserveLiquidityAndObligationCollateral",
       "accounts": [
         {
@@ -1819,7 +1884,7 @@
         },
         {
           "name": "reserveLiquidityMint",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -1904,7 +1969,7 @@
             },
             {
               "name": "reserveLiquidityMint",
-              "isMut": true,
+              "isMut": false,
               "isSigner": false
             },
             {
@@ -1985,7 +2050,7 @@
       "accounts": [
         {
           "name": "owner",
-          "isMut": false,
+          "isMut": true,
           "isSigner": true
         },
         {
@@ -2010,7 +2075,7 @@
         },
         {
           "name": "reserveLiquidityMint",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -2070,7 +2135,7 @@
           "accounts": [
             {
               "name": "owner",
-              "isMut": false,
+              "isMut": true,
               "isSigner": true
             },
             {
@@ -2095,7 +2160,7 @@
             },
             {
               "name": "reserveLiquidityMint",
-              "isMut": true,
+              "isMut": false,
               "isSigner": false
             },
             {
@@ -2201,7 +2266,7 @@
         },
         {
           "name": "repayReserveLiquidityMint",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -2216,7 +2281,7 @@
         },
         {
           "name": "withdrawReserveLiquidityMint",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -2323,7 +2388,7 @@
             },
             {
               "name": "repayReserveLiquidityMint",
-              "isMut": true,
+              "isMut": false,
               "isSigner": false
             },
             {
@@ -2338,7 +2403,7 @@
             },
             {
               "name": "withdrawReserveLiquidityMint",
-              "isMut": true,
+              "isMut": false,
               "isSigner": false
             },
             {
@@ -2732,7 +2797,7 @@
         },
         {
           "name": "reserveLiquidityMint",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -3249,11 +3314,19 @@
             "type": "u64"
           },
           {
+            "name": "minInitialDepositAmount",
+            "docs": [
+              "Minimum amount of deposit at creation of a reserve to prevent artificial inflation",
+              "Note: this amount cannot be recovered, the ctoken associated are never minted"
+            ],
+            "type": "u64"
+          },
+          {
             "name": "padding1",
             "type": {
               "array": [
                 "u64",
-                171
+                170
               ]
             }
           }
@@ -3436,11 +3509,18 @@
             "type": "u8"
           },
           {
+            "name": "lowestReserveDepositMaxLtvPct",
+            "docs": [
+              "The lowest max LTV found amongst the collateral deposits"
+            ],
+            "type": "u8"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                6
+                5
               ]
             }
           },
@@ -4029,6 +4109,9 @@
           },
           {
             "name": "UpdateIndividualAutodeleverageMarginCallPeriodSecs"
+          },
+          {
+            "name": "UpdateInitialDepositAmount"
           }
         ]
       }
@@ -5692,12 +5775,42 @@
     {
       "code": 6115,
       "name": "ObligationCurrentlyMarkedForDeleveraging",
-      "msg": "Obligation is currently marked for deleveraging"
+      "msg": "Obligation is already marked for deleveraging"
     },
     {
       "code": 6116,
+      "name": "MaximumWithdrawValueZero",
+      "msg": "Maximum withdrawable value of this collateral is zero, LTV needs improved"
+    },
+    {
+      "code": 6117,
+      "name": "ZeroMaxLtvAssetsInDeposits",
+      "msg": "No max LTV 0 assets allowed in deposits for repay and withdraw"
+    },
+    {
+      "code": 6118,
+      "name": "MinLtvAssetsPriority",
+      "msg": "The operation must prioritize the collateral with the lowest LTV"
+    },
+    {
+      "code": 6119,
+      "name": "WorseLTVThanUnhealthyLTV",
+      "msg": "Cannot get the obligation liquidatable"
+    },
+    {
+      "code": 6120,
       "name": "FarmAccountsMissing",
       "msg": "Farm accounts to refresh are missing"
+    },
+    {
+      "code": 6121,
+      "name": "RepayTooSmallForFullLiquidation",
+      "msg": "Repay amount is too small to satisfy the mandatory full liquidation"
+    },
+    {
+      "code": 6122,
+      "name": "InsufficientRepayAmount",
+      "msg": "Liquidator provided repay amount lower than required by liquidation rules"
     }
   ]
 }

@@ -14,6 +14,7 @@ export interface InitReserveAccounts {
   feeReceiver: PublicKey
   reserveCollateralMint: PublicKey
   reserveCollateralSupply: PublicKey
+  initialLiquiditySource: PublicKey
   rent: PublicKey
   liquidityTokenProgram: PublicKey
   collateralTokenProgram: PublicKey
@@ -51,6 +52,11 @@ export function initReserve(
     },
     {
       pubkey: accounts.reserveCollateralSupply,
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: accounts.initialLiquiditySource,
       isSigner: false,
       isWritable: true,
     },

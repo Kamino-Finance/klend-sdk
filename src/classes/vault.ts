@@ -11,10 +11,10 @@ import {
   SYSVAR_RENT_PUBKEY,
   TransactionInstruction,
 } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID, unpackAccount } from '@solana/spl-token';
+import { NATIVE_MINT, TOKEN_PROGRAM_ID, unpackAccount } from '@solana/spl-token';
 import {
   getAssociatedTokenAddress,
-  getDepositWsolIxns,
+  getTransferWsolIxns,
   getTokenOracleData,
   KaminoMarket,
   KaminoReserve,
@@ -22,7 +22,6 @@ import {
   PubkeyHashMap,
   Reserve,
   UserState,
-  WRAPPED_SOL_MINT,
 } from '../lib';
 import {
   DepositAccounts,
@@ -695,20 +694,20 @@ export class KaminoVaultClient {
     const userTokenAta = getAssociatedTokenAddress(vaultState.tokenMint, user, true, tokenProgramID);
     const createAtasIxns: TransactionInstruction[] = [];
     const closeAtasIxns: TransactionInstruction[] = [];
-    if (vaultState.tokenMint.equals(WRAPPED_SOL_MINT)) {
+    if (vaultState.tokenMint.equals(NATIVE_MINT)) {
       const [{ ata: wsolAta, createAtaIx: createWsolAtaIxn }] = createAtasIdempotent(user, [
         {
-          mint: WRAPPED_SOL_MINT,
+          mint: NATIVE_MINT,
           tokenProgram: TOKEN_PROGRAM_ID,
         },
       ]);
       createAtasIxns.push(createWsolAtaIxn);
-      const depositWsolIxn = getDepositWsolIxns(
+      const transferWsolIxns = getTransferWsolIxns(
         user,
         wsolAta,
         numberToLamportsDecimal(tokenAmount, vaultState.tokenMintDecimals.toNumber()).ceil()
       );
-      createAtasIxns.push(...depositWsolIxn);
+      createAtasIxns.push(...transferWsolIxns);
     }
 
     const [{ ata: userSharesAta, createAtaIx: createSharesAtaIxns }] = createAtasIdempotent(user, [

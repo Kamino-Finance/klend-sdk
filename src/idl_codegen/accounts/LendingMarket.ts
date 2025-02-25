@@ -68,6 +68,11 @@ export interface LendingMarketFields {
    * been individually marked for auto-deleveraging (by the risk council).
    */
   individualAutodeleverageMarginCallPeriodSecs: BN
+  /**
+   * Minimum amount of deposit at creation of a reserve to prevent artificial inflation
+   * Note: this amount cannot be recovered, the ctoken associated are never minted
+   */
+  minInitialDepositAmount: BN
   padding1: Array<BN>
 }
 
@@ -135,6 +140,11 @@ export interface LendingMarketJSON {
    * been individually marked for auto-deleveraging (by the risk council).
    */
   individualAutodeleverageMarginCallPeriodSecs: string
+  /**
+   * Minimum amount of deposit at creation of a reserve to prevent artificial inflation
+   * Note: this amount cannot be recovered, the ctoken associated are never minted
+   */
+  minInitialDepositAmount: string
   padding1: Array<string>
 }
 
@@ -202,6 +212,11 @@ export class LendingMarket {
    * been individually marked for auto-deleveraging (by the risk council).
    */
   readonly individualAutodeleverageMarginCallPeriodSecs: BN
+  /**
+   * Minimum amount of deposit at creation of a reserve to prevent artificial inflation
+   * Note: this amount cannot be recovered, the ctoken associated are never minted
+   */
+  readonly minInitialDepositAmount: BN
   readonly padding1: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -234,7 +249,8 @@ export class LendingMarket {
     borsh.array(borsh.u8(), 32, "name"),
     borsh.u64("minValueSkipLiquidationBfChecks"),
     borsh.u64("individualAutodeleverageMarginCallPeriodSecs"),
-    borsh.array(borsh.u64(), 171, "padding1"),
+    borsh.u64("minInitialDepositAmount"),
+    borsh.array(borsh.u64(), 170, "padding1"),
   ])
 
   constructor(fields: LendingMarketFields) {
@@ -271,6 +287,7 @@ export class LendingMarket {
       fields.minValueSkipLiquidationBfChecks
     this.individualAutodeleverageMarginCallPeriodSecs =
       fields.individualAutodeleverageMarginCallPeriodSecs
+    this.minInitialDepositAmount = fields.minInitialDepositAmount
     this.padding1 = fields.padding1
   }
 
@@ -349,6 +366,7 @@ export class LendingMarket {
       minValueSkipLiquidationBfChecks: dec.minValueSkipLiquidationBfChecks,
       individualAutodeleverageMarginCallPeriodSecs:
         dec.individualAutodeleverageMarginCallPeriodSecs,
+      minInitialDepositAmount: dec.minInitialDepositAmount,
       padding1: dec.padding1,
     })
   }
@@ -387,6 +405,7 @@ export class LendingMarket {
         this.minValueSkipLiquidationBfChecks.toString(),
       individualAutodeleverageMarginCallPeriodSecs:
         this.individualAutodeleverageMarginCallPeriodSecs.toString(),
+      minInitialDepositAmount: this.minInitialDepositAmount.toString(),
       padding1: this.padding1.map((item) => item.toString()),
     }
   }
@@ -432,6 +451,7 @@ export class LendingMarket {
       individualAutodeleverageMarginCallPeriodSecs: new BN(
         obj.individualAutodeleverageMarginCallPeriodSecs
       ),
+      minInitialDepositAmount: new BN(obj.minInitialDepositAmount),
       padding1: obj.padding1.map((item) => new BN(item)),
     })
   }

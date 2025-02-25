@@ -40,7 +40,7 @@ export function refreshObligationFarmsForReserve(
     {
       pubkey: accounts.baseAccounts.lendingMarketAuthority,
       isSigner: false,
-      isWritable: true,
+      isWritable: false,
     },
     {
       pubkey: accounts.baseAccounts.reserve,

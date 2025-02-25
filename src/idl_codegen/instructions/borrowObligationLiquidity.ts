@@ -43,7 +43,7 @@ export function borrowObligationLiquidity(
     {
       pubkey: accounts.borrowReserveLiquidityMint,
       isSigner: false,
-      isWritable: true,
+      isWritable: false,
     },
     {
       pubkey: accounts.reserveSourceLiquidity,

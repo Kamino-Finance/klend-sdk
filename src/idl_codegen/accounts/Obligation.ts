@@ -48,6 +48,8 @@ export interface ObligationFields {
    * Only effective when `deleveraging_margin_call_started_slot != 0`.
    */
   autodeleverageTargetLtvPct: number
+  /** The lowest max LTV found amongst the collateral deposits */
+  lowestReserveDepositMaxLtvPct: number
   reserved: Array<number>
   highestBorrowFactorPct: BN
   /**
@@ -102,6 +104,8 @@ export interface ObligationJSON {
    * Only effective when `deleveraging_margin_call_started_slot != 0`.
    */
   autodeleverageTargetLtvPct: number
+  /** The lowest max LTV found amongst the collateral deposits */
+  lowestReserveDepositMaxLtvPct: number
   reserved: Array<number>
   highestBorrowFactorPct: string
   /**
@@ -157,6 +161,8 @@ export class Obligation {
    * Only effective when `deleveraging_margin_call_started_slot != 0`.
    */
   readonly autodeleverageTargetLtvPct: number
+  /** The lowest max LTV found amongst the collateral deposits */
+  readonly lowestReserveDepositMaxLtvPct: number
   readonly reserved: Array<number>
   readonly highestBorrowFactorPct: BN
   /**
@@ -191,7 +197,8 @@ export class Obligation {
     borsh.publicKey("referrer"),
     borsh.u8("borrowingDisabled"),
     borsh.u8("autodeleverageTargetLtvPct"),
-    borsh.array(borsh.u8(), 6, "reserved"),
+    borsh.u8("lowestReserveDepositMaxLtvPct"),
+    borsh.array(borsh.u8(), 5, "reserved"),
     borsh.u64("highestBorrowFactorPct"),
     borsh.u64("autodeleverageMarginCallStartedTimestamp"),
     borsh.array(borsh.u64(), 125, "padding3"),
@@ -224,6 +231,7 @@ export class Obligation {
     this.referrer = fields.referrer
     this.borrowingDisabled = fields.borrowingDisabled
     this.autodeleverageTargetLtvPct = fields.autodeleverageTargetLtvPct
+    this.lowestReserveDepositMaxLtvPct = fields.lowestReserveDepositMaxLtvPct
     this.reserved = fields.reserved
     this.highestBorrowFactorPct = fields.highestBorrowFactorPct
     this.autodeleverageMarginCallStartedTimestamp =
@@ -304,6 +312,7 @@ export class Obligation {
       referrer: dec.referrer,
       borrowingDisabled: dec.borrowingDisabled,
       autodeleverageTargetLtvPct: dec.autodeleverageTargetLtvPct,
+      lowestReserveDepositMaxLtvPct: dec.lowestReserveDepositMaxLtvPct,
       reserved: dec.reserved,
       highestBorrowFactorPct: dec.highestBorrowFactorPct,
       autodeleverageMarginCallStartedTimestamp:
@@ -336,6 +345,7 @@ export class Obligation {
       referrer: this.referrer.toString(),
       borrowingDisabled: this.borrowingDisabled,
       autodeleverageTargetLtvPct: this.autodeleverageTargetLtvPct,
+      lowestReserveDepositMaxLtvPct: this.lowestReserveDepositMaxLtvPct,
       reserved: this.reserved,
       highestBorrowFactorPct: this.highestBorrowFactorPct.toString(),
       autodeleverageMarginCallStartedTimestamp:
@@ -374,6 +384,7 @@ export class Obligation {
       referrer: new PublicKey(obj.referrer),
       borrowingDisabled: obj.borrowingDisabled,
       autodeleverageTargetLtvPct: obj.autodeleverageTargetLtvPct,
+      lowestReserveDepositMaxLtvPct: obj.lowestReserveDepositMaxLtvPct,
       reserved: obj.reserved,
       highestBorrowFactorPct: new BN(obj.highestBorrowFactorPct),
       autodeleverageMarginCallStartedTimestamp: new BN(

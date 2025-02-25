@@ -54,7 +54,6 @@ import {
   createLookupTableIx,
   isNotNullPubkey,
   PublicKeySet,
-  WRAPPED_SOL_MINT,
   getAssociatedTokenAddress,
   ScopeRefresh,
   createAtasIdempotent,
@@ -2396,11 +2395,11 @@ export class KaminoAction {
   }
 
   private async addAtaIxs(action: ActionType) {
-    if (this.mint.equals(WRAPPED_SOL_MINT) || this.secondaryMint?.equals(WRAPPED_SOL_MINT)) {
+    if (this.mint.equals(NATIVE_MINT) || this.secondaryMint?.equals(NATIVE_MINT)) {
       await this.updateWSOLAccount(action);
     }
 
-    if ((action === 'withdraw' || action === 'borrow' || action === 'redeem') && !this.mint.equals(WRAPPED_SOL_MINT)) {
+    if ((action === 'withdraw' || action === 'borrow' || action === 'redeem') && !this.mint.equals(NATIVE_MINT)) {
       const [, createUserTokenAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
         this.owner,
         this.reserve.getLiquidityMint(),
@@ -2445,10 +2444,7 @@ export class KaminoAction {
       }
     }
 
-    if (
-      action === 'depositAndBorrow' ||
-      (action === 'repayAndWithdraw' && !this.secondaryMint?.equals(WRAPPED_SOL_MINT))
-    ) {
+    if (action === 'depositAndBorrow' || (action === 'repayAndWithdraw' && !this.secondaryMint?.equals(NATIVE_MINT))) {
       if (!this.additionalTokenAccountAddress) {
         throw new Error(`Additional token account address not found ${this.secondaryMint}`);
       }
@@ -2540,7 +2536,7 @@ export class KaminoAction {
     }
 
     let userTokenAccountAddress = this.userTokenAccountAddress;
-    if (this.secondaryMint?.equals(WRAPPED_SOL_MINT)) {
+    if (this.secondaryMint?.equals(NATIVE_MINT)) {
       if (!this.additionalTokenAccountAddress) {
         throw new Error(`Additional token account address not found ${this.secondaryMint}`);
       }
@@ -2556,7 +2552,7 @@ export class KaminoAction {
       action === 'deposit' ||
       action === 'repay' ||
       action === 'mint' ||
-      (action === 'liquidate' && this.secondaryMint?.equals(WRAPPED_SOL_MINT)); // only sync WSOL amount if liquidator repays SOL which is secondaryMint
+      (action === 'liquidate' && this.secondaryMint?.equals(NATIVE_MINT)); // only sync WSOL amount if liquidator repays SOL which is secondaryMint
 
     const transferLamportsIx = SystemProgram.transfer({
       fromPubkey: this.owner,

@@ -36,7 +36,7 @@ export function initObligationFarmsForReserve(
     {
       pubkey: accounts.lendingMarketAuthority,
       isSigner: false,
-      isWritable: true,
+      isWritable: false,
     },
     { pubkey: accounts.reserve, isSigner: false, isWritable: true },
     { pubkey: accounts.reserveFarmState, isSigner: false, isWritable: true },

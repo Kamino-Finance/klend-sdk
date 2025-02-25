@@ -55,7 +55,7 @@ export function repayObligationLiquidityV2(
     {
       pubkey: accounts.repayAccounts.reserveLiquidityMint,
       isSigner: false,
-      isWritable: true,
+      isWritable: false,
     },
     {
       pubkey: accounts.repayAccounts.reserveDestinationLiquidity,

@@ -48,13 +48,21 @@ export class ObligationZP {
   readonly referrer: PublicKey
   /** Marked = 1 if borrowing disabled, 0 = borrowing enabled */
   readonly borrowingDisabled: number
-  /** A target LTV set by the risk council when marking this obligation for deleveraging. Only effective when `deleveraging_margin_call_started_slot != 0`. */
+  /**
+   *  A target LTV set by the risk council when marking this obligation for deleveraging. 
+   * Only effective when `deleveraging_margin_call_started_slot != 0`. 
+   * */
   readonly autodeleverageTargetLtvPct: number
-  readonly reserved: Array<BN>;
+  /** The lowest max LTV found amongst the collateral deposits */
+  readonly lowestReserveDepositMaxLtvPct: number
+  readonly reserved: Array<number>
   readonly highestBorrowFactorPct: BN
-  /** A timestamp at which the risk council most-recently marked this obligation for deleveraging. Zero if not currently subject to deleveraging. */
+  /** 
+   * A timestamp at which the risk council most-recently marked this obligation for deleveraging.
+   *  Zero if not currently subject to deleveraging. 
+   * */
   readonly autodeleverageMarginCallStartedTimestamp: BN
-  padding3: Array<BN> = new Array(0)
+  readonly padding3: Array<BN> = new Array(0)
 
   static readonly layout = borsh.struct([
     borsh.u64("tag"),
@@ -77,7 +85,8 @@ export class ObligationZP {
     borsh.publicKey("referrer"),
     borsh.u8("borrowingDisabled"),
     borsh.u8("autodeleverageTargetLtvPct"),
-    borsh.array(borsh.u8(), 6, "reserved"),
+    borsh.u8("lowestReserveDepositMaxLtvPct"),
+    borsh.array(borsh.u8(), 5, "reserved"),
     borsh.u64("highestBorrowFactorPct"),
     borsh.u64("autodeleverageMarginCallStartedTimestamp"),
   ])
@@ -109,7 +118,8 @@ export class ObligationZP {
     this.referrer = fields.referrer
     this.borrowingDisabled = fields.borrowingDisabled
     this.autodeleverageTargetLtvPct = fields.autodeleverageTargetLtvPct
-    this.reserved = fields.reserved.map((num) => new BN(num))
+    this.lowestReserveDepositMaxLtvPct = fields.lowestReserveDepositMaxLtvPct
+    this.reserved = new Array<number>(0)
     this.highestBorrowFactorPct = fields.highestBorrowFactorPct
     this.autodeleverageMarginCallStartedTimestamp = fields.autodeleverageMarginCallStartedTimestamp
     this.padding3 = new Array<BN>(0);
@@ -187,6 +197,7 @@ export class ObligationZP {
       referrer: dec.referrer,
       borrowingDisabled: dec.borrowingDisabled,
       autodeleverageTargetLtvPct: dec.autodeleverageTargetLtvPct,
+      lowestReserveDepositMaxLtvPct: dec.lowestReserveDepositMaxLtvPct,
       reserved: dec.reserved,
       highestBorrowFactorPct: dec.highestBorrowFactorPct,
       autodeleverageMarginCallStartedTimestamp: dec.autodeleverageMarginCallStartedTimestamp,

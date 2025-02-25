@@ -45,7 +45,7 @@ export function depositReserveLiquidityAndObligationCollateral(
     {
       pubkey: accounts.reserveLiquidityMint,
       isSigner: false,
-      isWritable: true,
+      isWritable: false,
     },
     {
       pubkey: accounts.reserveLiquiditySupply,
