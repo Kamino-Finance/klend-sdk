@@ -374,6 +374,7 @@ async function getDepositTargetCollIxns(
     false, // we do not need ATA ixns here (we construct and close them ourselves)
     removesElevationGroup, // we may need to (temporarily) remove the elevation group; the same or a different one will be set on withdraw, if requested
     false, // we are dealing with an existing obligation, no need to create user metadata
+    false, // we do not need to create a lookup table, dealing with an existing obligation
     context.referrer,
     context.currentSlot,
     context.scopeRefresh,
@@ -422,6 +423,7 @@ async function getWithdrawSourceCollIxns(
     false, // we do not need ATA ixns here (we construct and close them ourselves)
     requestedElevationGroup !== undefined, // the `elevationGroupIdToRequestAfterWithdraw()` has already decided on this
     false, // we are dealing with an existing obligation, no need to create user metadata
+    false, // we do not need to create a lookup table, dealing with an existing obligation
     context.referrer,
     context.currentSlot,
     undefined, // we have refreshed scope already, during depositing

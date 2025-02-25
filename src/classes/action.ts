@@ -407,6 +407,7 @@ export class KaminoAction {
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false, // to be requested *before* the deposit
     includeUserMetadata: boolean = true, // if true it includes user metadata
+    createLookupTable: boolean = true,
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
     scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' },
@@ -444,6 +445,7 @@ export class KaminoAction {
       requestElevationGroup,
       includeUserMetadata,
       addInitObligationForFarm,
+      createLookupTable,
       undefined,
       overrideElevationGroupRequest
     );
@@ -501,6 +503,7 @@ export class KaminoAction {
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
+    createLookupTable: boolean = true,
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
     scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' },
@@ -538,6 +541,7 @@ export class KaminoAction {
       requestElevationGroup,
       includeUserMetadata,
       addInitObligationForFarm,
+      createLookupTable,
       undefined,
       overrideElevationGroupRequest
     );
@@ -556,7 +560,6 @@ export class KaminoAction {
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas
     requestElevationGroup: boolean = false,
-    includeUserMetadata: boolean = true, // if true it includes user metadata
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
     scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
@@ -588,13 +591,7 @@ export class KaminoAction {
       await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
     }
 
-    await axn.addSupportIxs(
-      'mint',
-      includeAtaIxns,
-      requestElevationGroup,
-      includeUserMetadata,
-      addInitObligationForFarm
-    );
+    await axn.addSupportIxs('mint', includeAtaIxns, requestElevationGroup, false, addInitObligationForFarm, false);
     axn.addDepositReserveLiquidityIx();
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
     return axn;
@@ -609,7 +606,6 @@ export class KaminoAction {
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas
     requestElevationGroup: boolean = false,
-    includeUserMetadata: boolean = true, // if true it includes user metadata,
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
     scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
@@ -641,13 +637,7 @@ export class KaminoAction {
       await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
     }
 
-    await axn.addSupportIxs(
-      'redeem',
-      includeAtaIxns,
-      requestElevationGroup,
-      includeUserMetadata,
-      addInitObligationForFarm
-    );
+    await axn.addSupportIxs('redeem', includeAtaIxns, requestElevationGroup, false, addInitObligationForFarm, false);
     axn.addRedeemReserveCollateralIx();
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
     return axn;
@@ -663,6 +653,7 @@ export class KaminoAction {
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
+    createLookupTable: boolean = true,
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
     scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
@@ -699,7 +690,8 @@ export class KaminoAction {
       includeAtaIxns,
       requestElevationGroup,
       includeUserMetadata,
-      addInitObligationForFarm
+      addInitObligationForFarm,
+      createLookupTable
     );
     axn.addDepositObligationCollateralIx();
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
@@ -718,6 +710,7 @@ export class KaminoAction {
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata,
+    createLookupTable: boolean = true,
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
     scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
@@ -761,6 +754,7 @@ export class KaminoAction {
       requestElevationGroup,
       includeUserMetadata,
       addInitObligationForFarmForDeposit,
+      createLookupTable,
       twoTokenAction
     );
     await axn.addDepositAndBorrowIx();
@@ -787,6 +781,7 @@ export class KaminoAction {
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata,
+    createLookupTable: boolean = true,
     referrer: PublicKey = PublicKey.default,
     scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
   ) {
@@ -828,6 +823,7 @@ export class KaminoAction {
       requestElevationGroup,
       includeUserMetadata,
       addInitObligationForFarmForRepay,
+      createLookupTable,
       twoTokenAction
     );
 
@@ -854,6 +850,7 @@ export class KaminoAction {
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false, // to be requested *after* the withdraw
     includeUserMetadata: boolean = true, // if true it includes user metadata
+    createLookupTable: boolean = true,
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
     scopeRefresh: ScopeRefresh | undefined = undefined,
@@ -899,6 +896,7 @@ export class KaminoAction {
       requestElevationGroup,
       includeUserMetadata,
       addInitObligationForFarm,
+      createLookupTable,
       false,
       overrideElevationGroupRequest
     );
@@ -938,6 +936,7 @@ export class KaminoAction {
     includeAtaIxns: boolean = true,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true,
+    createLookupTable: boolean = true,
     referrer: PublicKey = PublicKey.default,
     scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
   ) {
@@ -974,7 +973,8 @@ export class KaminoAction {
       includeAtaIxns,
       requestElevationGroup,
       includeUserMetadata,
-      addInitObligationForFarm
+      addInitObligationForFarm,
+      createLookupTable
     );
     await axn.addRepayIx();
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
@@ -995,6 +995,7 @@ export class KaminoAction {
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas, and creates all other token atas if they don't exist
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
+    createLookupTable: boolean = true,
     referrer: PublicKey = PublicKey.default,
     maxAllowedLtvOverridePercent: number = 0,
     currentSlot: number = 0,
@@ -1036,7 +1037,8 @@ export class KaminoAction {
       includeAtaIxns,
       requestElevationGroup,
       includeUserMetadata,
-      addInitObligationForFarm
+      addInitObligationForFarm,
+      createLookupTable
     );
     await axn.addLiquidateIx(maxAllowedLtvOverridePercent);
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
@@ -1885,13 +1887,24 @@ export class KaminoAction {
     requestElevationGroup: boolean,
     includeUserMetadata: boolean,
     addInitObligationForFarm: boolean,
+    createLookupTable: boolean,
     twoTokenAction: boolean = false,
     overrideElevationGroupRequest?: number
   ) {
     if (!['mint', 'redeem'].includes(action)) {
       const [, ownerUserMetadata] = await this.kaminoMarket.getUserMetadata(this.owner);
       if (!ownerUserMetadata && includeUserMetadata) {
-        await this.addInitUserMetadataIxs();
+        let lookupTable: PublicKey = PublicKey.default;
+        if (createLookupTable) {
+          const [createLutIx, lookupTableAddress] = await createLookupTableIx(
+            this.kaminoMarket.getConnection(),
+            this.owner
+          );
+          lookupTable = lookupTableAddress;
+          this.setupIxs.push(createLutIx);
+          this.setupIxsLabels.push(`createUserLutIx[${lookupTableAddress.toString()}]`);
+        }
+        this.addInitUserMetadataIxs(lookupTable);
       }
 
       if (['borrow', 'withdrawReferrerFees'].includes(action)) {
@@ -2312,10 +2325,7 @@ export class KaminoAction {
     }
   }
 
-  private async addInitUserMetadataIxs() {
-    const [createLutIx, lookupTableAddress] = await createLookupTableIx(this.kaminoMarket.getConnection(), this.owner);
-    this.setupIxs.push(createLutIx);
-    this.setupIxsLabels.push(`createUserLutIx[${lookupTableAddress.toString()}]`);
+  private addInitUserMetadataIxs(lookupTableAddress: PublicKey) {
     const [userMetadataAddress, _bump] = userMetadataPda(this.owner, this.kaminoMarket.programId);
     const referrerUserMetadataAddress = this.referrer.equals(PublicKey.default)
       ? this.kaminoMarket.programId

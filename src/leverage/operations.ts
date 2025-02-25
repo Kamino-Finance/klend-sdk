@@ -534,6 +534,7 @@ async function buildDepositWithLeverageIxns(
     false,
     elevationGroupOverride === 0 ? false : true, // emode
     false, // to be checked and created in a setup tx in the UI
+    false, // to be checked and created in a setup tx in the UI
     referrer,
     currentSlot,
     scopeRefresh
@@ -942,6 +943,7 @@ export async function buildWithdrawWithLeverageIxns(
     obligation,
     0,
     false,
+    false, // to be checked and created in a setup tx in the UI (won't be the case for withdraw anyway as this would be created in deposit)
     false, // to be checked and created in a setup tx in the UI (won't be the case for withdraw anyway as this would be created in deposit)
     isClosingPosition,
     referrer,
@@ -1477,6 +1479,7 @@ async function buildIncreaseLeverageIxns(
     false,
     false,
     false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
+    false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     referrer,
     currentSlot,
     { includeScopeRefresh: true, scopeFeed: scopeFeed! }
@@ -1492,6 +1495,7 @@ async function buildIncreaseLeverageIxns(
     0,
     false,
     false,
+    false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     referrer,
     currentSlot,
@@ -1653,6 +1657,7 @@ async function buildDecreaseLeverageIxns(
     false,
     false,
     false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
+    false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     referrer,
     scopeRefresh
   );
@@ -1667,6 +1672,7 @@ async function buildDecreaseLeverageIxns(
     0,
     false,
     false,
+    false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     referrer,
     currentSlot,
