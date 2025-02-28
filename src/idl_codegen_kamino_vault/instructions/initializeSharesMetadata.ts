@@ -11,7 +11,7 @@ export interface InitializeSharesMetadataArgs {
 }
 
 export interface InitializeSharesMetadataAccounts {
-  adminAuthority: PublicKey
+  vaultAdminAuthority: PublicKey
   vaultState: PublicKey
   sharesMint: PublicKey
   baseVaultAuthority: PublicKey
@@ -33,7 +33,7 @@ export function initializeSharesMetadata(
   programId: PublicKey = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta> = [
-    { pubkey: accounts.adminAuthority, isSigner: true, isWritable: true },
+    { pubkey: accounts.vaultAdminAuthority, isSigner: true, isWritable: true },
     { pubkey: accounts.vaultState, isSigner: false, isWritable: false },
     { pubkey: accounts.sharesMint, isSigner: false, isWritable: false },
     { pubkey: accounts.baseVaultAuthority, isSigner: false, isWritable: false },

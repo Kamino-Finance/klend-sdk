@@ -403,7 +403,7 @@
       "name": "updateVaultConfig",
       "accounts": [
         {
-          "name": "adminAuthority",
+          "name": "vaultAdminAuthority",
           "isMut": false,
           "isSigner": true
         },
@@ -435,7 +435,7 @@
       "name": "withdrawPendingFees",
       "accounts": [
         {
-          "name": "adminAuthority",
+          "name": "vaultAdminAuthority",
           "isMut": true,
           "isSigner": true
         },
@@ -540,7 +540,7 @@
       "name": "giveUpPendingFees",
       "accounts": [
         {
-          "name": "adminAuthority",
+          "name": "vaultAdminAuthority",
           "isMut": true,
           "isSigner": true
         },
@@ -566,7 +566,7 @@
       "name": "initializeSharesMetadata",
       "accounts": [
         {
-          "name": "adminAuthority",
+          "name": "vaultAdminAuthority",
           "isMut": true,
           "isSigner": true
         },
@@ -625,7 +625,7 @@
       "name": "updateSharesMetadata",
       "accounts": [
         {
-          "name": "adminAuthority",
+          "name": "vaultAdminAuthority",
           "isMut": true,
           "isSigner": true
         },
@@ -858,7 +858,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "adminAuthority",
+            "name": "vaultAdminAuthority",
             "type": "publicKey"
           },
           {

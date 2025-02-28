@@ -5,7 +5,7 @@ import * as types from "../types" // eslint-disable-line @typescript-eslint/no-u
 import { PROGRAM_ID } from "../programId"
 
 export interface WithdrawPendingFeesAccounts {
-  adminAuthority: PublicKey
+  vaultAdminAuthority: PublicKey
   vaultState: PublicKey
   reserve: PublicKey
   tokenVault: PublicKey
@@ -29,7 +29,7 @@ export function withdrawPendingFees(
   programId: PublicKey = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta> = [
-    { pubkey: accounts.adminAuthority, isSigner: true, isWritable: true },
+    { pubkey: accounts.vaultAdminAuthority, isSigner: true, isWritable: true },
     { pubkey: accounts.vaultState, isSigner: false, isWritable: true },
     { pubkey: accounts.reserve, isSigner: false, isWritable: true },
     { pubkey: accounts.tokenVault, isSigner: false, isWritable: true },

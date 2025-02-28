@@ -10,7 +10,7 @@ export interface UpdateVaultConfigArgs {
 }
 
 export interface UpdateVaultConfigAccounts {
-  adminAuthority: PublicKey
+  vaultAdminAuthority: PublicKey
   vaultState: PublicKey
   klendProgram: PublicKey
 }
@@ -26,7 +26,7 @@ export function updateVaultConfig(
   programId: PublicKey = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta> = [
-    { pubkey: accounts.adminAuthority, isSigner: true, isWritable: false },
+    { pubkey: accounts.vaultAdminAuthority, isSigner: true, isWritable: false },
     { pubkey: accounts.vaultState, isSigner: false, isWritable: true },
     { pubkey: accounts.klendProgram, isSigner: false, isWritable: false },
   ]

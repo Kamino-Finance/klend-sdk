@@ -9,7 +9,7 @@ export interface GiveUpPendingFeesArgs {
 }
 
 export interface GiveUpPendingFeesAccounts {
-  adminAuthority: PublicKey
+  vaultAdminAuthority: PublicKey
   vaultState: PublicKey
   klendProgram: PublicKey
 }
@@ -22,7 +22,7 @@ export function giveUpPendingFees(
   programId: PublicKey = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta> = [
-    { pubkey: accounts.adminAuthority, isSigner: true, isWritable: true },
+    { pubkey: accounts.vaultAdminAuthority, isSigner: true, isWritable: true },
     { pubkey: accounts.vaultState, isSigner: false, isWritable: true },
     { pubkey: accounts.klendProgram, isSigner: false, isWritable: false },
   ]

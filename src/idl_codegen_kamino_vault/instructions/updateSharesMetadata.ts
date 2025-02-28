@@ -11,7 +11,7 @@ export interface UpdateSharesMetadataArgs {
 }
 
 export interface UpdateSharesMetadataAccounts {
-  adminAuthority: PublicKey
+  vaultAdminAuthority: PublicKey
   vaultState: PublicKey
   baseVaultAuthority: PublicKey
   sharesMetadata: PublicKey
@@ -30,7 +30,7 @@ export function updateSharesMetadata(
   programId: PublicKey = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta> = [
-    { pubkey: accounts.adminAuthority, isSigner: true, isWritable: true },
+    { pubkey: accounts.vaultAdminAuthority, isSigner: true, isWritable: true },
     { pubkey: accounts.vaultState, isSigner: false, isWritable: false },
     { pubkey: accounts.baseVaultAuthority, isSigner: false, isWritable: false },
     { pubkey: accounts.sharesMetadata, isSigner: false, isWritable: true },

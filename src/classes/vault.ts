@@ -293,7 +293,7 @@ export class KaminoVaultClient {
     );
 
     const updateReserveAllocationAccounts: UpdateReserveAllocationAccounts = {
-      signer: vaultState.adminAuthority,
+      signer: vaultState.vaultAdminAuthority,
       vaultState: vault.address,
       baseVaultAuthority: vaultState.baseVaultAuthority,
       reserveCollateralMint: reserveState.collateral.mintPubkey,
@@ -325,7 +325,7 @@ export class KaminoVaultClient {
     accountsToAddToLUT.push(lendingMarketAuth);
 
     const insertIntoLUTIxs = await this.insertIntoLookupTableIxs(
-      vaultState.adminAuthority,
+      vaultState.vaultAdminAuthority,
       vaultState.vaultLookupTable,
       accountsToAddToLUT
     );
@@ -355,12 +355,12 @@ export class KaminoVaultClient {
     const vaultState: VaultState = await vault.getState(this.getConnection());
 
     const updateVaultConfigAccs: UpdateVaultConfigAccounts = {
-      adminAuthority: vaultState.adminAuthority,
+      vaultAdminAuthority: vaultState.vaultAdminAuthority,
       vaultState: vault.address,
       klendProgram: this._kaminoLendProgramId,
     };
     if (signer) {
-      updateVaultConfigAccs.adminAuthority = signer;
+      updateVaultConfigAccs.vaultAdminAuthority = signer;
     }
 
     const updateVaultConfigArgs: UpdateVaultConfigArgs = {
@@ -414,7 +414,7 @@ export class KaminoVaultClient {
     if (mode.kind === new VaultConfigField.PendingVaultAdmin().kind) {
       const newPubkey = new PublicKey(value);
       const insertIntoLutIxs = await this.insertIntoLookupTableIxs(
-        vaultState.adminAuthority,
+        vaultState.vaultAdminAuthority,
         vaultState.vaultLookupTable,
         [newPubkey]
       );
@@ -432,7 +432,7 @@ export class KaminoVaultClient {
           farmState!.globalConfig
         );
         const insertIntoLutIxs = await this.insertIntoLookupTableIxs(
-          vaultState.adminAuthority,
+          vaultState.vaultAdminAuthority,
           vaultState.vaultLookupTable,
           keysToAddToLUT
         );
@@ -481,7 +481,7 @@ export class KaminoVaultClient {
     value: string
   ): TransactionInstruction {
     const updateVaultConfigAccs: UpdateVaultConfigAccounts = {
-      adminAuthority: admin,
+      vaultAdminAuthority: admin,
       vaultState: vault,
       klendProgram: this._kaminoLendProgramId,
     };
@@ -531,7 +531,7 @@ export class KaminoVaultClient {
 
     // read the current LUT and create a new one for the new admin and backfill it
     const accountsInExistentLUT = (await getAccountsInLUT(this.getConnection(), vaultState.vaultLookupTable)).filter(
-      (account) => !account.equals(vaultState.adminAuthority)
+      (account) => !account.equals(vaultState.vaultAdminAuthority)
     );
 
     const LUTIxs: TransactionInstruction[] = [];
@@ -574,7 +574,7 @@ export class KaminoVaultClient {
     const vaultState: VaultState = await vault.getState(this.getConnection());
 
     const giveUpPendingFeesAccounts: GiveUpPendingFeesAccounts = {
-      adminAuthority: vaultState.adminAuthority,
+      vaultAdminAuthority: vaultState.vaultAdminAuthority,
       vaultState: vault.address,
       klendProgram: this._kaminoLendProgramId,
     };
@@ -604,7 +604,7 @@ export class KaminoVaultClient {
   ): Promise<TransactionInstruction[]> {
     const vaultState: VaultState = await vault.getState(this.getConnection());
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
-    const [{ ata: adminTokenAta, createAtaIx }] = createAtasIdempotent(vaultState.adminAuthority, [
+    const [{ ata: adminTokenAta, createAtaIx }] = createAtasIdempotent(vaultState.vaultAdminAuthority, [
       {
         mint: vaultState.tokenMint,
         tokenProgram: TOKEN_PROGRAM_ID,
@@ -1295,7 +1295,7 @@ export class KaminoVaultClient {
     const lendingMarketAuth = lendingMarketAuthPda(marketAddress, this._kaminoLendProgramId)[0];
 
     const withdrawPendingFeesAccounts: WithdrawPendingFeesAccounts = {
-      adminAuthority: vaultState.adminAuthority,
+      vaultAdminAuthority: vaultState.vaultAdminAuthority,
       vaultState: vault.address,
       reserve: reserve.address,
       tokenVault: vaultState.tokenVault,
@@ -1355,7 +1355,7 @@ export class KaminoVaultClient {
     const vaultState = await vault.getState(this.getConnection());
     const allAccountsToBeInserted = [
       vault.address,
-      vaultState.adminAuthority,
+      vaultState.vaultAdminAuthority,
       vaultState.baseVaultAuthority,
       vaultState.tokenMint,
       vaultState.tokenVault,
@@ -1400,7 +1400,7 @@ export class KaminoVaultClient {
     let lut = vaultState.vaultLookupTable;
     if (lut.equals(PublicKey.default)) {
       const recentSlot = await this.getConnection().getSlot();
-      const [ixn, address] = initLookupTableIx(vaultState.adminAuthority, recentSlot);
+      const [ixn, address] = initLookupTableIx(vaultState.vaultAdminAuthority, recentSlot);
       setupLUTIfNeededIxs.push(ixn);
       lut = address;
 
@@ -1420,7 +1420,7 @@ export class KaminoVaultClient {
     }
     ixns.push(
       ...(await this.insertIntoLookupTableIxs(
-        vaultState.adminAuthority,
+        vaultState.vaultAdminAuthority,
         lut,
         allAccountsToBeInserted,
         overridenExistentAccounts

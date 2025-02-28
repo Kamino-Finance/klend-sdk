@@ -5,7 +5,7 @@ import * as types from "../types" // eslint-disable-line @typescript-eslint/no-u
 import { PROGRAM_ID } from "../programId"
 
 export interface VaultStateFields {
-  adminAuthority: PublicKey
+  vaultAdminAuthority: PublicKey
   baseVaultAuthority: PublicKey
   baseVaultAuthorityBump: BN
   tokenMint: PublicKey
@@ -43,7 +43,7 @@ export interface VaultStateFields {
 }
 
 export interface VaultStateJSON {
-  adminAuthority: string
+  vaultAdminAuthority: string
   baseVaultAuthority: string
   baseVaultAuthorityBump: string
   tokenMint: string
@@ -81,7 +81,7 @@ export interface VaultStateJSON {
 }
 
 export class VaultState {
-  readonly adminAuthority: PublicKey
+  readonly vaultAdminAuthority: PublicKey
   readonly baseVaultAuthority: PublicKey
   readonly baseVaultAuthorityBump: BN
   readonly tokenMint: PublicKey
@@ -122,7 +122,7 @@ export class VaultState {
   ])
 
   static readonly layout = borsh.struct([
-    borsh.publicKey("adminAuthority"),
+    borsh.publicKey("vaultAdminAuthority"),
     borsh.publicKey("baseVaultAuthority"),
     borsh.u64("baseVaultAuthorityBump"),
     borsh.publicKey("tokenMint"),
@@ -160,7 +160,7 @@ export class VaultState {
   ])
 
   constructor(fields: VaultStateFields) {
-    this.adminAuthority = fields.adminAuthority
+    this.vaultAdminAuthority = fields.vaultAdminAuthority
     this.baseVaultAuthority = fields.baseVaultAuthority
     this.baseVaultAuthorityBump = fields.baseVaultAuthorityBump
     this.tokenMint = fields.tokenMint
@@ -243,7 +243,7 @@ export class VaultState {
     const dec = VaultState.layout.decode(data.slice(8))
 
     return new VaultState({
-      adminAuthority: dec.adminAuthority,
+      vaultAdminAuthority: dec.vaultAdminAuthority,
       baseVaultAuthority: dec.baseVaultAuthority,
       baseVaultAuthorityBump: dec.baseVaultAuthorityBump,
       tokenMint: dec.tokenMint,
@@ -287,7 +287,7 @@ export class VaultState {
 
   toJSON(): VaultStateJSON {
     return {
-      adminAuthority: this.adminAuthority.toString(),
+      vaultAdminAuthority: this.vaultAdminAuthority.toString(),
       baseVaultAuthority: this.baseVaultAuthority.toString(),
       baseVaultAuthorityBump: this.baseVaultAuthorityBump.toString(),
       tokenMint: this.tokenMint.toString(),
@@ -329,7 +329,7 @@ export class VaultState {
 
   static fromJSON(obj: VaultStateJSON): VaultState {
     return new VaultState({
-      adminAuthority: new PublicKey(obj.adminAuthority),
+      vaultAdminAuthority: new PublicKey(obj.vaultAdminAuthority),
       baseVaultAuthority: new PublicKey(obj.baseVaultAuthority),
       baseVaultAuthorityBump: new BN(obj.baseVaultAuthorityBump),
       tokenMint: new PublicKey(obj.tokenMint),
