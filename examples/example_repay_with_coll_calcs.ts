@@ -39,6 +39,7 @@ import { getJupiterQuoter } from './utils/jup_utils';
     currentSlot,
     collTokenMint: collTokenMint,
     quoter: getJupiterQuoter(slippagePct * 100, collTokenReserve!, debtTokenReserve!),
+    useV2Ixs: true,
   });
   console.log('estimatedStats', estimatedStats);
 })().catch(async (e) => {

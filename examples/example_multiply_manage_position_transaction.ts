@@ -39,6 +39,7 @@ import Decimal from 'decimal.js';
     new PublicKey(collTokenMint),
     wallet.publicKey,
     obligation!,
+    true,
     currentSlot
   );
 
@@ -61,6 +62,7 @@ import Decimal from 'decimal.js';
     new PublicKey(debtTokenMint),
     wallet.publicKey,
     obligation!,
+    true,
     currentSlot
   );
 
@@ -77,6 +79,7 @@ import Decimal from 'decimal.js';
     new PublicKey(debtTokenMint),
     wallet.publicKey,
     obligation!,
+    true,
     currentSlot
   );
 
@@ -93,6 +96,7 @@ import Decimal from 'decimal.js';
     new PublicKey(collTokenMint),
     wallet.publicKey,
     obligation!,
+    true,
     currentSlot
   );
 

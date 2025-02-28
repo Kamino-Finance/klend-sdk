@@ -308,7 +308,8 @@ async function deposit(connection: Connection, wallet: Keypair, token: string, d
     depositAmount,
     kaminoMarket.getReserveBySymbol(token)!.getLiquidityMint(),
     wallet.publicKey,
-    new VanillaObligation(STAGING_LENDING_MARKET)
+    new VanillaObligation(STAGING_LENDING_MARKET),
+    true
   );
   console.log('User obligation', kaminoAction.obligation!.obligationAddress.toString());
 
@@ -328,7 +329,8 @@ async function withdraw(connection: Connection, wallet: Keypair, token: string, 
     depositAmount,
     kaminoMarket.getReserveBySymbol(token)!.getLiquidityMint(),
     wallet.publicKey,
-    new VanillaObligation(new PublicKey(STAGING_LENDING_MARKET))
+    new VanillaObligation(new PublicKey(STAGING_LENDING_MARKET)),
+    true
   );
   console.log('User obligation', kaminoAction.obligation!.obligationAddress.toString());
 
@@ -348,7 +350,8 @@ async function borrow(connection: Connection, wallet: Keypair, token: string, bo
     borrowAmount,
     kaminoMarket.getReserveBySymbol(token)!.getLiquidityMint(),
     wallet.publicKey,
-    new VanillaObligation(new PublicKey(STAGING_LENDING_MARKET))
+    new VanillaObligation(new PublicKey(STAGING_LENDING_MARKET)),
+    true
   );
   console.log('User obligation', kaminoAction.obligation!.obligationAddress.toString());
 
@@ -369,6 +372,7 @@ async function repay(connection: Connection, wallet: Keypair, token: string, bor
     kaminoMarket.getReserveBySymbol(token)!.getLiquidityMint(),
     wallet.publicKey,
     new VanillaObligation(new PublicKey(STAGING_LENDING_MARKET)),
+    true,
     await connection.getSlot()
   );
   console.log('User obligation', kaminoAction.obligation!.obligationAddress.toString());

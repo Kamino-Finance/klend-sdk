@@ -20,8 +20,8 @@ import {
   isNotNullPubkey,
   UserMetadata,
   PublicKeySet,
+  obligationFarmStatePda,
 } from '../lib';
-import { farmsId } from '@kamino-finance/farms-sdk';
 import { KaminoReserve } from '../classes/reserve';
 
 export type KaminoUserMetadata = {
@@ -266,19 +266,19 @@ function getMultiplyObligationAndObligationFarmStateAddresses(
       });
       if (!collReserve.state.farmCollateral.equals(PublicKey.default)) {
         farmUserStates.push({
-          address: getPdaFarmsUserState(
-            collReserve.state.farmCollateral!,
-            multiplyObligation.toPda(kaminoMarket.getAddress(), user)
-          ),
+          address: obligationFarmStatePda(
+            multiplyObligation.toPda(kaminoMarket.getAddress(), user),
+            collReserve.state.farmCollateral!
+          )[0],
           log: 'collReserve farmState for multiply obligation coll: ' + collMintString + ' debt: ' + debtMintString,
         });
       }
       if (!debtReserve.state.farmDebt.equals(PublicKey.default)) {
         farmUserStates.push({
-          address: getPdaFarmsUserState(
-            debtReserve.state.farmDebt!,
-            multiplyObligation.toPda(kaminoMarket.getAddress(), user)
-          ),
+          address: obligationFarmStatePda(
+            multiplyObligation.toPda(kaminoMarket.getAddress(), user),
+            debtReserve.state.farmDebt!
+          )[0],
           log: 'debtReserve farmState for multiply obligation coll: ' + collMintString + ' debt: ' + debtMintString,
         });
       }
@@ -309,19 +309,19 @@ function getLeverageObligationAndObligationFarmStateAddresses(
       });
       if (!collReserve.state.farmCollateral.equals(PublicKey.default)) {
         farmUserStates.push({
-          address: getPdaFarmsUserState(
-            collReserve.state.farmCollateral!,
-            leverageObligation.toPda(kaminoMarket.getAddress(), user)
-          ),
+          address: obligationFarmStatePda(
+            leverageObligation.toPda(kaminoMarket.getAddress(), user),
+            collReserve.state.farmCollateral!
+          )[0],
           log: 'collReserve farmState for leverage obligation coll: ' + collMintString + ' debt: ' + debtMintString,
         });
       }
       if (!debtReserve.state.farmDebt.equals(PublicKey.default)) {
         farmUserStates.push({
-          address: getPdaFarmsUserState(
-            debtReserve.state.farmDebt!,
-            leverageObligation.toPda(kaminoMarket.getAddress(), user)
-          ),
+          address: obligationFarmStatePda(
+            leverageObligation.toPda(kaminoMarket.getAddress(), user),
+            debtReserve.state.farmDebt!
+          )[0],
           log: 'debtReserve farmState for leverage obligation coll: ' + collMintString + ' debt: ' + debtMintString,
         });
       }
@@ -342,7 +342,7 @@ function getRepayWithCollObligationFarmStateAddresses(
     const borrowReserve = kaminoMarket.getReserveByMint(borrow.mintAddress)!;
     if (!borrowReserve.state.farmDebt.equals(PublicKey.default)) {
       farmUserStates.push({
-        address: getPdaFarmsUserState(borrowReserve.state.farmDebt!, obligation.obligationAddress),
+        address: obligationFarmStatePda(obligation.obligationAddress, borrowReserve.state.farmDebt!)[0],
         log: 'debtReserve farmState for vanilla obligation: ' + obligationString,
       });
     }
@@ -352,7 +352,7 @@ function getRepayWithCollObligationFarmStateAddresses(
     const depositReserve = kaminoMarket.getReserveByMint(deposit.mintAddress)!;
     if (!depositReserve.state.farmCollateral.equals(PublicKey.default)) {
       farmUserStates.push({
-        address: getPdaFarmsUserState(depositReserve.state.farmCollateral!, obligation.obligationAddress),
+        address: obligationFarmStatePda(obligation.obligationAddress, depositReserve.state.farmCollateral!)[0],
         log: 'collReserve farmState for vanilla obligation' + obligationString,
       });
     }
@@ -360,11 +360,6 @@ function getRepayWithCollObligationFarmStateAddresses(
 
   return farmUserStates;
 }
-
-const BASE_SEED_USER_STATE = Buffer.from('user');
-
-const getPdaFarmsUserState = (farm: PublicKey, obligation: PublicKey) =>
-  PublicKey.findProgramAddressSync([BASE_SEED_USER_STATE, farm.toBytes(), obligation.toBytes()], farmsId)[0];
 
 export async function getAllUserMetadatasWithFilter(
   connection: Connection,

@@ -49,7 +49,7 @@ export type KaminoDepositSwapOverride = (
   amountDebtAtaBalance: Decimal
 ) => Promise<InstructionsWithLookupTables>;
 
-export type DepsoitLeverageIxsResponse<QuoteResponse> = {
+export type DepositLeverageIxsResponse<QuoteResponse> = {
   ixs: TransactionInstruction[];
   lookupTables: AddressLookupTableAccount[];
   swapInputs: SwapInputs;
@@ -90,6 +90,7 @@ export interface DepositWithLeverageSwapInputsProps<QuoteResponse> {
   // currently only used to disable requesting elevation group when this value is 0
   // to be implemented properly in the future
   elevationGroupOverride?: number;
+  useV2Ixs: boolean;
 }
 
 export interface DepositWithLeverageProps<QuoteResponse> extends DepositWithLeverageSwapInputsProps<QuoteResponse> {
@@ -146,6 +147,7 @@ export interface WithdrawWithLeverageSwapInputsProps<QuoteResponse> {
   quoteBufferBps: Decimal;
   isKtoken: IsKtokenProvider;
   quoter: SwapQuoteProvider<QuoteResponse>;
+  useV2Ixs: boolean;
 }
 
 export interface WithdrawWithLeverageProps<QuoteResponse> extends WithdrawWithLeverageSwapInputsProps<QuoteResponse> {
@@ -199,6 +201,7 @@ export interface AdjustLeverageSwapInputsProps<QuoteResponse> {
   priceAinB: PriceAinBProvider;
   isKtoken: IsKtokenProvider;
   quoter: SwapQuoteProvider<QuoteResponse>;
+  useV2Ixs: boolean;
 }
 
 export interface AdjustLeverageProps<QuoteResponse> extends AdjustLeverageSwapInputsProps<QuoteResponse> {

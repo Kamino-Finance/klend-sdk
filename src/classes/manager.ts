@@ -199,7 +199,7 @@ export class KaminoManager {
       reserveAccount.publicKey,
       params.assetConfig.getReserveConfig(),
       undefined,
-      true
+      false
     );
 
     const txnIxns: TransactionInstruction[][] = [];

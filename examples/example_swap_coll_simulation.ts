@@ -39,6 +39,7 @@ import { getKeypair } from './utils/keypair';
     currentSlot,
     quoter: getJupiterQuoter(slippagePct * 100, sourceCollTokenReserve, targetCollTokenReserve),
     swapper: getJupiterSwapper(connection, wallet.publicKey),
+    useV2Ixs: true,
   });
 
   console.log('simulationDetails', swapCollIxnsOutputs.simulationDetails);

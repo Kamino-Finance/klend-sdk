@@ -110,6 +110,7 @@ import { QuoteResponse } from '@jup-ag/api/dist/index.js';
     }, // should return true if the token is a ktoken which is currently not supported
     quoter: getJupiterQuoter(slippagePct * 100, collTokenReserve!, debtTokenReserve!), // IMPORTANT!: For adjust DOWN the input mint is the coll token and the output mint is the debt token
     swapper: getJupiterSwapper(connection, wallet.publicKey),
+    useV2Ixs: true,
   });
 
   const lookupTableKeys = lookupTables.map((lut) => lut.key);
@@ -150,6 +151,7 @@ import { QuoteResponse } from '@jup-ag/api/dist/index.js';
       }, // should return true if the token is a ktoken which is currently not supported
       quoter: getJupiterQuoter(slippagePct * 100, debtTokenReserve!, collTokenReserve!), // IMPORTANT!: For adjust UP the input mint is the debt token and the output mint is the coll token
       swapper: getJupiterSwapper(connection, wallet.publicKey),
+      useV2Ixs: true,
     });
 
     const lookupTableKeys = lookupTables.map((lut) => lut.key);

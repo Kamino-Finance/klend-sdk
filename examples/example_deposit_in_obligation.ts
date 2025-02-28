@@ -27,6 +27,7 @@ import { loadReserveData } from './utils/helpers';
     usdcReserve.getLiquidityMint(),
     wallet.publicKey,
     new VanillaObligation(PROGRAM_ID),
+    false,
     300_000,
     true
   );

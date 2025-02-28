@@ -104,6 +104,7 @@ import { getJupiterPrice, getJupiterQuoter, getJupiterSwapper } from './utils/ju
       market.getReserveByMint(collTokenMint)!
     ), // IMPORTANT!: For deposit the input mint is the debt token mint and the output mint is the collateral token
     swapper: getJupiterSwapper(connection, wallet.publicKey),
+    useV2Ixs: true,
   });
 
   const lookupTableKeys = lookupTables.map((lut) => lut.key);

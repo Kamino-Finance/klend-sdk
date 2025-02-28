@@ -62,6 +62,7 @@ export interface SwapCollIxnsInputs<QuoteResponse> {
   currentSlot: number;
   budgetAndPriorityFeeIxns?: TransactionInstruction[];
   scopeRefresh?: ScopeRefresh;
+  useV2Ixs: boolean;
   quoter: SwapQuoteProvider<QuoteResponse>;
   swapper: SwapIxsProvider<QuoteResponse>;
   logger?: (msg: string, ...extra: any[]) => void;
@@ -80,6 +81,11 @@ export interface SwapCollIxnsOutputs<QuoteResponse> {
    * Required LUTs.
    */
   lookupTables: AddressLookupTableAccount[];
+
+  /**
+   * Whether the swap is using V2 instructions.
+   */
+  useV2Ixs: boolean;
 
   /**
    * Informational-only details of the token amounts/fees/rates that were used during construction of `ixs`.
@@ -167,6 +173,7 @@ export async function getSwapCollIxns<QuoteResponse>(
   return {
     ixs: listIxns(klendIxns, externalSwapIxns.ixns),
     lookupTables: externalSwapIxns.luts,
+    useV2Ixs: context.useV2Ixs,
     simulationDetails: {
       flashLoan: {
         targetCollFlashBorrowedAmount: klendIxns.simulationDetails.targetCollFlashBorrowedAmount,
@@ -197,6 +204,7 @@ type SwapCollContext<QuoteResponse> = {
   swapper: SwapIxsProvider<QuoteResponse>;
   referrer: PublicKey;
   currentSlot: number;
+  useV2Ixs: boolean;
   scopeRefresh: ScopeRefresh | undefined;
   logger: (msg: string, ...extra: any[]) => void;
 };
@@ -229,6 +237,7 @@ function extractArgsAndContext<QuoteResponse>(
       referrer: inputs.referrer,
       scopeRefresh: inputs.scopeRefresh,
       currentSlot: inputs.currentSlot,
+      useV2Ixs: inputs.useV2Ixs,
     },
   ];
 }
@@ -370,6 +379,7 @@ async function getDepositTargetCollIxns(
     context.targetCollReserve.getLiquidityMint(),
     context.obligation.state.owner,
     context.obligation,
+    context.useV2Ixs,
     0, // no extra compute budget
     false, // we do not need ATA ixns here (we construct and close them ourselves)
     removesElevationGroup, // we may need to (temporarily) remove the elevation group; the same or a different one will be set on withdraw, if requested
@@ -419,6 +429,7 @@ async function getWithdrawSourceCollIxns(
     context.sourceCollReserve.getLiquidityMint(),
     context.obligation.state.owner,
     context.obligation,
+    context.useV2Ixs,
     0, // no extra compute budget
     false, // we do not need ATA ixns here (we construct and close them ourselves)
     requestedElevationGroup !== undefined, // the `elevationGroupIdToRequestAfterWithdraw()` has already decided on this

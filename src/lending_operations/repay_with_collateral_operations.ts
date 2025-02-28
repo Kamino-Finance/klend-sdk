@@ -52,6 +52,7 @@ interface RepayWithCollSwapInputsProps<QuoteResponse> {
   isClosingPosition: boolean;
   budgetAndPriorityFeeIxs?: TransactionInstruction[];
   scopeRefresh?: ScopeRefresh;
+  useV2Ixs: boolean;
   quoter: SwapQuoteProvider<QuoteResponse>;
 }
 
@@ -67,6 +68,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
   isClosingPosition,
   budgetAndPriorityFeeIxs,
   scopeRefresh,
+  useV2Ixs,
 }: RepayWithCollSwapInputsProps<QuoteResponse>): Promise<{
   swapInputs: SwapInputs;
   initialInputs: RepayWithCollInitialInputs<QuoteResponse>;
@@ -132,7 +134,8 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
     },
     isClosingPosition,
     repayAmountLamports,
-    inputAmountLamports
+    inputAmountLamports,
+    useV2Ixs
   );
   const uniqueKlendAccounts = uniqueAccounts(klendIxs);
 
@@ -189,6 +192,7 @@ export async function getRepayWithCollIxs<QuoteResponse>({
   swapper,
   referrer,
   scopeRefresh,
+  useV2Ixs,
   logger = console.log,
 }: RepayWithCollIxsProps<QuoteResponse>): Promise<RepayWithCollIxsResponse<QuoteResponse>> {
   const { swapInputs, initialInputs } = await getRepayWithCollSwapInputs({
@@ -203,6 +207,7 @@ export async function getRepayWithCollIxs<QuoteResponse>({
     isClosingPosition,
     budgetAndPriorityFeeIxs,
     scopeRefresh,
+    useV2Ixs,
   });
   const { debtRepayAmountLamports, flashRepayAmountLamports, maxCollateralWithdrawLamports, swapQuote } = initialInputs;
   const { inputAmountLamports: collSwapInLamports } = swapInputs;
@@ -243,7 +248,8 @@ export async function getRepayWithCollIxs<QuoteResponse>({
     swapResponse,
     isClosingPosition,
     debtRepayAmountLamports,
-    swapInputs.inputAmountLamports
+    swapInputs.inputAmountLamports,
+    useV2Ixs
   );
 
   return {
@@ -266,7 +272,8 @@ async function buildRepayWithCollateralIxs(
   swapQuoteIxs: SwapIxs,
   isClosingPosition: boolean,
   debtRepayAmountLamports: Decimal,
-  collWithdrawLamports: Decimal
+  collWithdrawLamports: Decimal,
+  useV2Ixs: boolean
 ): Promise<TransactionInstruction[]> {
   // 1. Create atas & budget txns
   const budgetIxns = budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxns(1_400_000);
@@ -306,6 +313,7 @@ async function buildRepayWithCollateralIxs(
     obligation.state.owner,
     currentSlot,
     obligation,
+    useV2Ixs,
     0,
     false,
     requestElevationGroup,

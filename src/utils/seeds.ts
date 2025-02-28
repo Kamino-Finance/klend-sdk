@@ -1,5 +1,6 @@
 import { PublicKey } from '@solana/web3.js';
 import { PROGRAM_ID } from '../idl_codegen/programId';
+import { farmsId } from '@kamino-finance/farms-sdk';
 
 /**
  * Lending market authority seed
@@ -37,6 +38,11 @@ export const BASE_SEED_REFERRER_STATE = 'ref_state';
  * Short url seed
  */
 export const BASE_SEED_SHORT_URL = 'short_url';
+
+/**
+ * User farm state seed
+ */
+export const BASE_SEED_FARM_USER_STATE = Buffer.from('user');
 
 /**
  * Encapsulates all the PDAs for a given reserve
@@ -180,4 +186,11 @@ export function referrerStatePda(referrer: PublicKey, programId: PublicKey = PRO
  */
 export function shortUrlPda(shortUrl: string, programId: PublicKey = PROGRAM_ID) {
   return PublicKey.findProgramAddressSync([Buffer.from(BASE_SEED_SHORT_URL), Buffer.from(shortUrl)], programId);
+}
+
+export function obligationFarmStatePda(obligation: PublicKey, farm: PublicKey, programId: PublicKey = farmsId) {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(BASE_SEED_FARM_USER_STATE), farm.toBuffer(), obligation.toBuffer()],
+    programId
+  );
 }

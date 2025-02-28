@@ -114,6 +114,7 @@ import { QuoteResponse } from '@jup-ag/api/dist/index.js';
     }, // should return true if the token is a ktoken which is currently not supported
     quoter: getJupiterQuoter(slippagePct * 100, collTokenReserve!, debtTokenReserve!), // IMPORTANT!: For withdraw the input mint is the coll token mint and the output mint is the debt token
     swapper: getJupiterSwapper(connection, wallet.publicKey),
+    useV2Ixs: true,
   });
 
   const lookupTableKeys = lookupTables.map((lut) => lut.key);

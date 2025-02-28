@@ -53,7 +53,7 @@ import {
   DepositLeverageInitialInputs,
   DepositWithLeverageProps,
   DepositWithLeverageSwapInputsProps,
-  DepsoitLeverageIxsResponse,
+  DepositLeverageIxsResponse,
   PriceAinBProvider,
   SwapInputs,
   SwapIxs,
@@ -86,6 +86,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
   priceAinB,
   isKtoken,
   quoter,
+  useV2Ixs,
   elevationGroupOverride,
 }: DepositWithLeverageSwapInputsProps<QuoteResponse>): Promise<{
   swapInputs: SwapInputs;
@@ -151,6 +152,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
     },
     strategy,
     collIsKtoken,
+    useV2Ixs,
     elevationGroupOverride
   );
 
@@ -315,7 +317,8 @@ export async function getDepositWithLeverageIxns<QuoteResponse>({
   quoter,
   swapper,
   elevationGroupOverride,
-}: DepositWithLeverageProps<QuoteResponse>): Promise<DepsoitLeverageIxsResponse<QuoteResponse>> {
+  useV2Ixs,
+}: DepositWithLeverageProps<QuoteResponse>): Promise<DepositLeverageIxsResponse<QuoteResponse>> {
   const { swapInputs, initialInputs } = await getDepositWithLeverageSwapInputs({
     owner,
     kaminoMarket,
@@ -337,6 +340,7 @@ export async function getDepositWithLeverageIxns<QuoteResponse>({
     priceAinB,
     isKtoken,
     quoter,
+    useV2Ixs,
   });
 
   let depositSwapper: SwapIxsProvider<QuoteResponse>;
@@ -392,6 +396,7 @@ export async function getDepositWithLeverageIxns<QuoteResponse>({
     },
     initialInputs.strategy,
     initialInputs.collIsKtoken,
+    useV2Ixs,
     elevationGroupOverride
   );
 
@@ -418,6 +423,7 @@ async function buildDepositWithLeverageIxns(
   swapQuoteIxs: SwapIxs,
   strategy: StrategyWithAddress | undefined,
   collIsKtoken: boolean,
+  useV2Ixs: boolean,
   elevationGroupOverride?: number
 ): Promise<TransactionInstruction[]> {
   const budgetIxns = budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxns(3000000);
@@ -530,6 +536,7 @@ async function buildDepositWithLeverageIxns(
     debtTokenMint,
     owner,
     obligation!,
+    useV2Ixs,
     0,
     false,
     elevationGroupOverride === 0 ? false : true, // emode
@@ -592,6 +599,7 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
   quoteBufferBps,
   isKtoken,
   quoter,
+  useV2Ixs,
 }: WithdrawWithLeverageSwapInputsProps<QuoteResponse>): Promise<{
   swapInputs: SwapInputs;
   initialInputs: WithdrawLeverageInitialInputs<QuoteResponse>;
@@ -642,7 +650,8 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
       lookupTables: [],
     },
     strategy,
-    collIsKtoken
+    collIsKtoken,
+    useV2Ixs
   );
 
   const uniqueKlendAccounts = uniqueAccounts(klendIxs);
@@ -725,6 +734,7 @@ export async function getWithdrawWithLeverageIxns<QuoteResponse>({
   isKtoken,
   quoter,
   swapper,
+  useV2Ixs,
 }: WithdrawWithLeverageProps<QuoteResponse>): Promise<WithdrawLeverageIxsResponse<QuoteResponse>> {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
@@ -752,6 +762,7 @@ export async function getWithdrawWithLeverageIxns<QuoteResponse>({
     quoteBufferBps,
     isKtoken,
     quoter,
+    useV2Ixs,
   });
 
   let withdrawSwapper: SwapIxsProvider<QuoteResponse>;
@@ -802,7 +813,8 @@ export async function getWithdrawWithLeverageIxns<QuoteResponse>({
       lookupTables,
     },
     initialInputs.strategy,
-    initialInputs.collIsKtoken
+    initialInputs.collIsKtoken,
+    useV2Ixs
   );
 
   // Send ixns and lookup tables
@@ -829,7 +841,8 @@ export async function buildWithdrawWithLeverageIxns(
   budgetAndPriorityFeeIxs: TransactionInstruction[] | undefined,
   swapQuoteIxs: SwapIxs,
   strategy: StrategyWithAddress | undefined,
-  collIsKtoken: boolean
+  collIsKtoken: boolean,
+  useV2Ixs: boolean
 ): Promise<TransactionInstruction[]> {
   const collTokenMint = collReserve.getLiquidityMint();
   const debtTokenMint = debtReserve.getLiquidityMint();
@@ -941,6 +954,7 @@ export async function buildWithdrawWithLeverageIxns(
     owner,
     currentSlot,
     obligation,
+    useV2Ixs,
     0,
     false,
     false, // to be checked and created in a setup tx in the UI (won't be the case for withdraw anyway as this would be created in deposit)
@@ -986,6 +1000,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
   quoteBufferBps,
   isKtoken,
   quoter,
+  useV2Ixs,
 }: AdjustLeverageSwapInputsProps<QuoteResponse>): Promise<{
   swapInputs: SwapInputs;
   initialInputs: AdjustLeverageInitialInputs<QuoteResponse>;
@@ -1051,7 +1066,8 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         swapIxs: [],
         lookupTables: [],
       },
-      budgetAndPriorityFeeIxs
+      budgetAndPriorityFeeIxs,
+      useV2Ixs
     );
 
     const uniqueKlendAccounts = uniqueAccounts(klendIxs);
@@ -1154,7 +1170,8 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         swapIxs: [],
         lookupTables: [],
       },
-      budgetAndPriorityFeeIxs
+      budgetAndPriorityFeeIxs,
+      useV2Ixs
     );
 
     const uniqueKlendAccounts = uniqueAccounts(klendIxs);
@@ -1240,6 +1257,7 @@ export async function getAdjustLeverageIxns<QuoteResponse>({
   isKtoken,
   quoter,
   swapper,
+  useV2Ixs,
 }: AdjustLeverageProps<QuoteResponse>): Promise<AdjustLeverageIxsResponse<QuoteResponse>> {
   const { swapInputs, initialInputs } = await getAdjustLeverageSwapInputs({
     owner,
@@ -1262,6 +1280,7 @@ export async function getAdjustLeverageIxns<QuoteResponse>({
     priceAinB,
     isKtoken,
     quoter,
+    useV2Ixs,
   });
 
   // leverage increased so we need to deposit and borrow more
@@ -1309,7 +1328,8 @@ export async function getAdjustLeverageIxns<QuoteResponse>({
         swapIxs,
         lookupTables,
       },
-      budgetAndPriorityFeeIxs
+      budgetAndPriorityFeeIxs,
+      useV2Ixs
     );
     return {
       ixs,
@@ -1355,7 +1375,8 @@ export async function getAdjustLeverageIxns<QuoteResponse>({
         swapIxs,
         lookupTables,
       },
-      budgetAndPriorityFeeIxs
+      budgetAndPriorityFeeIxs,
+      useV2Ixs
     );
 
     return {
@@ -1383,7 +1404,8 @@ async function buildIncreaseLeverageIxns(
   scopeFeed: string | undefined,
   collIsKtoken: boolean,
   swapQuoteIxs: SwapIxs,
-  budgetAndPriorityFeeIxns: TransactionInstruction[] | undefined
+  budgetAndPriorityFeeIxns: TransactionInstruction[] | undefined,
+  useV2Ixs: boolean
 ): Promise<TransactionInstruction[]> {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
@@ -1475,6 +1497,7 @@ async function buildIncreaseLeverageIxns(
     collTokenMint,
     owner,
     obligation,
+    useV2Ixs,
     0,
     false,
     false,
@@ -1492,6 +1515,7 @@ async function buildIncreaseLeverageIxns(
     debtTokenMint,
     owner,
     obligation,
+    useV2Ixs,
     0,
     false,
     false,
@@ -1551,7 +1575,8 @@ async function buildDecreaseLeverageIxns(
   scopeFeed: string | undefined,
   collIsKtoken: boolean,
   swapQuoteIxs: SwapIxs,
-  budgetAndPriorityFeeIxns: TransactionInstruction[] | undefined
+  budgetAndPriorityFeeIxns: TransactionInstruction[] | undefined,
+  useV2Ixs: boolean
 ): Promise<TransactionInstruction[]> {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
@@ -1651,6 +1676,7 @@ async function buildDecreaseLeverageIxns(
     debtTokenMint,
     owner,
     obligation,
+    useV2Ixs,
     currentSlot,
     undefined,
     0,
@@ -1669,6 +1695,7 @@ async function buildDecreaseLeverageIxns(
     collTokenMint,
     owner,
     obligation,
+    useV2Ixs,
     0,
     false,
     false,
