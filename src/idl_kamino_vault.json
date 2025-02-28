@@ -36,6 +36,11 @@
           "isSigner": false
         },
         {
+          "name": "adminTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "systemProgram",
           "isMut": false,
           "isSigner": false
@@ -62,7 +67,7 @@
       "name": "updateReserveAllocation",
       "accounts": [
         {
-          "name": "adminAuthority",
+          "name": "signer",
           "isMut": true,
           "isSigner": true
         },
@@ -997,11 +1002,15 @@
             "type": "u64"
           },
           {
+            "name": "allocationAdmin",
+            "type": "publicKey"
+          },
+          {
             "name": "padding2",
             "type": {
               "array": [
                 "u128",
-                244
+                242
               ]
             }
           }
@@ -1874,6 +1883,9 @@
           },
           {
             "name": "Farm"
+          },
+          {
+            "name": "AllocationAdmin"
           }
         ]
       }
@@ -2160,6 +2172,21 @@
       "code": 7043,
       "name": "MissingReserveForBatchRefresh",
       "msg": "Missing reserve for batch refresh"
+    },
+    {
+      "code": 7044,
+      "name": "MinWithdrawAmountTooBig",
+      "msg": "Min withdraw amount is too big"
+    },
+    {
+      "code": 7045,
+      "name": "InvestTooSoon",
+      "msg": "Invest is called too soon after last invest"
+    },
+    {
+      "code": 7046,
+      "name": "WrongAdminOrAllocationAdmin",
+      "msg": "Wrong admin or allocation admin"
     }
   ]
 }

@@ -10,7 +10,7 @@ export interface UpdateReserveAllocationArgs {
 }
 
 export interface UpdateReserveAllocationAccounts {
-  adminAuthority: PublicKey
+  signer: PublicKey
   vaultState: PublicKey
   baseVaultAuthority: PublicKey
   reserveCollateralMint: PublicKey
@@ -29,7 +29,7 @@ export function updateReserveAllocation(
   programId: PublicKey = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta> = [
-    { pubkey: accounts.adminAuthority, isSigner: true, isWritable: true },
+    { pubkey: accounts.signer, isSigner: true, isWritable: true },
     { pubkey: accounts.vaultState, isSigner: false, isWritable: true },
     { pubkey: accounts.baseVaultAuthority, isSigner: false, isWritable: false },
     {

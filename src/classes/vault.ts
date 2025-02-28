@@ -11,7 +11,7 @@ import {
   SYSVAR_RENT_PUBKEY,
   TransactionInstruction,
 } from '@solana/web3.js';
-import { NATIVE_MINT, TOKEN_PROGRAM_ID, unpackAccount } from '@solana/spl-token';
+import { getAssociatedTokenAddressSync, NATIVE_MINT, TOKEN_PROGRAM_ID, unpackAccount } from '@solana/spl-token';
 import {
   getAssociatedTokenAddress,
   getTransferWsolIxns,
@@ -99,6 +99,8 @@ const TOKEN_VAULT_SEED = 'token_vault';
 const CTOKEN_VAULT_SEED = 'ctoken_vault';
 const BASE_VAULT_AUTHORITY_SEED = 'authority';
 const SHARES_SEED = 'shares';
+
+export const INITIAL_DEPOSIT_LAMPORTS = 1000;
 
 /**
  * KaminoVaultClient is a class that provides a high-level interface to interact with the Kamino Vault program.
@@ -195,6 +197,8 @@ export class KaminoVaultClient {
       this._kaminoVaultProgramId
     )[0];
 
+    const adminTokenAccount = getAssociatedTokenAddressSync(vaultConfig.tokenMint, vaultConfig.admin, false);
+
     const initVaultAccounts: InitVaultAccounts = {
       adminAuthority: vaultConfig.admin,
       vaultState: vaultState.publicKey,
@@ -206,6 +210,7 @@ export class KaminoVaultClient {
       rent: SYSVAR_RENT_PUBKEY,
       tokenProgram: vaultConfig.tokenMintProgramId,
       sharesTokenProgram: TOKEN_PROGRAM_ID,
+      adminTokenAccount,
     };
     const initVaultIx = initVault(initVaultAccounts, this._kaminoVaultProgramId);
 
@@ -288,7 +293,7 @@ export class KaminoVaultClient {
     );
 
     const updateReserveAllocationAccounts: UpdateReserveAllocationAccounts = {
-      adminAuthority: vaultState.adminAuthority,
+      signer: vaultState.adminAuthority,
       vaultState: vault.address,
       baseVaultAuthority: vaultState.baseVaultAuthority,
       reserveCollateralMint: reserveState.collateral.mintPubkey,
@@ -1010,20 +1015,16 @@ export class KaminoVaultClient {
     if (allReserves.length === 0) {
       throw new Error('No reserves found for the vault, please select at least one reserve for the vault');
     }
-
     const [allReservesStateMap, computedReservesAllocation] = await Promise.all([
       this.loadVaultReserves(vaultState),
       this.getVaultComputedReservesAllocation(vaultState),
     ]);
-
     const tokenProgram = await getAccountOwner(this.getConnection(), vaultState.tokenMint);
     const [{ ata: _payerTokenAta, createAtaIx }] = createAtasIdempotent(payer, [
       { mint: vaultState.tokenMint, tokenProgram },
     ]);
-
     // compute total vault holdings and expected distribution based on weights
     const curentVaultAllocations = this.getVaultAllocations(vaultState);
-
     const reservesToDisinvestFrom: PublicKey[] = [];
     const reservesToInvestInto: PublicKey[] = [];
 
@@ -1528,8 +1529,8 @@ export class KaminoVaultClient {
 
     let totalLeftToInvest = holdings.totalAUMIncludingFees.sub(holdings.pendingFees);
     let currentAllocationSum = totalAllocation;
-    const ZERO = new Decimal(0);
-    while (totalLeftToInvest.gt(ZERO)) {
+    const ONE = new Decimal(1);
+    while (totalLeftToInvest.gt(ONE)) {
       const totalLeftover = totalLeftToInvest;
       for (const reserve of allReserves) {
         const reserveWithWeight = initialVaultAllocations.get(reserve);

@@ -11,6 +11,7 @@ export interface InitVaultAccounts {
   tokenVault: PublicKey
   baseTokenMint: PublicKey
   sharesMint: PublicKey
+  adminTokenAccount: PublicKey
   systemProgram: PublicKey
   rent: PublicKey
   tokenProgram: PublicKey
@@ -28,6 +29,7 @@ export function initVault(
     { pubkey: accounts.tokenVault, isSigner: false, isWritable: true },
     { pubkey: accounts.baseTokenMint, isSigner: false, isWritable: false },
     { pubkey: accounts.sharesMint, isSigner: false, isWritable: true },
+    { pubkey: accounts.adminTokenAccount, isSigner: false, isWritable: true },
     { pubkey: accounts.systemProgram, isSigner: false, isWritable: false },
     { pubkey: accounts.rent, isSigner: false, isWritable: false },
     { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },

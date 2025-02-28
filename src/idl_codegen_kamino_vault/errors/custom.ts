@@ -43,6 +43,9 @@ export type CustomError =
   | ManagementFeeGreaterThanMaxAllowed
   | VaultAUMZero
   | MissingReserveForBatchRefresh
+  | MinWithdrawAmountTooBig
+  | InvestTooSoon
+  | WrongAdminOrAllocationAdmin
 
 export class DepositAmountsZero extends Error {
   static readonly code = 7000
@@ -528,6 +531,39 @@ export class MissingReserveForBatchRefresh extends Error {
   }
 }
 
+export class MinWithdrawAmountTooBig extends Error {
+  static readonly code = 7044
+  readonly code = 7044
+  readonly name = "MinWithdrawAmountTooBig"
+  readonly msg = "Min withdraw amount is too big"
+
+  constructor(readonly logs?: string[]) {
+    super("7044: Min withdraw amount is too big")
+  }
+}
+
+export class InvestTooSoon extends Error {
+  static readonly code = 7045
+  readonly code = 7045
+  readonly name = "InvestTooSoon"
+  readonly msg = "Invest is called too soon after last invest"
+
+  constructor(readonly logs?: string[]) {
+    super("7045: Invest is called too soon after last invest")
+  }
+}
+
+export class WrongAdminOrAllocationAdmin extends Error {
+  static readonly code = 7046
+  readonly code = 7046
+  readonly name = "WrongAdminOrAllocationAdmin"
+  readonly msg = "Wrong admin or allocation admin"
+
+  constructor(readonly logs?: string[]) {
+    super("7046: Wrong admin or allocation admin")
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 7000:
@@ -618,6 +654,12 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new VaultAUMZero(logs)
     case 7043:
       return new MissingReserveForBatchRefresh(logs)
+    case 7044:
+      return new MinWithdrawAmountTooBig(logs)
+    case 7045:
+      return new InvestTooSoon(logs)
+    case 7046:
+      return new WrongAdminOrAllocationAdmin(logs)
   }
 
   return null

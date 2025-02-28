@@ -38,6 +38,7 @@ export interface VaultStateFields {
   vaultFarm: PublicKey
   creationTimestamp: BN
   padding1: BN
+  allocationAdmin: PublicKey
   padding2: Array<BN>
 }
 
@@ -75,6 +76,7 @@ export interface VaultStateJSON {
   vaultFarm: string
   creationTimestamp: string
   padding1: string
+  allocationAdmin: string
   padding2: Array<string>
 }
 
@@ -112,6 +114,7 @@ export class VaultState {
   readonly vaultFarm: PublicKey
   readonly creationTimestamp: BN
   readonly padding1: BN
+  readonly allocationAdmin: PublicKey
   readonly padding2: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -152,7 +155,8 @@ export class VaultState {
     borsh.publicKey("vaultFarm"),
     borsh.u64("creationTimestamp"),
     borsh.u64("padding1"),
-    borsh.array(borsh.u128(), 244, "padding2"),
+    borsh.publicKey("allocationAdmin"),
+    borsh.array(borsh.u128(), 242, "padding2"),
   ])
 
   constructor(fields: VaultStateFields) {
@@ -191,6 +195,7 @@ export class VaultState {
     this.vaultFarm = fields.vaultFarm
     this.creationTimestamp = fields.creationTimestamp
     this.padding1 = fields.padding1
+    this.allocationAdmin = fields.allocationAdmin
     this.padding2 = fields.padding2
   }
 
@@ -275,6 +280,7 @@ export class VaultState {
       vaultFarm: dec.vaultFarm,
       creationTimestamp: dec.creationTimestamp,
       padding1: dec.padding1,
+      allocationAdmin: dec.allocationAdmin,
       padding2: dec.padding2,
     })
   }
@@ -316,6 +322,7 @@ export class VaultState {
       vaultFarm: this.vaultFarm.toString(),
       creationTimestamp: this.creationTimestamp.toString(),
       padding1: this.padding1.toString(),
+      allocationAdmin: this.allocationAdmin.toString(),
       padding2: this.padding2.map((item) => item.toString()),
     }
   }
@@ -357,6 +364,7 @@ export class VaultState {
       vaultFarm: new PublicKey(obj.vaultFarm),
       creationTimestamp: new BN(obj.creationTimestamp),
       padding1: new BN(obj.padding1),
+      allocationAdmin: new PublicKey(obj.allocationAdmin),
       padding2: obj.padding2.map((item) => new BN(item)),
     })
   }

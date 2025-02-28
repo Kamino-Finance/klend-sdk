@@ -256,6 +256,29 @@ export class Farm {
   }
 }
 
+export interface AllocationAdminJSON {
+  kind: "AllocationAdmin"
+}
+
+export class AllocationAdmin {
+  static readonly discriminator = 11
+  static readonly kind = "AllocationAdmin"
+  readonly discriminator = 11
+  readonly kind = "AllocationAdmin"
+
+  toJSON(): AllocationAdminJSON {
+    return {
+      kind: "AllocationAdmin",
+    }
+  }
+
+  toEncodable() {
+    return {
+      AllocationAdmin: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.VaultConfigFieldKind {
   if (typeof obj !== "object") {
@@ -294,6 +317,9 @@ export function fromDecoded(obj: any): types.VaultConfigFieldKind {
   }
   if ("Farm" in obj) {
     return new Farm()
+  }
+  if ("AllocationAdmin" in obj) {
+    return new AllocationAdmin()
   }
 
   throw new Error("Invalid enum object")
@@ -336,6 +362,9 @@ export function fromJSON(
     case "Farm": {
       return new Farm()
     }
+    case "AllocationAdmin": {
+      return new AllocationAdmin()
+    }
   }
 }
 
@@ -352,6 +381,7 @@ export function layout(property?: string) {
     borsh.struct([], "Name"),
     borsh.struct([], "LookupTable"),
     borsh.struct([], "Farm"),
+    borsh.struct([], "AllocationAdmin"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

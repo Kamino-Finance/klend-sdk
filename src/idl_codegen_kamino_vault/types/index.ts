@@ -63,6 +63,7 @@ export type VaultConfigFieldKind =
   | VaultConfigField.Name
   | VaultConfigField.LookupTable
   | VaultConfigField.Farm
+  | VaultConfigField.AllocationAdmin
 export type VaultConfigFieldJSON =
   | VaultConfigField.PerformanceFeeBpsJSON
   | VaultConfigField.ManagementFeeBpsJSON
@@ -75,6 +76,7 @@ export type VaultConfigFieldJSON =
   | VaultConfigField.NameJSON
   | VaultConfigField.LookupTableJSON
   | VaultConfigField.FarmJSON
+  | VaultConfigField.AllocationAdminJSON
 
 export { VaultAllocation } from "./VaultAllocation"
 export type {

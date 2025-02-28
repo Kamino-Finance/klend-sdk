@@ -85,3 +85,4 @@ export const DEFAULT_MAX_COMPUTE_UNITS = 1_400_000;
  * Minimum initial deposit required for the initialization of a reserve
  */
 export const MIN_INITIAL_DEPOSIT = 100_000;
+export const MIN_VAULT_INITIAL_DEPOSIT = 1_000_000_000;
