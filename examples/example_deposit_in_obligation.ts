@@ -28,6 +28,7 @@ import { loadReserveData } from './utils/helpers';
     wallet.publicKey,
     new VanillaObligation(PROGRAM_ID),
     false,
+    undefined,
     300_000,
     true
   );

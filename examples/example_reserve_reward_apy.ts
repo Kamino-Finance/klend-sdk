@@ -1,6 +1,7 @@
 import { loadReserveData } from './utils/helpers';
 import { getConnection } from './utils/connection';
 import { MAIN_MARKET, PYUSD_MINT } from './utils/constants';
+import { Scope } from '@kamino-finance/scope-sdk/dist/Scope';
 
 (async () => {
   const connection = getConnection();
@@ -10,7 +11,8 @@ import { MAIN_MARKET, PYUSD_MINT } from './utils/constants';
     marketPubkey: MAIN_MARKET,
     mintPubkey: PYUSD_MINT,
   });
-  const prices = await market.getAllScopePrices();
+  const scope = new Scope('mainnet-beta', connection);
+  const prices = await market.getAllScopePrices(scope);
   const rewardApys = await reserve.getRewardYields(prices);
   for (const rewardApy of rewardApys) {
     console.log(

@@ -397,59 +397,17 @@ export function getReserveOracleConfigs(priceFeed: PriceFeed | null): {
   };
 }
 
+const ORACLE_TYPE_MAP = Object.fromEntries(
+  Object.values(OracleType)
+    // Filter for oracle types that have a discriminator property
+    // This ensures we only include actual oracle implementations in the mapping
+    // Pyth is used as a type assertion here but actually any oracle type with a discriminator will pass
+    .filter((T): T is typeof OracleType.Pyth => 'discriminator' in T)
+    .map((T) => [T.discriminator, T.name])
+);
+
 export function parseOracleType(type: number): string {
-  switch (type) {
-    case new OracleType.Pyth().discriminator:
-      return 'Pyth';
-    case new OracleType.SwitchboardV2().discriminator:
-      return 'SwitchboardV2';
-    case new OracleType.CToken().discriminator:
-      return 'CToken';
-    case new OracleType.KToken().discriminator:
-      return 'KToken';
-    case new OracleType.SplStake().discriminator:
-      return 'SplStake';
-    case new OracleType.PythEMA().discriminator:
-      return 'PythEMA';
-    case new OracleType.DeprecatedPlaceholder1().discriminator:
-      return 'DeprecatedPlaceholder1';
-    case new OracleType.DeprecatedPlaceholder2().discriminator:
-      return 'DeprecatedPlaceholder2';
-    case new OracleType.MsolStake().discriminator:
-      return 'MsolStake';
-    case new OracleType.KTokenToTokenA().discriminator:
-      return 'KTokenToTokenA';
-    case new OracleType.KTokenToTokenB().discriminator:
-      return 'KTokenToTokenB';
-    case new OracleType.JupiterLpFetch().discriminator:
-      return 'JupiterLpFetch';
-    case new OracleType.ScopeTwap().discriminator:
-      return 'ScopeTwap';
-    case new OracleType.OrcaWhirlpoolAtoB().discriminator:
-      return 'OrcaWhirlpoolAtoB';
-    case new OracleType.OrcaWhirlpoolBtoA().discriminator:
-      return 'OrcaWhirlpoolBtoA';
-    case new OracleType.RaydiumAmmV3AtoB().discriminator:
-      return 'RaydiumAmmV3AtoB';
-    case new OracleType.RaydiumAmmV3BtoA().discriminator:
-      return 'RaydiumAmmV3BtoA';
-    case new OracleType.JupiterLpCompute().discriminator:
-      return 'JupiterLpCompute';
-    case new OracleType.MeteoraDlmmAtoB().discriminator:
-      return 'MeteoraDlmmAtoB';
-    case new OracleType.MeteoraDlmmBtoA().discriminator:
-      return 'MeteoraDlmmBtoA';
-    case new OracleType.JupiterLpScope().discriminator:
-      return 'JupiterLpScope';
-    case new OracleType.PythPullBased().discriminator:
-      return 'PythPullBased';
-    case new OracleType.PythPullBasedEMA().discriminator:
-      return 'PythPullBasedEMA';
-    case new OracleType.FixedPrice().discriminator:
-      return 'FixedPrice';
-    default:
-      return 'Unknown';
-  }
+  return ORACLE_TYPE_MAP[type] || 'Unknown';
 }
 
 export type MarketWithAddress = {

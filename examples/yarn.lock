@@ -229,6 +229,11 @@
   resolved "https://registry.npmjs.org/@jup-ag/api/-/api-6.0.27.tgz"
   integrity sha512-Y6UwtmYVCjrwlejP+ZEJtIxtRIm7Fp+fgEbIdg3N8+BbX/Qi4fVHOF8wg4q2/pq8i4kZufcDaS5s6c/no4IQzg==
 
+"@jup-ag/api@^6.0.38":
+  version "6.0.40"
+  resolved "https://registry.yarnpkg.com/@jup-ag/api/-/api-6.0.40.tgz#4a6c9f738e60f5c6897999862c8575f0fce9662d"
+  integrity sha512-iHDOY5YiCnt+XvqCoiPTKcYWIpAY7nmeo3Rsr1Cx2sdjgqTRjqNsYtLLvjTOO33pemVz5h+U0GaU2vc9zeyjew==
+
 "@kamino-finance/farms-sdk@2.3.4", "@kamino-finance/farms-sdk@^2.3.4":
   version "2.3.4"
   resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-2.3.4.tgz#2a3f8b883cf8025ebf9358210a566f2f5fb0ee9b"
@@ -247,6 +252,50 @@
     cli-color "^2.0.4"
     commander "^9.3.0"
     decimal.js "^10.4.3"
+
+"@kamino-finance/farms-sdk@2.4.2":
+  version "2.4.2"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-2.4.2.tgz#6ad3031c301522f37f2509252438107c406fbfdb"
+  integrity sha512-wTHfEaA1QBeTuAyOdU960PNO9yyoQkLlyW53dsjyV2mnRJw6Lp0spkmEJy3uZ/jd+jasFIbwiTA2LpZq34FwOA==
+  dependencies:
+    "@coral-xyz/anchor" "^0.28.0"
+    "@coral-xyz/borsh" "^0.28.0"
+    "@kamino-finance/klend-sdk" "^5.10.32"
+    "@kamino-finance/kliquidity-sdk" "^7.0.13"
+    "@kamino-finance/scope-sdk" "^8.0.4"
+    "@solana/spl-token" "^0.4.9"
+    "@solana/web3.js" "^1.95.5"
+    base58-js "1.0.5"
+    bn.js "^5.2.1"
+    bs58 "^4.0.1"
+    cli-color "^2.0.4"
+    commander "^9.3.0"
+    decimal.js "^10.4.3"
+
+"@kamino-finance/klend-sdk@^5.10.32":
+  version "5.11.2"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/klend-sdk/-/klend-sdk-5.11.2.tgz#477ded0e4d5bb630074847b171c3849262bffc6a"
+  integrity sha512-53RXbt9TacjQi3YruOx/ZJJqtHkdLn91z0jU0+cQCgTCqEh9fEqeFReAdimAsOjta+HVhVTLdGmbTezfnRfwNA==
+  dependencies:
+    "@coral-xyz/anchor" "^0.28.0"
+    "@coral-xyz/borsh" "^0.28.0"
+    "@kamino-finance/farms-sdk" "2.4.2"
+    "@kamino-finance/kliquidity-sdk" "^7.0.13"
+    "@kamino-finance/scope-sdk" "^8.0.3"
+    "@solana/buffer-layout" "^4.0.0"
+    "@solana/spl-token" "^0.4.8"
+    "@solana/web3.js" "^1.95.8"
+    "@switchboard-xyz/sbv2-lite" "^0.1.0"
+    axios "^1.6.8"
+    base58-js "^2.0.0"
+    bn.js "^5.2.1"
+    bs58 "^6.0.0"
+    buffer "^6.0.3"
+    commander "^9.3.0"
+    decimal.js "^10.4.3"
+    exponential-backoff "^3.1.1"
+    uuid "^10.0.0"
+    zstddec "^0.1.0"
 
 "@kamino-finance/klend-sdk@^5.8.0":
   version "5.10.12"
@@ -274,13 +323,13 @@
     zstddec "^0.1.0"
 
 "@kamino-finance/klend-sdk@file:..":
-  version "5.10.12"
+  version "5.11.1"
   dependencies:
     "@coral-xyz/anchor" "^0.28.0"
     "@coral-xyz/borsh" "^0.28.0"
-    "@kamino-finance/farms-sdk" "2.3.4"
-    "@kamino-finance/kliquidity-sdk" "^7.0.1"
-    "@kamino-finance/scope-sdk" "^8.0.3"
+    "@kamino-finance/farms-sdk" "2.4.2"
+    "@kamino-finance/kliquidity-sdk" "^7.0.13"
+    "@kamino-finance/scope-sdk" "^8.0.5"
     "@solana/buffer-layout" "^4.0.0"
     "@solana/spl-token" "^0.4.8"
     "@solana/web3.js" "^1.95.8"
@@ -336,6 +385,26 @@
     bs58 "^6.0.0"
     decimal.js "^10.3.1"
 
+"@kamino-finance/kliquidity-sdk@^7.0.13":
+  version "7.0.13"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/kliquidity-sdk/-/kliquidity-sdk-7.0.13.tgz#050b793fd67abfa987c619e98e5db7a75f6c30ba"
+  integrity sha512-EHhmDpiln68WAAOxueqCkk5XfHYEi1kP4WoOSH/LE8KqAhsVsaBV4gWLkrVCqQmQDpdzOGa7FyOSjVdJf8qyyA==
+  dependencies:
+    "@coral-xyz/anchor" "^0.29.0"
+    "@coral-xyz/borsh" "^0.30.1"
+    "@hubbleprotocol/hubble-config" "^5.0.0"
+    "@jup-ag/api" "^6.0.38"
+    "@kamino-finance/scope-sdk" "^8.0.2"
+    "@orca-so/whirlpool-client-sdk" "^0.0.8"
+    "@orca-so/whirlpool-sdk" "^0.4.2"
+    "@raydium-io/raydium-sdk-v2" "=0.1.111-alpha"
+    "@solana/spl-token" "^0.4.9"
+    "@solana/web3.js" "^1.95.8"
+    axios "^1.7.8"
+    bn.js "^5.2.1"
+    bs58 "^6.0.0"
+    decimal.js "^10.3.1"
+
 "@kamino-finance/scope-sdk@^8.0.2":
   version "8.0.2"
   resolved "https://registry.npmjs.org/@kamino-finance/scope-sdk/-/scope-sdk-8.0.2.tgz"
@@ -351,6 +420,17 @@
   version "8.0.4"
   resolved "https://registry.yarnpkg.com/@kamino-finance/scope-sdk/-/scope-sdk-8.0.4.tgz#c6c3eeeb8afd3843c2b33d90a0bcd95e4d7d474b"
   integrity sha512-ixcSqdsM1qJGqTJ9j0fwhF5JISpvEl3/z7UYCP+o0QH1PeUbyyrhKeur8Zt3Xvi0LcnUmY2cgAR0srUD14KG3w==
+  dependencies:
+    "@coral-xyz/anchor" "^0.29.0"
+    "@solana/buffer-layout" "^4.0.1"
+    "@solana/web3.js" "^1.95.8"
+    bn.js "^5.2.1"
+    decimal.js "^10.3.1"
+
+"@kamino-finance/scope-sdk@^8.0.4", "@kamino-finance/scope-sdk@^8.0.5":
+  version "8.0.5"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/scope-sdk/-/scope-sdk-8.0.5.tgz#70f97cc78600462522700b57a061a10abfd2b34a"
+  integrity sha512-XWba4nliIOdfEujcs/rMhIUhKLeyw2n9McB2n5lE5A3YawBkSuAhk/NwN3viu/FeUzAVeflN304HMaEH2Sv+8w==
   dependencies:
     "@coral-xyz/anchor" "^0.29.0"
     "@solana/buffer-layout" "^4.0.1"
@@ -477,6 +557,24 @@
   dependencies:
     bn.js "^5.1.2"
     buffer-layout "^1.2.0"
+
+"@raydium-io/raydium-sdk-v2@=0.1.111-alpha":
+  version "0.1.111-alpha"
+  resolved "https://registry.yarnpkg.com/@raydium-io/raydium-sdk-v2/-/raydium-sdk-v2-0.1.111-alpha.tgz#622fd832ffacdc0dc9b6c4b9f70b7412ca986753"
+  integrity sha512-mIvwClYgiBgKsYWgM6sFWXpwxYeWhXvZpSOPA6+o0xuRSEBo2hmpuy98DdWOkSZwoUUg1oTKSdRGepBwtpZqQw==
+  dependencies:
+    "@solana/buffer-layout" "^4.0.1"
+    "@solana/spl-token" "^0.4.8"
+    "@solana/web3.js" "^1.95.3"
+    axios "^1.1.3"
+    big.js "^6.2.1"
+    bn.js "^5.2.1"
+    dayjs "^1.11.5"
+    decimal.js-light "^2.5.1"
+    jsonfile "^6.1.0"
+    lodash "^4.17.21"
+    toformat "^2.0.0"
+    tsconfig-paths "^4.2.0"
 
 "@raydium-io/raydium-sdk@=1.3.1-beta.5":
   version "1.3.1-beta.5"
@@ -807,6 +905,27 @@
     rpc-websockets "^9.0.2"
     superstruct "^2.0.2"
 
+"@solana/web3.js@^1.95.3":
+  version "1.98.0"
+  resolved "https://registry.yarnpkg.com/@solana/web3.js/-/web3.js-1.98.0.tgz#21ecfe8198c10831df6f0cfde7f68370d0405917"
+  integrity sha512-nz3Q5OeyGFpFCR+erX2f6JPt3sKhzhYcSycBCSPkWjzSVDh/Rr1FqTVMRe58FKO16/ivTUcuJjeS5MyBvpkbzA==
+  dependencies:
+    "@babel/runtime" "^7.25.0"
+    "@noble/curves" "^1.4.2"
+    "@noble/hashes" "^1.4.0"
+    "@solana/buffer-layout" "^4.0.1"
+    agentkeepalive "^4.5.0"
+    bigint-buffer "^1.1.5"
+    bn.js "^5.2.1"
+    borsh "^0.7.0"
+    bs58 "^4.0.1"
+    buffer "6.0.3"
+    fast-stable-stringify "^1.0.0"
+    jayson "^4.1.1"
+    node-fetch "^2.7.0"
+    rpc-websockets "^9.0.2"
+    superstruct "^2.0.2"
+
 "@solana/web3.js@^1.95.5", "@solana/web3.js@^1.95.8":
   version "1.95.8"
   resolved "https://registry.yarnpkg.com/@solana/web3.js/-/web3.js-1.95.8.tgz#2d49abda23f7a79a3cc499ab6680f7be11786ee1"
@@ -959,6 +1078,15 @@ axios@^0.25.0:
   integrity sha512-cD8FOb0tRH3uuEe6+evtAbgJtfxr7ly3fQjYcMcuPlgkwVS9xboaVIpcDV+cYQe+yGykgwZCs1pzjntcGa6l5g==
   dependencies:
     follow-redirects "^1.14.7"
+
+axios@^1.1.3:
+  version "1.8.1"
+  resolved "https://registry.yarnpkg.com/axios/-/axios-1.8.1.tgz#7c118d2146e9ebac512b7d1128771cdd738d11e3"
+  integrity sha512-NN+fvwH/kV01dYUQ3PTOZns4LWtWhOFCAhQ/pHb88WQ1hNe5V/dvFwc4VJcDL11LT9xSX0QtsR8sWUuyOuOq7g==
+  dependencies:
+    follow-redirects "^1.15.6"
+    form-data "^4.0.0"
+    proxy-from-env "^1.1.0"
 
 axios@^1.2.6, axios@^1.6.8:
   version "1.7.4"
@@ -1149,6 +1277,11 @@ d@1, d@^1.0.1, d@^1.0.2:
   dependencies:
     es5-ext "^0.10.64"
     type "^2.7.2"
+
+dayjs@^1.11.5:
+  version "1.11.13"
+  resolved "https://registry.yarnpkg.com/dayjs/-/dayjs-1.11.13.tgz#92430b0139055c3ebb60150aa13e860a4b5a366c"
+  integrity sha512-oaMBel6gjolK862uaPQOVTA7q3TZhuSvuMQAAglQDOWYO9A91IrAOUJEyKVlqJlHE0vq5p5UXxzdPfMH/x6xNg==
 
 decimal.js-light@^2.5.1:
   version "2.5.1"
@@ -1360,6 +1493,11 @@ get-tsconfig@^4.7.5:
   dependencies:
     resolve-pkg-maps "^1.0.0"
 
+graceful-fs@^4.1.6:
+  version "4.2.11"
+  resolved "https://registry.yarnpkg.com/graceful-fs/-/graceful-fs-4.2.11.tgz#4183e4e8bf08bb6e05bbb2f7d2e0c8f712ca40e3"
+  integrity sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==
+
 humanize-ms@^1.2.1:
   version "1.2.1"
   resolved "https://registry.npmjs.org/humanize-ms/-/humanize-ms-1.2.1.tgz"
@@ -1409,6 +1547,20 @@ json-stringify-safe@^5.0.1:
   version "5.0.1"
   resolved "https://registry.npmjs.org/json-stringify-safe/-/json-stringify-safe-5.0.1.tgz"
   integrity sha512-ZClg6AaYvamvYEE82d3Iyd3vSSIjQ+odgjaTzRuO3s7toCdFKczob2i0zCh7JE8kWn17yvAWhUVxvqGwUalsRA==
+
+json5@^2.2.2:
+  version "2.2.3"
+  resolved "https://registry.yarnpkg.com/json5/-/json5-2.2.3.tgz#78cd6f1a19bdc12b73db5ad0c61efd66c1e29283"
+  integrity sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==
+
+jsonfile@^6.1.0:
+  version "6.1.0"
+  resolved "https://registry.yarnpkg.com/jsonfile/-/jsonfile-6.1.0.tgz#bc55b2634793c679ec6403094eb13698a6ec0aae"
+  integrity sha512-5dgndWOriYSm5cnYaJNhalLNDKOqFwyDB/rr1E9ZsGciGvKPs8R2xYGCacuf3z6K1YKDz182fd+fY3cn3pMqXQ==
+  dependencies:
+    universalify "^2.0.0"
+  optionalDependencies:
+    graceful-fs "^4.1.6"
 
 jsonparse@^1.2.0:
   version "1.3.1"
@@ -1464,6 +1616,11 @@ mime-types@^2.1.12:
   integrity sha512-ZDY+bPm5zTTF+YpCrAU9nK0UgICYPT0QtT1NZWFv4s++TNkcgVaT0g6+4R2uI4MjQjzysHB1zxuWL50hzaeXiw==
   dependencies:
     mime-db "1.52.0"
+
+minimist@^1.2.6:
+  version "1.2.8"
+  resolved "https://registry.yarnpkg.com/minimist/-/minimist-1.2.8.tgz#c1a464e7693302e082a075cee0c057741ac4772c"
+  integrity sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA==
 
 ms@^2.0.0:
   version "2.1.3"
@@ -1549,6 +1706,11 @@ snake-case@^3.0.4:
     dot-case "^3.0.4"
     tslib "^2.0.3"
 
+strip-bom@^3.0.0:
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/strip-bom/-/strip-bom-3.0.0.tgz#2334c18e9c759f7bdd56fdef7e9ae3d588e68ed3"
+  integrity sha512-vavAMRXOgBVNF6nyEEmL3DBK19iRpDcoIwW+swQ+CbGiu7lju6t+JklA1MHweoWtadgt4ISVUsXLyDq34ddcwA==
+
 superstruct@^0.15.4:
   version "0.15.5"
   resolved "https://registry.npmjs.org/superstruct/-/superstruct-0.15.5.tgz"
@@ -1621,6 +1783,15 @@ ts-node@^10.9.2:
     v8-compile-cache-lib "^3.0.1"
     yn "3.1.1"
 
+tsconfig-paths@^4.2.0:
+  version "4.2.0"
+  resolved "https://registry.yarnpkg.com/tsconfig-paths/-/tsconfig-paths-4.2.0.tgz#ef78e19039133446d244beac0fd6a1632e2d107c"
+  integrity sha512-NoZ4roiN7LnbKn9QqE1amc9DJfzvZXxF4xDavcOWt1BPkdx+m+0gJuPM+S0vCe7zTJMYUP0R8pO2XMr+Y8oLIg==
+  dependencies:
+    json5 "^2.2.2"
+    minimist "^1.2.6"
+    strip-bom "^3.0.0"
+
 tslib@^2.0.3, tslib@^2.4.0:
   version "2.6.3"
   resolved "https://registry.npmjs.org/tslib/-/tslib-2.6.3.tgz"
@@ -1650,6 +1821,11 @@ undici-types@~6.19.2:
   version "6.19.6"
   resolved "https://registry.npmjs.org/undici-types/-/undici-types-6.19.6.tgz"
   integrity sha512-e/vggGopEfTKSvj4ihnOLTsqhrKRN3LeO6qSN/GxohhuRv8qH9bNQ4B8W7e/vFL+0XTnmHPB4/kegunZGA4Org==
+
+universalify@^2.0.0:
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/universalify/-/universalify-2.0.1.tgz#168efc2180964e6386d061e094df61afe239b18d"
+  integrity sha512-gptHNQghINnc/vTGIk0SOFGFNXw7JVrlRUtConJRlvaw6DuX0wO5Jeko9sWrMBhh+PsYAZ7oXAiOnf/UKogyiw==
 
 utf-8-validate@^5.0.2:
   version "5.0.10"

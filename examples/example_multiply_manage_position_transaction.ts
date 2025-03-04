@@ -40,6 +40,7 @@ import Decimal from 'decimal.js';
     wallet.publicKey,
     obligation!,
     true,
+    undefined,
     currentSlot
   );
 
@@ -63,6 +64,7 @@ import Decimal from 'decimal.js';
     wallet.publicKey,
     obligation!,
     true,
+    undefined,
     currentSlot
   );
 
@@ -80,6 +82,7 @@ import Decimal from 'decimal.js';
     wallet.publicKey,
     obligation!,
     true,
+    undefined,
     currentSlot
   );
 
@@ -97,6 +100,7 @@ import Decimal from 'decimal.js';
     wallet.publicKey,
     obligation!,
     true,
+    undefined,
     currentSlot
   );
 

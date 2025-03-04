@@ -15,6 +15,7 @@ import { PublicKey } from '@solana/web3.js';
 import Decimal from 'decimal.js';
 import { getJupiterPrice, getJupiterQuoter, getJupiterSwapper } from './utils/jup_utils';
 import { QuoteResponse } from '@jup-ag/api/dist/index.js';
+import { Scope } from '@kamino-finance/scope-sdk/';
 
 // For this example we are only using JLP/USDC multiply
 // This can be also used for leverage by using the correct type when creating the obligation
@@ -23,6 +24,7 @@ import { QuoteResponse } from '@jup-ag/api/dist/index.js';
   const wallet = getKeypair();
 
   const market = await getMarket({ connection, marketPubkey: JLP_MARKET });
+  const scope = new Scope('mainnet-beta', connection);
 
   const collTokenMint = JLP_MINT;
   const debtTokenMint = USDC_MINT;
@@ -102,7 +104,7 @@ import { QuoteResponse } from '@jup-ag/api/dist/index.js';
     slippagePct: new Decimal(slippagePct),
     budgetAndPriorityFeeIxs: computeIxs,
     kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
-    scopeFeed: 'hubble',
+    scopeRefreshConfig: { scope, scopeFeed: 'hubble' },
     quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
     priceAinB: getPriceAinB,
     isKtoken: async (token: PublicKey | string): Promise<boolean> => {
@@ -143,7 +145,7 @@ import { QuoteResponse } from '@jup-ag/api/dist/index.js';
       slippagePct: new Decimal(slippagePct),
       budgetAndPriorityFeeIxs: computeIxs,
       kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
-      scopeFeed: 'hubble',
+      scopeRefreshConfig: { scope, scopeFeed: 'hubble' },
       quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
       priceAinB: getPriceAinB,
       isKtoken: async (token: PublicKey | string): Promise<boolean> => {

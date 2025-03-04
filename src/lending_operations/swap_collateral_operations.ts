@@ -6,14 +6,14 @@ import {
   KaminoObligation,
   KaminoReserve,
 } from '../classes';
-import { getFlashLoanInstructions, SwapIxsProvider, SwapQuoteProvider } from '../leverage';
+import { getFlashLoanInstructions, getScopeRefreshIx, SwapIxsProvider, SwapQuoteProvider } from '../leverage';
 import {
   createAtasIdempotent,
   DEFAULT_MAX_COMPUTE_UNITS,
   getAssociatedTokenAddress,
   getComputeBudgetAndPriorityFeeIxns,
   PublicKeySet,
-  ScopeRefresh,
+  ScopePriceRefreshConfig,
   U64_MAX,
   uniqueAccounts,
 } from '../utils';
@@ -61,7 +61,7 @@ export interface SwapCollIxnsInputs<QuoteResponse> {
   referrer: PublicKey;
   currentSlot: number;
   budgetAndPriorityFeeIxns?: TransactionInstruction[];
-  scopeRefresh?: ScopeRefresh;
+  scopeRefreshConfig?: ScopePriceRefreshConfig;
   useV2Ixs: boolean;
   quoter: SwapQuoteProvider<QuoteResponse>;
   swapper: SwapIxsProvider<QuoteResponse>;
@@ -205,7 +205,7 @@ type SwapCollContext<QuoteResponse> = {
   referrer: PublicKey;
   currentSlot: number;
   useV2Ixs: boolean;
-  scopeRefresh: ScopeRefresh | undefined;
+  scopeRefreshConfig: ScopePriceRefreshConfig | undefined;
   logger: (msg: string, ...extra: any[]) => void;
 };
 
@@ -235,7 +235,7 @@ function extractArgsAndContext<QuoteResponse>(
       quoter: inputs.quoter,
       swapper: inputs.swapper,
       referrer: inputs.referrer,
-      scopeRefresh: inputs.scopeRefresh,
+      scopeRefreshConfig: inputs.scopeRefreshConfig,
       currentSlot: inputs.currentSlot,
       useV2Ixs: inputs.useV2Ixs,
     },
@@ -263,6 +263,18 @@ async function getKlendIxns(
 ): Promise<SwapCollKlendIxns> {
   const { ataCreationIxns, targetCollAta } = getAtaCreationIxns(context);
   const setupIxns = [...context.budgetAndPriorityFeeIxns, ...ataCreationIxns];
+
+  const scopeRefreshIxn = await getScopeRefreshIx(
+    context.market,
+    context.sourceCollReserve,
+    context.targetCollReserve,
+    context.obligation,
+    context.scopeRefreshConfig
+  );
+
+  if (scopeRefreshIxn) {
+    setupIxns.unshift(...scopeRefreshIxn);
+  }
 
   const targetCollFlashBorrowedAmount = calculateTargetCollFlashBorrowedAmount(targetCollSwapOutAmount, context);
   const { targetCollFlashBorrowIxn, targetCollFlashRepayIxn } = getTargetCollFlashLoanIxns(
@@ -380,6 +392,7 @@ async function getDepositTargetCollIxns(
     context.obligation.state.owner,
     context.obligation,
     context.useV2Ixs,
+    undefined, // we create the scope refresh ixn outside of KaminoAction
     0, // no extra compute budget
     false, // we do not need ATA ixns here (we construct and close them ourselves)
     removesElevationGroup, // we may need to (temporarily) remove the elevation group; the same or a different one will be set on withdraw, if requested
@@ -387,7 +400,6 @@ async function getDepositTargetCollIxns(
     false, // we do not need to create a lookup table, dealing with an existing obligation
     context.referrer,
     context.currentSlot,
-    context.scopeRefresh,
     removesElevationGroup ? 0 : undefined // only applicable when removing the group
   );
   return {
@@ -430,6 +442,7 @@ async function getWithdrawSourceCollIxns(
     context.obligation.state.owner,
     context.obligation,
     context.useV2Ixs,
+    undefined, // we create the scope refresh ixn outside of KaminoAction
     0, // no extra compute budget
     false, // we do not need ATA ixns here (we construct and close them ourselves)
     requestedElevationGroup !== undefined, // the `elevationGroupIdToRequestAfterWithdraw()` has already decided on this
@@ -437,7 +450,6 @@ async function getWithdrawSourceCollIxns(
     false, // we do not need to create a lookup table, dealing with an existing obligation
     context.referrer,
     context.currentSlot,
-    undefined, // we have refreshed scope already, during depositing
     requestedElevationGroup,
     context.obligation.deposits.has(context.targetCollReserve.address) // if our obligation already had the target coll...
       ? undefined // ... then we need no customizations here, but otherwise...

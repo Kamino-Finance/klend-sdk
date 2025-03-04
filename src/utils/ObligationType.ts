@@ -1,7 +1,7 @@
 import { PublicKey } from '@solana/web3.js';
 import { KaminoMarket, KaminoObligation } from '../classes';
 
-export type ObligationType = VanillaObligation | MultiplyObligation | LendingObligation;
+export type ObligationType = VanillaObligation | MultiplyObligation | LendingObligation | LeverageObligation;
 
 export enum ObligationTypeTag {
   Vanilla = 0,

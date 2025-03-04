@@ -2,7 +2,7 @@ import { AddressLookupTableAccount, PublicKey, TransactionInstruction } from '@s
 import Decimal from 'decimal.js';
 import { KaminoMarket, KaminoObligation } from '../classes';
 import { InstructionsWithLookupTables, Kamino, StrategyWithAddress } from '@kamino-finance/kliquidity-sdk';
-import { ObligationType, ObligationTypeTag } from '../utils';
+import { ObligationType, ObligationTypeTag, ScopePriceRefreshConfig } from '../utils';
 
 export type SwapQuoteProvider<QuoteResponse> = (
   inputs: SwapInputs,
@@ -82,7 +82,7 @@ export interface DepositWithLeverageSwapInputsProps<QuoteResponse> {
   selectedTokenMint: PublicKey;
   budgetAndPriorityFeeIxs?: TransactionInstruction[];
   kamino: Kamino | undefined;
-  scopeFeed: string | undefined;
+  scopeRefreshConfig?: ScopePriceRefreshConfig;
   quoteBufferBps: Decimal;
   priceAinB: PriceAinBProvider;
   isKtoken: IsKtokenProvider;
@@ -143,7 +143,7 @@ export interface WithdrawWithLeverageSwapInputsProps<QuoteResponse> {
   selectedTokenMint: PublicKey;
   budgetAndPriorityFeeIxs?: TransactionInstruction[];
   kamino: Kamino | undefined;
-  scopeFeed: string | undefined;
+  scopeRefreshConfig?: ScopePriceRefreshConfig;
   quoteBufferBps: Decimal;
   isKtoken: IsKtokenProvider;
   quoter: SwapQuoteProvider<QuoteResponse>;
@@ -196,7 +196,7 @@ export interface AdjustLeverageSwapInputsProps<QuoteResponse> {
   slippagePct: Decimal;
   budgetAndPriorityFeeIxs?: TransactionInstruction[];
   kamino: Kamino | undefined;
-  scopeFeed: string | undefined;
+  scopeRefreshConfig?: ScopePriceRefreshConfig;
   quoteBufferBps: Decimal;
   priceAinB: PriceAinBProvider;
   isKtoken: IsKtokenProvider;

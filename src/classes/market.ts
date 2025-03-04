@@ -29,7 +29,7 @@ import Decimal from 'decimal.js';
 import { FarmState } from '@kamino-finance/farms-sdk';
 import { PROGRAM_ID } from '../idl_codegen/programId';
 import bs58 from 'bs58';
-import { OraclePrices, Scope } from '@kamino-finance/scope-sdk';
+import { OraclePrices, Scope, U16_MAX } from '@kamino-finance/scope-sdk';
 import { Fraction } from './fraction';
 import { chunks, KaminoPrices, MintToPriceMap } from '@kamino-finance/kliquidity-sdk';
 import { parseTokenSymbol, parseZeroPaddedUtf8 } from './utils';
@@ -59,8 +59,6 @@ export class KaminoMarket {
 
   readonly programId: PublicKey;
 
-  scope: Scope;
-
   private readonly recentSlotDurationMs: number;
 
   private constructor(
@@ -68,7 +66,6 @@ export class KaminoMarket {
     state: LendingMarket,
     marketAddress: string,
     reserves: Map<PublicKey, KaminoReserve>,
-    scope: Scope,
     recentSlotDurationMs: number,
     programId: PublicKey = PROGRAM_ID
   ) {
@@ -78,7 +75,6 @@ export class KaminoMarket {
     this.reserves = reserves;
     this.reservesActive = getReservesActive(this.reserves);
     this.programId = programId;
-    this.scope = scope;
     this.recentSlotDurationMs = recentSlotDurationMs;
   }
 
@@ -97,7 +93,6 @@ export class KaminoMarket {
     marketAddress: PublicKey,
     recentSlotDurationMs: number,
     programId: PublicKey = PROGRAM_ID,
-    setupLocalTest: boolean = false,
     withReserves: boolean = true
   ) {
     const market = await LendingMarket.fetch(connection, marketAddress, programId);
@@ -105,26 +100,12 @@ export class KaminoMarket {
     if (market === null) {
       return null;
     }
-    let scope: Scope;
-    if (!setupLocalTest) {
-      scope = new Scope('mainnet-beta', connection);
-    } else {
-      scope = new Scope('localnet', connection);
-    }
 
     const reserves = withReserves
       ? await getReservesForMarket(marketAddress, connection, programId, recentSlotDurationMs)
       : new Map<PublicKey, KaminoReserve>();
 
-    return new KaminoMarket(
-      connection,
-      market,
-      marketAddress.toString(),
-      reserves,
-      scope,
-      recentSlotDurationMs,
-      programId
-    );
+    return new KaminoMarket(connection, market, marketAddress.toString(), reserves, recentSlotDurationMs, programId);
   }
 
   async reload(): Promise<void> {
@@ -1186,9 +1167,9 @@ export class KaminoMarket {
   /**
    * Get all Scope prices used by all the market reserves
    */
-  async getAllScopePrices(oraclePrices?: OraclePrices): Promise<KaminoPrices> {
+  async getAllScopePrices(scope: Scope, oraclePrices?: OraclePrices): Promise<KaminoPrices> {
     if (!oraclePrices) {
-      oraclePrices = await this.scope.getOraclePrices();
+      oraclePrices = await scope.getOraclePrices();
     }
     const spot: MintToPriceMap = {};
     const twaps: MintToPriceMap = {};
@@ -1199,11 +1180,11 @@ export class KaminoMarket {
       const chain = reserve.state.config.tokenInfo.scopeConfiguration.priceChain;
       const twapChain = reserve.state.config.tokenInfo.scopeConfiguration.twapChain.filter((x) => x > 0);
       if (oracle && isNotNullPubkey(oracle) && chain && Scope.isScopeChainValid(chain)) {
-        const spotPrice = await this.scope.getPriceFromChain(chain, oraclePrices);
+        const spotPrice = await scope.getPriceFromChain(chain, oraclePrices);
         spot[tokenMint] = { price: spotPrice.price, name: tokenName };
       }
       if (oracle && isNotNullPubkey(oracle) && twapChain && Scope.isScopeChainValid(twapChain)) {
-        const twap = await this.scope.getPriceFromChain(twapChain, oraclePrices);
+        const twap = await scope.getPriceFromChain(twapChain, oraclePrices);
         twaps[tokenMint] = { price: twap.price, name: tokenName };
       }
     }
@@ -1525,6 +1506,34 @@ export function getReservesActive(reserves: Map<PublicKey, KaminoReserve>): Map<
     }
   }
   return reservesActive;
+}
+
+export function getTokenIdsForScopeRefresh(kaminoMarket: KaminoMarket, reserves: PublicKey[]): number[] {
+  const tokenIds: number[] = [];
+
+  for (const reserveAddress of reserves) {
+    const reserve = kaminoMarket.getReserveByAddress(reserveAddress);
+    if (!reserve) {
+      throw new Error(`Reserve not found for reserve ${reserveAddress.toBase58()}`);
+    }
+
+    if (!reserve.state.config.tokenInfo.scopeConfiguration.priceFeed.equals(PublicKey.default)) {
+      let x = 0;
+
+      while (reserve.state.config.tokenInfo.scopeConfiguration.priceChain[x] !== U16_MAX) {
+        tokenIds.push(reserve.state.config.tokenInfo.scopeConfiguration.priceChain[x]);
+        x++;
+      }
+
+      x = 0;
+      while (reserve.state.config.tokenInfo.scopeConfiguration.twapChain[x] !== U16_MAX) {
+        tokenIds.push(reserve.state.config.tokenInfo.scopeConfiguration.twapChain[x]);
+        x++;
+      }
+    }
+  }
+
+  return tokenIds;
 }
 
 export async function getReserveFromMintAndMarket(

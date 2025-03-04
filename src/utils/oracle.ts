@@ -35,8 +35,8 @@ export type CandidatePrice = {
   valid: boolean;
 };
 
-export type ScopeRefresh = {
-  includeScopeRefresh: boolean;
+export type ScopePriceRefreshConfig = {
+  scope: Scope;
   scopeFeed: string;
 };
 

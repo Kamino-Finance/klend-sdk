@@ -61,11 +61,11 @@ import {
   isNotNullPubkey,
   PublicKeySet,
   getAssociatedTokenAddress,
-  ScopeRefresh,
+  ScopePriceRefreshConfig,
   createAtasIdempotent,
   obligationFarmStatePda,
 } from '../utils';
-import { KaminoMarket } from './market';
+import { getTokenIdsForScopeRefresh, KaminoMarket } from './market';
 import { KaminoObligation } from './obligation';
 import { KaminoReserve } from './reserve';
 import { ReserveFarmKind } from '../idl_codegen/types';
@@ -73,7 +73,7 @@ import { farmsId } from '@kamino-finance/farms-sdk';
 import { Reserve } from '../idl_codegen/accounts';
 import { VanillaObligation } from '../utils/ObligationType';
 import { PROGRAM_ID } from '../lib';
-import { U16_MAX } from '@kamino-finance/scope-sdk';
+import { Scope } from '@kamino-finance/scope-sdk';
 
 const SOL_PADDING_FOR_INTEREST = new BN('1000000');
 
@@ -411,6 +411,7 @@ export class KaminoAction {
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType,
     useV2Ixs: boolean,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false, // to be requested *before* the deposit
@@ -418,7 +419,6 @@ export class KaminoAction {
     createLookupTable: boolean = true,
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
-    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' },
     overrideElevationGroupRequest: number | undefined = undefined // if set, when an elevationgroup request is made, it will use this value
   ) {
     const axn = await KaminoAction.initialize(
@@ -437,16 +437,6 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new PublicKeySet<PublicKey>([
-      ...axn.depositReserves,
-      ...axn.borrowReserves,
-      axn.reserve.address,
-    ]).toArray();
-    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
-
-    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
-    }
     await axn.addSupportIxs(
       'deposit',
       includeAtaIxns,
@@ -454,6 +444,7 @@ export class KaminoAction {
       includeUserMetadata,
       addInitObligationForFarm,
       useV2Ixs,
+      scopeRefreshConfig,
       createLookupTable,
       undefined,
       overrideElevationGroupRequest
@@ -468,36 +459,10 @@ export class KaminoAction {
     return axn;
   }
 
-  getTokenIdsForScopeRefresh(kaminoMarket: KaminoMarket, reserves: PublicKey[]): number[] {
-    const tokenIds: number[] = [];
-
-    for (const reserveAddress of reserves) {
-      const reserve = kaminoMarket.getReserveByAddress(reserveAddress);
-      if (!reserve) {
-        throw new Error(`Reserve not found for reserve ${reserveAddress.toBase58()}`);
-      }
-
-      if (!reserve.state.config.tokenInfo.scopeConfiguration.priceFeed.equals(PublicKey.default)) {
-        reserve.state.config.tokenInfo.scopeConfiguration.priceChain.map((x) => {
-          if (x !== U16_MAX) {
-            tokenIds.push(x);
-          }
-        });
-        reserve.state.config.tokenInfo.scopeConfiguration.twapChain.map((x) => {
-          if (x !== U16_MAX) {
-            tokenIds.push(x);
-          }
-        });
-      }
-    }
-
-    return tokenIds;
-  }
-
-  async addScopeRefreshIxs(tokens: number[], feed: string = 'hubble') {
-    this.preTxnIxsLabels.unshift(`refreshScopePrices`);
-    this.preTxnIxs.unshift(
-      await this.kaminoMarket.scope.refreshPriceListIx(
+  async addScopeRefreshIxs(scope: Scope, tokens: number[], feed: string = 'hubble') {
+    this.setupIxsLabels.unshift(`refreshScopePrices`);
+    this.setupIxs.unshift(
+      await scope.refreshPriceListIx(
         {
           feed: feed,
         },
@@ -513,6 +478,7 @@ export class KaminoAction {
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType,
     useV2Ixs: boolean,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
@@ -520,7 +486,6 @@ export class KaminoAction {
     createLookupTable: boolean = true,
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
-    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' },
     overrideElevationGroupRequest: number | undefined = undefined // if set, when an elevationgroup request is made, it will use this value
   ) {
     const axn = await KaminoAction.initialize(
@@ -536,17 +501,6 @@ export class KaminoAction {
     const addInitObligationForFarm = true;
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIxn(extraComputeBudget);
-    }
-
-    const allReserves = new PublicKeySet<PublicKey>([
-      ...axn.depositReserves,
-      ...axn.borrowReserves,
-      axn.reserve.address,
-    ]).toArray();
-    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
-
-    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
     }
 
     if (!axn.referrer.equals(PublicKey.default)) {
@@ -568,6 +522,7 @@ export class KaminoAction {
       includeUserMetadata,
       addInitObligationForFarm,
       useV2Ixs,
+      scopeRefreshConfig,
       createLookupTable,
       undefined,
       overrideElevationGroupRequest
@@ -588,12 +543,12 @@ export class KaminoAction {
     mint: PublicKey,
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas
     requestElevationGroup: boolean = false,
     referrer: PublicKey = PublicKey.default,
-    currentSlot: number = 0,
-    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
+    currentSlot: number = 0
   ) {
     const axn = await KaminoAction.initialize(
       'mint',
@@ -611,17 +566,6 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new PublicKeySet<PublicKey>([
-      ...axn.depositReserves,
-      ...axn.borrowReserves,
-      axn.reserve.address,
-    ]).toArray();
-    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
-
-    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
-    }
-
     await axn.addSupportIxs(
       'mint',
       includeAtaIxns,
@@ -629,6 +573,7 @@ export class KaminoAction {
       false,
       addInitObligationForFarm,
       false,
+      scopeRefreshConfig,
       false
     );
     axn.addDepositReserveLiquidityIx();
@@ -642,12 +587,12 @@ export class KaminoAction {
     mint: PublicKey,
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas
     requestElevationGroup: boolean = false,
     referrer: PublicKey = PublicKey.default,
-    currentSlot: number = 0,
-    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
+    currentSlot: number = 0
   ) {
     const axn = await KaminoAction.initialize(
       'redeem',
@@ -665,17 +610,6 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new PublicKeySet<PublicKey>([
-      ...axn.depositReserves,
-      ...axn.borrowReserves,
-      axn.reserve.address,
-    ]).toArray();
-    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
-
-    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
-    }
-
     await axn.addSupportIxs(
       'redeem',
       includeAtaIxns,
@@ -683,6 +617,7 @@ export class KaminoAction {
       false,
       addInitObligationForFarm,
       false,
+      scopeRefreshConfig,
       false
     );
     axn.addRedeemReserveCollateralIx();
@@ -697,14 +632,14 @@ export class KaminoAction {
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType,
     useV2Ixs: boolean,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata
     createLookupTable: boolean = true,
     referrer: PublicKey = PublicKey.default,
-    currentSlot: number = 0,
-    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
+    currentSlot: number = 0
   ) {
     const axn = await KaminoAction.initialize(
       'depositCollateral',
@@ -722,17 +657,6 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new PublicKeySet<PublicKey>([
-      ...axn.depositReserves,
-      ...axn.borrowReserves,
-      axn.reserve.address,
-    ]).toArray();
-    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
-
-    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
-    }
-
     await axn.addSupportIxs(
       'depositCollateral',
       includeAtaIxns,
@@ -740,6 +664,7 @@ export class KaminoAction {
       includeUserMetadata,
       addInitObligationForFarm,
       useV2Ixs,
+      scopeRefreshConfig,
       createLookupTable
     );
     if (useV2Ixs) {
@@ -760,14 +685,14 @@ export class KaminoAction {
     payer: PublicKey,
     obligation: KaminoObligation | ObligationType,
     useV2Ixs: boolean,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata,
     createLookupTable: boolean = true,
     referrer: PublicKey = PublicKey.default,
-    currentSlot: number = 0,
-    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
+    currentSlot: number = 0
   ) {
     const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
@@ -790,18 +715,6 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new PublicKeySet<PublicKey>([
-      ...axn.depositReserves,
-      ...axn.borrowReserves,
-      axn.reserve.address,
-      axn.outflowReserve!.address,
-    ]).toArray();
-    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
-
-    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
-    }
-
     if (!axn.referrer.equals(PublicKey.default)) {
       const referrerTokenState = referrerTokenStatePda(
         axn.referrer,
@@ -820,6 +733,7 @@ export class KaminoAction {
       includeUserMetadata,
       addInitObligationForFarmForDeposit,
       useV2Ixs,
+      undefined,
       createLookupTable,
       twoTokenAction
     );
@@ -837,6 +751,20 @@ export class KaminoAction {
       useV2Ixs
     );
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
+
+    // Create the scope refresh ixn in here to ensure it's the first ixn in the txn
+    const allReserves = new PublicKeySet<PublicKey>([
+      ...axn.depositReserves,
+      ...axn.borrowReserves,
+      axn.reserve.address,
+      ...(axn.outflowReserve ? [axn.outflowReserve.address] : []),
+      ...(axn.preLoadedDepositReservesSameTx ? axn.preLoadedDepositReservesSameTx : []),
+    ]).toArray();
+    const tokenIds = getTokenIdsForScopeRefresh(axn.kaminoMarket, allReserves);
+
+    if (tokenIds.length > 0 && scopeRefreshConfig) {
+      await axn.addScopeRefreshIxs(scopeRefreshConfig.scope, tokenIds, scopeRefreshConfig.scopeFeed);
+    }
     return axn;
   }
 
@@ -850,13 +778,13 @@ export class KaminoAction {
     currentSlot: number,
     obligation: KaminoObligation | ObligationType,
     useV2Ixs: boolean,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true, // if true it includes user metadata,
     createLookupTable: boolean = true,
-    referrer: PublicKey = PublicKey.default,
-    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
+    referrer: PublicKey = PublicKey.default
   ) {
     const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
@@ -878,18 +806,6 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new PublicKeySet<PublicKey>([
-      ...axn.depositReserves,
-      ...axn.borrowReserves,
-      axn.reserve.address,
-      axn.outflowReserve!.address,
-    ]).toArray();
-    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
-
-    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
-    }
-
     await axn.addSupportIxs(
       'repay',
       includeAtaIxns,
@@ -897,6 +813,7 @@ export class KaminoAction {
       includeUserMetadata,
       addInitObligationForFarmForRepay,
       useV2Ixs,
+      undefined,
       createLookupTable,
       twoTokenAction
     );
@@ -916,6 +833,19 @@ export class KaminoAction {
       useV2Ixs
     );
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
+    // Create the scope refresh ixn in here to ensure it's the first ixn in the txn
+    const allReserves = new PublicKeySet<PublicKey>([
+      ...axn.depositReserves,
+      ...axn.borrowReserves,
+      axn.reserve.address,
+      ...(axn.outflowReserve ? [axn.outflowReserve.address] : []),
+      ...(axn.preLoadedDepositReservesSameTx ? axn.preLoadedDepositReservesSameTx : []),
+    ]).toArray();
+    const tokenIds = getTokenIdsForScopeRefresh(axn.kaminoMarket, allReserves);
+
+    if (tokenIds.length > 0 && scopeRefreshConfig) {
+      await axn.addScopeRefreshIxs(scopeRefreshConfig.scope, tokenIds, scopeRefreshConfig.scopeFeed);
+    }
     return axn;
   }
 
@@ -926,6 +856,7 @@ export class KaminoAction {
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType,
     useV2Ixs: boolean,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false, // to be requested *after* the withdraw
@@ -933,7 +864,6 @@ export class KaminoAction {
     createLookupTable: boolean = true,
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
-    scopeRefresh: ScopeRefresh | undefined = undefined,
     overrideElevationGroupRequest?: number,
     // Optional customizations which may be needed if the obligation was mutated by some previous ixn.
     obligationCustomizations?: {
@@ -959,17 +889,6 @@ export class KaminoAction {
 
     axn.depositReserves.push(...(obligationCustomizations?.addedDepositReserves || []));
 
-    const allReserves = new PublicKeySet<PublicKey>([
-      ...axn.depositReserves,
-      ...axn.borrowReserves,
-      axn.reserve.address,
-    ]).toArray();
-    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
-
-    if (tokenIds.length > 0 && scopeRefresh && scopeRefresh.includeScopeRefresh) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
-    }
-
     await axn.addSupportIxs(
       'withdraw',
       includeAtaIxns,
@@ -977,6 +896,7 @@ export class KaminoAction {
       includeUserMetadata,
       addInitObligationForFarm,
       useV2Ixs,
+      scopeRefreshConfig,
       createLookupTable,
       false,
       overrideElevationGroupRequest
@@ -1016,6 +936,7 @@ export class KaminoAction {
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType,
     useV2Ixs: boolean,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
     currentSlot: number,
     payer: PublicKey | undefined = undefined,
     extraComputeBudget: number = 1_000_000,
@@ -1023,8 +944,7 @@ export class KaminoAction {
     requestElevationGroup: boolean = false,
     includeUserMetadata: boolean = true,
     createLookupTable: boolean = true,
-    referrer: PublicKey = PublicKey.default,
-    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
+    referrer: PublicKey = PublicKey.default
   ) {
     const axn = await KaminoAction.initialize(
       'repay',
@@ -1043,17 +963,6 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new PublicKeySet<PublicKey>([
-      ...axn.depositReserves,
-      ...axn.borrowReserves,
-      axn.reserve.address,
-    ]).toArray();
-    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
-
-    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
-    }
-
     await axn.addSupportIxs(
       'repay',
       includeAtaIxns,
@@ -1061,6 +970,7 @@ export class KaminoAction {
       includeUserMetadata,
       addInitObligationForFarm,
       useV2Ixs,
+      scopeRefreshConfig,
       createLookupTable
     );
     if (useV2Ixs) {
@@ -1083,6 +993,7 @@ export class KaminoAction {
     obligationOwner: PublicKey,
     obligation: KaminoObligation | ObligationType,
     useV2Ixs: boolean,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas, and creates all other token atas if they don't exist
     requestElevationGroup: boolean = false,
@@ -1090,8 +1001,7 @@ export class KaminoAction {
     createLookupTable: boolean = true,
     referrer: PublicKey = PublicKey.default,
     maxAllowedLtvOverridePercent: number = 0,
-    currentSlot: number = 0,
-    scopeRefresh: ScopeRefresh = { includeScopeRefresh: false, scopeFeed: 'hubble' }
+    currentSlot: number = 0
   ) {
     const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
@@ -1112,18 +1022,6 @@ export class KaminoAction {
       axn.addComputeBudgetIxn(extraComputeBudget);
     }
 
-    const allReserves = new PublicKeySet<PublicKey>([
-      ...axn.depositReserves,
-      ...axn.borrowReserves,
-      axn.reserve.address,
-      axn.outflowReserve!.address,
-    ]).toArray();
-    const tokenIds = axn.getTokenIdsForScopeRefresh(kaminoMarket, allReserves);
-
-    if (tokenIds.length > 0 && scopeRefresh.includeScopeRefresh) {
-      await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
-    }
-
     await axn.addSupportIxs(
       'liquidate',
       includeAtaIxns,
@@ -1131,6 +1029,7 @@ export class KaminoAction {
       includeUserMetadata,
       addInitObligationForFarm,
       useV2Ixs,
+      scopeRefreshConfig,
       createLookupTable
     );
     if (useV2Ixs) {
@@ -2534,6 +2433,7 @@ export class KaminoAction {
     includeUserMetadata: boolean,
     addInitObligationForFarm: boolean,
     useV2Ixs: boolean,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
     createLookupTable: boolean,
     twoTokenAction: boolean = false,
     overrideElevationGroupRequest?: number
@@ -2567,6 +2467,19 @@ export class KaminoAction {
       twoTokenAction,
       overrideElevationGroupRequest
     );
+
+    const allReserves = new PublicKeySet<PublicKey>([
+      ...this.depositReserves,
+      ...this.borrowReserves,
+      this.reserve.address,
+      ...(this.outflowReserve ? [this.outflowReserve.address] : []),
+      ...(this.preLoadedDepositReservesSameTx ? this.preLoadedDepositReservesSameTx : []),
+    ]).toArray();
+    const tokenIds = getTokenIdsForScopeRefresh(this.kaminoMarket, allReserves);
+
+    if (tokenIds.length > 0 && scopeRefreshConfig) {
+      await this.addScopeRefreshIxs(scopeRefreshConfig.scope, tokenIds, scopeRefreshConfig.scopeFeed);
+    }
   }
 
   private static optionalAccount(pubkey: PublicKey, programId: PublicKey = PROGRAM_ID): PublicKey {

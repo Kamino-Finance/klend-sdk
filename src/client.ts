@@ -22,6 +22,7 @@ import { VanillaObligation } from './utils/ObligationType';
 import { parseTokenSymbol } from './classes/utils';
 import { Env, initEnv } from '../tests/runner/setup_utils';
 import { initializeFarmsForReserve } from '../tests/runner/farms/farms_operations';
+import { Scope } from '@kamino-finance/scope-sdk';
 
 const STAGING_LENDING_MARKET = new PublicKey('6WVSwDQXrBZeQVnu6hpnsRZhodaJTZBUaC334SiiBKdb');
 const MAINNET_LENDING_MARKET = new PublicKey('7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF');
@@ -309,7 +310,8 @@ async function deposit(connection: Connection, wallet: Keypair, token: string, d
     kaminoMarket.getReserveBySymbol(token)!.getLiquidityMint(),
     wallet.publicKey,
     new VanillaObligation(STAGING_LENDING_MARKET),
-    true
+    true,
+    { scope: new Scope('mainnet-beta', connection), scopeFeed: 'hubble' }
   );
   console.log('User obligation', kaminoAction.obligation!.obligationAddress.toString());
 
@@ -330,7 +332,8 @@ async function withdraw(connection: Connection, wallet: Keypair, token: string, 
     kaminoMarket.getReserveBySymbol(token)!.getLiquidityMint(),
     wallet.publicKey,
     new VanillaObligation(new PublicKey(STAGING_LENDING_MARKET)),
-    true
+    true,
+    { scope: new Scope('mainnet-beta', connection), scopeFeed: 'hubble' }
   );
   console.log('User obligation', kaminoAction.obligation!.obligationAddress.toString());
 
@@ -351,7 +354,8 @@ async function borrow(connection: Connection, wallet: Keypair, token: string, bo
     kaminoMarket.getReserveBySymbol(token)!.getLiquidityMint(),
     wallet.publicKey,
     new VanillaObligation(new PublicKey(STAGING_LENDING_MARKET)),
-    true
+    true,
+    { scope: new Scope('mainnet-beta', connection), scopeFeed: 'hubble' }
   );
   console.log('User obligation', kaminoAction.obligation!.obligationAddress.toString());
 
@@ -373,6 +377,7 @@ async function repay(connection: Connection, wallet: Keypair, token: string, bor
     wallet.publicKey,
     new VanillaObligation(new PublicKey(STAGING_LENDING_MARKET)),
     true,
+    { scope: new Scope('mainnet-beta', connection), scopeFeed: 'hubble' },
     await connection.getSlot()
   );
   console.log('User obligation', kaminoAction.obligation!.obligationAddress.toString());

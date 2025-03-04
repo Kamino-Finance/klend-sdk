@@ -15,7 +15,7 @@ import { getKaminoResources } from './utils/kamino_resources';
 import { PublicKey } from '@solana/web3.js';
 import Decimal from 'decimal.js';
 import { getJupiterPrice, getJupiterQuoter, getJupiterSwapper } from './utils/jup_utils';
-
+import { Scope } from '@kamino-finance/scope-sdk/';
 // For this example we are only using JLP/USDC multiply
 // This can be also used for leverage by using the correct type when creating the obligation
 (async () => {
@@ -23,6 +23,7 @@ import { getJupiterPrice, getJupiterQuoter, getJupiterSwapper } from './utils/ju
   const wallet = getKeypair();
 
   const market = await getMarket({ connection, marketPubkey: JLP_MARKET });
+  const scope = new Scope('mainnet-beta', connection);
 
   const collTokenMint = JLP_MINT;
   const debtTokenMint = USDC_MINT;
@@ -91,7 +92,7 @@ import { getJupiterPrice, getJupiterQuoter, getJupiterSwapper } from './utils/ju
     selectedTokenMint: debtTokenMint, // the token we are using to deposit
     kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
     obligationTypeTagOverride: ObligationTypeTag.Multiply, // or leverage
-    scopeFeed: 'hubble',
+    scopeRefreshConfig: { scope, scopeFeed: 'hubble' },
     budgetAndPriorityFeeIxs: computeIxs,
     quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
     priceAinB: getPriceAinB,

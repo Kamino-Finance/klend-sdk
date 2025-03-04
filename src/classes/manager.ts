@@ -949,7 +949,7 @@ export class KaminoManager {
   }
 
   /**
-   * This retruns an array of scope oracle configs to be used to set the scope price and twap oracles for a reserve
+   * This returns an array of scope oracle configs to be used to set the scope price and twap oracles for a reserve
    * @param feed - scope feed to fetch prices from
    * @param cluster - cluster to fetch from, this should be left unchanged unless working on devnet or locally
    * @returns - an array of scope oracle configs

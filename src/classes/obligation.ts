@@ -17,6 +17,7 @@ import {
   getObligationPdaWithArgs,
   getObligationType,
   isNotNullPubkey,
+  ObligationType,
   PubkeyHashMap,
   TOTAL_NUMBER_OF_IDS_TO_CHECK,
   U64_MAX,
@@ -1592,4 +1593,9 @@ export class KaminoObligation {
       };
     }
   }
+}
+
+// Create a function that checks if an obligation is of type obligation or obligationType
+export function isKaminoObligation(obligation: KaminoObligation | ObligationType): obligation is KaminoObligation {
+  return 'obligationAddress' in obligation;
 }
