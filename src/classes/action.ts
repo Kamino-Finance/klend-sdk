@@ -549,6 +549,18 @@ export class KaminoAction {
       await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
     }
 
+    if (!axn.referrer.equals(PublicKey.default)) {
+      const referrerTokenState = referrerTokenStatePda(
+        axn.referrer,
+        axn.reserve.address,
+        axn.kaminoMarket.programId
+      )[0];
+      const account = await axn.kaminoMarket.getConnection().getAccountInfo(referrerTokenState);
+      if (!account) {
+        axn.addInitReferrerTokenStateIx(axn.reserve, referrerTokenState);
+      }
+    }
+
     await axn.addSupportIxs(
       'borrow',
       includeAtaIxns,
@@ -790,6 +802,17 @@ export class KaminoAction {
       await axn.addScopeRefreshIxs(tokenIds, scopeRefresh.scopeFeed);
     }
 
+    if (!axn.referrer.equals(PublicKey.default)) {
+      const referrerTokenState = referrerTokenStatePda(
+        axn.referrer,
+        axn.outflowReserve!.address,
+        axn.kaminoMarket.programId
+      )[0];
+      const account = await axn.kaminoMarket.getConnection().getAccountInfo(referrerTokenState);
+      if (!account) {
+        axn.addInitReferrerTokenStateIx(axn.outflowReserve!, referrerTokenState);
+      }
+    }
     await axn.addSupportIxs(
       'deposit',
       includeAtaIxns,
@@ -1136,6 +1159,17 @@ export class KaminoAction {
     axn.preTxnIxs.push(...createAtaIxs);
     axn.preTxnIxsLabels.push(`createAtasIxs[${axn.userTokenAccountAddress.toString()}]`);
 
+    if (!axn.referrer.equals(PublicKey.default)) {
+      const referrerTokenState = referrerTokenStatePda(
+        axn.referrer,
+        axn.reserve.address,
+        axn.kaminoMarket.programId
+      )[0];
+      const account = await axn.kaminoMarket.getConnection().getAccountInfo(referrerTokenState);
+      if (!account) {
+        axn.addInitReferrerTokenStateIx(axn.reserve, referrerTokenState);
+      }
+    }
     axn.addRefreshReserveIxs([axn.reserve.address]);
     axn.addWithdrawReferrerFeesIxs();
 
@@ -2520,13 +2554,6 @@ export class KaminoAction {
         this.addInitUserMetadataIxs(lookupTable);
       }
 
-      if (['borrow', 'withdrawReferrerFees'].includes(action)) {
-        await this.addInitReferrerTokenStateIx(this.reserve);
-      }
-      // depositAndBorrow
-      if (action === 'deposit' && this.outflowReserve) {
-        await this.addInitReferrerTokenStateIx(this.outflowReserve);
-      }
       await this.addInitObligationIxs();
     }
 
@@ -2948,29 +2975,21 @@ export class KaminoAction {
     this.setupIxsLabels.push(`initUserMetadata[${userMetadataAddress.toString()}]`);
   }
 
-  private async addInitReferrerTokenStateIx(reserve: KaminoReserve) {
-    if (this.referrer.equals(PublicKey.default)) {
-      return;
-    }
-
-    const referrerTokenState = referrerTokenStatePda(this.referrer, reserve.address, this.kaminoMarket.programId)[0];
-    const account = await this.kaminoMarket.getConnection().getAccountInfo(referrerTokenState);
-    if (!account) {
-      const initReferrerTokenStateIx = initReferrerTokenState(
-        {
-          lendingMarket: this.kaminoMarket.getAddress(),
-          payer: this.owner,
-          reserve: reserve.address,
-          referrer: this.referrer,
-          referrerTokenState,
-          rent: SYSVAR_RENT_PUBKEY,
-          systemProgram: SystemProgram.programId,
-        },
-        this.kaminoMarket.programId
-      );
-      this.setupIxs.unshift(initReferrerTokenStateIx);
-      this.setupIxsLabels.unshift(`InitReferrerTokenState[${referrerTokenState.toString()} res=${reserve.address}]`);
-    }
+  private addInitReferrerTokenStateIx(reserve: KaminoReserve, referrerTokenState: PublicKey) {
+    const initReferrerTokenStateIx = initReferrerTokenState(
+      {
+        lendingMarket: this.kaminoMarket.getAddress(),
+        payer: this.owner,
+        reserve: reserve.address,
+        referrer: this.referrer,
+        referrerTokenState,
+        rent: SYSVAR_RENT_PUBKEY,
+        systemProgram: SystemProgram.programId,
+      },
+      this.kaminoMarket.programId
+    );
+    this.setupIxs.unshift(initReferrerTokenStateIx);
+    this.setupIxsLabels.unshift(`InitReferrerTokenState[${referrerTokenState.toString()} res=${reserve.address}]`);
   }
 
   private addWithdrawReferrerFeesIxs() {
