@@ -1324,8 +1324,8 @@ export class KaminoAction {
   addDepositIxV2() {
     const farmsAccounts = this.reserve.state.farmCollateral.equals(PublicKey.default)
       ? {
-          obligationFarmUserState: PROGRAM_ID,
-          reserveFarmState: PROGRAM_ID,
+          obligationFarmUserState: this.kaminoMarket.programId,
+          reserveFarmState: this.kaminoMarket.programId,
         }
       : {
           obligationFarmUserState: obligationFarmStatePda(
@@ -1392,8 +1392,8 @@ export class KaminoAction {
   addDepositObligationCollateralIxV2() {
     const farmsAccounts = this.reserve.state.farmCollateral.equals(PublicKey.default)
       ? {
-          obligationFarmUserState: PROGRAM_ID,
-          reserveFarmState: PROGRAM_ID,
+          obligationFarmUserState: this.kaminoMarket.programId,
+          reserveFarmState: this.kaminoMarket.programId,
         }
       : {
           obligationFarmUserState: obligationFarmStatePda(
@@ -1477,8 +1477,8 @@ export class KaminoAction {
 
     const farmsAccounts = this.reserve.state.farmDebt.equals(PublicKey.default)
       ? {
-          obligationFarmUserState: PROGRAM_ID,
-          reserveFarmState: PROGRAM_ID,
+          obligationFarmUserState: this.kaminoMarket.programId,
+          reserveFarmState: this.kaminoMarket.programId,
         }
       : {
           obligationFarmUserState: obligationFarmStatePda(this.getObligationPda(), this.reserve.state.farmDebt)[0],
@@ -1552,8 +1552,8 @@ export class KaminoAction {
   async addWithdrawIxV2(collateralAmount: BN) {
     const farmsAccounts = this.reserve.state.farmCollateral.equals(PublicKey.default)
       ? {
-          obligationFarmUserState: PROGRAM_ID,
-          reserveFarmState: PROGRAM_ID,
+          obligationFarmUserState: this.kaminoMarket.programId,
+          reserveFarmState: this.kaminoMarket.programId,
         }
       : {
           obligationFarmUserState: obligationFarmStatePda(
@@ -1639,8 +1639,8 @@ export class KaminoAction {
 
     const farmsAccounts = this.reserve.state.farmDebt.equals(PublicKey.default)
       ? {
-          obligationFarmUserState: PROGRAM_ID,
-          reserveFarmState: PROGRAM_ID,
+          obligationFarmUserState: this.kaminoMarket.programId,
+          reserveFarmState: this.kaminoMarket.programId,
         }
       : {
           obligationFarmUserState: obligationFarmStatePda(this.getObligationPda(), this.reserve.state.farmDebt)[0],
@@ -1760,8 +1760,8 @@ export class KaminoAction {
   async addDepositAndBorrowIxV2() {
     const collateralFarmsAccounts = this.reserve.state.farmCollateral.equals(PublicKey.default)
       ? {
-          obligationFarmUserState: PROGRAM_ID,
-          reserveFarmState: PROGRAM_ID,
+          obligationFarmUserState: this.kaminoMarket.programId,
+          reserveFarmState: this.kaminoMarket.programId,
         }
       : {
           obligationFarmUserState: obligationFarmStatePda(
@@ -1824,8 +1824,8 @@ export class KaminoAction {
 
     const debtFarmsAccounts = this.outflowReserve.state.farmDebt.equals(PublicKey.default)
       ? {
-          obligationFarmUserState: PROGRAM_ID,
-          reserveFarmState: PROGRAM_ID,
+          obligationFarmUserState: this.kaminoMarket.programId,
+          reserveFarmState: this.kaminoMarket.programId,
         }
       : {
           obligationFarmUserState: obligationFarmStatePda(
@@ -1953,8 +1953,8 @@ export class KaminoAction {
 
     const debtFarmsAccounts = this.reserve.state.farmDebt.equals(PublicKey.default)
       ? {
-          obligationFarmUserState: PROGRAM_ID,
-          reserveFarmState: PROGRAM_ID,
+          obligationFarmUserState: this.kaminoMarket.programId,
+          reserveFarmState: this.kaminoMarket.programId,
         }
       : {
           obligationFarmUserState: obligationFarmStatePda(this.getObligationPda(), this.reserve.state.farmDebt)[0],
@@ -2001,8 +2001,8 @@ export class KaminoAction {
 
     const collateralFarmsAccounts = this.outflowReserve.state.farmCollateral.equals(PublicKey.default)
       ? {
-          obligationFarmUserState: PROGRAM_ID,
-          reserveFarmState: PROGRAM_ID,
+          obligationFarmUserState: this.kaminoMarket.programId,
+          reserveFarmState: this.kaminoMarket.programId,
         }
       : {
           obligationFarmUserState: obligationFarmStatePda(
@@ -2110,8 +2110,8 @@ export class KaminoAction {
 
     const collateralFarmsAccounts = this.outflowReserve.state.farmCollateral.equals(PublicKey.default)
       ? {
-          obligationFarmUserState: PROGRAM_ID,
-          reserveFarmState: PROGRAM_ID,
+          obligationFarmUserState: this.kaminoMarket.programId,
+          reserveFarmState: this.kaminoMarket.programId,
         }
       : {
           obligationFarmUserState: obligationFarmStatePda(
@@ -2123,8 +2123,8 @@ export class KaminoAction {
 
     const debtFarmsAccounts = this.reserve.state.farmDebt.equals(PublicKey.default)
       ? {
-          obligationFarmUserState: PROGRAM_ID,
-          reserveFarmState: PROGRAM_ID,
+          obligationFarmUserState: this.kaminoMarket.programId,
+          reserveFarmState: this.kaminoMarket.programId,
         }
       : {
           obligationFarmUserState: obligationFarmStatePda(this.getObligationPda(), this.reserve.state.farmDebt)[0],
