@@ -576,6 +576,37 @@ export class KaminoManager {
   }
 
   /**
+   * Get all lending markets
+   * @returns an array of all lending markets
+   */
+  async getAllMarkets(): Promise<KaminoMarket[]> {
+    const lendingMarketsAccounts = await getProgramAccounts(
+      this.getConnection(),
+      this._kaminoLendProgramId,
+      LendingMarket.layout.span + 8,
+      {
+        commitment: this.getConnection().commitment ?? 'processed',
+        filters: [
+          { dataSize: LendingMarket.layout.span + 8 },
+          { memcmp: { offset: 0, bytes: bs58.encode(LendingMarket.discriminator) } },
+        ],
+      }
+    );
+
+    const markets = await Promise.all(
+      lendingMarketsAccounts.map((account) =>
+        KaminoMarket.load(
+          this._connection,
+          account.pubkey,
+          this.recentSlotDurationMs,
+          this._kaminoLendProgramId
+        )
+      )
+    );
+    return markets.filter((market): market is KaminoMarket => market !== null);
+  }
+
+  /**
    * Get all vaults for owner
    * @param owner the pubkey of the vaults owner
    * @returns an array of all vaults owned by a given pubkey

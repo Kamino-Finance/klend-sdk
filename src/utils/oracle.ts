@@ -170,10 +170,11 @@ export function cacheOrGetPythPrices(
         const { price, exponent, conf: confidence, publishTime: timestamp, emaPrice } = priceMessage;
         if (price) {
           const px = new Decimal(price.toString()).div(10 ** Math.abs(exponent));
+          const conf = new Decimal(confidence.toString());
           prices.spot = {
             price: px,
             timestamp: BigInt(timestamp.toString()),
-            valid: validatePythPx(px, confidence.toNumber()),
+            valid: validatePythPx(px, conf),
           };
         }
         if (emaPrice !== undefined && emaPrice !== null) {
@@ -297,9 +298,9 @@ function isBetterPrice(current: CandidatePrice | undefined, next: CandidatePrice
   return next.timestamp > current.timestamp;
 }
 
-function validatePythPx(price: Decimal, confidence: number | undefined): boolean {
-  const conf50x = new Decimal(confidence || 0).mul(CONFIDENCE_FACTOR);
-  return price.gt(conf50x);
+function validatePythPx(price: Decimal, confidence: Decimal): boolean {
+  const conf50x = confidence.mul(CONFIDENCE_FACTOR);
+  return !price.isZero() && price.gt(conf50x);
 }
 
 function validateSwitchboardV2Px(agg: any): boolean {
