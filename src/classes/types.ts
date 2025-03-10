@@ -58,4 +58,4 @@ export type ReserveAllocationOverview = {
 export type APYs = {
   grossAPY: Decimal;
   netAPY: Decimal;
-}
+};
