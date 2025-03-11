@@ -17,6 +17,7 @@
   - [Deposit in reserve to mint ctokens](#deposit-in-reserve-to-mint-ctokens)
   - [Burn ctokens to redeem tokens from reserve](#burn-ctokens-to-redeem-tokens-from-reserve)
   - [Deposit in obligation](#deposit-in-obligation)
+  - [Borrow tokens from reserve](#borrow-from-single-reserve)
   - [Harvest farm rewards](#harvest-farm-rewards)
   - [Get obligations based on reserve filter](#get-obligations-based-on-reserve-filter)
 
@@ -113,6 +114,12 @@ yarn run burn-ctokens-redeem
 ```bash
 export KEYPAIR_FILE=YOUR_PATH_TO_YOUR_KEYPAIR_FILE
 yarn run deposit-obligation
+```
+
+### Borrow from single reserve
+```bash
+export KEYPAIR_FILE=YOUR_PATH_TO_YOUR_KEYPAIR_FILE
+yarn run borrow-tokens
 ```
 
 ### Harvest farm rewards

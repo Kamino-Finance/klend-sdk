@@ -23,6 +23,7 @@
     "reserve-supply-borrow": "tsx example_reserve_supply_and_borrow.ts",
     "deposit-mint-ctokens": "tsx example_deposit_mint_ctokens.ts",
     "deposit-in-obligation": "tsx example_deposit_in_obligation.ts",
+    "borrow-tokens": "tsx example_borrow.ts",
     "burn-ctokens-redeem": "tsx example_burn_ctokens_redeem_tokens.ts",
     "harvest-farm-reward": "tsx example_harvest_reward.ts",
     "multiply-deposit": "tsx example_multiply_deposit_transaction.ts",
