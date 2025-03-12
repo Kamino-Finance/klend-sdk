@@ -63,6 +63,7 @@ import {
   getAssociatedTokenAddress,
   ScopePriceRefreshConfig,
   createAtasIdempotent,
+  SOL_PADDING_FOR_INTEREST,
   obligationFarmStatePda,
 } from '../utils';
 import { getTokenIdsForScopeRefresh, KaminoMarket } from './market';
@@ -74,8 +75,6 @@ import { Reserve } from '../idl_codegen/accounts';
 import { VanillaObligation } from '../utils/ObligationType';
 import { PROGRAM_ID } from '../lib';
 import { Scope } from '@kamino-finance/scope-sdk';
-
-const SOL_PADDING_FOR_INTEREST = new BN('1000000');
 
 export type ActionType =
   | 'deposit'
@@ -107,12 +106,6 @@ export class KaminoAction {
   obligation: KaminoObligation | null = null;
 
   referrer: PublicKey;
-
-  userTokenAccountAddress: PublicKey;
-
-  userCollateralAccountAddress: PublicKey;
-
-  additionalTokenAccountAddress?: PublicKey;
 
   /**
    * Null unless the obligation is not passed
@@ -163,8 +156,6 @@ export class KaminoAction {
     kaminoMarket: KaminoMarket,
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType | null,
-    userTokenAccountAddress: PublicKey,
-    userCollateralAccountAddress: PublicKey,
     mint: PublicKey,
     positions: number,
     amount: string | BN,
@@ -173,7 +164,6 @@ export class KaminoAction {
     reserveState: KaminoReserve,
     currentSlot: number,
     secondaryMint?: PublicKey,
-    additionalTokenAccountAddress?: PublicKey,
     outflowReserveState?: KaminoReserve,
     outflowAmount?: string | BN,
     referrer?: PublicKey,
@@ -191,8 +181,6 @@ export class KaminoAction {
     this.amount = new BN(amount);
     this.mint = mint;
     this.positions = positions;
-    this.userTokenAccountAddress = userTokenAccountAddress;
-    this.userCollateralAccountAddress = userCollateralAccountAddress;
     this.computeBudgetIxs = [];
     this.computeBudgetIxsLabels = [];
     this.setupIxs = [];
@@ -211,7 +199,6 @@ export class KaminoAction {
     this.refreshFarmsCleanupTxnIxsLabels = [];
     this.depositReserves = depositReserves;
     this.borrowReserves = borrowReserves;
-    this.additionalTokenAccountAddress = additionalTokenAccountAddress;
     this.secondaryMint = secondaryMint;
     this.reserve = reserveState;
     this.outflowReserve = outflowReserveState;
@@ -237,11 +224,6 @@ export class KaminoAction {
       throw new Error(`Reserve ${mint} not found in market ${kaminoMarket.getAddress().toBase58()}`);
     }
 
-    const { userTokenAccountAddress, userCollateralAccountAddress } = KaminoAction.getUserAccountAddresses(
-      payer ?? owner,
-      reserve.state
-    );
-
     const { kaminoObligation, depositReserves, borrowReserves, distinctReserveCount } =
       await KaminoAction.loadObligation(action, kaminoMarket, owner, reserve.address, obligation);
 
@@ -251,8 +233,6 @@ export class KaminoAction {
       kaminoMarket,
       owner,
       kaminoObligation || obligation,
-      userTokenAccountAddress,
-      userCollateralAccountAddress,
       mint,
       distinctReserveCount,
       amount,
@@ -260,7 +240,6 @@ export class KaminoAction {
       borrowReserves,
       reserve,
       currentSlot,
-      undefined,
       undefined,
       undefined,
       undefined,
@@ -1056,7 +1035,7 @@ export class KaminoAction {
     );
 
     axn.preTxnIxs.push(...createAtaIxs);
-    axn.preTxnIxsLabels.push(`createAtasIxs[${axn.userTokenAccountAddress.toString()}]`);
+    axn.preTxnIxsLabels.push(`createAtasIxs[${axn.owner.toString()}]`);
 
     if (!axn.referrer.equals(PublicKey.default)) {
       const referrerTokenState = referrerTokenStatePda(
@@ -1188,8 +1167,8 @@ export class KaminoAction {
           reserveLiquidityMint: this.reserve.getLiquidityMint(),
           reserveLiquiditySupply: this.reserve.state.liquidity.supplyVault,
           reserveCollateralMint: this.reserve.getCTokenMint(),
-          userSourceLiquidity: this.userTokenAccountAddress,
-          userDestinationCollateral: this.userCollateralAccountAddress,
+          userSourceLiquidity: this.getUserTokenAccountAddress(this.reserve),
+          userDestinationCollateral: this.getUserCollateralAccountAddress(this.reserve),
           collateralTokenProgram: TOKEN_PROGRAM_ID,
           liquidityTokenProgram: this.reserve.getLiquidityTokenProgram(),
           instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
@@ -1214,8 +1193,8 @@ export class KaminoAction {
           reserveLiquidityMint: this.reserve.getLiquidityMint(),
           reserveLiquiditySupply: this.reserve.state.liquidity.supplyVault,
           reserveCollateralMint: this.reserve.getCTokenMint(),
-          userSourceCollateral: this.userCollateralAccountAddress,
-          userDestinationLiquidity: this.userTokenAccountAddress,
+          userSourceCollateral: this.getUserCollateralAccountAddress(this.reserve),
+          userDestinationLiquidity: this.getUserTokenAccountAddress(this.reserve),
           collateralTokenProgram: TOKEN_PROGRAM_ID,
           liquidityTokenProgram: this.reserve.getLiquidityTokenProgram(),
           instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
@@ -1243,7 +1222,7 @@ export class KaminoAction {
           reserveLiquiditySupply: this.reserve.state.liquidity.supplyVault,
           reserveCollateralMint: this.reserve.getCTokenMint(),
           reserveDestinationDepositCollateral: this.reserve.state.collateral.supplyVault, // destinationCollateral
-          userSourceLiquidity: this.userTokenAccountAddress,
+          userSourceLiquidity: this.getUserTokenAccountAddress(this.reserve),
           placeholderUserDestinationCollateral: this.kaminoMarket.programId,
           collateralTokenProgram: TOKEN_PROGRAM_ID,
           liquidityTokenProgram: this.reserve.getLiquidityTokenProgram(),
@@ -1285,7 +1264,7 @@ export class KaminoAction {
             reserveLiquiditySupply: this.reserve.state.liquidity.supplyVault,
             reserveCollateralMint: this.reserve.getCTokenMint(),
             reserveDestinationDepositCollateral: this.reserve.state.collateral.supplyVault, // destinationCollateral
-            userSourceLiquidity: this.userTokenAccountAddress,
+            userSourceLiquidity: this.getUserTokenAccountAddress(this.reserve),
             placeholderUserDestinationCollateral: this.kaminoMarket.programId,
             collateralTokenProgram: TOKEN_PROGRAM_ID,
             liquidityTokenProgram: this.reserve.getLiquidityTokenProgram(),
@@ -1313,7 +1292,7 @@ export class KaminoAction {
           lendingMarket: this.kaminoMarket.getAddress(),
           depositReserve: this.reserve.address,
           reserveDestinationCollateral: this.reserve.state.collateral.supplyVault,
-          userSourceCollateral: this.userCollateralAccountAddress,
+          userSourceCollateral: this.getUserCollateralAccountAddress(this.reserve),
           tokenProgram: TOKEN_PROGRAM_ID,
           instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
         },
@@ -1349,7 +1328,7 @@ export class KaminoAction {
             lendingMarket: this.kaminoMarket.getAddress(),
             depositReserve: this.reserve.address,
             reserveDestinationCollateral: this.reserve.state.collateral.supplyVault,
-            userSourceCollateral: this.userCollateralAccountAddress,
+            userSourceCollateral: this.getUserCollateralAccountAddress(this.reserve),
             tokenProgram: TOKEN_PROGRAM_ID,
             instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
           },
@@ -1384,7 +1363,7 @@ export class KaminoAction {
         borrowReserve: this.reserve.address,
         borrowReserveLiquidityMint: this.reserve.getLiquidityMint(),
         reserveSourceLiquidity: this.reserve.state.liquidity.supplyVault,
-        userDestinationLiquidity: this.userTokenAccountAddress,
+        userDestinationLiquidity: this.getUserTokenAccountAddress(this.reserve),
         borrowReserveLiquidityFeeReceiver: this.reserve.state.liquidity.feeVault,
         referrerTokenState: referrerTokenStatePda(this.referrer, this.reserve.address, this.kaminoMarket.programId)[0],
         tokenProgram: this.reserve.getLiquidityTokenProgram(),
@@ -1431,7 +1410,7 @@ export class KaminoAction {
           borrowReserve: this.reserve.address,
           borrowReserveLiquidityMint: this.reserve.getLiquidityMint(),
           reserveSourceLiquidity: this.reserve.state.liquidity.supplyVault,
-          userDestinationLiquidity: this.userTokenAccountAddress,
+          userDestinationLiquidity: this.getUserTokenAccountAddress(this.reserve),
           borrowReserveLiquidityFeeReceiver: this.reserve.state.liquidity.feeVault,
           referrerTokenState: referrerTokenStatePda(
             this.referrer,
@@ -1471,7 +1450,7 @@ export class KaminoAction {
           reserveCollateralMint: this.reserve.getCTokenMint(),
           reserveLiquiditySupply: this.reserve.state.liquidity.supplyVault,
           reserveSourceCollateral: this.reserve.state.collateral.supplyVault,
-          userDestinationLiquidity: this.userTokenAccountAddress,
+          userDestinationLiquidity: this.getUserTokenAccountAddress(this.reserve),
           placeholderUserDestinationCollateral: this.kaminoMarket.programId,
           collateralTokenProgram: TOKEN_PROGRAM_ID,
           liquidityTokenProgram: this.reserve.getLiquidityTokenProgram(),
@@ -1513,7 +1492,7 @@ export class KaminoAction {
             reserveCollateralMint: this.reserve.getCTokenMint(),
             reserveLiquiditySupply: this.reserve.state.liquidity.supplyVault,
             reserveSourceCollateral: this.reserve.state.collateral.supplyVault,
-            userDestinationLiquidity: this.userTokenAccountAddress,
+            userDestinationLiquidity: this.getUserTokenAccountAddress(this.reserve),
             placeholderUserDestinationCollateral: this.kaminoMarket.programId,
             collateralTokenProgram: TOKEN_PROGRAM_ID,
             liquidityTokenProgram: this.reserve.getLiquidityTokenProgram(),
@@ -1549,7 +1528,7 @@ export class KaminoAction {
         lendingMarket: this.kaminoMarket.getAddress(),
         repayReserve: this.reserve.address,
         reserveLiquidityMint: this.reserve.getLiquidityMint(),
-        userSourceLiquidity: this.userTokenAccountAddress,
+        userSourceLiquidity: this.getTokenAccountAddressByUser(this.reserve, this.payer),
         reserveDestinationLiquidity: this.reserve.state.liquidity.supplyVault,
         tokenProgram: this.reserve.getLiquidityTokenProgram(),
         instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
@@ -1594,7 +1573,7 @@ export class KaminoAction {
           lendingMarket: this.kaminoMarket.getAddress(),
           repayReserve: this.reserve.address,
           reserveLiquidityMint: this.reserve.getLiquidityMint(),
-          userSourceLiquidity: this.userTokenAccountAddress,
+          userSourceLiquidity: this.getTokenAccountAddressByUser(this.reserve, this.payer),
           reserveDestinationLiquidity: this.reserve.state.liquidity.supplyVault,
           tokenProgram: this.reserve.getLiquidityTokenProgram(),
           instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
@@ -1630,7 +1609,7 @@ export class KaminoAction {
           reserveLiquiditySupply: this.reserve.state.liquidity.supplyVault,
           reserveCollateralMint: this.reserve.getCTokenMint(),
           reserveDestinationDepositCollateral: this.reserve.state.collateral.supplyVault, // destinationCollateral
-          userSourceLiquidity: this.userTokenAccountAddress,
+          userSourceLiquidity: this.getUserTokenAccountAddress(this.reserve),
           placeholderUserDestinationCollateral: this.kaminoMarket.programId,
           collateralTokenProgram: TOKEN_PROGRAM_ID,
           liquidityTokenProgram: this.reserve.getLiquidityTokenProgram(),
@@ -1642,10 +1621,6 @@ export class KaminoAction {
 
     if (!this.outflowReserve) {
       throw new Error(`outflowReserve not set`);
-    }
-
-    if (!this.additionalTokenAccountAddress) {
-      throw new Error(`additionalTokenAccountAddress not set`);
     }
 
     if (!this.outflowAmount) {
@@ -1672,7 +1647,7 @@ export class KaminoAction {
         borrowReserve: this.outflowReserve.address,
         borrowReserveLiquidityMint: this.outflowReserve.getLiquidityMint(),
         reserveSourceLiquidity: this.outflowReserve.state.liquidity.supplyVault,
-        userDestinationLiquidity: this.additionalTokenAccountAddress,
+        userDestinationLiquidity: this.getUserTokenAccountAddress(this.outflowReserve),
         borrowReserveLiquidityFeeReceiver: this.outflowReserve.state.liquidity.feeVault,
         referrerTokenState: referrerTokenStatePda(
           this.referrer,
@@ -1722,7 +1697,7 @@ export class KaminoAction {
             reserveLiquiditySupply: this.reserve.state.liquidity.supplyVault,
             reserveCollateralMint: this.reserve.getCTokenMint(),
             reserveDestinationDepositCollateral: this.reserve.state.collateral.supplyVault, // destinationCollateral
-            userSourceLiquidity: this.userTokenAccountAddress,
+            userSourceLiquidity: this.getUserTokenAccountAddress(this.reserve),
             placeholderUserDestinationCollateral: this.kaminoMarket.programId,
             collateralTokenProgram: TOKEN_PROGRAM_ID,
             liquidityTokenProgram: this.reserve.getLiquidityTokenProgram(),
@@ -1737,10 +1712,6 @@ export class KaminoAction {
 
     if (!this.outflowReserve) {
       throw new Error(`outflowReserve not set`);
-    }
-
-    if (!this.additionalTokenAccountAddress) {
-      throw new Error(`additionalTokenAccountAddress not set`);
     }
 
     if (!this.outflowAmount) {
@@ -1781,7 +1752,7 @@ export class KaminoAction {
           borrowReserve: this.outflowReserve.address,
           borrowReserveLiquidityMint: this.outflowReserve.getLiquidityMint(),
           reserveSourceLiquidity: this.outflowReserve.state.liquidity.supplyVault,
-          userDestinationLiquidity: this.additionalTokenAccountAddress,
+          userDestinationLiquidity: this.getUserTokenAccountAddress(this.outflowReserve),
           borrowReserveLiquidityFeeReceiver: this.outflowReserve.state.liquidity.feeVault,
           referrerTokenState: referrerTokenStatePda(
             this.referrer,
@@ -1823,7 +1794,7 @@ export class KaminoAction {
         lendingMarket: this.kaminoMarket.getAddress(),
         repayReserve: this.reserve!.address,
         reserveLiquidityMint: this.reserve.getLiquidityMint(),
-        userSourceLiquidity: this.userTokenAccountAddress,
+        userSourceLiquidity: this.getUserTokenAccountAddress(this.reserve),
         reserveDestinationLiquidity: this.reserve.state.liquidity.supplyVault,
         tokenProgram: this.reserve.getLiquidityTokenProgram(),
         instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
@@ -1836,10 +1807,6 @@ export class KaminoAction {
     this.lendingIxs.push(repayIx);
     if (!this.outflowReserve) {
       throw new Error(`outflowReserve not set`);
-    }
-
-    if (!this.additionalTokenAccountAddress) {
-      throw new Error(`additionalTokenAccountAddress not set`);
     }
 
     if (!this.outflowAmount) {
@@ -1861,7 +1828,7 @@ export class KaminoAction {
           reserveCollateralMint: this.outflowReserve.getCTokenMint(),
           reserveLiquiditySupply: this.outflowReserve.state.liquidity.supplyVault,
           reserveSourceCollateral: this.outflowReserve.state.collateral.supplyVault,
-          userDestinationLiquidity: this.additionalTokenAccountAddress,
+          userDestinationLiquidity: this.getUserTokenAccountAddress(this.outflowReserve),
           placeholderUserDestinationCollateral: this.kaminoMarket.programId,
           collateralTokenProgram: TOKEN_PROGRAM_ID,
           liquidityTokenProgram: this.outflowReserve.getLiquidityTokenProgram(),
@@ -1905,7 +1872,7 @@ export class KaminoAction {
           lendingMarket: this.kaminoMarket.getAddress(),
           repayReserve: this.reserve!.address,
           reserveLiquidityMint: this.reserve.getLiquidityMint(),
-          userSourceLiquidity: this.userTokenAccountAddress,
+          userSourceLiquidity: this.getUserTokenAccountAddress(this.reserve),
           reserveDestinationLiquidity: this.reserve.state.liquidity.supplyVault,
           tokenProgram: this.reserve.getLiquidityTokenProgram(),
           instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
@@ -1922,10 +1889,6 @@ export class KaminoAction {
     this.lendingIxs.push(repayIx);
     if (!this.outflowReserve) {
       throw new Error(`outflowReserve not set`);
-    }
-
-    if (!this.additionalTokenAccountAddress) {
-      throw new Error(`additionalTokenAccountAddress not set`);
     }
 
     if (!this.outflowAmount) {
@@ -1961,7 +1924,7 @@ export class KaminoAction {
             reserveCollateralMint: this.outflowReserve.getCTokenMint(),
             reserveLiquiditySupply: this.outflowReserve.state.liquidity.supplyVault,
             reserveSourceCollateral: this.outflowReserve.state.collateral.supplyVault,
-            userDestinationLiquidity: this.additionalTokenAccountAddress,
+            userDestinationLiquidity: this.getUserTokenAccountAddress(this.outflowReserve),
             placeholderUserDestinationCollateral: this.kaminoMarket.programId,
             collateralTokenProgram: TOKEN_PROGRAM_ID,
             liquidityTokenProgram: this.outflowReserve.getLiquidityTokenProgram(),
@@ -1979,9 +1942,6 @@ export class KaminoAction {
     this.lendingIxsLabels.push(`liquidateObligationAndRedeemReserveCollateral`);
     if (!this.outflowReserve) {
       throw Error(`Withdraw reserve during liquidation is not defined`);
-    }
-    if (!this.additionalTokenAccountAddress) {
-      throw Error(`Liquidating token account address is not defined`);
     }
 
     const depositReservesList = this.getAdditionalDepositReservesList();
@@ -2009,9 +1969,9 @@ export class KaminoAction {
         withdrawReserveCollateralMint: this.outflowReserve.getCTokenMint(),
         withdrawReserveCollateralSupply: this.outflowReserve.state.collateral.supplyVault,
         withdrawReserveLiquiditySupply: this.outflowReserve.state.liquidity.supplyVault,
-        userSourceLiquidity: this.additionalTokenAccountAddress,
-        userDestinationCollateral: this.userCollateralAccountAddress,
-        userDestinationLiquidity: this.userTokenAccountAddress,
+        userSourceLiquidity: this.getUserTokenAccountAddress(this.reserve),
+        userDestinationCollateral: this.getUserCollateralAccountAddress(this.outflowReserve),
+        userDestinationLiquidity: this.getUserTokenAccountAddress(this.outflowReserve),
         withdrawReserveLiquidityFeeReceiver: this.outflowReserve.state.liquidity.feeVault,
         collateralTokenProgram: TOKEN_PROGRAM_ID,
         repayLiquidityTokenProgram: this.reserve.getLiquidityTokenProgram(),
@@ -2031,9 +1991,6 @@ export class KaminoAction {
     this.lendingIxsLabels.push(`liquidateObligationAndRedeemReserveCollateralV2`);
     if (!this.outflowReserve) {
       throw Error(`Withdraw reserve during liquidation is not defined`);
-    }
-    if (!this.additionalTokenAccountAddress) {
-      throw Error(`Liquidating token account address is not defined`);
     }
 
     const depositReservesList = this.getAdditionalDepositReservesList();
@@ -2085,9 +2042,9 @@ export class KaminoAction {
           withdrawReserveCollateralMint: this.outflowReserve.getCTokenMint(),
           withdrawReserveCollateralSupply: this.outflowReserve.state.collateral.supplyVault,
           withdrawReserveLiquiditySupply: this.outflowReserve.state.liquidity.supplyVault,
-          userSourceLiquidity: this.additionalTokenAccountAddress,
-          userDestinationCollateral: this.userCollateralAccountAddress,
-          userDestinationLiquidity: this.userTokenAccountAddress,
+          userSourceLiquidity: this.getUserTokenAccountAddress(this.reserve),
+          userDestinationCollateral: this.getUserCollateralAccountAddress(this.outflowReserve),
+          userDestinationLiquidity: this.getUserTokenAccountAddress(this.outflowReserve),
           withdrawReserveLiquidityFeeReceiver: this.outflowReserve.state.liquidity.feeVault,
           collateralTokenProgram: TOKEN_PROGRAM_ID,
           repayLiquidityTokenProgram: this.reserve.getLiquidityTokenProgram(),
@@ -2920,7 +2877,7 @@ export class KaminoAction {
         reserveLiquidityMint: this.reserve.getLiquidityMint(),
         referrerTokenState: referrerTokenStateAddress,
         reserveSupplyLiquidity: this.reserve.state.liquidity.supplyVault,
-        referrerTokenAccount: this.userTokenAccountAddress,
+        referrerTokenAccount: this.getUserTokenAccountAddress(this.reserve),
         lendingMarketAuthority: this.kaminoMarket.getLendingMarketAuthority(),
         tokenProgram: this.reserve.getLiquidityTokenProgram(),
       },
@@ -2947,7 +2904,7 @@ export class KaminoAction {
         this.reserve.getLiquidityMint(),
         this.owner,
         this.reserve.getLiquidityTokenProgram(),
-        this.userTokenAccountAddress
+        this.getUserTokenAccountAddress(this.reserve)
       );
 
       this.setupIxs.unshift(createUserTokenAccountIx);
@@ -2956,7 +2913,7 @@ export class KaminoAction {
 
     if (action === 'liquidate') {
       if (!this.outflowReserve) {
-        throw new Error(`Outflow reserve state not found ${this.mint}`);
+        throw new Error(`Outflow reserve state not found ${this.secondaryMint}`);
       }
 
       const [, createUserTokenAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
@@ -2964,40 +2921,36 @@ export class KaminoAction {
         this.outflowReserve.getLiquidityMint(),
         this.owner,
         this.outflowReserve.getLiquidityTokenProgram(),
-        this.userTokenAccountAddress
+        this.getUserTokenAccountAddress(this.outflowReserve)
       );
 
       this.setupIxs.unshift(createUserTokenAccountIx);
-      this.setupIxsLabels.unshift(`CreateUserAta[${this.userTokenAccountAddress.toBase58()}]`);
+      this.setupIxsLabels.unshift(`CreateUserAta[${this.getUserTokenAccountAddress(this.outflowReserve).toBase58()}]`);
 
       const [, createUserCollateralAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
         this.owner,
         this.outflowReserve.getCTokenMint(),
         this.owner,
         TOKEN_PROGRAM_ID,
-        this.userCollateralAccountAddress
+        this.getUserCollateralAccountAddress(this.outflowReserve)
       );
 
       this.setupIxs.unshift(createUserCollateralAccountIx);
-      this.setupIxsLabels.unshift(`CreateCollateralUserAta[${this.userCollateralAccountAddress.toString()}]`);
-
-      if (!this.additionalTokenAccountAddress) {
-        throw new Error(`Additional token account address not found ${this.mint}`);
-      }
+      this.setupIxsLabels.unshift(
+        `CreateCollateralUserAta[${this.getUserCollateralAccountAddress(this.outflowReserve).toString()}]`
+      );
     }
 
     if (action === 'depositAndBorrow' || (action === 'repayAndWithdraw' && !this.secondaryMint?.equals(NATIVE_MINT))) {
-      if (!this.additionalTokenAccountAddress) {
-        throw new Error(`Additional token account address not found ${this.secondaryMint}`);
-      }
-
       if (!this.outflowReserve) {
         throw new Error(`Outflow reserve state not found ${this.mint}`);
       }
 
+      const additionalUserTokenAccountAddress = this.getUserTokenAccountAddress(this.outflowReserve);
+
       const additionalUserTokenAccountInfo = await this.kaminoMarket
         .getConnection()
-        .getAccountInfo(this.additionalTokenAccountAddress);
+        .getAccountInfo(additionalUserTokenAccountAddress);
 
       if (!additionalUserTokenAccountInfo) {
         const [, createUserTokenAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
@@ -3005,7 +2958,7 @@ export class KaminoAction {
           this.outflowReserve.getLiquidityMint(),
           this.owner,
           this.outflowReserve.getLiquidityTokenProgram(),
-          this.additionalTokenAccountAddress
+          additionalUserTokenAccountAddress
         );
 
         this.setupIxs.unshift(createUserTokenAccountIx);
@@ -3019,23 +2972,24 @@ export class KaminoAction {
         this.reserve.getLiquidityMint(),
         this.owner,
         this.reserve.getLiquidityTokenProgram(),
-        this.userTokenAccountAddress
+        this.getUserTokenAccountAddress(this.reserve)
       );
       this.preTxnIxs.push(createUserTokenAccountIx);
-      this.preTxnIxsLabels.push(`CreateUserAta[${this.userTokenAccountAddress.toBase58()}]`);
+      this.preTxnIxsLabels.push(`CreateUserAta[${this.getUserTokenAccountAddress(this.reserve).toBase58()}]`);
     }
     if (action === 'mint') {
-      const collateralMintPubkey = this.reserve.getCTokenMint();
       const [, createUserCollateralAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
         this.owner,
-        collateralMintPubkey,
+        this.reserve.getCTokenMint(),
         this.owner,
         TOKEN_PROGRAM_ID,
-        this.userCollateralAccountAddress
+        this.getUserCollateralAccountAddress(this.reserve)
       );
 
       this.setupIxs.unshift(createUserCollateralAccountIx);
-      this.setupIxsLabels.unshift(`CreateCollateralUserAta[${this.userCollateralAccountAddress.toString()}]`);
+      this.setupIxsLabels.unshift(
+        `CreateCollateralUserAta[${this.getUserCollateralAccountAddress(this.reserve).toString()}]`
+      );
     }
   }
 
@@ -3077,12 +3031,14 @@ export class KaminoAction {
       );
     }
 
-    let userTokenAccountAddress = this.userTokenAccountAddress;
+    let userTokenAccountAddress = this.getUserTokenAccountAddress(this.reserve);
     if (this.secondaryMint?.equals(NATIVE_MINT)) {
-      if (!this.additionalTokenAccountAddress) {
-        throw new Error(`Additional token account address not found ${this.secondaryMint}`);
+      if (!this.outflowReserve) {
+        throw new Error(`Outflow reserve state not found ${this.secondaryMint}`);
       }
-      userTokenAccountAddress = this.additionalTokenAccountAddress;
+
+      const additionalUserTokenAccountAddress = this.getUserTokenAccountAddress(this.outflowReserve);
+      userTokenAccountAddress = additionalUserTokenAccountAddress;
     }
 
     const userWSOLAccountInfo = await this.kaminoMarket.getConnection().getAccountInfo(userTokenAccountAddress);
@@ -3094,7 +3050,7 @@ export class KaminoAction {
       action === 'deposit' ||
       action === 'repay' ||
       action === 'mint' ||
-      (action === 'liquidate' && this.secondaryMint?.equals(NATIVE_MINT)); // only sync WSOL amount if liquidator repays SOL which is secondaryMint
+      (action === 'liquidate' && this.mint?.equals(NATIVE_MINT)); // only sync WSOL amount if liquidator repays SOL which is secondaryMint
 
     const transferLamportsIx = SystemProgram.transfer({
       fromPubkey: this.owner,
@@ -3163,16 +3119,6 @@ export class KaminoAction {
       throw new Error('reserve states are not fetched');
     }
 
-    const {
-      userTokenAccountAddress: userOutflowTokenAccountAddress,
-      userCollateralAccountAddress: userOutflowCollateralAccountAddress,
-    } = KaminoAction.getUserAccountAddresses(payer, outflowReserve.state);
-
-    const {
-      userTokenAccountAddress: userInflowTokenAccountAddress,
-      userCollateralAccountAddress: userInflowCollateralAccountAddress,
-    } = KaminoAction.getUserAccountAddresses(payer, inflowReserve.state);
-
     const { kaminoObligation, depositReserves, borrowReserves, distinctReserveCount } =
       await KaminoAction.loadObligation(
         action,
@@ -3184,30 +3130,12 @@ export class KaminoAction {
       );
     const referrerKey = await this.getReferrerKey(kaminoMarket, payer, kaminoObligation, referrer);
 
-    let userTokenAccountAddress: PublicKey;
-    let userCollateralAccountAddress: PublicKey;
-    let additionalUserTokenAccountAddress: PublicKey;
     let secondaryMint: PublicKey;
     let primaryMint: PublicKey;
 
-    if (action === 'liquidate') {
-      userTokenAccountAddress = userOutflowTokenAccountAddress;
-      userCollateralAccountAddress = userOutflowCollateralAccountAddress;
-      additionalUserTokenAccountAddress = userInflowTokenAccountAddress;
-      primaryMint = outflowTokenMint;
-      secondaryMint = inflowTokenMint;
-    } else if (action === 'depositAndBorrow') {
-      userTokenAccountAddress = userInflowTokenAccountAddress;
-      userCollateralAccountAddress = userInflowCollateralAccountAddress;
-      additionalUserTokenAccountAddress = userOutflowTokenAccountAddress;
+    if (action === 'liquidate' || action === 'depositAndBorrow' || action === 'repayAndWithdraw') {
       primaryMint = inflowTokenMint;
       secondaryMint = outflowTokenMint;
-    } else if (action === 'repayAndWithdraw') {
-      primaryMint = inflowTokenMint;
-      secondaryMint = outflowTokenMint;
-      userTokenAccountAddress = userInflowTokenAccountAddress;
-      userCollateralAccountAddress = userOutflowCollateralAccountAddress;
-      additionalUserTokenAccountAddress = userOutflowTokenAccountAddress;
     } else {
       throw new Error('Invalid action');
     }
@@ -3216,8 +3144,6 @@ export class KaminoAction {
       kaminoMarket,
       payer,
       kaminoObligation || obligation,
-      userTokenAccountAddress,
-      userCollateralAccountAddress,
       primaryMint,
       distinctReserveCount,
       inflowAmount,
@@ -3226,7 +3152,6 @@ export class KaminoAction {
       inflowReserve,
       currentSlot,
       secondaryMint,
-      additionalUserTokenAccountAddress,
       outflowReserve,
       outflowAmount,
       referrerKey
@@ -3244,22 +3169,18 @@ export class KaminoAction {
       throw new Error(`Reserve ${mint} not found in market ${kaminoMarket.getAddress().toBase58()}`);
     }
 
-    const [{ ata, createAtaIx }] = createAtasIdempotent(owner, [
+    const [{ createAtaIx }] = createAtasIdempotent(owner, [
       {
         mint: reserve.getLiquidityMint(),
         tokenProgram: reserve.getLiquidityTokenProgram(),
       },
     ]);
 
-    const userTokenAccountAddress = ata;
-
     return {
       axn: new KaminoAction(
         kaminoMarket,
         owner,
         new VanillaObligation(kaminoMarket.programId),
-        userTokenAccountAddress,
-        PublicKey.default,
         mint,
         0,
         new BN(0),
@@ -3336,6 +3257,18 @@ export class KaminoAction {
     return referrerKey;
   }
 
+  getUserTokenAccountAddress(reserve: KaminoReserve): PublicKey {
+    return getAssociatedTokenAddress(reserve.getLiquidityMint(), this.owner, true, reserve.getLiquidityTokenProgram());
+  }
+
+  getTokenAccountAddressByUser(reserve: KaminoReserve, user: PublicKey): PublicKey {
+    return getAssociatedTokenAddress(reserve.getLiquidityMint(), user, true, reserve.getLiquidityTokenProgram());
+  }
+
+  getUserCollateralAccountAddress(reserve: KaminoReserve): PublicKey {
+    return getAssociatedTokenAddress(reserve.getCTokenMint(), this.owner, true);
+  }
+
   public static actionToIxs(action: KaminoAction): Array<TransactionInstruction> {
     const ixs: TransactionInstruction[] = [...action.computeBudgetIxs, ...action.setupIxs];
     ixs.push(...KaminoAction.actionToLendingIxs(action));
@@ -3362,13 +3295,13 @@ export class KaminoAction {
   }
 
   public static actionToLendingIxLabels(action: KaminoAction): Array<string> {
-    const lables: string[] = [];
+    const labels: string[] = [];
     for (let i = 0; i < action.lendingIxsLabels.length; i++) {
-      lables.push(action.lendingIxsLabels[i]);
+      labels.push(action.lendingIxsLabels[i]);
       if (i !== action.lendingIxsLabels.length - 1) {
-        lables.push(...action.inBetweenIxsLabels);
+        labels.push(...action.inBetweenIxsLabels);
       }
     }
-    return lables;
+    return labels;
   }
 }

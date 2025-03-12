@@ -1,6 +1,7 @@
 import Decimal from 'decimal.js';
 import { PROGRAM_ID } from '../idl_codegen/programId';
 import { PublicKey } from '@solana/web3.js';
+import BN from 'bn.js';
 
 export const STAGING_PROGRAM_ID: PublicKey = new PublicKey('SLendK7ySfcEzyaFqy93gDnD3RtrpXJcnRwb6zFHJSh');
 export const DEFAULT_KLEND_PROGRAM_ID: string = PROGRAM_ID.toString();
@@ -80,6 +81,11 @@ export const BORROWS_LIMIT = 5;
 export const DEPOSITS_LIMIT = 8;
 
 export const DEFAULT_MAX_COMPUTE_UNITS = 1_400_000;
+
+/**
+ * Padding for safe interest calculations
+ */
+export const SOL_PADDING_FOR_INTEREST = new BN('1000000');
 
 /**
  * Minimum initial deposit required for the initialization of a reserve
