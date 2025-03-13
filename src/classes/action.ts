@@ -136,12 +136,6 @@ export class KaminoAction {
   cleanupIxs: Array<TransactionInstruction>;
   cleanupIxsLabels: Array<string>;
 
-  preTxnIxs: Array<TransactionInstruction>;
-  preTxnIxsLabels: Array<string>;
-
-  postTxnIxs: Array<TransactionInstruction>;
-  postTxnIxsLabels: Array<string>;
-
   refreshFarmsCleanupTxnIxs: Array<TransactionInstruction>;
   refreshFarmsCleanupTxnIxsLabels: Array<string>;
 
@@ -191,10 +185,6 @@ export class KaminoAction {
     this.lendingIxsLabels = [];
     this.cleanupIxs = [];
     this.cleanupIxsLabels = [];
-    this.preTxnIxs = [];
-    this.preTxnIxsLabels = [];
-    this.postTxnIxs = [];
-    this.postTxnIxsLabels = [];
     this.refreshFarmsCleanupTxnIxs = [];
     this.refreshFarmsCleanupTxnIxsLabels = [];
     this.depositReserves = depositReserves;
@@ -1034,8 +1024,8 @@ export class KaminoAction {
       currentSlot
     );
 
-    axn.preTxnIxs.push(...createAtaIxs);
-    axn.preTxnIxsLabels.push(`createAtasIxs[${axn.owner.toString()}]`);
+    axn.setupIxs.push(...createAtaIxs);
+    axn.setupIxsLabels.push(`createAtasIxs[${axn.owner.toString()}]`);
 
     if (!axn.referrer.equals(PublicKey.default)) {
       const referrerTokenState = referrerTokenStatePda(
@@ -1055,25 +1045,10 @@ export class KaminoAction {
   }
 
   async getTransactions() {
-    const txns: {
-      preLendingTxn: Transaction | null;
-      lendingTxn: Transaction | null;
-      postLendingTxn: Transaction | null;
-    } = {
-      preLendingTxn: null,
-      lendingTxn: null,
-      postLendingTxn: null,
-    };
-
-    if (this.preTxnIxs.length) {
-      txns.preLendingTxn = new Transaction({
-        feePayer: this.owner,
-        recentBlockhash: (await this.kaminoMarket.getConnection().getLatestBlockhash()).blockhash,
-      }).add(...this.preTxnIxs);
-    }
+    let txns: Transaction;
 
     if (this.lendingIxs.length === 2) {
-      txns.lendingTxn = new Transaction({
+      txns = new Transaction({
         feePayer: this.owner,
         recentBlockhash: (await this.kaminoMarket.getConnection().getLatestBlockhash()).blockhash,
       }).add(
@@ -1084,17 +1059,10 @@ export class KaminoAction {
         ...this.cleanupIxs
       );
     } else {
-      txns.lendingTxn = new Transaction({
+      txns = new Transaction({
         feePayer: this.owner,
         recentBlockhash: (await this.kaminoMarket.getConnection().getLatestBlockhash()).blockhash,
       }).add(...this.setupIxs, ...this.lendingIxs, ...this.cleanupIxs);
-    }
-
-    if (this.postTxnIxs.length) {
-      txns.postLendingTxn = new Transaction({
-        feePayer: this.owner,
-        recentBlockhash: (await this.kaminoMarket.getConnection().getLatestBlockhash()).blockhash,
-      }).add(...this.postTxnIxs);
     }
 
     return txns;
@@ -1103,11 +1071,7 @@ export class KaminoAction {
   async sendTransactions(sendTransaction: (txn: Transaction, connection: Connection) => Promise<TransactionSignature>) {
     const txns = await this.getTransactions();
 
-    await this.sendSingleTransaction(txns.preLendingTxn, sendTransaction);
-
-    const signature = await this.sendSingleTransaction(txns.lendingTxn, sendTransaction);
-
-    await this.sendSingleTransaction(txns.postLendingTxn, sendTransaction);
+    const signature = await this.sendSingleTransaction(txns, sendTransaction);
 
     return signature;
   }
@@ -1132,11 +1096,7 @@ export class KaminoAction {
   ) {
     const txns = await this.getTransactions();
 
-    await this.simulateSingleTransaction(txns.preLendingTxn, sendTransaction);
-
-    const signature = await this.simulateSingleTransaction(txns.lendingTxn, sendTransaction);
-
-    await this.simulateSingleTransaction(txns.postLendingTxn, sendTransaction);
+    const signature = await this.simulateSingleTransaction(txns, sendTransaction);
 
     return signature;
   }
@@ -2974,8 +2934,8 @@ export class KaminoAction {
         this.reserve.getLiquidityTokenProgram(),
         this.getUserTokenAccountAddress(this.reserve)
       );
-      this.preTxnIxs.push(createUserTokenAccountIx);
-      this.preTxnIxsLabels.push(`CreateUserAta[${this.getUserTokenAccountAddress(this.reserve).toBase58()}]`);
+      this.setupIxs.unshift(createUserTokenAccountIx);
+      this.setupIxsLabels.unshift(`CreateUserAta[${this.getUserTokenAccountAddress(this.reserve).toBase58()}]`);
     }
     if (action === 'mint') {
       const [, createUserCollateralAccountIx] = createAssociatedTokenAccountIdempotentInstruction(
