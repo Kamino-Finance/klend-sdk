@@ -62,9 +62,17 @@ async function main() {
     .option(`--rpc <string>`, 'The RPC URL')
     .action(async ({ rpc }) => {
       const connection = new Connection(rpc, {});
-      for await (const lendingMarketAccount of getAllLendingMarketAccounts(connection)) {
-        console.log(toJson(lendingMarketAccount.toJSON()));
+      let count = 0;
+      for await (const [address, lendingMarketAccount] of getAllLendingMarketAccounts(connection)) {
+        count++;
+        console.log(
+          address.toString(),
+          lendingMarketAccount.riskCouncil.toString(),
+          lendingMarketAccount.autodeleverageEnabled,
+          lendingMarketAccount.individualAutodeleverageMarginCallPeriodSecs.toString()
+        );
       }
+      console.log(`Total lending markets: ${count}`);
     });
 
   commands
@@ -84,9 +92,17 @@ async function main() {
     .option(`--rpc <string>`, 'The RPC URL')
     .action(async ({ rpc }) => {
       const connection = new Connection(rpc, {});
-      for await (const obligationAccount of getAllObligationAccounts(connection)) {
-        console.log(toJson(obligationAccount.toJSON()));
+      let count = 0;
+      for await (const [address, obligationAccount] of getAllObligationAccounts(connection)) {
+        count++;
+        if (
+          obligationAccount.autodeleverageTargetLtvPct > 0 ||
+          obligationAccount.autodeleverageMarginCallStartedTimestamp.toNumber() > 0
+        ) {
+          console.log(address.toString(), toJson(obligationAccount.toJSON()));
+        }
       }
+      console.log(`Total obligations: ${count}`);
     });
 
   commands
@@ -104,9 +120,19 @@ async function main() {
     .option(`--rpc <string>`, 'The RPC URL')
     .action(async ({ rpc }) => {
       const connection = new Connection(rpc, {});
-      for await (const reserveAccount of getAllReserveAccounts(connection)) {
-        console.log(toJson(reserveAccount.toJSON()));
+      let count = 0;
+      const logItems: { address: string; value: string; index: number }[] = [];
+      for await (const [address, reserveAccount] of getAllReserveAccounts(connection)) {
+        count++;
+        const logItem = {
+          address: address.toString(),
+          value: reserveAccount.config.autodeleverageEnabled.toString(),
+          index: count,
+        };
+        logItems.push(logItem);
       }
+      console.log(`Total reserves: ${count}`);
+      console.log(logItems);
     });
 
   commands

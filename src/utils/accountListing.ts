@@ -1,9 +1,11 @@
-import { Connection } from '@solana/web3.js';
+import { Connection, PublicKey } from '@solana/web3.js';
 import { LendingMarket, Obligation, Reserve } from '../idl_codegen/accounts';
 import { PROGRAM_ID } from '../idl_codegen/programId';
 import bs58 from 'bs58';
 
-export async function* getAllObligationAccounts(connection: Connection): AsyncGenerator<Obligation, void, unknown> {
+export async function* getAllObligationAccounts(
+  connection: Connection
+): AsyncGenerator<[PublicKey, Obligation], void, unknown> {
   // Poor-man's paging...
   for (let i = 0; i < 256; i++) {
     const obligations = await connection.getProgramAccounts(PROGRAM_ID, {
@@ -26,12 +28,14 @@ export async function* getAllObligationAccounts(connection: Connection): AsyncGe
       ],
     });
     for (const obligation of obligations) {
-      yield Obligation.decode(obligation.account.data);
+      yield [obligation.pubkey, Obligation.decode(obligation.account.data)];
     }
   }
 }
 
-export async function* getAllReserveAccounts(connection: Connection): AsyncGenerator<Reserve, void, unknown> {
+export async function* getAllReserveAccounts(
+  connection: Connection
+): AsyncGenerator<[PublicKey, Reserve], void, unknown> {
   // due to relatively low count of reserves, we technically don't really need a generator, but let's keep it consistent within this file
   const reserves = await connection.getProgramAccounts(PROGRAM_ID, {
     filters: [
@@ -47,13 +51,13 @@ export async function* getAllReserveAccounts(connection: Connection): AsyncGener
     ],
   });
   for (const reserve of reserves) {
-    yield Reserve.decode(reserve.account.data);
+    yield [reserve.pubkey, Reserve.decode(reserve.account.data)];
   }
 }
 
 export async function* getAllLendingMarketAccounts(
   connection: Connection
-): AsyncGenerator<LendingMarket, void, unknown> {
+): AsyncGenerator<[PublicKey, LendingMarket], void, unknown> {
   // due to relatively very low count of lending markets, we technically don't really need a generator, but let's keep it consistent within this file
   const lendingMarkets = await connection.getProgramAccounts(PROGRAM_ID, {
     filters: [
@@ -69,6 +73,6 @@ export async function* getAllLendingMarketAccounts(
     ],
   });
   for (const lendingMarket of lendingMarkets) {
-    yield LendingMarket.decode(lendingMarket.account.data);
+    yield [lendingMarket.pubkey, LendingMarket.decode(lendingMarket.account.data)];
   }
 }
