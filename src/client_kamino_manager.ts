@@ -1020,6 +1020,21 @@ async function main() {
     });
 
   commands
+    .command('compute-alloc')
+    .requiredOption('--vault <string>', 'Vault address')
+    .action(async ({ vault }) => {
+      const env = initializeClient(false, false);
+
+      const vaultAddress = new PublicKey(vault);
+
+      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const vaultState = await new KaminoVault(vaultAddress, undefined, env.kVaultProgramId).getState(env.connection);
+
+      const computedAllocation = await kaminoManager.getVaultComputedReservesAllocation(vaultState);
+      console.log('computedAllocation', computedAllocation);
+    });
+
+  commands
     .command('download-lending-market-config-and-all-reserves-configs')
     .requiredOption('--lending-market <string>', 'Lending Market Address')
     .option(`--staging`, 'If true, will use the staging programs')

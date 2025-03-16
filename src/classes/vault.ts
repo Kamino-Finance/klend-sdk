@@ -1536,9 +1536,12 @@ export class KaminoVaultClient {
         const reserveWithWeight = initialVaultAllocations.get(reserve);
         const targetAllocation = reserveWithWeight!.targetWeight.mul(totalLeftover).div(currentAllocationSum);
         const reserveCap = reserveWithWeight!.tokenAllocationCap;
-        const amountToInvest = Decimal.min(targetAllocation, reserveCap, totalLeftToInvest);
+        let amountToInvest = Decimal.min(targetAllocation, totalLeftToInvest);
+        if (reserveCap.gt(ZERO)) {
+          amountToInvest = Decimal.min(amountToInvest, reserveCap);
+        }
         totalLeftToInvest = totalLeftToInvest.sub(amountToInvest);
-        if (amountToInvest.eq(reserveCap)) {
+        if (amountToInvest.eq(reserveCap) && reserveCap.gt(ZERO)) {
           currentAllocationSum = currentAllocationSum.sub(reserveWithWeight!.targetWeight);
         }
         const reserveHasPreallocation = expectedHoldingsDistribution.has(reserve);
