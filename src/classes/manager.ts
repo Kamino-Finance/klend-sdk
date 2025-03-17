@@ -462,10 +462,16 @@ export class KaminoManager {
    * @param payer - payer wallet pubkey
    * @param lookupTable - lookup table to insert the keys into
    * @param keys - keys to insert into the lookup table
+   * @param [accountsInLUT] - the existent accounts in the lookup table. Optional. If provided, the function will not fetch the accounts in the lookup table
    * @returns - an array of instructions to insert the missing keys into the lookup table
    */
-  async insertIntoLUTIxs(payer: PublicKey, lut: PublicKey, keys: PublicKey[]): Promise<TransactionInstruction[]> {
-    return this._vaultClient.insertIntoLookupTableIxs(payer, lut, keys);
+  async insertIntoLUTIxs(
+    payer: PublicKey,
+    lut: PublicKey,
+    keys: PublicKey[],
+    accountsInLUT?: PublicKey[]
+  ): Promise<TransactionInstruction[]> {
+    return this._vaultClient.insertIntoLookupTableIxs(payer, lut, keys, accountsInLUT);
   }
 
   /**

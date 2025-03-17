@@ -1460,14 +1460,16 @@ export class KaminoVaultClient {
     keys: PublicKey[],
     accountsInLUT?: PublicKey[]
   ): Promise<TransactionInstruction[]> {
-    let lutContents = accountsInLUT;
+    let lutContentsList = accountsInLUT;
     if (!accountsInLUT) {
-      lutContents = await getAccountsInLUT(this.getConnection(), lookupTable);
+      lutContentsList = await getAccountsInLUT(this.getConnection(), lookupTable);
     } else {
-      lutContents = accountsInLUT;
+      lutContentsList = accountsInLUT;
     }
 
-    const missingAccounts = keys.filter((key) => !lutContents!.includes(key) && !key.equals(PublicKey.default));
+    const lutContents = new PublicKeySet(lutContentsList);
+
+    const missingAccounts = keys.filter((key) => !lutContents.contains(key) && !key.equals(PublicKey.default));
     // deduplicate missing accounts and remove default accounts and convert it back to an array
     const missingAccountsList = new PublicKeySet(missingAccounts).toArray();
 
