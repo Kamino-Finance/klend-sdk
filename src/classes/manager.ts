@@ -595,7 +595,7 @@ export class KaminoManager {
 
     const markets = await Promise.all(
       lendingMarketsAccounts.map((account) =>
-        KaminoMarket.load(this._connection, account.pubkey, this.recentSlotDurationMs, this._kaminoLendProgramId, false)
+        KaminoMarket.load(this._connection, account.pubkey, this.recentSlotDurationMs, this._kaminoLendProgramId)
       )
     );
     return markets.filter((market): market is KaminoMarket => market !== null);
