@@ -266,18 +266,18 @@ function getMultiplyObligationAndObligationFarmStateAddresses(
       if (!collReserve.state.farmCollateral.equals(PublicKey.default)) {
         farmUserStates.push({
           address: obligationFarmStatePda(
-            multiplyObligation.toPda(kaminoMarket.getAddress(), user),
-            collReserve.state.farmCollateral!
-          )[0],
+            collReserve.state.farmCollateral!,
+            multiplyObligation.toPda(kaminoMarket.getAddress(), user)
+          ),
           log: 'collReserve farmState for multiply obligation coll: ' + collMintString + ' debt: ' + debtMintString,
         });
       }
       if (!debtReserve.state.farmDebt.equals(PublicKey.default)) {
         farmUserStates.push({
           address: obligationFarmStatePda(
-            multiplyObligation.toPda(kaminoMarket.getAddress(), user),
-            debtReserve.state.farmDebt!
-          )[0],
+            debtReserve.state.farmDebt!,
+            multiplyObligation.toPda(kaminoMarket.getAddress(), user)
+          ),
           log: 'debtReserve farmState for multiply obligation coll: ' + collMintString + ' debt: ' + debtMintString,
         });
       }
@@ -309,18 +309,18 @@ function getLeverageObligationAndObligationFarmStateAddresses(
       if (!collReserve.state.farmCollateral.equals(PublicKey.default)) {
         farmUserStates.push({
           address: obligationFarmStatePda(
-            leverageObligation.toPda(kaminoMarket.getAddress(), user),
-            collReserve.state.farmCollateral!
-          )[0],
+            collReserve.state.farmCollateral!,
+            leverageObligation.toPda(kaminoMarket.getAddress(), user)
+          ),
           log: 'collReserve farmState for leverage obligation coll: ' + collMintString + ' debt: ' + debtMintString,
         });
       }
       if (!debtReserve.state.farmDebt.equals(PublicKey.default)) {
         farmUserStates.push({
           address: obligationFarmStatePda(
-            leverageObligation.toPda(kaminoMarket.getAddress(), user),
-            debtReserve.state.farmDebt!
-          )[0],
+            debtReserve.state.farmDebt!,
+            leverageObligation.toPda(kaminoMarket.getAddress(), user)
+          ),
           log: 'debtReserve farmState for leverage obligation coll: ' + collMintString + ' debt: ' + debtMintString,
         });
       }
@@ -341,7 +341,7 @@ function getRepayWithCollObligationFarmStateAddresses(
     const borrowReserve = kaminoMarket.getReserveByMint(borrow.mintAddress)!;
     if (!borrowReserve.state.farmDebt.equals(PublicKey.default)) {
       farmUserStates.push({
-        address: obligationFarmStatePda(obligation.obligationAddress, borrowReserve.state.farmDebt!)[0],
+        address: obligationFarmStatePda(borrowReserve.state.farmDebt!, obligation.obligationAddress),
         log: 'debtReserve farmState for vanilla obligation: ' + obligationString,
       });
     }
@@ -351,7 +351,7 @@ function getRepayWithCollObligationFarmStateAddresses(
     const depositReserve = kaminoMarket.getReserveByMint(deposit.mintAddress)!;
     if (!depositReserve.state.farmCollateral.equals(PublicKey.default)) {
       farmUserStates.push({
-        address: obligationFarmStatePda(obligation.obligationAddress, depositReserve.state.farmCollateral!)[0],
+        address: obligationFarmStatePda(depositReserve.state.farmCollateral!, obligation.obligationAddress),
         log: 'collReserve farmState for vanilla obligation' + obligationString,
       });
     }

@@ -267,7 +267,7 @@ export class KaminoObligation {
   /**
    * @returns total borrow power of the obligation, relative to max LTV of each asset's reserve
    */
-  getAllowedBorrowValue(): Decimal {
+  getMaxAllowedBorrowValue(): Decimal {
     return new Fraction(this.state.allowedBorrowValueSf).toDecimal();
   }
 

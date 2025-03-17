@@ -38,6 +38,10 @@ export const BASE_SEED_REFERRER_STATE = 'ref_state';
  * Short url seed
  */
 export const BASE_SEED_SHORT_URL = 'short_url';
+/**
+ * Farm user state seed
+ */
+export const BASE_SEED_USER_STATE = 'user';
 
 /**
  * User farm state seed
@@ -188,9 +192,15 @@ export function shortUrlPda(shortUrl: string, programId: PublicKey = PROGRAM_ID)
   return PublicKey.findProgramAddressSync([Buffer.from(BASE_SEED_SHORT_URL), Buffer.from(shortUrl)], programId);
 }
 
-export function obligationFarmStatePda(obligation: PublicKey, farm: PublicKey, programId: PublicKey = farmsId) {
+/**
+ * Returns the PDA for the obligation farm state
+ * @param farm
+ * @param obligation
+ * @returns pda
+ */
+export function obligationFarmStatePda(farm: PublicKey, obligation: PublicKey) {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from(BASE_SEED_FARM_USER_STATE), farm.toBuffer(), obligation.toBuffer()],
-    programId
-  );
+    [Buffer.from(BASE_SEED_USER_STATE), farm.toBytes(), obligation.toBytes()],
+    farmsId
+  )[0];
 }

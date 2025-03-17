@@ -82,7 +82,7 @@ import {
 import { batchFetch, collToLamportsDecimal, ZERO } from '@kamino-finance/kliquidity-sdk';
 import { FullBPSDecimal } from '@kamino-finance/kliquidity-sdk/dist/utils/CreationParameters';
 import { FarmState } from '@kamino-finance/farms-sdk/dist';
-import { getAccountsInLUT, initLookupTableIx } from './lut_utils';
+import { getAccountsInLUT, initLookupTableIx } from '../utils/lookupTable';
 import {
   getFarmStakeIxs,
   getFarmUnstakeAndWithdrawIxs,

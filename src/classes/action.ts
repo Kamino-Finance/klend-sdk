@@ -21,6 +21,7 @@ import BN from 'bn.js';
 import Decimal from 'decimal.js';
 import {
   borrowObligationLiquidity,
+  depositAndWithdraw,
   borrowObligationLiquidityV2,
   depositObligationCollateral,
   depositObligationCollateralV2,
@@ -41,6 +42,7 @@ import {
   RefreshObligationFarmsForReserveAccounts,
   RefreshObligationFarmsForReserveArgs,
   refreshReserve,
+  repayAndWithdrawAndRedeem,
   repayObligationLiquidity,
   repayObligationLiquidityV2,
   requestElevationGroup,
@@ -89,7 +91,9 @@ export type ActionType =
   | 'repayAndWithdraw'
   | 'refreshObligation'
   | 'requestElevationGroup'
-  | 'withdrawReferrerFees';
+  | 'withdrawReferrerFees'
+  | 'repayAndWithdrawV2'
+  | 'depositAndWithdraw';
 
 export type AuxiliaryIx = 'setup' | 'inBetween' | 'cleanup';
 
@@ -737,6 +741,112 @@ export class KaminoAction {
     return axn;
   }
 
+  static async buildDepositAndWithdrawV2Txns(
+    kaminoMarket: KaminoMarket,
+    depositAmount: string | BN,
+    depositMint: PublicKey,
+    withdrawAmount: string | BN,
+    withdrawMint: PublicKey,
+    payer: PublicKey,
+    currentSlot: number,
+    obligation: KaminoObligation | ObligationType,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
+    includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
+    requestElevationGroup: boolean = false,
+    includeUserMetadata: boolean = true, // if true it includes user metadata,
+    createLookupTable: boolean = true,
+    referrer: PublicKey = PublicKey.default
+  ) {
+    const axn = await KaminoAction.initializeMultiTokenAction(
+      kaminoMarket,
+      'depositAndWithdraw',
+      depositAmount,
+      depositMint,
+      withdrawMint,
+      payer,
+      payer,
+      obligation,
+      withdrawAmount,
+      referrer,
+      currentSlot
+    );
+    const addInitObligationForFarm = true;
+    const twoTokenAction = true;
+    if (extraComputeBudget > 0) {
+      axn.addComputeBudgetIxn(extraComputeBudget);
+    }
+
+    await axn.addSupportIxs(
+      'depositAndWithdraw',
+      includeAtaIxns,
+      requestElevationGroup,
+      includeUserMetadata,
+      addInitObligationForFarm,
+      true,
+      scopeRefreshConfig,
+      createLookupTable,
+      twoTokenAction
+    );
+    const withdrawCollateralAmount = axn.getWithdrawCollateralAmount(axn.outflowReserve!, axn.outflowAmount!);
+    axn.addDepositAndWithdrawV2Ixs(withdrawCollateralAmount);
+
+    return axn;
+  }
+
+  static async buildRepayAndWithdrawV2Txns(
+    kaminoMarket: KaminoMarket,
+    repayAmount: string | BN,
+    repayMint: PublicKey,
+    withdrawAmount: string | BN,
+    withdrawMint: PublicKey,
+    payer: PublicKey,
+    currentSlot: number,
+    obligation: KaminoObligation | ObligationType,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
+    includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
+    requestElevationGroup: boolean = false,
+    includeUserMetadata: boolean = true, // if true it includes user metadata,
+    createLookupTable: boolean = true,
+    referrer: PublicKey = PublicKey.default
+  ) {
+    const axn = await KaminoAction.initializeMultiTokenAction(
+      kaminoMarket,
+      'repayAndWithdrawV2',
+      repayAmount,
+      repayMint,
+      withdrawMint,
+      payer,
+      payer,
+      obligation,
+      withdrawAmount,
+      referrer,
+      currentSlot
+    );
+    const addInitObligationForFarm = true;
+    const twoTokenAction = true;
+    if (extraComputeBudget > 0) {
+      axn.addComputeBudgetIxn(extraComputeBudget);
+    }
+
+    await axn.addSupportIxs(
+      'repayAndWithdrawV2',
+      includeAtaIxns,
+      requestElevationGroup,
+      includeUserMetadata,
+      addInitObligationForFarm,
+      true,
+      scopeRefreshConfig,
+      createLookupTable,
+      twoTokenAction
+    );
+    const withdrawCollateralAmount = axn.getWithdrawCollateralAmount(axn.outflowReserve!, axn.outflowAmount!);
+    axn.addRepayAndWithdrawV2Ixs(withdrawCollateralAmount);
+
+    return axn;
+  }
+
   static async buildRepayAndWithdrawTxns(
     kaminoMarket: KaminoMarket,
     repayAmount: string | BN,
@@ -1200,10 +1310,7 @@ export class KaminoAction {
           reserveFarmState: this.kaminoMarket.programId,
         }
       : {
-          obligationFarmUserState: obligationFarmStatePda(
-            this.getObligationPda(),
-            this.reserve.state.farmCollateral
-          )[0],
+          obligationFarmUserState: obligationFarmStatePda(this.reserve.state.farmCollateral, this.getObligationPda()),
           reserveFarmState: this.reserve.state.farmCollateral,
         };
 
@@ -1268,10 +1375,7 @@ export class KaminoAction {
           reserveFarmState: this.kaminoMarket.programId,
         }
       : {
-          obligationFarmUserState: obligationFarmStatePda(
-            this.getObligationPda(),
-            this.reserve.state.farmCollateral
-          )[0],
+          obligationFarmUserState: obligationFarmStatePda(this.reserve.state.farmCollateral, this.getObligationPda()),
           reserveFarmState: this.reserve.state.farmCollateral,
         };
 
@@ -1353,7 +1457,7 @@ export class KaminoAction {
           reserveFarmState: this.kaminoMarket.programId,
         }
       : {
-          obligationFarmUserState: obligationFarmStatePda(this.getObligationPda(), this.reserve.state.farmDebt)[0],
+          obligationFarmUserState: obligationFarmStatePda(this.reserve.state.farmDebt, this.getObligationPda()),
           reserveFarmState: this.reserve.state.farmDebt,
         };
 
@@ -1428,10 +1532,7 @@ export class KaminoAction {
           reserveFarmState: this.kaminoMarket.programId,
         }
       : {
-          obligationFarmUserState: obligationFarmStatePda(
-            this.getObligationPda(),
-            this.reserve.state.farmCollateral
-          )[0],
+          obligationFarmUserState: obligationFarmStatePda(this.reserve.state.farmCollateral, this.getObligationPda()),
           reserveFarmState: this.reserve.state.farmCollateral,
         };
 
@@ -1515,7 +1616,7 @@ export class KaminoAction {
           reserveFarmState: this.kaminoMarket.programId,
         }
       : {
-          obligationFarmUserState: obligationFarmStatePda(this.getObligationPda(), this.reserve.state.farmDebt)[0],
+          obligationFarmUserState: obligationFarmStatePda(this.reserve.state.farmDebt, this.getObligationPda()),
           reserveFarmState: this.reserve.state.farmDebt,
         };
     const depositReserveAccountMetas = depositReservesList.map((reserve) => {
@@ -1549,6 +1650,200 @@ export class KaminoAction {
       this.obligation!.state.elevationGroup > 0 ? repayIx.keys.concat([...depositReserveAccountMetas]) : repayIx.keys;
 
     this.lendingIxs.push(repayIx);
+  }
+
+  addRepayAndWithdrawV2Ixs(withdrawCollateralAmount: BN) {
+    this.lendingIxsLabels.push(
+      `repayAndWithdrawAndRedeem(repayReserve=${this.reserve!.address})(withdrawReserve=${
+        this.outflowReserve!.address
+      })(obligation=${this.getObligationPda()})`
+    );
+
+    const depositReservesList = this.getAdditionalDepositReservesList();
+
+    const depositReserveAccountMetas = depositReservesList.map((reserve) => {
+      return { pubkey: reserve, isSigner: false, isWritable: true };
+    });
+    const borrowReserveAccountMetas = this.borrowReserves.map((reserve) => {
+      return { pubkey: reserve, isSigner: false, isWritable: true };
+    });
+
+    if (!this.outflowAmount) {
+      throw new Error(`outflowAmount not set`);
+    }
+
+    if (!this.outflowReserve) {
+      throw new Error(`outflowReserve not set`);
+    }
+
+    const collateralFarmsAccounts = this.outflowReserve.state.farmCollateral.equals(PublicKey.default)
+      ? {
+          obligationFarmUserState: this.kaminoMarket.programId,
+          reserveFarmState: this.kaminoMarket.programId,
+        }
+      : {
+          obligationFarmUserState: obligationFarmStatePda(
+            this.outflowReserve.state.farmCollateral,
+            this.getObligationPda()
+          ),
+          reserveFarmState: this.outflowReserve.state.farmCollateral,
+        };
+
+    const debtFarmsAccounts = this.reserve.state.farmDebt.equals(PublicKey.default)
+      ? {
+          obligationFarmUserState: this.kaminoMarket.programId,
+          reserveFarmState: this.kaminoMarket.programId,
+        }
+      : {
+          obligationFarmUserState: obligationFarmStatePda(this.reserve.state.farmDebt, this.getObligationPda()),
+          reserveFarmState: this.reserve.state.farmDebt,
+        };
+
+    const repayAndWithdrawIx = repayAndWithdrawAndRedeem(
+      {
+        repayAmount: this.amount,
+        withdrawCollateralAmount,
+      },
+      {
+        repayAccounts: {
+          owner: this.owner,
+          obligation: this.getObligationPda(),
+          lendingMarket: this.kaminoMarket.getAddress(),
+          repayReserve: this.reserve!.address,
+          reserveLiquidityMint: this.reserve.getLiquidityMint(),
+          userSourceLiquidity: this.getUserTokenAccountAddress(this.reserve),
+          reserveDestinationLiquidity: this.reserve.state.liquidity.supplyVault,
+          tokenProgram: this.reserve.getLiquidityTokenProgram(),
+          instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
+        },
+        withdrawAccounts: {
+          owner: this.owner,
+          obligation: this.getObligationPda(),
+          lendingMarket: this.kaminoMarket.getAddress(),
+          lendingMarketAuthority: this.kaminoMarket.getLendingMarketAuthority(),
+          withdrawReserve: this.outflowReserve.address,
+          reserveLiquidityMint: this.outflowReserve.getLiquidityMint(),
+          reserveCollateralMint: this.outflowReserve.getCTokenMint(),
+          reserveLiquiditySupply: this.outflowReserve.state.liquidity.supplyVault,
+          reserveSourceCollateral: this.outflowReserve.state.collateral.supplyVault,
+          userDestinationLiquidity: this.getUserTokenAccountAddress(this.outflowReserve),
+          placeholderUserDestinationCollateral: this.kaminoMarket.programId,
+          collateralTokenProgram: TOKEN_PROGRAM_ID,
+          liquidityTokenProgram: this.outflowReserve.getLiquidityTokenProgram(),
+          instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
+        },
+        collateralFarmsAccounts,
+        debtFarmsAccounts,
+        farmsProgram: farmsId,
+      },
+      this.kaminoMarket.programId
+    );
+
+    repayAndWithdrawIx.keys = repayAndWithdrawIx.keys.concat([
+      ...depositReserveAccountMetas,
+      ...borrowReserveAccountMetas,
+    ]);
+
+    this.lendingIxs.push(repayAndWithdrawIx);
+  }
+
+  addDepositAndWithdrawV2Ixs(withdrawCollateralAmount: BN) {
+    this.lendingIxsLabels.push(
+      `depositAndWithdrawV2(depositReserve=${this.reserve!.address})(withdrawReserve=${
+        this.outflowReserve!.address
+      })(obligation=${this.getObligationPda()})`
+    );
+
+    const depositReservesList = this.getAdditionalDepositReservesList();
+
+    const depositReserveAccountMetas = depositReservesList.map((reserve) => {
+      return { pubkey: reserve, isSigner: false, isWritable: true };
+    });
+    const borrowReserveAccountMetas = this.borrowReserves.map((reserve) => {
+      return { pubkey: reserve, isSigner: false, isWritable: true };
+    });
+
+    if (!this.outflowAmount) {
+      throw new Error(`outflowAmount not set`);
+    }
+
+    if (!this.outflowReserve) {
+      throw new Error(`outflowReserve not set`);
+    }
+
+    const depositFarmsAccounts = this.reserve.state.farmCollateral.equals(PublicKey.default)
+      ? {
+          obligationFarmUserState: this.kaminoMarket.programId,
+          reserveFarmState: this.kaminoMarket.programId,
+        }
+      : {
+          obligationFarmUserState: obligationFarmStatePda(this.reserve.state.farmCollateral, this.getObligationPda()),
+          reserveFarmState: this.reserve.state.farmCollateral,
+        };
+    const withdrawFarmsAccounts = this.outflowReserve.state.farmCollateral.equals(PublicKey.default)
+      ? {
+          obligationFarmUserState: this.kaminoMarket.programId,
+          reserveFarmState: this.kaminoMarket.programId,
+        }
+      : {
+          obligationFarmUserState: obligationFarmStatePda(
+            this.outflowReserve.state.farmCollateral,
+            this.getObligationPda()
+          ),
+          reserveFarmState: this.outflowReserve.state.farmCollateral,
+        };
+
+    const depositAndWithdrawIx = depositAndWithdraw(
+      {
+        liquidityAmount: this.amount,
+        withdrawCollateralAmount,
+      },
+      {
+        depositAccounts: {
+          owner: this.owner,
+          obligation: this.getObligationPda(),
+          lendingMarket: this.kaminoMarket.getAddress(),
+          lendingMarketAuthority: this.kaminoMarket.getLendingMarketAuthority(),
+          reserve: this.reserve.address,
+          reserveLiquidityMint: this.reserve.getLiquidityMint(),
+          reserveLiquiditySupply: this.reserve.state.liquidity.supplyVault,
+          reserveCollateralMint: this.reserve.getCTokenMint(),
+          reserveDestinationDepositCollateral: this.reserve.state.collateral.supplyVault, // destinationCollateral
+          userSourceLiquidity: this.getUserTokenAccountAddress(this.reserve),
+          placeholderUserDestinationCollateral: this.kaminoMarket.programId,
+          collateralTokenProgram: TOKEN_PROGRAM_ID,
+          liquidityTokenProgram: this.reserve.getLiquidityTokenProgram(),
+          instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
+        },
+        withdrawAccounts: {
+          owner: this.owner,
+          obligation: this.getObligationPda(),
+          lendingMarket: this.kaminoMarket.getAddress(),
+          lendingMarketAuthority: this.kaminoMarket.getLendingMarketAuthority(),
+          withdrawReserve: this.outflowReserve.address,
+          reserveLiquidityMint: this.outflowReserve.getLiquidityMint(),
+          reserveCollateralMint: this.outflowReserve.getCTokenMint(),
+          reserveLiquiditySupply: this.outflowReserve.state.liquidity.supplyVault,
+          reserveSourceCollateral: this.outflowReserve.state.collateral.supplyVault,
+          userDestinationLiquidity: this.getUserTokenAccountAddress(this.outflowReserve),
+          placeholderUserDestinationCollateral: this.kaminoMarket.programId,
+          collateralTokenProgram: TOKEN_PROGRAM_ID,
+          liquidityTokenProgram: this.outflowReserve.getLiquidityTokenProgram(),
+          instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
+        },
+        depositFarmsAccounts,
+        withdrawFarmsAccounts,
+        farmsProgram: farmsId,
+      },
+      this.kaminoMarket.programId
+    );
+
+    depositAndWithdrawIx.keys = depositAndWithdrawIx.keys.concat([
+      ...depositReserveAccountMetas,
+      ...borrowReserveAccountMetas,
+    ]);
+
+    this.lendingIxs.push(depositAndWithdrawIx);
   }
 
   async addDepositAndBorrowIx() {
@@ -1632,10 +1927,7 @@ export class KaminoAction {
           reserveFarmState: this.kaminoMarket.programId,
         }
       : {
-          obligationFarmUserState: obligationFarmStatePda(
-            this.getObligationPda(),
-            this.reserve.state.farmCollateral
-          )[0],
+          obligationFarmUserState: obligationFarmStatePda(this.reserve.state.farmCollateral, this.getObligationPda()),
           reserveFarmState: this.reserve.state.farmCollateral,
         };
 
@@ -1692,10 +1984,7 @@ export class KaminoAction {
           reserveFarmState: this.kaminoMarket.programId,
         }
       : {
-          obligationFarmUserState: obligationFarmStatePda(
-            this.getObligationPda(),
-            this.outflowReserve.state.farmDebt!
-          )[0],
+          obligationFarmUserState: obligationFarmStatePda(this.outflowReserve.state.farmDebt, this.getObligationPda()),
           reserveFarmState: this.outflowReserve.state.farmDebt,
         };
 
@@ -1817,7 +2106,7 @@ export class KaminoAction {
           reserveFarmState: this.kaminoMarket.programId,
         }
       : {
-          obligationFarmUserState: obligationFarmStatePda(this.getObligationPda(), this.reserve.state.farmDebt)[0],
+          obligationFarmUserState: obligationFarmStatePda(this.reserve.state.farmDebt, this.getObligationPda()),
           reserveFarmState: this.reserve.state.farmDebt,
         };
 
@@ -1862,9 +2151,9 @@ export class KaminoAction {
         }
       : {
           obligationFarmUserState: obligationFarmStatePda(
-            this.getObligationPda(),
-            this.outflowReserve.state.farmCollateral
-          )[0],
+            this.outflowReserve.state.farmCollateral,
+            this.getObligationPda()
+          ),
           reserveFarmState: this.outflowReserve.state.farmCollateral,
         };
 
@@ -1898,7 +2187,7 @@ export class KaminoAction {
     );
   }
 
-  async addLiquidateIx(maxAllowedLtvOverridePercent: number = 0) {
+  addLiquidateIx(maxAllowedLtvOverridePercent: number = 0) {
     this.lendingIxsLabels.push(`liquidateObligationAndRedeemReserveCollateral`);
     if (!this.outflowReserve) {
       throw Error(`Withdraw reserve during liquidation is not defined`);
@@ -1965,9 +2254,9 @@ export class KaminoAction {
         }
       : {
           obligationFarmUserState: obligationFarmStatePda(
-            this.getObligationPda(),
-            this.outflowReserve.state.farmCollateral
-          )[0],
+            this.outflowReserve.state.farmCollateral,
+            this.getObligationPda()
+          ),
           reserveFarmState: this.outflowReserve.state.farmCollateral,
         };
 
@@ -1977,7 +2266,7 @@ export class KaminoAction {
           reserveFarmState: this.kaminoMarket.programId,
         }
       : {
-          obligationFarmUserState: obligationFarmStatePda(this.getObligationPda(), this.reserve.state.farmDebt)[0],
+          obligationFarmUserState: obligationFarmStatePda(this.reserve.state.farmDebt, this.getObligationPda()),
           reserveFarmState: this.reserve.state.farmDebt,
         };
 
@@ -2089,7 +2378,9 @@ export class KaminoAction {
         'repay',
         'depositAndBorrow',
         'repayAndWithdraw',
+        'repayAndWithdrawV2',
         'refreshObligation',
+        'depositAndWithdraw',
       ].includes(action)
     ) {
       // The support ixns in order are:
@@ -2107,12 +2398,17 @@ export class KaminoAction {
 
       let currentReserves: KaminoReserve[] = [];
 
-      if (action === 'liquidate' || action === 'depositAndBorrow' || action === 'repayAndWithdraw') {
+      if (
+        action === 'liquidate' ||
+        action === 'depositAndBorrow' ||
+        action === 'repayAndWithdraw' ||
+        action === 'repayAndWithdrawV2'
+      ) {
         if (!this.outflowReserve) {
           throw new Error('outflowReserve is undefined');
         }
 
-        if (action === 'depositAndBorrow' || action === 'repayAndWithdraw') {
+        if (action === 'depositAndBorrow' || action === 'repayAndWithdraw' || action === 'repayAndWithdrawV2') {
           currentReserves = [this.reserve, this.outflowReserve];
           if (action === 'depositAndBorrow') {
             if (this.obligation) {
@@ -2151,13 +2447,19 @@ export class KaminoAction {
           action === 'depositAndBorrow' ||
           action === 'depositCollateral' ||
           action === 'withdraw' ||
-          action === 'deposit'
+          action === 'deposit' ||
+          action === 'depositAndWithdraw'
         ) {
           await this.addInitObligationForFarm(this.reserve, ReserveFarmKind.Collateral, addAsSupportIx);
-          if (this.outflowReserve) {
+          if (this.outflowReserve && action !== 'depositAndWithdraw') {
             await this.addInitObligationForFarm(this.outflowReserve, ReserveFarmKind.Debt, addAsSupportIx);
           }
-        } else if (action === 'repayAndWithdraw' || action === 'borrow' || action === 'repay') {
+        } else if (
+          action === 'repayAndWithdraw' ||
+          action === 'borrow' ||
+          action === 'repay' ||
+          action === 'repayAndWithdrawV2'
+        ) {
           // todo - probably don't need to add both debt and collateral for everything here
           await this.addInitObligationForFarm(this.reserve, ReserveFarmKind.Debt, addAsSupportIx);
           if (this.outflowReserve) {
@@ -2188,7 +2490,7 @@ export class KaminoAction {
       }
 
       if (requestElevationGroup) {
-        if (action === 'repay') {
+        if (action === 'repay' || action === 'repayAndWithdrawV2') {
           const repayObligationLiquidity = this.obligation!.borrows.get(this.reserve.address);
 
           if (!repayObligationLiquidity) {
@@ -2616,7 +2918,7 @@ export class KaminoAction {
         farms.push([
           ReserveFarmKind.Collateral,
           kaminoReserve.state.farmCollateral,
-          obligationFarmStatePda(this.getObligationPda(), kaminoReserve.state.farmCollateral)[0],
+          obligationFarmStatePda(kaminoReserve.state.farmCollateral, this.getObligationPda()),
           kaminoReserve,
         ]);
       }
@@ -2624,7 +2926,7 @@ export class KaminoAction {
         farms.push([
           ReserveFarmKind.Debt,
           kaminoReserve.state.farmDebt,
-          obligationFarmStatePda(this.getObligationPda(), kaminoReserve.state.farmDebt)[0],
+          obligationFarmStatePda(kaminoReserve.state.farmDebt, this.getObligationPda()),
           kaminoReserve,
         ]);
       }
@@ -2708,18 +3010,18 @@ export class KaminoAction {
     const farms: [number, PublicKey, PublicKey][] = [];
 
     if (mode === ReserveFarmKind.Collateral && isNotNullPubkey(reserve.state.farmCollateral)) {
-      const userPda = obligationFarmStatePda(this.getObligationPda(), reserve.state.farmCollateral)[0];
-      const account = await this.kaminoMarket.getConnection().getAccountInfo(userPda);
+      const pda = obligationFarmStatePda(reserve.state.farmCollateral, this.getObligationPda());
+      const account = await this.kaminoMarket.getConnection().getAccountInfo(pda);
       if (!account) {
-        farms.push([ReserveFarmKind.Collateral.discriminator, reserve.state.farmCollateral, userPda]);
+        farms.push([ReserveFarmKind.Collateral.discriminator, reserve.state.farmCollateral, pda]);
       }
     }
 
     if (mode === ReserveFarmKind.Debt && isNotNullPubkey(reserve.state.farmDebt)) {
-      const userPda = obligationFarmStatePda(this.getObligationPda(), reserve.state.farmDebt)[0];
-      const account = await this.kaminoMarket.getConnection().getAccountInfo(userPda);
+      const pda = obligationFarmStatePda(reserve.state.farmDebt, this.getObligationPda());
+      const account = await this.kaminoMarket.getConnection().getAccountInfo(pda);
       if (!account) {
-        farms.push([ReserveFarmKind.Debt.discriminator, reserve.state.farmDebt, userPda]);
+        farms.push([ReserveFarmKind.Debt.discriminator, reserve.state.farmDebt, pda]);
       }
     }
 
@@ -2753,7 +3055,7 @@ export class KaminoAction {
     });
   }
 
-  private async addInitObligationIxs() {
+  private addInitObligationIxs() {
     if (!this.obligation) {
       const obligationPda = this.getObligationPda();
       const [userMetadataAddress, _bump] = userMetadataPda(this.owner, this.kaminoMarket.programId);
@@ -2965,7 +3267,7 @@ export class KaminoAction {
 
     let safeRepay = new BN(this.amount);
 
-    if (this.obligation && action === 'repay' && this.amount.eq(new BN(U64_MAX))) {
+    if (this.obligation && (action === 'repay' || action === 'repayAndWithdrawV2') && this.amount.eq(new BN(U64_MAX))) {
       const borrow = this.obligation.state.borrows.find(
         (borrow) => borrow.borrowReserve.toString() === this.reserve.address.toString()
       );
@@ -2979,7 +3281,7 @@ export class KaminoAction {
         this.currentSlot,
         this.kaminoMarket.state.referralFeeBps
       );
-      // TODO: shouldn't this calc be added to all other stuff as well?
+
       safeRepay = new BN(
         Math.floor(
           KaminoObligation.getBorrowAmount(borrow)
@@ -3009,6 +3311,7 @@ export class KaminoAction {
     const sendAction =
       action === 'deposit' ||
       action === 'repay' ||
+      action === 'repayAndWithdrawV2' ||
       action === 'mint' ||
       (action === 'liquidate' && this.mint?.equals(NATIVE_MINT)); // only sync WSOL amount if liquidator repays SOL which is secondaryMint
 
@@ -3093,7 +3396,12 @@ export class KaminoAction {
     let secondaryMint: PublicKey;
     let primaryMint: PublicKey;
 
-    if (action === 'liquidate' || action === 'depositAndBorrow' || action === 'repayAndWithdraw') {
+    if (
+      action === 'liquidate' ||
+      action === 'depositAndBorrow' ||
+      action === 'repayAndWithdraw' ||
+      action === 'repayAndWithdrawV2'
+    ) {
       primaryMint = inflowTokenMint;
       secondaryMint = outflowTokenMint;
     } else {

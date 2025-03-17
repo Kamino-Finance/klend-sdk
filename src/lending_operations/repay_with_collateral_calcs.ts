@@ -2,6 +2,7 @@ import Decimal from 'decimal.js';
 import { KaminoMarket, KaminoObligation, KaminoReserve, numberToLamportsDecimal } from '../classes';
 import { PublicKey } from '@solana/web3.js';
 import { lamportsToDecimal } from '../classes/utils';
+import { MaxWithdrawLtvCheck, getMaxWithdrawLtvCheck } from './repay_with_collateral_operations';
 
 export function calcRepayAmountWithSlippage(
   kaminoMarket: KaminoMarket,
@@ -102,6 +103,7 @@ export function calcMaxWithdrawCollateral(
       .filter((p) => !p.reserveAddress.equals(borrow.reserveAddress))
       .reduce((acc, b) => acc.add(b.marketValueRefreshed), new Decimal('0'));
   }
+  const maxWithdrawLtvCheck = getMaxWithdrawLtvCheck(obligation);
 
   let remainingDepositsValueWithLtv = new Decimal('0');
   if (obligation.getDeposits().length > 1) {
@@ -109,8 +111,13 @@ export function calcMaxWithdrawCollateral(
       .getDeposits()
       .filter((p) => !p.reserveAddress.equals(deposit.reserveAddress))
       .reduce((acc, d) => {
-        const { maxLtv } = obligation.getLtvForReserve(market, market.getReserveByAddress(d.reserveAddress)!);
-        return acc.add(d.marketValueRefreshed.mul(maxLtv));
+        const { maxLtv, liquidationLtv } = obligation.getLtvForReserve(
+          market,
+          market.getReserveByAddress(d.reserveAddress)!
+        );
+        const maxWithdrawLtv =
+          maxWithdrawLtvCheck === MaxWithdrawLtvCheck.LIQUIDATION_THRESHOLD ? liquidationLtv : maxLtv;
+        return acc.add(d.marketValueRefreshed.mul(maxWithdrawLtv));
       }, new Decimal('0'));
   }
 
@@ -123,16 +130,18 @@ export function calcMaxWithdrawCollateral(
       repayingAllDebt: repayAmountLamports.gte(borrow.amount),
     };
   } else {
-    const { maxLtv: collMaxLtv } = obligation.getLtvForReserve(
+    const { maxLtv: collMaxLtv, liquidationLtv: collLiquidationLtv } = obligation.getLtvForReserve(
       market,
       market.getReserveByAddress(depositReserve.address)!
     );
+    const maxWithdrawLtv =
+      maxWithdrawLtvCheck === MaxWithdrawLtvCheck.LIQUIDATION_THRESHOLD ? collLiquidationLtv : collMaxLtv;
     const numerator = deposit.marketValueRefreshed
-      .mul(collMaxLtv)
+      .mul(maxWithdrawLtv)
       .add(remainingDepositsValueWithLtv)
       .sub(remainingBorrowsValue);
 
-    const denominator = depositReserve.getOracleMarketPrice().mul(collMaxLtv);
+    const denominator = depositReserve.getOracleMarketPrice().mul(maxWithdrawLtv);
     const maxCollWithdrawAmount = numerator.div(denominator);
     const withdrawableCollLamports = maxCollWithdrawAmount.mul(depositReserve.getMintFactor()).floor();
 
