@@ -2151,9 +2151,14 @@ export function updateReserveConfigEncodedValue(
     case UpdateConfigMode.UpdateDepositLimit.discriminator:
     case UpdateConfigMode.UpdateBorrowLimit.discriminator:
     case UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator:
-      value = value as bigint;
       buffer = Buffer.alloc(8);
-      buffer.writeBigUint64LE(value, 0);
+      // Convert value to BigInt if it's not already
+      const bigIntValue = typeof value === 'bigint' ? value : BigInt(value.toString());
+      // Split into two 32-bit values
+      const low = Number(bigIntValue & BigInt(0xffffffff));
+      const high = Number(bigIntValue >> BigInt(32));
+      buffer.writeUInt32LE(low, 0);
+      buffer.writeUInt32LE(high, 4);
       break;
     case UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator:
     case UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator:
