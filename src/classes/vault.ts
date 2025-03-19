@@ -92,8 +92,8 @@ import {
 } from './farm_utils';
 import { printHoldings } from './types_utils';
 
-export const kaminoVaultId = new PublicKey('kvauTFR8qm1dhniz6pYuBZkuene3Hfrs1VQhVRgCNrr');
-export const kaminoVaultStagingId = new PublicKey('STkvh7ostar39Fwr4uZKASs1RNNuYMFMTsE77FiRsL2');
+export const kaminoVaultId = new PublicKey('KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd');
+export const kaminoVaultStagingId = new PublicKey('stKvQfwRsQiKnLtMNVLHKS3exFJmZFsgfzBPWHECUYK');
 
 const TOKEN_VAULT_SEED = 'token_vault';
 const CTOKEN_VAULT_SEED = 'ctoken_vault';

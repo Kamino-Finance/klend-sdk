@@ -730,6 +730,27 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "removeAllocation",
+      "accounts": [
+        {
+          "name": "vaultAdminAuthority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "vaultState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "reserve",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
@@ -936,7 +957,16 @@
                 {
                   "defined": "VaultAllocation"
                 },
-                10
+                25
+              ]
+            }
+          },
+          {
+            "name": "padding1",
+            "type": {
+              "array": [
+                "u128",
+                256
               ]
             }
           },
@@ -998,7 +1028,7 @@
             "type": "u64"
           },
           {
-            "name": "padding1",
+            "name": "padding2",
             "type": "u64"
           },
           {
@@ -1006,7 +1036,7 @@
             "type": "publicKey"
           },
           {
-            "name": "padding2",
+            "name": "padding3",
             "type": {
               "array": [
                 "u128",
@@ -2187,6 +2217,11 @@
       "code": 7046,
       "name": "WrongAdminOrAllocationAdmin",
       "msg": "Wrong admin or allocation admin"
+    },
+    {
+      "code": 7047,
+      "name": "ReserveHasNonZeroAllocationOrCTokens",
+      "msg": "Reserve has non-zero allocation or ctokens so cannot be removed"
     }
   ]
 }

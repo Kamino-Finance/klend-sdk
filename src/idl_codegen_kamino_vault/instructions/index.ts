@@ -40,3 +40,5 @@ export type {
   WithdrawFromAvailableArgs,
   WithdrawFromAvailableAccounts,
 } from "./withdrawFromAvailable"
+export { removeAllocation } from "./removeAllocation"
+export type { RemoveAllocationAccounts } from "./removeAllocation"

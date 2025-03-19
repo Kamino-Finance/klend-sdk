@@ -16,6 +16,7 @@ import {
   Chain,
   DEFAULT_RECENT_SLOT_DURATION_MS,
   encodeTokenName,
+  initLookupTableIx,
   KaminoManager,
   KaminoMarket,
   KaminoVault,
@@ -407,6 +408,14 @@ async function main() {
 
       mode === 'execute' && console.log('Management fee updated:', updateVaultConfigSig);
     });
+
+  commands.command('create-lut').action(async () => {
+    const env = initializeClient(false, false);
+    const initLutIx = initLookupTableIx(env.payer.publicKey, await env.connection.getSlot());
+
+    const updateVaultConfigSig = await processTxn(env.client, env.payer, [initLutIx[0]], 'execute', 2500, []);
+    console.log(`LUT created: ${initLutIx[1].toString()} tx id: ${updateVaultConfigSig}`);
+  });
 
   commands
     .command('sync-vault-lut')

@@ -24,6 +24,7 @@ export interface VaultStateFields {
   prevAumSf: BN
   pendingFeesSf: BN
   vaultAllocationStrategy: Array<types.VaultAllocationFields>
+  padding1: Array<BN>
   minDepositAmount: BN
   minWithdrawAmount: BN
   minInvestAmount: BN
@@ -37,9 +38,9 @@ export interface VaultStateFields {
   vaultLookupTable: PublicKey
   vaultFarm: PublicKey
   creationTimestamp: BN
-  padding1: BN
+  padding2: BN
   allocationAdmin: PublicKey
-  padding2: Array<BN>
+  padding3: Array<BN>
 }
 
 export interface VaultStateJSON {
@@ -62,6 +63,7 @@ export interface VaultStateJSON {
   prevAumSf: string
   pendingFeesSf: string
   vaultAllocationStrategy: Array<types.VaultAllocationJSON>
+  padding1: Array<string>
   minDepositAmount: string
   minWithdrawAmount: string
   minInvestAmount: string
@@ -75,9 +77,9 @@ export interface VaultStateJSON {
   vaultLookupTable: string
   vaultFarm: string
   creationTimestamp: string
-  padding1: string
+  padding2: string
   allocationAdmin: string
-  padding2: Array<string>
+  padding3: Array<string>
 }
 
 export class VaultState {
@@ -100,6 +102,7 @@ export class VaultState {
   readonly prevAumSf: BN
   readonly pendingFeesSf: BN
   readonly vaultAllocationStrategy: Array<types.VaultAllocation>
+  readonly padding1: Array<BN>
   readonly minDepositAmount: BN
   readonly minWithdrawAmount: BN
   readonly minInvestAmount: BN
@@ -113,9 +116,9 @@ export class VaultState {
   readonly vaultLookupTable: PublicKey
   readonly vaultFarm: PublicKey
   readonly creationTimestamp: BN
-  readonly padding1: BN
+  readonly padding2: BN
   readonly allocationAdmin: PublicKey
-  readonly padding2: Array<BN>
+  readonly padding3: Array<BN>
 
   static readonly discriminator = Buffer.from([
     228, 196, 82, 165, 98, 210, 235, 152,
@@ -140,7 +143,8 @@ export class VaultState {
     borsh.u64("lastFeeChargeTimestamp"),
     borsh.u128("prevAumSf"),
     borsh.u128("pendingFeesSf"),
-    borsh.array(types.VaultAllocation.layout(), 10, "vaultAllocationStrategy"),
+    borsh.array(types.VaultAllocation.layout(), 25, "vaultAllocationStrategy"),
+    borsh.array(borsh.u128(), 256, "padding1"),
     borsh.u64("minDepositAmount"),
     borsh.u64("minWithdrawAmount"),
     borsh.u64("minInvestAmount"),
@@ -154,9 +158,9 @@ export class VaultState {
     borsh.publicKey("vaultLookupTable"),
     borsh.publicKey("vaultFarm"),
     borsh.u64("creationTimestamp"),
-    borsh.u64("padding1"),
+    borsh.u64("padding2"),
     borsh.publicKey("allocationAdmin"),
-    borsh.array(borsh.u128(), 242, "padding2"),
+    borsh.array(borsh.u128(), 242, "padding3"),
   ])
 
   constructor(fields: VaultStateFields) {
@@ -181,6 +185,7 @@ export class VaultState {
     this.vaultAllocationStrategy = fields.vaultAllocationStrategy.map(
       (item) => new types.VaultAllocation({ ...item })
     )
+    this.padding1 = fields.padding1
     this.minDepositAmount = fields.minDepositAmount
     this.minWithdrawAmount = fields.minWithdrawAmount
     this.minInvestAmount = fields.minInvestAmount
@@ -194,9 +199,9 @@ export class VaultState {
     this.vaultLookupTable = fields.vaultLookupTable
     this.vaultFarm = fields.vaultFarm
     this.creationTimestamp = fields.creationTimestamp
-    this.padding1 = fields.padding1
-    this.allocationAdmin = fields.allocationAdmin
     this.padding2 = fields.padding2
+    this.allocationAdmin = fields.allocationAdmin
+    this.padding3 = fields.padding3
   }
 
   static async fetch(
@@ -266,6 +271,7 @@ export class VaultState {
           item: any /* eslint-disable-line @typescript-eslint/no-explicit-any */
         ) => types.VaultAllocation.fromDecoded(item)
       ),
+      padding1: dec.padding1,
       minDepositAmount: dec.minDepositAmount,
       minWithdrawAmount: dec.minWithdrawAmount,
       minInvestAmount: dec.minInvestAmount,
@@ -279,9 +285,9 @@ export class VaultState {
       vaultLookupTable: dec.vaultLookupTable,
       vaultFarm: dec.vaultFarm,
       creationTimestamp: dec.creationTimestamp,
-      padding1: dec.padding1,
-      allocationAdmin: dec.allocationAdmin,
       padding2: dec.padding2,
+      allocationAdmin: dec.allocationAdmin,
+      padding3: dec.padding3,
     })
   }
 
@@ -308,6 +314,7 @@ export class VaultState {
       vaultAllocationStrategy: this.vaultAllocationStrategy.map((item) =>
         item.toJSON()
       ),
+      padding1: this.padding1.map((item) => item.toString()),
       minDepositAmount: this.minDepositAmount.toString(),
       minWithdrawAmount: this.minWithdrawAmount.toString(),
       minInvestAmount: this.minInvestAmount.toString(),
@@ -321,9 +328,9 @@ export class VaultState {
       vaultLookupTable: this.vaultLookupTable.toString(),
       vaultFarm: this.vaultFarm.toString(),
       creationTimestamp: this.creationTimestamp.toString(),
-      padding1: this.padding1.toString(),
+      padding2: this.padding2.toString(),
       allocationAdmin: this.allocationAdmin.toString(),
-      padding2: this.padding2.map((item) => item.toString()),
+      padding3: this.padding3.map((item) => item.toString()),
     }
   }
 
@@ -350,6 +357,7 @@ export class VaultState {
       vaultAllocationStrategy: obj.vaultAllocationStrategy.map((item) =>
         types.VaultAllocation.fromJSON(item)
       ),
+      padding1: obj.padding1.map((item) => new BN(item)),
       minDepositAmount: new BN(obj.minDepositAmount),
       minWithdrawAmount: new BN(obj.minWithdrawAmount),
       minInvestAmount: new BN(obj.minInvestAmount),
@@ -363,9 +371,9 @@ export class VaultState {
       vaultLookupTable: new PublicKey(obj.vaultLookupTable),
       vaultFarm: new PublicKey(obj.vaultFarm),
       creationTimestamp: new BN(obj.creationTimestamp),
-      padding1: new BN(obj.padding1),
+      padding2: new BN(obj.padding2),
       allocationAdmin: new PublicKey(obj.allocationAdmin),
-      padding2: obj.padding2.map((item) => new BN(item)),
+      padding3: obj.padding3.map((item) => new BN(item)),
     })
   }
 }

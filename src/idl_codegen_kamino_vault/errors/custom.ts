@@ -46,6 +46,7 @@ export type CustomError =
   | MinWithdrawAmountTooBig
   | InvestTooSoon
   | WrongAdminOrAllocationAdmin
+  | ReserveHasNonZeroAllocationOrCTokens
 
 export class DepositAmountsZero extends Error {
   static readonly code = 7000
@@ -564,6 +565,20 @@ export class WrongAdminOrAllocationAdmin extends Error {
   }
 }
 
+export class ReserveHasNonZeroAllocationOrCTokens extends Error {
+  static readonly code = 7047
+  readonly code = 7047
+  readonly name = "ReserveHasNonZeroAllocationOrCTokens"
+  readonly msg =
+    "Reserve has non-zero allocation or ctokens so cannot be removed"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "7047: Reserve has non-zero allocation or ctokens so cannot be removed"
+    )
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 7000:
@@ -660,6 +675,8 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new InvestTooSoon(logs)
     case 7046:
       return new WrongAdminOrAllocationAdmin(logs)
+    case 7047:
+      return new ReserveHasNonZeroAllocationOrCTokens(logs)
   }
 
   return null

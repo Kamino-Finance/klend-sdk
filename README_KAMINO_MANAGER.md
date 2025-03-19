@@ -20,9 +20,9 @@ In order to use the CLI, the followign `.env` configuration is required (i.e. yo
 ADMIN="admin.json"
 RPC="https://rpc.cluster"
 KLEND_PROGRAM_ID_MAINNET="KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD"
-KVAULT_PROGRAM_ID_MAINNET="kvauTFR8qm1dhniz6pYuBZkuene3Hfrs1VQhVRgCNrr"
+KVAULT_PROGRAM_ID_MAINNET="KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd"
 KLEND_PROGRAM_ID_STAGING="SLendK7ySfcEzyaFqy93gDnD3RtrpXJcnRwb6zFHJSh"
-KVAULT_PROGRAM_ID_STAGING="STkvh7ostar39Fwr4uZKASs1RNNuYMFMTsE77FiRsL2"
+KVAULT_PROGRAM_ID_STAGING="stKvQfwRsQiKnLtMNVLHKS3exFJmZFsgfzBPWHECUYK"
 ```
 
 - for the template you can copy `.env.example` to `.env` and then replace the ADMIN and RPC values `cp .env.example .env`
