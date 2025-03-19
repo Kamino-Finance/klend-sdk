@@ -30,6 +30,16 @@ export type PriceAinBProvider = (mintA: PublicKey, mintB: PublicKey) => Promise<
 
 export type IsKtokenProvider = (token: PublicKey | string) => Promise<boolean>;
 
+export type FlashLoanInfo = {
+  flashBorrowReserve: PublicKey;
+  flashLoanFee: Decimal;
+};
+
+export type LeverageIxnsOutput = {
+  instructions: TransactionInstruction[];
+  flashLoanInfo: FlashLoanInfo;
+};
+
 export type SwapInputs = {
   inputAmountLamports: Decimal;
   minOutAmountLamports?: Decimal;
@@ -53,6 +63,7 @@ export type DepositLeverageIxsResponse<QuoteResponse> = {
   ixs: TransactionInstruction[];
   lookupTables: AddressLookupTableAccount[];
   swapInputs: SwapInputs;
+  flashLoanInfo: FlashLoanInfo;
   initialInputs: DepositLeverageInitialInputs<QuoteResponse>;
 };
 
@@ -113,6 +124,7 @@ export type WithdrawLeverageIxsResponse<QuoteResponse> = {
   ixs: TransactionInstruction[];
   lookupTables: AddressLookupTableAccount[];
   swapInputs: SwapInputs;
+  flashLoanInfo: FlashLoanInfo;
   initialInputs: WithdrawLeverageInitialInputs<QuoteResponse>;
 };
 
@@ -166,6 +178,7 @@ export type AdjustLeverageIxsResponse<QuoteResponse> = {
   ixs: TransactionInstruction[];
   lookupTables: AddressLookupTableAccount[];
   swapInputs: SwapInputs;
+  flashLoanInfo: FlashLoanInfo;
   initialInputs: AdjustLeverageInitialInputs<QuoteResponse>;
 };
 

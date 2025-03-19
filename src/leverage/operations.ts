@@ -67,6 +67,8 @@ import {
   WithdrawLeverageIxsResponse,
   WithdrawWithLeverageProps,
   WithdrawWithLeverageSwapInputsProps,
+  LeverageIxnsOutput,
+  FlashLoanInfo,
 } from './types';
 
 export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
@@ -93,6 +95,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
   useV2Ixs,
   elevationGroupOverride,
 }: DepositWithLeverageSwapInputsProps<QuoteResponse>): Promise<{
+  flashLoanInfo: FlashLoanInfo;
   swapInputs: SwapInputs;
   initialInputs: DepositLeverageInitialInputs<QuoteResponse>;
 }> {
@@ -137,7 +140,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
   }
 
   // Build the repay & withdraw collateral tx to get the number of accounts
-  const klendIxs = await buildDepositWithLeverageIxns(
+  const klendIxs: LeverageIxnsOutput = await buildDepositWithLeverageIxns(
     kaminoMarket,
     debtReserve,
     collReserve,
@@ -160,7 +163,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
     elevationGroupOverride
   );
 
-  const uniqueKlendAccounts = uniqueAccounts(klendIxs);
+  const uniqueKlendAccounts = uniqueAccounts(klendIxs.instructions);
 
   const swapInputAmount = toLamports(
     !collIsKtoken ? calcs.swapDebtTokenIn : calcs.singleSidedDepositKtokenOnly,
@@ -229,6 +232,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
       outputMint: collTokenMint,
       amountDebtAtaBalance: expectedDebtTokenAtaBalance,
     },
+    flashLoanInfo: klendIxs.flashLoanInfo,
     initialInputs: {
       calcs: quotePriceCalcs,
       swapQuote,
@@ -381,7 +385,7 @@ export async function getDepositWithLeverageIxns<QuoteResponse>({
   const solTokenReserve = kaminoMarket.getReserveByMint(NATIVE_MINT);
   const depositTokenIsSol = !solTokenReserve ? false : selectedTokenMint.equals(solTokenReserve!.getLiquidityMint());
 
-  const ixs = await buildDepositWithLeverageIxns(
+  const ixs: LeverageIxnsOutput = await buildDepositWithLeverageIxns(
     kaminoMarket,
     debtReserve!,
     collReserve!,
@@ -405,7 +409,8 @@ export async function getDepositWithLeverageIxns<QuoteResponse>({
   );
 
   return {
-    ixs,
+    ixs: ixs.instructions,
+    flashLoanInfo: ixs.flashLoanInfo,
     lookupTables,
     swapInputs,
     initialInputs,
@@ -429,7 +434,7 @@ async function buildDepositWithLeverageIxns(
   collIsKtoken: boolean,
   useV2Ixs: boolean,
   elevationGroupOverride?: number
-): Promise<TransactionInstruction[]> {
+): Promise<LeverageIxnsOutput> {
   const budgetIxns = budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxns(3000000);
   const collTokenMint = collReserve.getLiquidityMint();
   const debtTokenMint = debtReserve.getLiquidityMint();
@@ -556,31 +561,42 @@ async function buildDepositWithLeverageIxns(
   // 4. Swap
   const { swapIxs } = swapQuoteIxs;
   const swapInstructions = removeBudgetAndAtaIxns(swapIxs, []);
+  const flashBorrowReserve = !collIsKtoken ? collReserve : debtReserve;
+  const flashLoanInfo = {
+    flashBorrowReserve: flashBorrowReserve.address,
+    flashLoanFee: flashBorrowReserve.getFlashLoanFee(),
+  };
 
   if (!collIsKtoken) {
-    return [
-      ...scopeRefreshIxn,
-      ...budgetIxns,
-      ...atasAndCreateIxns.map((x) => x.createAtaIx),
-      ...fillWsolAtaIxns,
-      ...[flashBorrowIxn],
-      ...KaminoAction.actionToIxs(kaminoDepositAndBorrowAction),
-      ...swapInstructions,
-      ...[flashRepayIxn],
-    ];
+    return {
+      flashLoanInfo,
+      instructions: [
+        ...scopeRefreshIxn,
+        ...budgetIxns,
+        ...atasAndCreateIxns.map((x) => x.createAtaIx),
+        ...fillWsolAtaIxns,
+        ...[flashBorrowIxn],
+        ...KaminoAction.actionToIxs(kaminoDepositAndBorrowAction),
+        ...swapInstructions,
+        ...[flashRepayIxn],
+      ],
+    };
   } else {
-    return [
-      ...scopeRefreshIxn,
-      ...budgetIxns,
-      ...atasAndCreateIxns.map((x) => x.createAtaIx),
-      ...fillWsolAtaIxns,
-      ...[flashBorrowIxn],
-      ...swapInstructions,
-      ...kaminoDepositAndBorrowAction.setupIxs,
-      ...KaminoAction.actionToLendingIxs(kaminoDepositAndBorrowAction),
-      ...kaminoDepositAndBorrowAction.cleanupIxs,
-      ...[flashRepayIxn],
-    ];
+    return {
+      flashLoanInfo,
+      instructions: [
+        ...scopeRefreshIxn,
+        ...budgetIxns,
+        ...atasAndCreateIxns.map((x) => x.createAtaIx),
+        ...fillWsolAtaIxns,
+        ...[flashBorrowIxn],
+        ...swapInstructions,
+        ...kaminoDepositAndBorrowAction.setupIxs,
+        ...KaminoAction.actionToLendingIxs(kaminoDepositAndBorrowAction),
+        ...kaminoDepositAndBorrowAction.cleanupIxs,
+        ...[flashRepayIxn],
+      ],
+    };
   }
 }
 
@@ -608,6 +624,7 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
   useV2Ixs,
 }: WithdrawWithLeverageSwapInputsProps<QuoteResponse>): Promise<{
   swapInputs: SwapInputs;
+  flashLoanInfo: FlashLoanInfo;
   initialInputs: WithdrawLeverageInitialInputs<QuoteResponse>;
 }> {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
@@ -660,7 +677,7 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
     useV2Ixs
   );
 
-  const uniqueKlendAccounts = uniqueAccounts(klendIxs);
+  const uniqueKlendAccounts = uniqueAccounts(klendIxs.instructions);
 
   const swapInputAmount = toLamports(
     calcs.collTokenSwapIn,
@@ -706,6 +723,7 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
       outputMint: debtTokenMint,
       amountDebtAtaBalance: new Decimal(0), // Only needed for ktokens deposits
     },
+    flashLoanInfo: klendIxs.flashLoanInfo,
     initialInputs: {
       calcs: calcsQuotePrice,
       swapQuote,
@@ -800,7 +818,7 @@ export async function getWithdrawWithLeverageIxns<QuoteResponse>({
     }
   }
 
-  const ixs = await buildWithdrawWithLeverageIxns(
+  const ixs: LeverageIxnsOutput = await buildWithdrawWithLeverageIxns(
     kaminoMarket,
     debtReserve!,
     collReserve!,
@@ -825,7 +843,8 @@ export async function getWithdrawWithLeverageIxns<QuoteResponse>({
 
   // Send ixns and lookup tables
   return {
-    ixs,
+    ixs: ixs.instructions,
+    flashLoanInfo: ixs.flashLoanInfo,
     lookupTables,
     swapInputs,
     initialInputs: initialInputs,
@@ -849,7 +868,7 @@ export async function buildWithdrawWithLeverageIxns(
   strategy: StrategyWithAddress | undefined,
   collIsKtoken: boolean,
   useV2Ixs: boolean
-): Promise<TransactionInstruction[]> {
+): Promise<LeverageIxnsOutput> {
   const collTokenMint = collReserve.getLiquidityMint();
   const debtTokenMint = debtReserve.getLiquidityMint();
   const debtTokenAta = getAssociatedTokenAddressSync(
@@ -975,17 +994,23 @@ export async function buildWithdrawWithLeverageIxns(
 
   const swapInstructions = removeBudgetAndAtaIxns(swapQuoteIxs.swapIxs, []);
 
-  return [
-    ...scopeRefreshIxn,
-    ...budgetIxns,
-    ...atasAndCreateIxns.map((x) => x.createAtaIx),
-    ...fillWsolAtaIxns,
-    ...[flashBorrowIxn],
-    ...KaminoAction.actionToIxs(repayAndWithdrawAction),
-    ...swapInstructions,
-    ...[flashRepayIxn],
-    ...closeWsolAtaIxns,
-  ];
+  return {
+    flashLoanInfo: {
+      flashLoanFee: debtReserve.getFlashLoanFee(),
+      flashBorrowReserve: debtReserve.address,
+    },
+    instructions: [
+      ...scopeRefreshIxn,
+      ...budgetIxns,
+      ...atasAndCreateIxns.map((x) => x.createAtaIx),
+      ...fillWsolAtaIxns,
+      ...[flashBorrowIxn],
+      ...KaminoAction.actionToIxs(repayAndWithdrawAction),
+      ...swapInstructions,
+      ...[flashRepayIxn],
+      ...closeWsolAtaIxns,
+    ],
+  };
 }
 
 export async function getAdjustLeverageSwapInputs<QuoteResponse>({
@@ -1011,6 +1036,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
   useV2Ixs,
 }: AdjustLeverageSwapInputsProps<QuoteResponse>): Promise<{
   swapInputs: SwapInputs;
+  flashLoanInfo: FlashLoanInfo;
   initialInputs: AdjustLeverageInitialInputs<QuoteResponse>;
 }> {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint)!;
@@ -1057,7 +1083,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
     );
 
     // Build the repay & withdraw collateral tx to get the number of accounts
-    const klendIxs = await buildIncreaseLeverageIxns(
+    const klendIxs: LeverageIxnsOutput = await buildIncreaseLeverageIxns(
       owner,
       kaminoMarket,
       collTokenMint,
@@ -1078,7 +1104,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
       useV2Ixs
     );
 
-    const uniqueKlendAccounts = uniqueAccounts(klendIxs);
+    const uniqueKlendAccounts = uniqueAccounts(klendIxs.instructions);
 
     const swapInputAmount = toLamports(
       !collIsKtoken ? calcs.borrowAmount : calcs.amountToFlashBorrowDebt,
@@ -1147,6 +1173,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         outputMint: collTokenMint,
         amountDebtAtaBalance: expectedDebtTokenAtaBalance,
       },
+      flashLoanInfo: klendIxs.flashLoanInfo,
       initialInputs: {
         calcs: calcsQuotePrice,
         swapQuote,
@@ -1161,7 +1188,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
   } else {
     const calcs = adjustWithdrawLeverageCalcs(adjustDepositPosition, adjustBorrowPosition, flashLoanFee, slippagePct);
 
-    const klendIxs = await buildDecreaseLeverageIxns(
+    const klendIxs: LeverageIxnsOutput = await buildDecreaseLeverageIxns(
       owner,
       kaminoMarket,
       collTokenMint,
@@ -1182,7 +1209,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
       useV2Ixs
     );
 
-    const uniqueKlendAccounts = uniqueAccounts(klendIxs);
+    const uniqueKlendAccounts = uniqueAccounts(klendIxs.instructions);
 
     const swapInputAmount = toLamports(
       calcs.withdrawAmountWithSlippageAndFlashLoanFee,
@@ -1229,6 +1256,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         outputMint: debtTokenMint,
         amountDebtAtaBalance: new Decimal(0), // Only needed for ktokens deposits
       },
+      flashLoanInfo: klendIxs.flashLoanInfo,
       initialInputs: {
         calcs: calcsQuotePrice,
         swapQuote,
@@ -1318,8 +1346,7 @@ export async function getAdjustLeverageIxns<QuoteResponse>({
       initialInputs.swapQuote
     );
 
-    // TODO: marius why are we not using both adjustDepositPosition & adjustBorrowPosition
-    const ixs = await buildIncreaseLeverageIxns(
+    const ixs: LeverageIxnsOutput = await buildIncreaseLeverageIxns(
       owner,
       kaminoMarket,
       collTokenMint,
@@ -1340,7 +1367,8 @@ export async function getAdjustLeverageIxns<QuoteResponse>({
       useV2Ixs
     );
     return {
-      ixs,
+      ixs: ixs.instructions,
+      flashLoanInfo: ixs.flashLoanInfo,
       lookupTables,
       swapInputs,
       initialInputs,
@@ -1366,7 +1394,7 @@ export async function getAdjustLeverageIxns<QuoteResponse>({
       initialInputs.swapQuote
     );
 
-    const ixs = await buildDecreaseLeverageIxns(
+    const ixs: LeverageIxnsOutput = await buildDecreaseLeverageIxns(
       owner,
       kaminoMarket,
       collTokenMint,
@@ -1388,7 +1416,8 @@ export async function getAdjustLeverageIxns<QuoteResponse>({
     );
 
     return {
-      ixs,
+      ixs: ixs.instructions,
+      flashLoanInfo: ixs.flashLoanInfo,
       lookupTables,
       swapInputs,
       initialInputs,
@@ -1414,7 +1443,7 @@ async function buildIncreaseLeverageIxns(
   swapQuoteIxs: SwapIxs,
   budgetAndPriorityFeeIxns: TransactionInstruction[] | undefined,
   useV2Ixs: boolean
-): Promise<TransactionInstruction[]> {
+): Promise<LeverageIxnsOutput> {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
   const debtTokenAta = getAssociatedTokenAddressSync(
@@ -1566,7 +1595,16 @@ async function buildIncreaseLeverageIxns(
         ...[flashRepayIxn],
       ];
 
-  return ixs;
+  const flashBorrowReserve = !collIsKtoken ? collReserve! : debtReserve!;
+  const res: LeverageIxnsOutput = {
+    flashLoanInfo: {
+      flashBorrowReserve: flashBorrowReserve.address,
+      flashLoanFee: flashBorrowReserve.getFlashLoanFee(),
+    },
+    instructions: ixs,
+  };
+
+  return res;
 }
 
 /**
@@ -1587,7 +1625,7 @@ async function buildDecreaseLeverageIxns(
   swapQuoteIxs: SwapIxs,
   budgetAndPriorityFeeIxns: TransactionInstruction[] | undefined,
   useV2Ixs: boolean
-): Promise<TransactionInstruction[]> {
+): Promise<LeverageIxnsOutput> {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
   const debtTokenAta = getAssociatedTokenAddressSync(
@@ -1739,7 +1777,15 @@ async function buildDecreaseLeverageIxns(
     ...closeWsolAtaIxns,
   ];
 
-  return ixns;
+  const res: LeverageIxnsOutput = {
+    flashLoanInfo: {
+      flashBorrowReserve: debtReserve!.address,
+      flashLoanFee: debtReserve!.getFlashLoanFee(),
+    },
+    instructions: ixns,
+  };
+
+  return res;
 }
 
 export const getScopeRefreshIx = async (

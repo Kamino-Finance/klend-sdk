@@ -6,7 +6,13 @@ import {
   KaminoObligation,
   KaminoReserve,
 } from '../classes';
-import { getFlashLoanInstructions, getScopeRefreshIx, SwapIxsProvider, SwapQuoteProvider } from '../leverage';
+import {
+  FlashLoanInfo,
+  getFlashLoanInstructions,
+  getScopeRefreshIx,
+  SwapIxsProvider,
+  SwapQuoteProvider,
+} from '../leverage';
 import {
   createAtasIdempotent,
   DEFAULT_MAX_COMPUTE_UNITS,
@@ -251,6 +257,7 @@ type SwapCollKlendIxns = {
   withdrawSourceCollIxns: TransactionInstruction[];
   targetCollFlashRepayIxn: TransactionInstruction;
   cleanupIxns: TransactionInstruction[];
+  flashLoanInfo: FlashLoanInfo;
   simulationDetails: {
     targetCollFlashBorrowedAmount: Decimal;
   };
@@ -295,6 +302,10 @@ async function getKlendIxns(
 
   return {
     setupIxns,
+    flashLoanInfo: {
+      flashBorrowReserve: context.targetCollReserve.address,
+      flashLoanFee: context.targetCollReserve.getFlashLoanFee(),
+    },
     targetCollFlashBorrowIxn,
     depositTargetCollIxns: depositTargetCollIxns.ixns,
     withdrawSourceCollIxns,
