@@ -33,6 +33,8 @@ import {
   InitVaultAccounts,
   invest,
   InvestAccounts,
+  removeAllocation,
+  RemoveAllocationAccounts,
   updateAdmin,
   UpdateAdminAccounts,
   updateReserveAllocation,
@@ -336,6 +338,35 @@ export class KaminoVaultClient {
     };
 
     return updateReserveAllocationIxs;
+  }
+
+  /**
+   * This method removes a reserve from the vault allocation strategy if already part of the allocation strategy
+   * @param vault - vault to remove the reserve from
+   * @param reserve - reserve to remove from the vault allocation strategy
+   * @returns - an instruction to remove the reserve from the vault allocation strategy or undefined if the reserve is not part of the allocation strategy
+   */
+  async removeReserveFromAllocationIx(
+    vault: KaminoVault,
+    reserve: PublicKey
+  ): Promise<TransactionInstruction | undefined> {
+    const vaultState = await vault.getState(this.getConnection());
+
+    const reserveIsPartOfAllocation = vaultState.vaultAllocationStrategy.some((allocation) =>
+      allocation.reserve.equals(reserve)
+    );
+
+    if (!reserveIsPartOfAllocation) {
+      return undefined;
+    }
+
+    const accounts: RemoveAllocationAccounts = {
+      vaultAdminAuthority: vaultState.vaultAdminAuthority,
+      vaultState: vault.address,
+      reserve,
+    };
+
+    return removeAllocation(accounts);
   }
 
   /**

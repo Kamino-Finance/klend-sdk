@@ -231,6 +231,19 @@ export class KaminoManager {
     return this._vaultClient.updateReserveAllocationIxs(vault, reserveAllocationConfig);
   }
 
+  /**
+   * This method removes a reserve from the vault allocation strategy if already part of the allocation strategy
+   * @param vault - vault to remove the reserve from
+   * @param reserve - reserve to remove from the vault allocation strategy
+   * @returns - an instruction to remove the reserve from the vault allocation strategy or undefined if the reserve is not part of the allocation strategy
+   */
+  async removeReserveFromAllocationIx(
+    vault: KaminoVault,
+    reserve: PublicKey
+  ): Promise<TransactionInstruction | undefined> {
+    return this._vaultClient.removeReserveFromAllocationIx(vault, reserve);
+  }
+
   // async closeVault(vault: KaminoVault): Promise<TransactionInstruction> {
   //   return this._vaultClient.closeVaultIx(vault);
   // }
