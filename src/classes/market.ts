@@ -101,6 +101,10 @@ export class KaminoMarket {
       return null;
     }
 
+    if (recentSlotDurationMs <= 0) {
+      throw new Error('Recent slot duration cannot be 0');
+    }
+
     const reserves = withReserves
       ? await getReservesForMarket(marketAddress, connection, programId, recentSlotDurationMs)
       : new Map<PublicKey, KaminoReserve>();
