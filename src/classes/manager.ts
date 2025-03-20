@@ -31,7 +31,6 @@ import {
   assertNever,
   CreateKaminoMarketParams,
   createReserveIxs,
-  DEFAULT_RECENT_SLOT_DURATION_MS,
   ENV,
   getReserveOracleConfigs,
   initLendingMarket,
@@ -100,19 +99,19 @@ export class KaminoManager {
 
   constructor(
     connection: Connection,
+    recentSlotDurationMs: number,
     kaminoLendProgramId?: PublicKey,
-    kaminoVaultProgramId?: PublicKey,
-    recentSlotDurationMs?: number
+    kaminoVaultProgramId?: PublicKey
   ) {
     this._connection = connection;
+    this.recentSlotDurationMs = recentSlotDurationMs;
     this._kaminoVaultProgramId = kaminoVaultProgramId ? kaminoVaultProgramId : kaminoVaultId;
     this._kaminoLendProgramId = kaminoLendProgramId ? kaminoLendProgramId : PROGRAM_ID;
-    this.recentSlotDurationMs = recentSlotDurationMs ? recentSlotDurationMs : DEFAULT_RECENT_SLOT_DURATION_MS;
     this._vaultClient = new KaminoVaultClient(
       connection,
+      this.recentSlotDurationMs,
       this._kaminoVaultProgramId,
-      this._kaminoLendProgramId,
-      this.recentSlotDurationMs
+      this._kaminoLendProgramId
     );
   }
 

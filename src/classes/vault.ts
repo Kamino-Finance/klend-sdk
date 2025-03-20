@@ -64,7 +64,7 @@ import {
 import { deposit } from '../idl_codegen_kamino_vault/instructions';
 import { withdraw } from '../idl_codegen_kamino_vault/instructions';
 import { PROGRAM_ID } from '../idl_codegen/programId';
-import { DEFAULT_RECENT_SLOT_DURATION_MS, ReserveWithAddress } from './reserve';
+import { ReserveWithAddress } from './reserve';
 import { Fraction } from './fraction';
 import { createAtasIdempotent, lendingMarketAuthPda, PublicKeySet, SECONDS_PER_YEAR, U64_MAX } from '../utils';
 import bs58 from 'bs58';
@@ -115,14 +115,14 @@ export class KaminoVaultClient {
 
   constructor(
     connection: Connection,
+    recentSlotDurationMs: number,
     kaminoVaultprogramId?: PublicKey,
-    kaminoLendProgramId?: PublicKey,
-    recentSlotDurationMs?: number
+    kaminoLendProgramId?: PublicKey
   ) {
     this._connection = connection;
+    this.recentSlotDurationMs = recentSlotDurationMs;
     this._kaminoVaultProgramId = kaminoVaultprogramId ? kaminoVaultprogramId : kaminoVaultId;
     this._kaminoLendProgramId = kaminoLendProgramId ? kaminoLendProgramId : PROGRAM_ID;
-    this.recentSlotDurationMs = recentSlotDurationMs ? recentSlotDurationMs : DEFAULT_RECENT_SLOT_DURATION_MS;
   }
 
   getConnection() {

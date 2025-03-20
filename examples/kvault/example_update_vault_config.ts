@@ -2,14 +2,20 @@ import { getConnection } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
 import Decimal from 'decimal.js/decimal';
-import { buildAndSendTxn, KaminoManager, KaminoVault, VaultConfigField } from '../../src/lib';
+import {
+  buildAndSendTxn,
+  getMedianSlotDurationInMsFromLastEpochs,
+  KaminoManager,
+  KaminoVault,
+  VaultConfigField,
+} from '../../src/lib';
 import { Keypair } from '@solana/web3.js/lib';
 
 (async () => {
   const connection = getConnection();
   const user = getKeypair();
-
-  const kaminoManager = new KaminoManager(connection);
+  const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+  const kaminoManager = new KaminoManager(connection, slotDuration);
   const kaminoVault = new KaminoVault(EXAMPLE_USDC_VAULT);
 
   // update min invest amount (numerical value)

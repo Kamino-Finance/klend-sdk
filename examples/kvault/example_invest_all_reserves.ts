@@ -1,14 +1,15 @@
 import { getConnection } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
-import { KaminoManager, KaminoVault, buildAndSendTxn } from '../../src/lib';
+import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault, buildAndSendTxn } from '../../src/lib';
 
 // Note: in the internal impl of `investAllReservesIxs` it will firstly disinvest from the reserve that has more tokens than the desired allocation and then invest
 (async () => {
   const connection = getConnection();
   const wallet = getKeypair();
+  const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-  const kaminoManager = new KaminoManager(connection);
+  const kaminoManager = new KaminoManager(connection, slotDuration);
   const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
 
   const investAllResvesIxs = await kaminoManager.investAllReservesIxs(wallet.publicKey, vault);

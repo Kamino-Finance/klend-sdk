@@ -2,13 +2,13 @@ import { getConnection } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
 import Decimal from 'decimal.js/decimal';
-import { buildAndSendTxn, KaminoManager, KaminoVault } from '../../src/lib';
+import { buildAndSendTxn, getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } from '../../src/lib';
 
 (async () => {
   const connection = getConnection();
   const user = getKeypair();
-
-  const kaminoManager = new KaminoManager(connection);
+  const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+  const kaminoManager = new KaminoManager(connection, slotDuration);
   const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
 
   // read the vault state so we can use the LUT in the tx

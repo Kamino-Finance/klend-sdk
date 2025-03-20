@@ -12,13 +12,14 @@ import {
   Reserve,
   ReserveAllocationConfig,
   KaminoVault,
+  getMedianSlotDurationInMsFromLastEpochs,
 } from '../../src/lib';
 
 (async () => {
   const connection = getConnection();
   const wallet = getKeypair();
-
-  const kaminoManager = new KaminoManager(connection);
+  const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+  const kaminoManager = new KaminoManager(connection, slotDuration);
 
   // Init vault
   const kaminoVaultConfig = new KaminoVaultConfig({

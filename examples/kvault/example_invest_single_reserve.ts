@@ -1,14 +1,22 @@
 import { getConnection } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT, USDC_RESERVE_JLP_MARKET } from '../utils/constants';
-import { KaminoManager, ReserveWithAddress, Reserve, KaminoVault, buildAndSendTxn } from '../../src/lib';
+import {
+  KaminoManager,
+  ReserveWithAddress,
+  Reserve,
+  KaminoVault,
+  buildAndSendTxn,
+  getMedianSlotDurationInMsFromLastEpochs,
+} from '../../src/lib';
 
 // Note: if the reserve allocation require funds to be invested that need to be disinvested from anoter result you will need to disinvest that one first or use `investAllReservesIxs`
 (async () => {
   const connection = getConnection();
   const wallet = getKeypair();
+  const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+  const kaminoManager = new KaminoManager(connection, slotDuration);
 
-  const kaminoManager = new KaminoManager(connection);
   const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
 
   const usdcJlpMarketReserveState = await Reserve.fetch(connection, USDC_RESERVE_JLP_MARKET);

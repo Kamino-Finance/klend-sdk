@@ -1,13 +1,14 @@
 import { getConnection } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
-import { KaminoManager, KaminoVault } from '../../src/lib';
+import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } from '../../src/lib';
 
 (async () => {
   const connection = getConnection();
   const user = getKeypair();
+  const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-  const kaminoManager = new KaminoManager(connection);
+  const kaminoManager = new KaminoManager(connection, slotDuration);
 
   const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
   const vaultState = await vault.getState(connection);

@@ -3,9 +3,9 @@ import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
 import Decimal from 'decimal.js/decimal';
 import {
+  getMedianSlotDurationInMsFromLastEpochs,
   KaminoManager,
   KaminoVault,
-  printMarketOverview,
   printMarketsOverviewMap,
   printPubkeyHashMap,
   printReservesAllocationOverviewMap,
@@ -15,9 +15,9 @@ import { printHoldings, printHoldingsWithUSDValue, printVaultOverview } from '..
 
 (async () => {
   const connection = getConnection();
-  const user = getKeypair();
+  const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-  const kaminoManager = new KaminoManager(connection);
+  const kaminoManager = new KaminoManager(connection, slotDuration);
 
   // print vault state as it is on chain
   const vault = new KaminoVault(EXAMPLE_USDC_VAULT);

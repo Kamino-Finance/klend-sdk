@@ -16,6 +16,7 @@ import {
   Chain,
   DEFAULT_RECENT_SLOT_DURATION_MS,
   encodeTokenName,
+  getMedianSlotDurationInMsFromLastEpochs,
   initLookupTableIx,
   KaminoManager,
   KaminoMarket,
@@ -84,7 +85,12 @@ async function main() {
 
       const multisigPk = multisig ? new PublicKey(multisig) : PublicKey.default;
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const { market: marketKp, ixns: createMarketIxns } = await kaminoManager.createMarketIxs({
         admin: mode === 'multisig' ? multisigPk : env.payer.publicKey,
@@ -118,7 +124,12 @@ async function main() {
       }
 
       const multisigPk = multisig ? new PublicKey(multisig) : PublicKey.default;
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const reserveConfigFromFile = JSON.parse(fs.readFileSync(reserveConfigPath, 'utf8'));
 
@@ -184,7 +195,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const reserveConfigFromFile = JSON.parse(fs.readFileSync(reserveConfigPath, 'utf8'));
 
@@ -247,7 +263,12 @@ async function main() {
       }
 
       const multisigPk = multisig ? new PublicKey(multisig) : PublicKey.default;
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const tokenProgramID = await getAccountOwner(env.connection, tokenMint);
       const kaminoVaultConfig = new KaminoVaultConfig({
@@ -293,7 +314,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const instructions = await kaminoManager.updateVaultConfigIxs(kaminoVault, new PendingVaultAdmin(), newAdmin);
@@ -329,7 +355,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const instructions = await kaminoManager.updateVaultConfigIxs(kaminoVault, field, value);
@@ -364,7 +395,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const instructions = await kaminoManager.updateVaultConfigIxs(kaminoVault, new ManagementFeeBps(), feeBps);
@@ -401,7 +437,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const instructions = await kaminoManager.insertIntoLUTIxs(env.payer.publicKey, lutAddress, addressesArr);
 
@@ -435,7 +476,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const syncLUTIxs = await kaminoManager.syncVaultLUTIxs(kaminoVault);
@@ -471,7 +517,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const instructions = await kaminoManager.updateVaultConfigIxs(kaminoVault, new PerformanceFeeBps(), feeBps);
@@ -505,7 +556,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const instructions = await kaminoManager.acceptVaultOwnershipIxs(kaminoVault);
@@ -540,7 +596,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const instruction = await kaminoManager.giveUpPendingFeesIx(kaminoVault, new Decimal(maxAmountToGiveUp));
@@ -567,7 +628,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const instructions = await kaminoManager.withdrawPendingFeesIxs(
@@ -595,10 +661,12 @@ async function main() {
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
 
-      const stakeIxs = await new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId).stakeSharesIxs(
-        env.payer.publicKey,
-        kaminoVault
-      );
+      const stakeIxs = await new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      ).stakeSharesIxs(env.payer.publicKey, kaminoVault);
 
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
@@ -631,7 +699,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
       const reserveState = await Reserve.fetch(env.connection, reserveAddress, env.kLendProgramId);
       if (!reserveState) {
         throw new Error('Reserve not found');
@@ -682,7 +755,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const depositInstructions = await kaminoManager.depositToVaultIxs(env.payer.publicKey, kaminoVault, amount);
@@ -711,7 +789,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const withdrawIxs = await kaminoManager.withdrawFromVaultIxs(
@@ -751,7 +834,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const instructions = await kaminoManager.investAllReservesIxs(env.payer.publicKey, kaminoVault);
@@ -783,7 +871,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const reserveState = await Reserve.fetch(env.connection, new PublicKey(reserve), env.kLendProgramId);
@@ -828,8 +921,9 @@ async function main() {
     .requiredOption('--vault <string>', 'Vault address')
     .action(async ({ vault }) => {
       const env = initializeClient(false, false);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(env.connection, slotDuration, env.kLendProgramId, env.kVaultProgramId);
 
       const vaultAddress = new PublicKey(vault);
       const vaultState = await new KaminoVault(vaultAddress, undefined, env.kVaultProgramId).getState(env.connection);
@@ -850,8 +944,9 @@ async function main() {
     .requiredOption('--vault <string>', 'Vault address')
     .action(async ({ vault }) => {
       const env = initializeClient(false, false);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(env.connection, slotDuration, env.kLendProgramId, env.kVaultProgramId);
 
       const vaultAddress = new PublicKey(vault);
       const vaultState = await new KaminoVault(vaultAddress, undefined, env.kVaultProgramId).getState(env.connection);
@@ -869,8 +964,9 @@ async function main() {
     .requiredOption('--vault <string>', 'Vault address')
     .action(async ({ vault }) => {
       const env = initializeClient(false, false);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(env.connection, slotDuration, env.kLendProgramId, env.kVaultProgramId);
 
       const vaultAddress = new PublicKey(vault);
       const vaultState = await new KaminoVault(vaultAddress, undefined, env.kVaultProgramId).getState(env.connection);
@@ -888,8 +984,9 @@ async function main() {
     .requiredOption('--wallet <string>', 'User wailt address')
     .action(async ({ vault, wallet }) => {
       const env = initializeClient(false, false);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(env.connection, slotDuration, env.kLendProgramId, env.kVaultProgramId);
 
       const vaultAddress = new PublicKey(vault);
       const walletAddress = new PublicKey(wallet);
@@ -903,8 +1000,9 @@ async function main() {
     .requiredOption('--wallet <string>', 'User wailt address')
     .action(async ({ wallet }) => {
       const env = initializeClient(false, false);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(env.connection, slotDuration, env.kLendProgramId, env.kVaultProgramId);
 
       const walletAddress = new PublicKey(wallet);
       const userShares = await kaminoManager.getUserSharesBalanceAllVaults(walletAddress);
@@ -918,8 +1016,9 @@ async function main() {
     .requiredOption('--vault <string>', 'Vault address')
     .action(async ({ vault }) => {
       const env = initializeClient(false, false);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(env.connection, slotDuration, env.kLendProgramId, env.kVaultProgramId);
 
       const vaultAddress = new PublicKey(vault);
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
@@ -935,8 +1034,9 @@ async function main() {
     .requiredOption('--vault <string>', 'Vault address')
     .action(async ({ vault }) => {
       const env = initializeClient(false, false);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(env.connection, slotDuration, env.kLendProgramId, env.kVaultProgramId);
 
       const vaultAddress = new PublicKey(vault);
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
@@ -961,7 +1061,12 @@ async function main() {
 
   commands.command('get-oracle-mappings').action(async () => {
     const env = initializeClient(false, false);
-    const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+    const kaminoManager = new KaminoManager(
+      env.connection,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      env.kLendProgramId,
+      env.kVaultProgramId
+    );
 
     console.log('Getting  oracle mappings');
     const oracleConfigs = await kaminoManager.getScopeOracleConfigs();
@@ -970,15 +1075,21 @@ async function main() {
 
   commands.command('get-all-vaults').action(async () => {
     const env = initializeClient(false, false);
-    const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+    const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
+    const kaminoManager = new KaminoManager(env.connection, slotDuration, env.kLendProgramId, env.kVaultProgramId);
     const allVaults = await kaminoManager.getAllVaults();
     console.log('all vaults', allVaults);
   });
 
   commands.command('get-all-vaults-pks').action(async () => {
     const env = initializeClient(false, false);
-    const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+    const kaminoManager = new KaminoManager(
+      env.connection,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      env.kLendProgramId,
+      env.kVaultProgramId
+    );
 
     const allVaults = await kaminoManager.getAllVaults();
     console.log(
@@ -994,8 +1105,9 @@ async function main() {
       const env = initializeClient(false, false);
 
       const vaultAddress = new PublicKey(vault);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(env.connection, slotDuration, env.kLendProgramId, env.kVaultProgramId);
       const vaultState = await new KaminoVault(vaultAddress, undefined, env.kVaultProgramId).getState(env.connection);
 
       const simulatedHoldings = await kaminoManager.calculateSimulatedHoldingsWithInterest(vaultState);
@@ -1036,8 +1148,9 @@ async function main() {
       const env = initializeClient(false, false);
 
       const vaultAddress = new PublicKey(vault);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(env.connection, slotDuration, env.kLendProgramId, env.kVaultProgramId);
       const vaultState = await new KaminoVault(vaultAddress, undefined, env.kVaultProgramId).getState(env.connection);
 
       const computedAllocation = await kaminoManager.getVaultComputedReservesAllocation(vaultState);
@@ -1117,7 +1230,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const newLendingMarket = LendingMarket.fromJSON(JSON.parse(fs.readFileSync(lendingMarketConfigPath, 'utf8')));
 
@@ -1157,7 +1275,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const ixn = kaminoManager.updateLendingMarketOwnerIxs(marketWithAddress);
 
@@ -1195,7 +1318,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const currentName = parseZeroPaddedUtf8(lendingMarketState.name);
       const newNameEncoded = encodeTokenName(newName);
@@ -1251,7 +1379,12 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
 
-      const kaminoManager = new KaminoManager(env.connection, env.kLendProgramId, env.kVaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
 
       const newReserveConfigFields: ReserveConfigFields = {
         ...reserveState.config,

@@ -4,13 +4,14 @@ import { KaminoVaultConfig } from '../../src/classes/vault';
 import { USDC_MINT } from '../utils/constants';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import Decimal from 'decimal.js/decimal';
-import { buildAndSendTxn, KaminoManager, sleep } from '../../src/lib';
+import { buildAndSendTxn, getMedianSlotDurationInMsFromLastEpochs, KaminoManager, sleep } from '../../src/lib';
 
 (async () => {
   const connection = getConnection();
   const wallet = getKeypair();
+  const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-  const kaminoManager = new KaminoManager(connection);
+  const kaminoManager = new KaminoManager(connection, slotDuration);
 
   // Initial vault configuration
   const kaminoVaultConfig = new KaminoVaultConfig({

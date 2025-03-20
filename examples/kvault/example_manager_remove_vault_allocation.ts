@@ -9,14 +9,15 @@ import {
   Reserve,
   ReserveAllocationConfig,
   KaminoVault,
+  getMedianSlotDurationInMsFromLastEpochs,
 } from '../../src/lib';
 
 // to remove a reserve from the allocation, set the weight to 0
 (async () => {
   const connection = getConnection();
   const wallet = getKeypair();
-
-  const kaminoManager = new KaminoManager(connection);
+  const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+  const kaminoManager = new KaminoManager(connection, slotDuration);
   const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
 
   // Update reserve allocation (add new reserve into the allocation)
