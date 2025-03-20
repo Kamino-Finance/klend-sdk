@@ -199,7 +199,12 @@ export class KaminoVaultClient {
       this._kaminoVaultProgramId
     )[0];
 
-    const adminTokenAccount = getAssociatedTokenAddressSync(vaultConfig.tokenMint, vaultConfig.admin, false);
+    const adminTokenAccount = getAssociatedTokenAddressSync(
+      vaultConfig.tokenMint,
+      vaultConfig.admin,
+      false,
+      vaultConfig.tokenMintProgramId
+    );
 
     const initVaultAccounts: InitVaultAccounts = {
       adminAuthority: vaultConfig.admin,
