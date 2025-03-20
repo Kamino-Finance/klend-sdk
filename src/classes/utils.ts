@@ -222,11 +222,17 @@ export function calculateAPRFromAPY(apy: Decimal.Value) {
     .times(SLOTS_PER_YEAR);
 }
 
-export function sameLengthArrayEquals(left: Array<number>, right: Array<number>): boolean {
+export function sameLengthArrayEquals<T>(left: Array<T>, right: Array<T>): boolean {
   if (left.length != right.length) {
-    throw new Error(`Not same length: ${left.length} != ${left.length}`);
+    throw new Error(`Not same length: ${left.length} != ${right.length}`);
   }
-  return left.every((value, index) => value === right[index]);
+  return left.every((value, index) => {
+    const other = right[index];
+    if (value != null && typeof (value as any).eq === 'function') {
+      return (value as any).eq(other);
+    }
+    return value === other;
+  });
 }
 
 export function getTokenBalanceFromAccountInfoLamports(accountInfo: AccountInfo<Buffer>): Decimal {

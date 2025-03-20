@@ -12,6 +12,7 @@ import {
   INITIAL_COLLATERAL_RATE,
   lendingMarketAuthPda,
   MarketWithAddress,
+  MIN_INITIAL_DEPOSIT,
   ONE_HUNDRED_PCT_IN_BPS,
   reservePdas,
   SLOTS_PER_DAY,
@@ -1184,13 +1185,14 @@ export function updateReserveConfigIx(
   reserveAddress: PublicKey,
   modeDiscriminator: number,
   value: Uint8Array,
-  programId: PublicKey
+  programId: PublicKey,
+  skipValidation: boolean = false
 ): TransactionInstruction {
   value;
   const args: UpdateReserveConfigArgs = {
     mode: new anchor.BN(modeDiscriminator),
     value: value,
-    skipValidation: false,
+    skipValidation,
   };
 
   const accounts: UpdateReserveConfigAccounts = {
@@ -1221,21 +1223,15 @@ function handleConfigUpdate(
   key: ReserveConfigKey,
   reserve: Reserve | undefined,
   reserveConfig: ReserveConfig,
-  updateReserveIxnsArgs: { mode: number; value: Uint8Array }[]
+  updateReserveIxnsArgs: UpdateReserveIxnsArgs[]
 ): void {
+  // We add 1 to the discriminator, to account for the fact that the UpdateConfigMode
+  // inside the SC starts incrementing from 1
   switch (key) {
     case 'status':
-      if (reserve === undefined) {
+      if (reserve === undefined || reserve.config.status !== reserveConfig.status) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateReserveStatus.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateReserveStatus.discriminator,
-            reserveConfig.status
-          ),
-        });
-      } else if (reserve.config.status !== reserveConfig.status) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateReserveStatus.discriminator,
+          mode: UpdateConfigMode.UpdateReserveStatus.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateReserveStatus.discriminator,
             reserveConfig.status
@@ -1244,17 +1240,9 @@ function handleConfigUpdate(
       }
       break;
     case 'assetTier':
-      if (reserve === undefined) {
+      if (reserve === undefined || reserve.config.assetTier !== reserveConfig.assetTier) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateAssetTier.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateAssetTier.discriminator,
-            reserveConfig.assetTier
-          ),
-        });
-      } else if (reserve.config.assetTier !== reserveConfig.assetTier) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateAssetTier.discriminator,
+          mode: UpdateConfigMode.UpdateAssetTier.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateAssetTier.discriminator,
             reserveConfig.assetTier
@@ -1263,17 +1251,9 @@ function handleConfigUpdate(
       }
       break;
     case 'hostFixedInterestRateBps':
-      if (reserve === undefined) {
+      if (reserve === undefined || reserve.config.hostFixedInterestRateBps !== reserveConfig.hostFixedInterestRateBps) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateHostFixedInterestRateBps.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateHostFixedInterestRateBps.discriminator,
-            reserveConfig.hostFixedInterestRateBps
-          ),
-        });
-      } else if (reserve.config.hostFixedInterestRateBps !== reserveConfig.hostFixedInterestRateBps) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateHostFixedInterestRateBps.discriminator,
+          mode: UpdateConfigMode.UpdateHostFixedInterestRateBps.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateHostFixedInterestRateBps.discriminator,
             reserveConfig.hostFixedInterestRateBps
@@ -1282,17 +1262,9 @@ function handleConfigUpdate(
       }
       break;
     case 'protocolTakeRatePct':
-      if (reserve === undefined) {
+      if (reserve === undefined || reserve.config.protocolTakeRatePct !== reserveConfig.protocolTakeRatePct) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateProtocolTakeRate.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateProtocolTakeRate.discriminator,
-            reserveConfig.protocolTakeRatePct
-          ),
-        });
-      } else if (reserve.config.protocolTakeRatePct !== reserveConfig.protocolTakeRatePct) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateProtocolTakeRate.discriminator,
+          mode: UpdateConfigMode.UpdateProtocolTakeRate.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateProtocolTakeRate.discriminator,
             reserveConfig.protocolTakeRatePct
@@ -1301,17 +1273,12 @@ function handleConfigUpdate(
       }
       break;
     case 'protocolLiquidationFeePct':
-      if (reserve === undefined) {
+      if (
+        reserve === undefined ||
+        reserve.config.protocolLiquidationFeePct !== reserveConfig.protocolLiquidationFeePct
+      ) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateProtocolLiquidationFee.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateProtocolLiquidationFee.discriminator,
-            reserveConfig.protocolLiquidationFeePct
-          ),
-        });
-      } else if (reserve.config.protocolLiquidationFeePct !== reserveConfig.protocolLiquidationFeePct) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateProtocolLiquidationFee.discriminator,
+          mode: UpdateConfigMode.UpdateProtocolLiquidationFee.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateProtocolLiquidationFee.discriminator,
             reserveConfig.protocolLiquidationFeePct
@@ -1320,17 +1287,9 @@ function handleConfigUpdate(
       }
       break;
     case 'loanToValuePct':
-      if (reserve === undefined) {
+      if (reserve === undefined || reserve.config.loanToValuePct !== reserveConfig.loanToValuePct) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateLoanToValuePct.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateLoanToValuePct.discriminator,
-            reserveConfig.loanToValuePct
-          ),
-        });
-      } else if (reserve.config.loanToValuePct !== reserveConfig.loanToValuePct) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateLoanToValuePct.discriminator,
+          mode: UpdateConfigMode.UpdateLoanToValuePct.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateLoanToValuePct.discriminator,
             reserveConfig.loanToValuePct
@@ -1339,17 +1298,9 @@ function handleConfigUpdate(
       }
       break;
     case 'liquidationThresholdPct':
-      if (reserve === undefined) {
+      if (reserve === undefined || reserve.config.liquidationThresholdPct !== reserveConfig.liquidationThresholdPct) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateLiquidationThresholdPct.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateLiquidationThresholdPct.discriminator,
-            reserveConfig.liquidationThresholdPct
-          ),
-        });
-      } else if (reserve.config.liquidationThresholdPct !== reserveConfig.liquidationThresholdPct) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateLiquidationThresholdPct.discriminator,
+          mode: UpdateConfigMode.UpdateLiquidationThresholdPct.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateLiquidationThresholdPct.discriminator,
             reserveConfig.liquidationThresholdPct
@@ -1358,17 +1309,9 @@ function handleConfigUpdate(
       }
       break;
     case 'minLiquidationBonusBps':
-      if (reserve === undefined) {
+      if (reserve === undefined || reserve.config.minLiquidationBonusBps !== reserveConfig.minLiquidationBonusBps) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateMinLiquidationBonusBps.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateMinLiquidationBonusBps.discriminator,
-            reserveConfig.minLiquidationBonusBps
-          ),
-        });
-      } else if (reserve.config.minLiquidationBonusBps !== reserveConfig.minLiquidationBonusBps) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateMinLiquidationBonusBps.discriminator,
+          mode: UpdateConfigMode.UpdateMinLiquidationBonusBps.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateMinLiquidationBonusBps.discriminator,
             reserveConfig.minLiquidationBonusBps
@@ -1377,17 +1320,9 @@ function handleConfigUpdate(
       }
       break;
     case 'maxLiquidationBonusBps':
-      if (reserve === undefined) {
+      if (reserve === undefined || reserve.config.maxLiquidationBonusBps !== reserveConfig.maxLiquidationBonusBps) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator,
-            reserveConfig.maxLiquidationBonusBps
-          ),
-        });
-      } else if (reserve.config.maxLiquidationBonusBps !== reserveConfig.maxLiquidationBonusBps) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator,
+          mode: UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator,
             reserveConfig.maxLiquidationBonusBps
@@ -1396,17 +1331,12 @@ function handleConfigUpdate(
       }
       break;
     case 'badDebtLiquidationBonusBps':
-      if (reserve === undefined) {
+      if (
+        reserve === undefined ||
+        reserve.config.badDebtLiquidationBonusBps !== reserveConfig.badDebtLiquidationBonusBps
+      ) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBadDebtLiquidationBonusBps.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateBadDebtLiquidationBonusBps.discriminator,
-            reserveConfig.badDebtLiquidationBonusBps
-          ),
-        });
-      } else if (reserve.config.badDebtLiquidationBonusBps !== reserveConfig.badDebtLiquidationBonusBps) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBadDebtLiquidationBonusBps.discriminator,
+          mode: UpdateConfigMode.UpdateBadDebtLiquidationBonusBps.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateBadDebtLiquidationBonusBps.discriminator,
             reserveConfig.badDebtLiquidationBonusBps
@@ -1415,17 +1345,12 @@ function handleConfigUpdate(
       }
       break;
     case 'deleveragingMarginCallPeriodSecs':
-      if (reserve === undefined) {
+      if (
+        reserve === undefined ||
+        !reserve.config.deleveragingMarginCallPeriodSecs.eq(reserveConfig.deleveragingMarginCallPeriodSecs)
+      ) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
-            reserveConfig.deleveragingMarginCallPeriodSecs.toNumber()
-          ),
-        });
-      } else if (!reserve.config.deleveragingMarginCallPeriodSecs.eq(reserveConfig.deleveragingMarginCallPeriodSecs)) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
+          mode: UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
             reserveConfig.deleveragingMarginCallPeriodSecs.toNumber()
@@ -1434,19 +1359,12 @@ function handleConfigUpdate(
       }
       break;
     case 'deleveragingThresholdDecreaseBpsPerDay':
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
-            reserveConfig.deleveragingThresholdDecreaseBpsPerDay.toNumber()
-          ),
-        });
-      } else if (
+      if (
+        reserve === undefined ||
         !reserve.config.deleveragingThresholdDecreaseBpsPerDay.eq(reserveConfig.deleveragingThresholdDecreaseBpsPerDay)
       ) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
+          mode: UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
             reserveConfig.deleveragingThresholdDecreaseBpsPerDay.toNumber()
@@ -1455,46 +1373,35 @@ function handleConfigUpdate(
       }
       break;
     case 'fees':
-      if (reserve === undefined) {
+      if (reserve === undefined || !reserve.config.fees.borrowFeeSf.eq(reserveConfig.fees.borrowFeeSf)) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateFeesBorrowFee.discriminator,
+          mode: UpdateConfigMode.UpdateFeesBorrowFee.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateFeesBorrowFee.discriminator,
             reserveConfig.fees.borrowFeeSf.toNumber()
           ),
         });
+      }
+
+      if (reserve === undefined || !reserve.config.fees.flashLoanFeeSf.eq(reserveConfig.fees.flashLoanFeeSf)) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateFeesFlashLoanFee.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateFeesFlashLoanFee.discriminator,
-            reserveConfig.fees.flashLoanFeeSf.toNumber()
-          ),
-        });
-      } else if (!reserve.config.fees.borrowFeeSf.eq(reserveConfig.fees.borrowFeeSf)) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateFeesBorrowFee.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateFeesBorrowFee.discriminator,
-            reserveConfig.fees.borrowFeeSf.toNumber()
-          ),
-        });
-      } else if (!reserve.config.fees.flashLoanFeeSf.eq(reserveConfig.fees.flashLoanFeeSf)) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateFeesFlashLoanFee.discriminator,
+          mode: UpdateConfigMode.UpdateFeesFlashLoanFee.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateFeesFlashLoanFee.discriminator,
             reserveConfig.fees.flashLoanFeeSf.toNumber()
           ),
         });
       }
+
       break;
     case 'borrowRateCurve':
       if (reserve === undefined) {
         updateReserveIxnsArgs.push({
-          mode: UpdateBorrowRateCurve.discriminator,
+          mode: UpdateBorrowRateCurve.discriminator + 1,
           value: updateReserveConfigEncodedValue(UpdateBorrowRateCurve.discriminator, reserveConfig.borrowRateCurve),
         });
       } else {
+        let shouldBorrowCurveBeUpdated = false;
         for (let i = 0; i < reserveConfig.borrowRateCurve.points.length; i++) {
           if (
             reserve.config.borrowRateCurve.points[i].utilizationRateBps !==
@@ -1502,30 +1409,24 @@ function handleConfigUpdate(
             reserve.config.borrowRateCurve.points[i].borrowRateBps !==
               reserveConfig.borrowRateCurve.points[i].borrowRateBps
           ) {
-            updateReserveIxnsArgs.push({
-              mode: UpdateBorrowRateCurve.discriminator,
-              value: updateReserveConfigEncodedValue(
-                UpdateBorrowRateCurve.discriminator,
-                reserveConfig.borrowRateCurve
-              ),
-            });
+            shouldBorrowCurveBeUpdated = true;
             break;
           }
+        }
+
+        if (shouldBorrowCurveBeUpdated) {
+          updateReserveIxnsArgs.push({
+            mode: UpdateBorrowRateCurve.discriminator + 1,
+            value: updateReserveConfigEncodedValue(UpdateBorrowRateCurve.discriminator, reserveConfig.borrowRateCurve),
+          });
+          break;
         }
       }
       break;
     case 'borrowFactorPct':
-      if (reserve === undefined) {
+      if (reserve === undefined || !reserve.config.borrowFactorPct.eq(reserveConfig.borrowFactorPct)) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBorrowFactor.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateBorrowFactor.discriminator,
-            reserveConfig.borrowFactorPct.toNumber()
-          ),
-        });
-      } else if (!reserve.config.borrowFactorPct.eq(reserveConfig.borrowFactorPct)) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBorrowFactor.discriminator,
+          mode: UpdateConfigMode.UpdateBorrowFactor.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateBorrowFactor.discriminator,
             reserveConfig.borrowFactorPct.toNumber()
@@ -1534,17 +1435,9 @@ function handleConfigUpdate(
       }
       break;
     case 'depositLimit':
-      if (reserve === undefined) {
+      if (reserve === undefined || !reserve.config.depositLimit.eq(reserveConfig.depositLimit)) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDepositLimit.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDepositLimit.discriminator,
-            BigInt(reserveConfig.depositLimit.toString())
-          ),
-        });
-      } else if (!reserve.config.depositLimit.eq(reserveConfig.depositLimit)) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDepositLimit.discriminator,
+          mode: UpdateConfigMode.UpdateDepositLimit.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateDepositLimit.discriminator,
             BigInt(reserveConfig.depositLimit.toString())
@@ -1553,17 +1446,9 @@ function handleConfigUpdate(
       }
       break;
     case 'borrowLimit':
-      if (reserve === undefined) {
+      if (reserve === undefined || !reserve.config.borrowLimit.eq(reserveConfig.borrowLimit)) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBorrowLimit.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateBorrowLimit.discriminator,
-            BigInt(reserveConfig.borrowLimit.toString())
-          ),
-        });
-      } else if (!reserve.config.borrowLimit.eq(reserveConfig.borrowLimit)) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBorrowLimit.discriminator,
+          mode: UpdateConfigMode.UpdateBorrowLimit.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateBorrowLimit.discriminator,
             BigInt(reserveConfig.borrowLimit.toString())
@@ -1575,88 +1460,88 @@ function handleConfigUpdate(
       const tokenInfo = reserveConfig.tokenInfo;
       if (reserve === undefined) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateTokenInfoName.discriminator,
+          mode: UpdateConfigMode.UpdateTokenInfoName.discriminator + 1,
           value: updateReserveConfigEncodedValue(UpdateConfigMode.UpdateTokenInfoName.discriminator, tokenInfo.name),
         });
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateTokenInfoLowerHeuristic.discriminator,
+          mode: UpdateConfigMode.UpdateTokenInfoLowerHeuristic.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateTokenInfoLowerHeuristic.discriminator,
             tokenInfo.heuristic.lower.toNumber()
           ),
         });
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateTokenInfoUpperHeuristic.discriminator,
+          mode: UpdateConfigMode.UpdateTokenInfoUpperHeuristic.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateTokenInfoUpperHeuristic.discriminator,
             tokenInfo.heuristic.upper.toNumber()
           ),
         });
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator,
+          mode: UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator,
             tokenInfo.heuristic.exp.toNumber()
           ),
         });
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateTokenInfoTwapDivergence.discriminator,
+          mode: UpdateConfigMode.UpdateTokenInfoTwapDivergence.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateTokenInfoTwapDivergence.discriminator,
             tokenInfo.maxTwapDivergenceBps.toNumber()
           ),
         });
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateTokenInfoPriceMaxAge.discriminator,
+          mode: UpdateConfigMode.UpdateTokenInfoPriceMaxAge.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateTokenInfoPriceMaxAge.discriminator,
             tokenInfo.maxAgePriceSeconds.toNumber()
           ),
         });
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator,
+          mode: UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator,
             tokenInfo.maxAgeTwapSeconds.toNumber()
           ),
         });
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator,
+          mode: UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator,
             tokenInfo.scopeConfiguration.priceChain
           ),
         });
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator,
+          mode: UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator,
             tokenInfo.scopeConfiguration.twapChain
           ),
         });
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateSwitchboardFeed.discriminator,
+          mode: UpdateConfigMode.UpdateSwitchboardFeed.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateSwitchboardFeed.discriminator,
             tokenInfo.switchboardConfiguration.priceAggregator
           ),
         });
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateSwitchboardTwapFeed.discriminator,
+          mode: UpdateConfigMode.UpdateSwitchboardTwapFeed.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateSwitchboardTwapFeed.discriminator,
             tokenInfo.switchboardConfiguration.twapAggregator
           ),
         });
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdatePythPrice.discriminator,
+          mode: UpdateConfigMode.UpdatePythPrice.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdatePythPrice.discriminator,
             tokenInfo.pythConfiguration.price
           ),
         });
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBlockPriceUsage.discriminator,
+          mode: UpdateConfigMode.UpdateBlockPriceUsage.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateBlockPriceUsage.discriminator,
             tokenInfo.blockPriceUsage
@@ -1665,13 +1550,13 @@ function handleConfigUpdate(
       } else {
         if (!sameLengthArrayEquals(reserve.config.tokenInfo.name, tokenInfo.name)) {
           updateReserveIxnsArgs.push({
-            mode: UpdateConfigMode.UpdateTokenInfoName.discriminator,
+            mode: UpdateConfigMode.UpdateTokenInfoName.discriminator + 1,
             value: updateReserveConfigEncodedValue(UpdateConfigMode.UpdateTokenInfoName.discriminator, tokenInfo.name),
           });
         }
         if (!reserve.config.tokenInfo.heuristic.lower.eq(tokenInfo.heuristic.lower)) {
           updateReserveIxnsArgs.push({
-            mode: UpdateConfigMode.UpdateTokenInfoLowerHeuristic.discriminator,
+            mode: UpdateConfigMode.UpdateTokenInfoLowerHeuristic.discriminator + 1,
             value: updateReserveConfigEncodedValue(
               UpdateConfigMode.UpdateTokenInfoLowerHeuristic.discriminator,
               tokenInfo.heuristic.lower.toNumber()
@@ -1680,7 +1565,7 @@ function handleConfigUpdate(
         }
         if (!reserve.config.tokenInfo.heuristic.upper.eq(tokenInfo.heuristic.upper)) {
           updateReserveIxnsArgs.push({
-            mode: UpdateConfigMode.UpdateTokenInfoUpperHeuristic.discriminator,
+            mode: UpdateConfigMode.UpdateTokenInfoUpperHeuristic.discriminator + 1,
             value: updateReserveConfigEncodedValue(
               UpdateConfigMode.UpdateTokenInfoUpperHeuristic.discriminator,
               tokenInfo.heuristic.upper.toNumber()
@@ -1689,7 +1574,7 @@ function handleConfigUpdate(
         }
         if (!reserve.config.tokenInfo.heuristic.exp.eq(tokenInfo.heuristic.exp)) {
           updateReserveIxnsArgs.push({
-            mode: UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator,
+            mode: UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator + 1,
             value: updateReserveConfigEncodedValue(
               UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator,
               tokenInfo.heuristic.exp.toNumber()
@@ -1698,7 +1583,7 @@ function handleConfigUpdate(
         }
         if (!reserve.config.tokenInfo.maxTwapDivergenceBps.eq(tokenInfo.maxTwapDivergenceBps)) {
           updateReserveIxnsArgs.push({
-            mode: UpdateConfigMode.UpdateTokenInfoTwapDivergence.discriminator,
+            mode: UpdateConfigMode.UpdateTokenInfoTwapDivergence.discriminator + 1,
             value: updateReserveConfigEncodedValue(
               UpdateConfigMode.UpdateTokenInfoTwapDivergence.discriminator,
               tokenInfo.maxTwapDivergenceBps.toNumber()
@@ -1707,7 +1592,7 @@ function handleConfigUpdate(
         }
         if (!reserve.config.tokenInfo.maxAgePriceSeconds.eq(tokenInfo.maxAgePriceSeconds)) {
           updateReserveIxnsArgs.push({
-            mode: UpdateConfigMode.UpdateTokenInfoPriceMaxAge.discriminator,
+            mode: UpdateConfigMode.UpdateTokenInfoPriceMaxAge.discriminator + 1,
             value: updateReserveConfigEncodedValue(
               UpdateConfigMode.UpdateTokenInfoPriceMaxAge.discriminator,
               tokenInfo.maxAgePriceSeconds.toNumber()
@@ -1716,7 +1601,7 @@ function handleConfigUpdate(
         }
         if (!reserve.config.tokenInfo.maxAgeTwapSeconds.eq(tokenInfo.maxAgeTwapSeconds)) {
           updateReserveIxnsArgs.push({
-            mode: UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator,
+            mode: UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator + 1,
             value: updateReserveConfigEncodedValue(
               UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator,
               tokenInfo.maxAgeTwapSeconds.toNumber()
@@ -1730,7 +1615,7 @@ function handleConfigUpdate(
           )
         ) {
           updateReserveIxnsArgs.push({
-            mode: UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator,
+            mode: UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator + 1,
             value: updateReserveConfigEncodedValue(
               UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator,
               tokenInfo.scopeConfiguration.priceChain
@@ -1744,7 +1629,7 @@ function handleConfigUpdate(
           )
         ) {
           updateReserveIxnsArgs.push({
-            mode: UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator,
+            mode: UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator + 1,
             value: updateReserveConfigEncodedValue(
               UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator,
               tokenInfo.scopeConfiguration.twapChain
@@ -1757,7 +1642,7 @@ function handleConfigUpdate(
           )
         ) {
           updateReserveIxnsArgs.push({
-            mode: UpdateConfigMode.UpdateSwitchboardFeed.discriminator,
+            mode: UpdateConfigMode.UpdateSwitchboardFeed.discriminator + 1,
             value: updateReserveConfigEncodedValue(
               UpdateConfigMode.UpdateSwitchboardFeed.discriminator,
               tokenInfo.switchboardConfiguration.priceAggregator
@@ -1770,7 +1655,7 @@ function handleConfigUpdate(
           )
         ) {
           updateReserveIxnsArgs.push({
-            mode: UpdateConfigMode.UpdateSwitchboardTwapFeed.discriminator,
+            mode: UpdateConfigMode.UpdateSwitchboardTwapFeed.discriminator + 1,
             value: updateReserveConfigEncodedValue(
               UpdateConfigMode.UpdateSwitchboardTwapFeed.discriminator,
               tokenInfo.switchboardConfiguration.twapAggregator
@@ -1779,7 +1664,7 @@ function handleConfigUpdate(
         }
         if (!reserve.config.tokenInfo.pythConfiguration.price.equals(tokenInfo.pythConfiguration.price)) {
           updateReserveIxnsArgs.push({
-            mode: UpdateConfigMode.UpdatePythPrice.discriminator,
+            mode: UpdateConfigMode.UpdatePythPrice.discriminator + 1,
             value: updateReserveConfigEncodedValue(
               UpdateConfigMode.UpdatePythPrice.discriminator,
               tokenInfo.pythConfiguration.price
@@ -1788,7 +1673,7 @@ function handleConfigUpdate(
         }
         if (reserve.config.tokenInfo.blockPriceUsage !== tokenInfo.blockPriceUsage) {
           updateReserveIxnsArgs.push({
-            mode: UpdateConfigMode.UpdateBlockPriceUsage.discriminator,
+            mode: UpdateConfigMode.UpdateBlockPriceUsage.discriminator + 1,
             value: updateReserveConfigEncodedValue(
               UpdateConfigMode.UpdateBlockPriceUsage.discriminator,
               tokenInfo.blockPriceUsage
@@ -1797,7 +1682,7 @@ function handleConfigUpdate(
         }
         if (!reserve.config.tokenInfo.scopeConfiguration.priceFeed.equals(tokenInfo.scopeConfiguration.priceFeed)) {
           updateReserveIxnsArgs.push({
-            mode: UpdateConfigMode.UpdateScopePriceFeed.discriminator,
+            mode: UpdateConfigMode.UpdateScopePriceFeed.discriminator + 1,
             value: updateReserveConfigEncodedValue(
               UpdateConfigMode.UpdateScopePriceFeed.discriminator,
               tokenInfo.scopeConfiguration.priceFeed
@@ -1809,18 +1694,11 @@ function handleConfigUpdate(
     case 'depositWithdrawalCap':
       if (reserve === undefined) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator,
+          mode: UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator + 1,
           value: updateReserveConfigEncodedValue(UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator, [
             reserveConfig.depositWithdrawalCap.configCapacity.toNumber(),
             reserveConfig.depositWithdrawalCap.configIntervalLengthSeconds.toNumber(),
           ]),
-        });
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDepositWithdrawalCapCurrentTotal.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator,
-            reserveConfig.depositWithdrawalCap.currentTotal.toNumber()
-          ),
         });
       } else if (
         !reserve.config.depositWithdrawalCap.configCapacity.eq(reserveConfig.depositWithdrawalCap.configCapacity) ||
@@ -1829,7 +1707,7 @@ function handleConfigUpdate(
         )
       ) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator,
+          mode: UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator + 1,
           value: updateReserveConfigEncodedValue(UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator, [
             reserveConfig.depositWithdrawalCap.configCapacity.toNumber(),
             reserveConfig.depositWithdrawalCap.configIntervalLengthSeconds.toNumber(),
@@ -1839,7 +1717,7 @@ function handleConfigUpdate(
         !reserve.config.depositWithdrawalCap.currentTotal.eq(reserveConfig.depositWithdrawalCap.currentTotal)
       ) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDepositWithdrawalCapCurrentTotal.discriminator,
+          mode: UpdateConfigMode.UpdateDepositWithdrawalCapCurrentTotal.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator,
             reserveConfig.depositWithdrawalCap.currentTotal.toNumber()
@@ -1850,18 +1728,11 @@ function handleConfigUpdate(
     case 'debtWithdrawalCap':
       if (reserve === undefined) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator,
+          mode: UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator + 1,
           value: updateReserveConfigEncodedValue(UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator, [
             reserveConfig.debtWithdrawalCap.configCapacity.toNumber(),
             reserveConfig.debtWithdrawalCap.configIntervalLengthSeconds.toNumber(),
           ]),
-        });
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDebtWithdrawalCapCurrentTotal.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator,
-            reserveConfig.debtWithdrawalCap.currentTotal.toNumber()
-          ),
         });
       } else if (
         !reserve.config.debtWithdrawalCap.configCapacity.eq(reserveConfig.debtWithdrawalCap.configCapacity) ||
@@ -1870,7 +1741,7 @@ function handleConfigUpdate(
         )
       ) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator,
+          mode: UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator + 1,
           value: updateReserveConfigEncodedValue(UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator, [
             reserveConfig.debtWithdrawalCap.configCapacity.toNumber(),
             reserveConfig.debtWithdrawalCap.configIntervalLengthSeconds.toNumber(),
@@ -1878,7 +1749,7 @@ function handleConfigUpdate(
         });
       } else if (!reserve.config.debtWithdrawalCap.currentTotal.eq(reserveConfig.debtWithdrawalCap.currentTotal)) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDebtWithdrawalCapCurrentTotal.discriminator,
+          mode: UpdateConfigMode.UpdateDebtWithdrawalCapCurrentTotal.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator,
             reserveConfig.debtWithdrawalCap.currentTotal.toNumber()
@@ -1887,41 +1758,26 @@ function handleConfigUpdate(
       }
       break;
     case 'elevationGroups':
-      if (reserve === undefined) {
+      if (
+        reserve === undefined ||
+        !sameLengthArrayEquals(reserve.config.elevationGroups, reserveConfig.elevationGroups)
+      ) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateElevationGroup.discriminator,
+          mode: UpdateConfigMode.UpdateElevationGroup.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateElevationGroup.discriminator,
             reserveConfig.elevationGroups
           ),
         });
-      } else {
-        for (let i = 0; i < reserveConfig.elevationGroups.length; i++) {
-          if (reserve.config.elevationGroups[i] !== reserveConfig.elevationGroups[i]) {
-            updateReserveIxnsArgs.push({
-              mode: UpdateConfigMode.UpdateElevationGroup.discriminator,
-              value: updateReserveConfigEncodedValue(
-                UpdateConfigMode.UpdateElevationGroup.discriminator,
-                reserveConfig.elevationGroups
-              ),
-            });
-            break;
-          }
-        }
       }
       break;
     case 'disableUsageAsCollOutsideEmode':
-      if (reserve === undefined) {
+      if (
+        reserve === undefined ||
+        reserve.config.disableUsageAsCollOutsideEmode !== reserveConfig.disableUsageAsCollOutsideEmode
+      ) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator,
-            reserveConfig.disableUsageAsCollOutsideEmode
-          ),
-        });
-      } else if (reserve.config.disableUsageAsCollOutsideEmode !== reserveConfig.disableUsageAsCollOutsideEmode) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator,
+          mode: UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator,
             reserveConfig.disableUsageAsCollOutsideEmode
@@ -1930,19 +1786,12 @@ function handleConfigUpdate(
       }
       break;
     case 'utilizationLimitBlockBorrowingAbovePct':
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
-            reserveConfig.utilizationLimitBlockBorrowingAbovePct
-          ),
-        });
-      } else if (
+      if (
+        reserve === undefined ||
         reserve.config.utilizationLimitBlockBorrowingAbovePct !== reserveConfig.utilizationLimitBlockBorrowingAbovePct
       ) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
+          mode: UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
             reserveConfig.utilizationLimitBlockBorrowingAbovePct
@@ -1951,17 +1800,9 @@ function handleConfigUpdate(
       }
       break;
     case 'autodeleverageEnabled':
-      if (reserve === undefined) {
+      if (reserve === undefined || reserve.config.autodeleverageEnabled !== reserveConfig.autodeleverageEnabled) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
-            reserveConfig.autodeleverageEnabled
-          ),
-        });
-      } else if (reserve.config.autodeleverageEnabled !== reserveConfig.autodeleverageEnabled) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
+          mode: UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
             reserveConfig.autodeleverageEnabled
@@ -1970,67 +1811,44 @@ function handleConfigUpdate(
       }
       break;
     case 'borrowLimitOutsideElevationGroup':
-      if (reserve === undefined) {
+      if (
+        reserve === undefined ||
+        !reserve.config.borrowLimitOutsideElevationGroup.eq(reserveConfig.borrowLimitOutsideElevationGroup)
+      ) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator,
+          mode: UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator,
             reserveConfig.borrowLimitOutsideElevationGroup.toNumber()
           ),
         });
-      } else if (!reserve.config.borrowLimitOutsideElevationGroup.eq(reserveConfig.borrowLimitOutsideElevationGroup)) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator,
-            BigInt(reserveConfig.borrowLimitOutsideElevationGroup.toString())
-          ),
-        });
       }
       break;
     case 'borrowLimitAgainstThisCollateralInElevationGroup':
-      if (reserve === undefined) {
+      if (
+        reserve === undefined ||
+        !sameLengthArrayEquals(
+          reserve.config.borrowLimitAgainstThisCollateralInElevationGroup,
+          reserveConfig.borrowLimitAgainstThisCollateralInElevationGroup
+        )
+      ) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.discriminator,
+          mode: UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.discriminator,
             reserveConfig.borrowLimitAgainstThisCollateralInElevationGroup.map((borrowLimit) => borrowLimit.toNumber())
           ),
         });
-      } else {
-        for (let i = 0; i < reserveConfig.borrowLimitAgainstThisCollateralInElevationGroup.length; i++) {
-          if (
-            reserve.config.borrowLimitAgainstThisCollateralInElevationGroup[i] !==
-            reserveConfig.borrowLimitAgainstThisCollateralInElevationGroup[i]
-          ) {
-            updateReserveIxnsArgs.push({
-              mode: UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.discriminator,
-              value: updateReserveConfigEncodedValue(
-                UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.discriminator,
-                reserveConfig.borrowLimitAgainstThisCollateralInElevationGroup.map((borrowLimit) =>
-                  borrowLimit.toNumber()
-                )
-              ),
-            });
-          }
-        }
       }
+
       break;
     case 'deleveragingBonusIncreaseBpsPerDay':
-      if (reserve === undefined) {
-        updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
-          value: updateReserveConfigEncodedValue(
-            UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
-            reserveConfig.deleveragingBonusIncreaseBpsPerDay.toNumber()
-          ),
-        });
-      } else if (
-        reserve.config.deleveragingBonusIncreaseBpsPerDay.toNumber() !==
-        reserveConfig.deleveragingBonusIncreaseBpsPerDay.toNumber()
+      if (
+        reserve === undefined ||
+        !reserve.config.deleveragingBonusIncreaseBpsPerDay.eq(reserveConfig.deleveragingBonusIncreaseBpsPerDay)
       ) {
         updateReserveIxnsArgs.push({
-          mode: UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
+          mode: UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator + 1,
           value: updateReserveConfigEncodedValue(
             UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
             reserveConfig.deleveragingBonusIncreaseBpsPerDay.toNumber()
@@ -2078,7 +1896,7 @@ export function parseForChangesReserveConfigAndGetIxs(
   reserveConfig: ReserveConfig,
   programId: PublicKey
 ) {
-  const updateReserveIxnsArgs: { mode: number; value: Uint8Array }[] = [];
+  let updateReserveIxnsArgs: UpdateReserveIxnsArgs[] = [];
   for (const key in reserveConfig.toEncodable()) {
     if (isExcludedReserveConfigKey(key)) {
       continue;
@@ -2088,14 +1906,21 @@ export function parseForChangesReserveConfigAndGetIxs(
 
   const ixns: TransactionInstruction[] = [];
 
+  updateReserveIxnsArgs = sortIxnsByPriority(updateReserveIxnsArgs);
+
   updateReserveIxnsArgs.forEach((updateReserveConfigArgs) => {
+    let skipValidation = false;
+    if (modeMatches(updateReserveConfigArgs.mode) && !reserve?.liquidity.availableAmount.gten(MIN_INITIAL_DEPOSIT)) {
+      skipValidation = true;
+    }
     ixns.push(
       updateReserveConfigIx(
         marketWithAddress,
         reserveAddress,
-        updateReserveConfigArgs.mode + 1,
+        updateReserveConfigArgs.mode,
         updateReserveConfigArgs.value,
-        programId
+        programId,
+        skipValidation
       )
     );
   });
@@ -2215,11 +2040,11 @@ export function updateReserveConfigEncodedValue(
 }
 
 export function serializeBorrowRateCurve(curve: BorrowRateCurve): Buffer {
-  const buffer = Buffer.alloc(4 + 8 * curve.points.length);
+  const buffer = Buffer.alloc(8 * curve.points.length);
   buffer.writeUInt32LE(curve.points.length, 0);
   for (let i = 0; i < curve.points.length; i++) {
-    buffer.writeUInt32LE(curve.points[i].utilizationRateBps, 4 + 8 * i);
-    buffer.writeUInt32LE(curve.points[i].borrowRateBps, 8 + 8 * i);
+    buffer.writeUInt32LE(curve.points[i].utilizationRateBps, 8 * i);
+    buffer.writeUInt32LE(curve.points[i].borrowRateBps, 4 + 8 * i);
   }
   return buffer;
 }
@@ -2227,4 +2052,38 @@ export function serializeBorrowRateCurve(curve: BorrowRateCurve): Buffer {
 export type ReserveWithAddress = {
   address: PublicKey;
   state: Reserve;
+};
+
+export type UpdateReserveIxnsArgs = {
+  mode: number;
+  value: Uint8Array;
+};
+
+export const modeMatches = (mode: number): boolean => {
+  const validModes = [
+    UpdateConfigMode.UpdateScopePriceFeed.discriminator + 1,
+    UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator + 1,
+    UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator + 1,
+    UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator + 1,
+    UpdateConfigMode.UpdateTokenInfoTwapDivergence.discriminator + 1,
+    UpdateConfigMode.UpdateTokenInfoPriceMaxAge.discriminator + 1,
+    UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator + 1,
+  ];
+  return validModes.includes(mode);
+};
+
+// Sort update reserve ixns, to first have the oracle config updates first
+// In order to skip the validation for the scope config updates
+export const sortIxnsByPriority = (updateReserveIxnsArgs: UpdateReserveIxnsArgs[]) => {
+  return updateReserveIxnsArgs.sort((a, b) => {
+    const isPriorityA = a.mode === 20 || a.mode === 16;
+    const isPriorityB = b.mode === 20 || b.mode === 16;
+    if (isPriorityA && !isPriorityB) {
+      return -1;
+    }
+    if (isPriorityB && !isPriorityA) {
+      return 1;
+    }
+    return 0;
+  });
 };

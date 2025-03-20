@@ -1427,64 +1427,64 @@ function createAddExtraComputeUnitFeeTransaction(units: number, microLamports: n
   return ixns;
 }
 
-function parseReserveConfigFromFile(farmConfigFromFile: any): ReserveConfig {
+function parseReserveConfigFromFile(reserveConfigFromFile: any): ReserveConfig {
   const reserveConfigFields: ReserveConfigFields = {
-    status: farmConfigFromFile.status,
-    loanToValuePct: farmConfigFromFile.loanToValuePct,
-    liquidationThresholdPct: farmConfigFromFile.liquidationThresholdPct,
-    minLiquidationBonusBps: farmConfigFromFile.minLiquidationBonusBps,
-    protocolLiquidationFeePct: farmConfigFromFile.protocolLiquidationFeePct,
-    protocolTakeRatePct: farmConfigFromFile.protocolLiquidationFeePct,
-    assetTier: farmConfigFromFile.assetTier,
-    maxLiquidationBonusBps: farmConfigFromFile.maxLiquidationBonusBps,
-    badDebtLiquidationBonusBps: farmConfigFromFile.badDebtLiquidationBonusBps,
+    status: reserveConfigFromFile.status,
+    loanToValuePct: reserveConfigFromFile.loanToValuePct,
+    liquidationThresholdPct: reserveConfigFromFile.liquidationThresholdPct,
+    minLiquidationBonusBps: reserveConfigFromFile.minLiquidationBonusBps,
+    protocolLiquidationFeePct: reserveConfigFromFile.protocolLiquidationFeePct,
+    protocolTakeRatePct: reserveConfigFromFile.protocolLiquidationFeePct,
+    assetTier: reserveConfigFromFile.assetTier,
+    maxLiquidationBonusBps: reserveConfigFromFile.maxLiquidationBonusBps,
+    badDebtLiquidationBonusBps: reserveConfigFromFile.badDebtLiquidationBonusBps,
     fees: {
-      borrowFeeSf: Fraction.fromDecimal(new Decimal(farmConfigFromFile.fees.borrowFee)).valueSf,
-      flashLoanFeeSf: Fraction.fromDecimal(new Decimal(farmConfigFromFile.fees.flashLoanFee)).valueSf,
+      borrowFeeSf: Fraction.fromDecimal(new Decimal(reserveConfigFromFile.fees.borrowFee)).valueSf,
+      flashLoanFeeSf: Fraction.fromDecimal(new Decimal(reserveConfigFromFile.fees.flashLoanFee)).valueSf,
       padding: Array(8).fill(0),
     },
-    depositLimit: new BN(farmConfigFromFile.depositLimit),
-    borrowLimit: new BN(farmConfigFromFile.borrowLimit),
+    depositLimit: new BN(reserveConfigFromFile.depositLimit),
+    borrowLimit: new BN(reserveConfigFromFile.borrowLimit),
     tokenInfo: {
-      name: encodeTokenName(farmConfigFromFile.tokenInfo.name),
+      name: encodeTokenName(reserveConfigFromFile.tokenInfo.name),
       heuristic: new PriceHeuristic({
-        lower: new BN(farmConfigFromFile.tokenInfo.heuristic.lower),
-        upper: new BN(farmConfigFromFile.tokenInfo.heuristic.upper),
-        exp: new BN(farmConfigFromFile.tokenInfo.heuristic.exp),
+        lower: new BN(reserveConfigFromFile.tokenInfo.heuristic.lower),
+        upper: new BN(reserveConfigFromFile.tokenInfo.heuristic.upper),
+        exp: new BN(reserveConfigFromFile.tokenInfo.heuristic.exp),
       }),
-      maxTwapDivergenceBps: new BN(farmConfigFromFile.tokenInfo.maxTwapDivergenceBps),
-      maxAgePriceSeconds: new BN(farmConfigFromFile.tokenInfo.maxAgePriceSeconds),
-      maxAgeTwapSeconds: new BN(farmConfigFromFile.tokenInfo.maxAgeTwapSeconds),
-      ...parseOracleConfiguration(farmConfigFromFile),
-      blockPriceUsage: farmConfigFromFile.tokenInfo.blockPriceUsage,
+      maxTwapDivergenceBps: new BN(reserveConfigFromFile.tokenInfo.maxTwapDivergenceBps),
+      maxAgePriceSeconds: new BN(reserveConfigFromFile.tokenInfo.maxAgePriceSeconds),
+      maxAgeTwapSeconds: new BN(reserveConfigFromFile.tokenInfo.maxAgeTwapSeconds),
+      ...parseOracleConfiguration(reserveConfigFromFile),
+      blockPriceUsage: reserveConfigFromFile.tokenInfo.blockPriceUsage,
       reserved: Array(7).fill(0),
       padding: Array(19).fill(new BN(0)),
     } as TokenInfo,
-    borrowRateCurve: parseBorrowRateCurve(farmConfigFromFile),
+    borrowRateCurve: parseBorrowRateCurve(reserveConfigFromFile),
     depositWithdrawalCap: new WithdrawalCaps({
-      configCapacity: new BN(farmConfigFromFile.depositWithdrawalCap.configCapacity),
+      configCapacity: new BN(reserveConfigFromFile.depositWithdrawalCap.configCapacity),
       currentTotal: new BN(0),
       lastIntervalStartTimestamp: new BN(0),
-      configIntervalLengthSeconds: new BN(farmConfigFromFile.depositWithdrawalCap.configIntervalLengthSeconds),
+      configIntervalLengthSeconds: new BN(reserveConfigFromFile.depositWithdrawalCap.configIntervalLengthSeconds),
     }),
     debtWithdrawalCap: new WithdrawalCaps({
-      configCapacity: new BN(farmConfigFromFile.debtWithdrawalCap.configCapacity),
+      configCapacity: new BN(reserveConfigFromFile.debtWithdrawalCap.configCapacity),
       currentTotal: new BN(0),
       lastIntervalStartTimestamp: new BN(0),
-      configIntervalLengthSeconds: new BN(farmConfigFromFile.debtWithdrawalCap.configIntervalLengthSeconds),
+      configIntervalLengthSeconds: new BN(reserveConfigFromFile.debtWithdrawalCap.configIntervalLengthSeconds),
     }),
-    deleveragingMarginCallPeriodSecs: new BN(farmConfigFromFile.deleveragingMarginCallPeriodSecs),
-    borrowFactorPct: new BN(farmConfigFromFile.borrowFactorPct),
-    elevationGroups: farmConfigFromFile.elevationGroups,
-    deleveragingThresholdDecreaseBpsPerDay: new BN(farmConfigFromFile.deleveragingThresholdDecreaseBpsPerDay),
-    disableUsageAsCollOutsideEmode: farmConfigFromFile.disableUsageAsCollOutsideEmode,
-    utilizationLimitBlockBorrowingAbovePct: farmConfigFromFile.utilizationLimitBlockBorrowingAbovePct,
-    hostFixedInterestRateBps: farmConfigFromFile.hostFixedInterestRateBps,
-    autodeleverageEnabled: farmConfigFromFile.autodeleverageEnabled,
-    borrowLimitOutsideElevationGroup: new BN(farmConfigFromFile.borrowLimitOutsideElevationGroup),
-    borrowLimitAgainstThisCollateralInElevationGroup: parseReserveBorrowLimitAgainstCollInEmode(farmConfigFromFile),
-    deleveragingBonusIncreaseBpsPerDay: new BN(farmConfigFromFile.deleveragingBonusIncreaseBpsPerDay),
-    reserved1: Array(2).fill(0),
+    deleveragingMarginCallPeriodSecs: new BN(reserveConfigFromFile.deleveragingMarginCallPeriodSecs),
+    borrowFactorPct: new BN(reserveConfigFromFile.borrowFactorPct),
+    elevationGroups: reserveConfigFromFile.elevationGroups,
+    deleveragingThresholdDecreaseBpsPerDay: new BN(reserveConfigFromFile.deleveragingThresholdDecreaseBpsPerDay),
+    disableUsageAsCollOutsideEmode: reserveConfigFromFile.disableUsageAsCollOutsideEmode,
+    utilizationLimitBlockBorrowingAbovePct: reserveConfigFromFile.utilizationLimitBlockBorrowingAbovePct,
+    hostFixedInterestRateBps: reserveConfigFromFile.hostFixedInterestRateBps,
+    autodeleverageEnabled: reserveConfigFromFile.autodeleverageEnabled,
+    borrowLimitOutsideElevationGroup: new BN(reserveConfigFromFile.borrowLimitOutsideElevationGroup),
+    borrowLimitAgainstThisCollateralInElevationGroup: parseReserveBorrowLimitAgainstCollInEmode(reserveConfigFromFile),
+    deleveragingBonusIncreaseBpsPerDay: new BN(reserveConfigFromFile.deleveragingBonusIncreaseBpsPerDay),
+    reserved1: Array(1).fill(0),
     reserved2: Array(2).fill(0),
     reserved3: Array(8).fill(0),
   };
@@ -1492,29 +1492,29 @@ function parseReserveConfigFromFile(farmConfigFromFile: any): ReserveConfig {
   return new ReserveConfig(reserveConfigFields);
 }
 
-function parseOracleConfiguration(farmConfigFromFile: any): {
+function parseOracleConfiguration(reserveConfigFromFile: any): {
   pythConfiguration: PythConfiguration;
   switchboardConfiguration: SwitchboardConfiguration;
   scopeConfiguration: ScopeConfiguration;
 } {
   const pythConfiguration = new PythConfiguration({
-    price: new PublicKey(farmConfigFromFile.tokenInfo.pythConfiguration.price),
+    price: new PublicKey(reserveConfigFromFile.tokenInfo.pythConfiguration.price),
   });
   const switchboardConfiguration = new SwitchboardConfiguration({
-    priceAggregator: new PublicKey(farmConfigFromFile.tokenInfo.switchboardConfiguration.priceAggregator),
-    twapAggregator: new PublicKey(farmConfigFromFile.tokenInfo.switchboardConfiguration.twapAggregator),
+    priceAggregator: new PublicKey(reserveConfigFromFile.tokenInfo.switchboardConfiguration.priceAggregator),
+    twapAggregator: new PublicKey(reserveConfigFromFile.tokenInfo.switchboardConfiguration.twapAggregator),
   });
   const priceChain = [65535, 65535, 65535, 65535];
   const twapChain = [65535, 65535, 65535, 65535];
 
-  const priceChainFromFile: number[] = farmConfigFromFile.tokenInfo.scopeConfiguration.priceChain;
-  const twapChainFromFile: number[] = farmConfigFromFile.tokenInfo.scopeConfiguration.twapChain;
+  const priceChainFromFile: number[] = reserveConfigFromFile.tokenInfo.scopeConfiguration.priceChain;
+  const twapChainFromFile: number[] = reserveConfigFromFile.tokenInfo.scopeConfiguration.twapChain;
 
   priceChainFromFile.forEach((value, index) => (priceChain[index] = value));
   twapChainFromFile.forEach((value, index) => (twapChain[index] = value));
 
   const scopeConfiguration = new ScopeConfiguration({
-    priceFeed: new PublicKey(farmConfigFromFile.tokenInfo.scopeConfiguration.priceFeed),
+    priceFeed: new PublicKey(reserveConfigFromFile.tokenInfo.scopeConfiguration.priceFeed),
     priceChain: priceChain,
     twapChain: twapChain,
   });
@@ -1526,29 +1526,29 @@ function parseOracleConfiguration(farmConfigFromFile: any): {
   };
 }
 
-function parseBorrowRateCurve(farmConfigFromFile: any): BorrowRateCurve {
+function parseBorrowRateCurve(reserveConfigFromFile: any): BorrowRateCurve {
   const curvePoints: CurvePointFields[] = [];
 
-  farmConfigFromFile.borrowRateCurve.points.forEach((curvePoint: { utilizationRateBps: any; borrowRateBps: any }) =>
+  reserveConfigFromFile.borrowRateCurve.points.forEach((curvePoint: { utilizationRateBps: any; borrowRateBps: any }) =>
     curvePoints.push({
       utilizationRateBps: curvePoint.utilizationRateBps,
       borrowRateBps: curvePoint.borrowRateBps,
     })
   );
 
-  const finalCruvePoints: CurvePointFields[] = Array(11).fill(curvePoints[curvePoints.length - 1]);
+  const finalCurvePoints: CurvePointFields[] = Array(11).fill(curvePoints[curvePoints.length - 1]);
 
-  curvePoints.forEach((curvePoint, index) => (finalCruvePoints[index] = curvePoint));
+  curvePoints.forEach((curvePoint, index) => (finalCurvePoints[index] = curvePoint));
 
-  const borrowRateCurve = new BorrowRateCurve({ points: finalCruvePoints });
+  const borrowRateCurve = new BorrowRateCurve({ points: finalCurvePoints });
 
   return borrowRateCurve;
 }
 
-function parseReserveBorrowLimitAgainstCollInEmode(farmConfigFromFile: any): BN[] {
+function parseReserveBorrowLimitAgainstCollInEmode(reserveConfigFromFile: any): BN[] {
   const reserveBorrowLimitAgainstCollInEmode: BN[] = Array(32).fill(new BN(0));
 
-  farmConfigFromFile.borrowLimitAgainstThisCollateralInElevationGroup.forEach(
+  reserveConfigFromFile.borrowLimitAgainstThisCollateralInElevationGroup.forEach(
     (limit: any, index: number) => (reserveBorrowLimitAgainstCollInEmode[index] = new BN(limit))
   );
 
