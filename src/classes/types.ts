@@ -3,9 +3,11 @@ import Decimal from 'decimal.js/decimal';
 
 /** the populateLUTIxs should be executed in a separate transaction as we cannot create and populate a lookup table in the same tx */
 export type InitVaultIxs = {
+  createAtaIfNeededIxs: TransactionInstruction[];
   initVaultIxs: TransactionInstruction[];
   createLUTIx: TransactionInstruction;
   populateLUTIxs: TransactionInstruction[];
+  cleanupIxs: TransactionInstruction[];
 };
 
 export type AcceptVaultOwnershipIxs = {
@@ -59,3 +61,4 @@ export type APYs = {
   grossAPY: Decimal;
   netAPY: Decimal;
 };
+

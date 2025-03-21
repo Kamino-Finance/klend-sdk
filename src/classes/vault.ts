@@ -66,7 +66,15 @@ import { withdraw } from '../idl_codegen_kamino_vault/instructions';
 import { PROGRAM_ID } from '../idl_codegen/programId';
 import { ReserveWithAddress } from './reserve';
 import { Fraction } from './fraction';
-import { createAtasIdempotent, lendingMarketAuthPda, PublicKeySet, SECONDS_PER_YEAR, U64_MAX } from '../utils';
+import {
+  createAtasIdempotent,
+  createWsolAtaIfMissing,
+  lendingMarketAuthPda,
+  PublicKeySet,
+  SECONDS_PER_YEAR,
+  U64_MAX,
+  VAULT_INITIAL_DEPOSIT,
+} from '../utils';
 import bs58 from 'bs58';
 import { getAccountOwner, getProgramAccounts } from '../utils/rpc';
 import {
@@ -199,12 +207,27 @@ export class KaminoVaultClient {
       this._kaminoVaultProgramId
     )[0];
 
-    const adminTokenAccount = getAssociatedTokenAddressSync(
-      vaultConfig.tokenMint,
-      vaultConfig.admin,
-      false,
-      vaultConfig.tokenMintProgramId
-    );
+    let adminTokenAccount: PublicKey;
+    const prerequisiteIxs: TransactionInstruction[] = [];
+    const cleanupIxs: TransactionInstruction[] = [];
+    if (vaultConfig.tokenMint.equals(NATIVE_MINT)) {
+      const { wsolAta, createAtaIxs, closeAtaIxs } = await createWsolAtaIfMissing(
+        this.getConnection(),
+        new Decimal(VAULT_INITIAL_DEPOSIT),
+        vaultConfig.admin
+      );
+      adminTokenAccount = wsolAta;
+
+      prerequisiteIxs.push(...createAtaIxs);
+      cleanupIxs.push(...closeAtaIxs);
+    } else {
+      adminTokenAccount = getAssociatedTokenAddressSync(
+        vaultConfig.tokenMint,
+        vaultConfig.admin,
+        false,
+        vaultConfig.tokenMintProgramId
+      );
+    }
 
     const initVaultAccounts: InitVaultAccounts = {
       adminAuthority: vaultConfig.admin,
@@ -277,7 +300,16 @@ export class KaminoVaultClient {
       ixns.push(setNameIx);
     }
 
-    return { vault: vaultState, initVaultIxs: { initVaultIxs: ixns, createLUTIx, populateLUTIxs: insertIntoLUTIxs } };
+    return {
+      vault: vaultState,
+      initVaultIxs: {
+        createAtaIfNeededIxs: prerequisiteIxs,
+        initVaultIxs: ixns,
+        createLUTIx,
+        populateLUTIxs: insertIntoLUTIxs,
+        cleanupIxs,
+      },
+    };
   }
 
   /**

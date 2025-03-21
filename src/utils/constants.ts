@@ -92,3 +92,5 @@ export const SOL_PADDING_FOR_INTEREST = new BN('1000000');
  */
 export const MIN_INITIAL_DEPOSIT = 100_000;
 export const MIN_VAULT_INITIAL_DEPOSIT = 1_000_000_000;
+
+export const VAULT_INITIAL_DEPOSIT = 1000;

@@ -1,11 +1,22 @@
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
+  NATIVE_MINT,
   TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountInstruction,
   createAssociatedTokenAccountIdempotentInstruction as createAtaIx,
+  createCloseAccountInstruction,
+  getAssociatedTokenAddressSync,
 } from '@solana/spl-token';
-import { ComputeBudgetProgram, Connection, PublicKey, SystemProgram, TransactionInstruction } from '@solana/web3.js';
+import {
+  AccountInfo,
+  ComputeBudgetProgram,
+  Connection,
+  PublicKey,
+  SystemProgram,
+  TransactionInstruction,
+} from '@solana/web3.js';
 import Decimal from 'decimal.js';
-import { AnchorProvider } from '@coral-xyz/anchor';
+import { collToLamportsDecimal, DECIMALS_SOL } from '@kamino-finance/kliquidity-sdk/dist';
 
 /**
  * Create an idempotent create ATA instruction
@@ -144,8 +155,8 @@ export function removeBudgetAndAtaIxns(ixns: TransactionInstruction[], mints: st
   });
 }
 
-export async function getTokenAccountBalance(provider: AnchorProvider, tokenAccount: PublicKey): Promise<number> {
-  const tokenAccountBalance = await provider.connection.getTokenAccountBalance(tokenAccount);
+export async function getTokenAccountBalance(connection: Connection, tokenAccount: PublicKey): Promise<number> {
+  const tokenAccountBalance = await connection.getTokenAccountBalance(tokenAccount);
 
   return Number(tokenAccountBalance.value.amount).valueOf();
 }
@@ -165,3 +176,90 @@ export async function getTokenAccountBalanceDecimal(
   const { value } = await connection.getTokenAccountBalance(ata);
   return new Decimal(value.uiAmountString!);
 }
+
+export type CreateWsolAtaIxs = {
+  wsolAta: PublicKey;
+  createAtaIxs: TransactionInstruction[];
+  closeAtaIxs: TransactionInstruction[];
+};
+
+/**
+ * Creates a wSOL ata if missing and syncs the balance. If the ata exists and it has more or equal no wrapping happens
+ * @param connection - Solana RPC connection (read)
+ * @param amount min amount to have in the wSOL ata. If the ata exists and it has more or equal no wrapping happens
+ * @param owner - owner of the ata
+ * @returns wsolAta: the keypair of the ata, used to sign the initialization transaction; createAtaIxs: a list with ixs to initialize the ata and wrap SOL if needed; closeAtaIxs: a list with ixs to close the ata
+ */
+export const createWsolAtaIfMissing = async (
+  connection: Connection,
+  amount: Decimal,
+  owner: PublicKey
+): Promise<CreateWsolAtaIxs> => {
+  const createIxns: TransactionInstruction[] = [];
+  const closeIxns: TransactionInstruction[] = [];
+
+  const wsolAta: PublicKey = getAssociatedTokenAddressSync(NATIVE_MINT, owner, true, TOKEN_PROGRAM_ID);
+
+  const solDeposit = amount;
+  const wsolAtaAccountInfo: AccountInfo<Buffer> | null = await connection.getAccountInfo(wsolAta);
+
+  // This checks if we need to create it
+  if (isWsolInfoInvalid(wsolAtaAccountInfo)) {
+    createIxns.push(createAssociatedTokenAccountInstruction(owner, wsolAta, owner, NATIVE_MINT, TOKEN_PROGRAM_ID));
+  }
+
+  let wsolExistingBalanceLamports = new Decimal(0);
+  try {
+    if (wsolAtaAccountInfo != null) {
+      const uiAmount = (await getTokenAccountBalanceDecimal(connection, NATIVE_MINT, owner)).toNumber();
+      wsolExistingBalanceLamports = collToLamportsDecimal(new Decimal(uiAmount), DECIMALS_SOL);
+    }
+  } catch (err) {
+    console.log('Err Token Balance', err);
+  }
+
+  if (solDeposit !== null && solDeposit.gt(wsolExistingBalanceLamports)) {
+    createIxns.push(
+      SystemProgram.transfer({
+        fromPubkey: owner,
+        toPubkey: wsolAta,
+        lamports: BigInt(solDeposit.sub(wsolExistingBalanceLamports).floor().toString()),
+      })
+    );
+  }
+
+  if (createIxns.length > 0) {
+    // Primitive way of wrapping SOL
+    createIxns.push(
+      new TransactionInstruction({
+        keys: [
+          {
+            pubkey: wsolAta,
+            isSigner: false,
+            isWritable: true,
+          },
+        ],
+        data: Buffer.from(new Uint8Array([17])),
+        programId: TOKEN_PROGRAM_ID,
+      })
+    );
+  }
+
+  closeIxns.push(createCloseAccountInstruction(wsolAta, owner, owner, [], TOKEN_PROGRAM_ID));
+
+  return {
+    wsolAta,
+    createAtaIxs: createIxns,
+    closeAtaIxs: closeIxns,
+  };
+};
+
+export const isWsolInfoInvalid = (wsolAtaAccountInfo: any): boolean => {
+  const res =
+    wsolAtaAccountInfo === null ||
+    (wsolAtaAccountInfo !== null &&
+      wsolAtaAccountInfo.data.length === 0 &&
+      wsolAtaAccountInfo.owner.eq(PublicKey.default));
+
+  return res;
+};
