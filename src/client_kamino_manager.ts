@@ -22,6 +22,7 @@ import {
   KaminoMarket,
   KaminoVault,
   KaminoVaultConfig,
+  lamportsToDecimal,
   LendingMarket,
   MAINNET_BETA_CHAIN_ID,
   parseZeroPaddedUtf8,
@@ -804,7 +805,7 @@ async function main() {
         await env.connection.getSlot('confirmed')
       );
 
-      const depositSig = await processTxn(
+      const withdrawSig = await processTxn(
         env.client,
         env.payer,
         [...withdrawIxs.unstakeFromFarmIfNeededIxs, ...withdrawIxs.withdrawIxs],
@@ -814,7 +815,7 @@ async function main() {
         800_000
       );
 
-      mode === 'execute' && console.log('User withdraw:', depositSig);
+      mode === 'execute' && console.log('User withdraw:', withdrawSig);
     });
 
   commands
@@ -1048,11 +1049,13 @@ async function main() {
 
       const vaultState = kaminoVault.state!;
 
-      const sharesIssued = new Decimal(vaultState.sharesIssued.toString()!).div(
-        new Decimal(vaultState.sharesMintDecimals.toString())
+      const sharesIssued = lamportsToDecimal(
+        vaultState.sharesIssued.toString(),
+        vaultState.sharesMintDecimals.toString()
       );
 
       console.log('farm', vaultState.vaultFarm.toString());
+      console.log('vault token mint', vaultState.tokenMint.toBase58());
       console.log('Name: ', kaminoManager.getDecodedVaultName(kaminoVault.state!));
       console.log('Shares issued: ', sharesIssued);
       printHoldings(holdings);
