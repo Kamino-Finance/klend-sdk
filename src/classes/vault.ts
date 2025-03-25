@@ -1295,7 +1295,7 @@ export class KaminoVaultClient {
     };
 
     const withdrawArgs: WithdrawArgs = {
-      sharesAmount: new BN(shareAmountLamports.toString()),
+      sharesAmount: new BN(shareAmountLamports.floor().toString()),
     };
 
     const withdrawIxn = withdraw(withdrawArgs, withdrawAccounts, this._kaminoVaultProgramId);
