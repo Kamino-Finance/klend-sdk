@@ -23,10 +23,12 @@ import {
   U64_MAX,
 } from '../utils';
 import { ActionType } from './action';
+import { KaminoObligationOrder } from './obligationOrder';
 
 export type Position = {
   reserveAddress: PublicKey;
   mintAddress: PublicKey;
+  mintFactor: Decimal;
   /**
    * Amount of tokens in lamports, including decimal places for interest accrued (no borrow factor weighting)
    */
@@ -47,8 +49,33 @@ export type ObligationStats = {
   borrowLiquidationLimit: Decimal;
   borrowUtilization: Decimal;
   netAccountValue: Decimal;
+
+  /**
+   * The obligation's current LTV, *suitable for UI display*.
+   *
+   * Technically, this is a ratio:
+   * - of a sum of all borrows' values multiplied by reserves' borrowFactor (i.e. `userTotalBorrowBorrowFactorAdjusted`)
+   * - to a sum of values of all deposits having reserve's loanToValue > 0 (i.e. `userTotalCollateralDeposit`)
+   *
+   * Please note that this is different from the smart contract's definition of LTV (which divides by a sum of values
+   * of strictly all deposits, i.e. `userTotalDeposit`). Some parts of the SDK (e.g. obligation orders) need to use the
+   * smart contract's LTV definition.
+   */
   loanToValue: Decimal;
+
+  /**
+   * The LTV at which the obligation becomes subject to liquidation, *suitable for UI display*.
+   *
+   * Technically, this is a ratio:
+   * - of a sum of all borrows' values multiplied by reserves' borrowFactor (i.e. `userTotalBorrowBorrowFactorAdjusted`)
+   * - to a sum of values of all deposits having reserve's liquidationLtv > 0 (i.e. `userTotalLiquidatableDeposit`)
+   *
+   * Please note that this is different from the smart contract's definition of liquidation LTV (which divides by a sum
+   * of values of strictly all deposits, i.e. `userTotalDeposit`). Some parts of the SDK (e.g. obligation orders) need
+   * to use the smart contract's LTV definition.
+   */
   liquidationLtv: Decimal;
+
   leverage: Decimal;
   potentialElevationGroupUpdate: number;
 };
@@ -244,6 +271,20 @@ export class KaminoObligation {
   }
 
   /**
+   * Returns obligation orders (including the null ones, i.e. non-active order slots).
+   */
+  getOrders(): Array<KaminoObligationOrder | null> {
+    return this.state.orders.map((order) => KaminoObligationOrder.fromState(order));
+  }
+
+  /**
+   * Returns active obligation orders (i.e. ones that *may* have their condition met).
+   */
+  getActiveOrders(): Array<KaminoObligationOrder> {
+    return this.getOrders().filter((order) => order !== null);
+  }
+
+  /**
    * @returns the total deposited value of the obligation (sum of all deposits)
    */
   getDepositedValue(): Decimal {
@@ -340,13 +381,46 @@ export class KaminoObligation {
   }
 
   /**
-   * Calculate the current ratio of borrowed value to deposited value
+   * Calculates the current ratio of borrowed value to deposited value (taking *all* deposits into account).
+   *
+   * Please note that the denominator here is different from the one found in `refreshedStats`:
+   * - the {@link ObligationStats#loanToValue} contains a value appropriate for display on the UI (i.e. taking into
+   *   account *only* the deposits having `reserve.loanToValue > 0`).
+   * - the computation below follows the logic used by the KLend smart contract, and is appropriate e.g. for evaluating
+   *   LTV-based obligation orders.
    */
   loanToValue(): Decimal {
     if (this.refreshedStats.userTotalDeposit.eq(0)) {
       return new Decimal(0);
     }
     return this.refreshedStats.userTotalBorrowBorrowFactorAdjusted.div(this.refreshedStats.userTotalDeposit);
+  }
+
+  /**
+   * Calculates the ratio of borrowed value to deposited value (taking *all* deposits into account) at which the
+   * obligation is subject to liquidation.
+   *
+   * Please note that the denominator here is different from the one found in `refreshedStats`:
+   * - the {@link ObligationStats#liquidationLtv} contains a value appropriate for display on the UI (i.e. taking into
+   *   account *only* the deposits having `reserve.liquidationLtv > 0`).
+   * - the computation below follows the logic used by the KLend smart contract, and is appropriate e.g. for evaluating
+   *   LTV-based obligation orders.
+   */
+  liquidationLtv(): Decimal {
+    if (this.refreshedStats.userTotalDeposit.eq(0)) {
+      return new Decimal(0);
+    }
+    return this.refreshedStats.borrowLiquidationLimit.div(this.refreshedStats.userTotalDeposit);
+  }
+
+  /**
+   * Calculate the current ratio of borrowed value to deposited value, disregarding the borrow factor.
+   */
+  noBfLoanToValue(): Decimal {
+    if (this.refreshedStats.userTotalDeposit.eq(0)) {
+      return new Decimal(0);
+    }
+    return this.refreshedStats.userTotalBorrow.div(this.refreshedStats.userTotalDeposit);
   }
 
   /**
@@ -904,6 +978,7 @@ export class KaminoObligation {
       const position: Position = {
         reserveAddress: reserve.address,
         mintAddress: reserve.getLiquidityMint(),
+        mintFactor: reserve.getMintFactor(),
         amount: supplyAmount,
         marketValueRefreshed: depositValueUsd,
       };
@@ -976,6 +1051,7 @@ export class KaminoObligation {
       const position: Position = {
         reserveAddress: reserve.address,
         mintAddress: reserve.getLiquidityMint(),
+        mintFactor: reserve.getMintFactor(),
         amount: borrowAmount,
         marketValueRefreshed: borrowValueUsd,
       };

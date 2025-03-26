@@ -28,7 +28,8 @@ export async function buildAndSendTxnWithLogs(
   owner: Keypair,
   signers: Signer[],
   withLogsIfSuccess: boolean = false,
-  withDescription: string = ''
+  withDescription: string = '',
+  throwOnError: boolean = false // TODO(error-surfacing): the "recovery" logic is broken/outdated + the "hide error" behavior seems wrong in general - migrate to "just throw"
 ): Promise<TransactionSignature> {
   tx.sign([owner, ...signers]);
 
@@ -47,6 +48,9 @@ export async function buildAndSendTxnWithLogs(
     }
     return sig;
   } catch (e: any) {
+    if (throwOnError) {
+      throw e;
+    }
     console.log(e);
     process.stdout.write(e.logs.toString());
     const sig = e.toString().split(' failed ')[0].split('Transaction ')[1];

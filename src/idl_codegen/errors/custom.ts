@@ -83,7 +83,7 @@ export type CustomError =
   | ShortUrlNotAsciiAlphanumeric
   | ReserveObsolete
   | ElevationGroupAlreadyActivated
-  | ObligationInDeprecatedReserve
+  | ObligationInObsoleteReserve
   | ReferrerStateOwnerMismatch
   | UserMetadataOwnerAlreadySet
   | CollateralNonLiquidatable
@@ -122,6 +122,10 @@ export type CustomError =
   | FarmAccountsMissing
   | RepayTooSmallForFullLiquidation
   | InsufficientRepayAmount
+  | OrderIndexOutOfBounds
+  | InvalidOrderConfiguration
+  | OrderConfigurationNotSupportedByObligation
+  | OperationNotPermittedWithCurrentObligationOrders
 
 export class InvalidMarketAuthority extends Error {
   static readonly code = 6000
@@ -1080,14 +1084,14 @@ export class ElevationGroupAlreadyActivated extends Error {
   }
 }
 
-export class ObligationInDeprecatedReserve extends Error {
+export class ObligationInObsoleteReserve extends Error {
   static readonly code = 6084
   readonly code = 6084
-  readonly name = "ObligationInDeprecatedReserve"
-  readonly msg = "Obligation has a deposit in a deprecated reserve"
+  readonly name = "ObligationInObsoleteReserve"
+  readonly msg = "Obligation has a deposit or borrow in an obsolete reserve"
 
   constructor(readonly logs?: string[]) {
-    super("6084: Obligation has a deposit in a deprecated reserve")
+    super("6084: Obligation has a deposit or borrow in an obsolete reserve")
   }
 }
 
@@ -1548,6 +1552,56 @@ export class InsufficientRepayAmount extends Error {
   }
 }
 
+export class OrderIndexOutOfBounds extends Error {
+  static readonly code = 6123
+  readonly code = 6123
+  readonly name = "OrderIndexOutOfBounds"
+  readonly msg = "Obligation order of the given index cannot exist"
+
+  constructor(readonly logs?: string[]) {
+    super("6123: Obligation order of the given index cannot exist")
+  }
+}
+
+export class InvalidOrderConfiguration extends Error {
+  static readonly code = 6124
+  readonly code = 6124
+  readonly name = "InvalidOrderConfiguration"
+  readonly msg = "Given order configuration has wrong parameters"
+
+  constructor(readonly logs?: string[]) {
+    super("6124: Given order configuration has wrong parameters")
+  }
+}
+
+export class OrderConfigurationNotSupportedByObligation extends Error {
+  static readonly code = 6125
+  readonly code = 6125
+  readonly name = "OrderConfigurationNotSupportedByObligation"
+  readonly msg =
+    "Given order configuration cannot be used with the current state of the obligation"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6125: Given order configuration cannot be used with the current state of the obligation"
+    )
+  }
+}
+
+export class OperationNotPermittedWithCurrentObligationOrders extends Error {
+  static readonly code = 6126
+  readonly code = 6126
+  readonly name = "OperationNotPermittedWithCurrentObligationOrders"
+  readonly msg =
+    "Single debt, single collateral obligation orders have to be cancelled before changing the deposit/borrow count"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6126: Single debt, single collateral obligation orders have to be cancelled before changing the deposit/borrow count"
+    )
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 6000:
@@ -1719,7 +1773,7 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
     case 6083:
       return new ElevationGroupAlreadyActivated(logs)
     case 6084:
-      return new ObligationInDeprecatedReserve(logs)
+      return new ObligationInObsoleteReserve(logs)
     case 6085:
       return new ReferrerStateOwnerMismatch(logs)
     case 6086:
@@ -1796,6 +1850,14 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new RepayTooSmallForFullLiquidation(logs)
     case 6122:
       return new InsufficientRepayAmount(logs)
+    case 6123:
+      return new OrderIndexOutOfBounds(logs)
+    case 6124:
+      return new InvalidOrderConfiguration(logs)
+    case 6125:
+      return new OrderConfigurationNotSupportedByObligation(logs)
+    case 6126:
+      return new OperationNotPermittedWithCurrentObligationOrders(logs)
   }
 
   return null

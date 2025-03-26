@@ -164,25 +164,25 @@ export class UpdateFeesFlashLoanFee {
   }
 }
 
-export interface UpdateFeesReferralFeeBpsJSON {
-  kind: "UpdateFeesReferralFeeBps"
+export interface DeprecatedUpdateFeesReferralFeeBpsJSON {
+  kind: "DeprecatedUpdateFeesReferralFeeBps"
 }
 
-export class UpdateFeesReferralFeeBps {
+export class DeprecatedUpdateFeesReferralFeeBps {
   static readonly discriminator = 7
-  static readonly kind = "UpdateFeesReferralFeeBps"
+  static readonly kind = "DeprecatedUpdateFeesReferralFeeBps"
   readonly discriminator = 7
-  readonly kind = "UpdateFeesReferralFeeBps"
+  readonly kind = "DeprecatedUpdateFeesReferralFeeBps"
 
-  toJSON(): UpdateFeesReferralFeeBpsJSON {
+  toJSON(): DeprecatedUpdateFeesReferralFeeBpsJSON {
     return {
-      kind: "UpdateFeesReferralFeeBps",
+      kind: "DeprecatedUpdateFeesReferralFeeBps",
     }
   }
 
   toEncodable() {
     return {
-      UpdateFeesReferralFeeBps: {},
+      DeprecatedUpdateFeesReferralFeeBps: {},
     }
   }
 }
@@ -624,48 +624,48 @@ export class UpdateDepositWithdrawalCap {
   }
 }
 
-export interface UpdateDebtWithdrawalCapCurrentTotalJSON {
-  kind: "UpdateDebtWithdrawalCapCurrentTotal"
+export interface DeprecatedUpdateDebtWithdrawalCapCurrentTotalJSON {
+  kind: "DeprecatedUpdateDebtWithdrawalCapCurrentTotal"
 }
 
-export class UpdateDebtWithdrawalCapCurrentTotal {
+export class DeprecatedUpdateDebtWithdrawalCapCurrentTotal {
   static readonly discriminator = 27
-  static readonly kind = "UpdateDebtWithdrawalCapCurrentTotal"
+  static readonly kind = "DeprecatedUpdateDebtWithdrawalCapCurrentTotal"
   readonly discriminator = 27
-  readonly kind = "UpdateDebtWithdrawalCapCurrentTotal"
+  readonly kind = "DeprecatedUpdateDebtWithdrawalCapCurrentTotal"
 
-  toJSON(): UpdateDebtWithdrawalCapCurrentTotalJSON {
+  toJSON(): DeprecatedUpdateDebtWithdrawalCapCurrentTotalJSON {
     return {
-      kind: "UpdateDebtWithdrawalCapCurrentTotal",
+      kind: "DeprecatedUpdateDebtWithdrawalCapCurrentTotal",
     }
   }
 
   toEncodable() {
     return {
-      UpdateDebtWithdrawalCapCurrentTotal: {},
+      DeprecatedUpdateDebtWithdrawalCapCurrentTotal: {},
     }
   }
 }
 
-export interface UpdateDepositWithdrawalCapCurrentTotalJSON {
-  kind: "UpdateDepositWithdrawalCapCurrentTotal"
+export interface DeprecatedUpdateDepositWithdrawalCapCurrentTotalJSON {
+  kind: "DeprecatedUpdateDepositWithdrawalCapCurrentTotal"
 }
 
-export class UpdateDepositWithdrawalCapCurrentTotal {
+export class DeprecatedUpdateDepositWithdrawalCapCurrentTotal {
   static readonly discriminator = 28
-  static readonly kind = "UpdateDepositWithdrawalCapCurrentTotal"
+  static readonly kind = "DeprecatedUpdateDepositWithdrawalCapCurrentTotal"
   readonly discriminator = 28
-  readonly kind = "UpdateDepositWithdrawalCapCurrentTotal"
+  readonly kind = "DeprecatedUpdateDepositWithdrawalCapCurrentTotal"
 
-  toJSON(): UpdateDepositWithdrawalCapCurrentTotalJSON {
+  toJSON(): DeprecatedUpdateDepositWithdrawalCapCurrentTotalJSON {
     return {
-      kind: "UpdateDepositWithdrawalCapCurrentTotal",
+      kind: "DeprecatedUpdateDepositWithdrawalCapCurrentTotal",
     }
   }
 
   toEncodable() {
     return {
-      UpdateDepositWithdrawalCapCurrentTotal: {},
+      DeprecatedUpdateDepositWithdrawalCapCurrentTotal: {},
     }
   }
 }
@@ -1130,6 +1130,29 @@ export class UpdateDeleveragingBonusIncreaseBpsPerDay {
   }
 }
 
+export interface UpdateProtocolOrderExecutionFeeJSON {
+  kind: "UpdateProtocolOrderExecutionFee"
+}
+
+export class UpdateProtocolOrderExecutionFee {
+  static readonly discriminator = 49
+  static readonly kind = "UpdateProtocolOrderExecutionFee"
+  readonly discriminator = 49
+  readonly kind = "UpdateProtocolOrderExecutionFee"
+
+  toJSON(): UpdateProtocolOrderExecutionFeeJSON {
+    return {
+      kind: "UpdateProtocolOrderExecutionFee",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateProtocolOrderExecutionFee: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if (typeof obj !== "object") {
@@ -1157,8 +1180,8 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if ("UpdateFeesFlashLoanFee" in obj) {
     return new UpdateFeesFlashLoanFee()
   }
-  if ("UpdateFeesReferralFeeBps" in obj) {
-    return new UpdateFeesReferralFeeBps()
+  if ("DeprecatedUpdateFeesReferralFeeBps" in obj) {
+    return new DeprecatedUpdateFeesReferralFeeBps()
   }
   if ("UpdateDepositLimit" in obj) {
     return new UpdateDepositLimit()
@@ -1217,11 +1240,11 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if ("UpdateDepositWithdrawalCap" in obj) {
     return new UpdateDepositWithdrawalCap()
   }
-  if ("UpdateDebtWithdrawalCapCurrentTotal" in obj) {
-    return new UpdateDebtWithdrawalCapCurrentTotal()
+  if ("DeprecatedUpdateDebtWithdrawalCapCurrentTotal" in obj) {
+    return new DeprecatedUpdateDebtWithdrawalCapCurrentTotal()
   }
-  if ("UpdateDepositWithdrawalCapCurrentTotal" in obj) {
-    return new UpdateDepositWithdrawalCapCurrentTotal()
+  if ("DeprecatedUpdateDepositWithdrawalCapCurrentTotal" in obj) {
+    return new DeprecatedUpdateDepositWithdrawalCapCurrentTotal()
   }
   if ("UpdateBadDebtLiquidationBonusBps" in obj) {
     return new UpdateBadDebtLiquidationBonusBps()
@@ -1283,6 +1306,9 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if ("UpdateDeleveragingBonusIncreaseBpsPerDay" in obj) {
     return new UpdateDeleveragingBonusIncreaseBpsPerDay()
   }
+  if ("UpdateProtocolOrderExecutionFee" in obj) {
+    return new UpdateProtocolOrderExecutionFee()
+  }
 
   throw new Error("Invalid enum object")
 }
@@ -1312,8 +1338,8 @@ export function fromJSON(
     case "UpdateFeesFlashLoanFee": {
       return new UpdateFeesFlashLoanFee()
     }
-    case "UpdateFeesReferralFeeBps": {
-      return new UpdateFeesReferralFeeBps()
+    case "DeprecatedUpdateFeesReferralFeeBps": {
+      return new DeprecatedUpdateFeesReferralFeeBps()
     }
     case "UpdateDepositLimit": {
       return new UpdateDepositLimit()
@@ -1372,11 +1398,11 @@ export function fromJSON(
     case "UpdateDepositWithdrawalCap": {
       return new UpdateDepositWithdrawalCap()
     }
-    case "UpdateDebtWithdrawalCapCurrentTotal": {
-      return new UpdateDebtWithdrawalCapCurrentTotal()
+    case "DeprecatedUpdateDebtWithdrawalCapCurrentTotal": {
+      return new DeprecatedUpdateDebtWithdrawalCapCurrentTotal()
     }
-    case "UpdateDepositWithdrawalCapCurrentTotal": {
-      return new UpdateDepositWithdrawalCapCurrentTotal()
+    case "DeprecatedUpdateDepositWithdrawalCapCurrentTotal": {
+      return new DeprecatedUpdateDepositWithdrawalCapCurrentTotal()
     }
     case "UpdateBadDebtLiquidationBonusBps": {
       return new UpdateBadDebtLiquidationBonusBps()
@@ -1438,6 +1464,9 @@ export function fromJSON(
     case "UpdateDeleveragingBonusIncreaseBpsPerDay": {
       return new UpdateDeleveragingBonusIncreaseBpsPerDay()
     }
+    case "UpdateProtocolOrderExecutionFee": {
+      return new UpdateProtocolOrderExecutionFee()
+    }
   }
 }
 
@@ -1450,7 +1479,7 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateProtocolTakeRate"),
     borsh.struct([], "UpdateFeesBorrowFee"),
     borsh.struct([], "UpdateFeesFlashLoanFee"),
-    borsh.struct([], "UpdateFeesReferralFeeBps"),
+    borsh.struct([], "DeprecatedUpdateFeesReferralFeeBps"),
     borsh.struct([], "UpdateDepositLimit"),
     borsh.struct([], "UpdateBorrowLimit"),
     borsh.struct([], "UpdateTokenInfoLowerHeuristic"),
@@ -1470,8 +1499,8 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateEntireReserveConfig"),
     borsh.struct([], "UpdateDebtWithdrawalCap"),
     borsh.struct([], "UpdateDepositWithdrawalCap"),
-    borsh.struct([], "UpdateDebtWithdrawalCapCurrentTotal"),
-    borsh.struct([], "UpdateDepositWithdrawalCapCurrentTotal"),
+    borsh.struct([], "DeprecatedUpdateDebtWithdrawalCapCurrentTotal"),
+    borsh.struct([], "DeprecatedUpdateDepositWithdrawalCapCurrentTotal"),
     borsh.struct([], "UpdateBadDebtLiquidationBonusBps"),
     borsh.struct([], "UpdateMinLiquidationBonusBps"),
     borsh.struct([], "UpdateDeleveragingMarginCallPeriod"),
@@ -1492,6 +1521,7 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateHostFixedInterestRateBps"),
     borsh.struct([], "UpdateAutodeleverageEnabled"),
     borsh.struct([], "UpdateDeleveragingBonusIncreaseBpsPerDay"),
+    borsh.struct([], "UpdateProtocolOrderExecutionFee"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

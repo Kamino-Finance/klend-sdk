@@ -25,8 +25,7 @@ export interface LendingMarketFields {
    * Whether the obligations on this market should be subject to auto-deleveraging after deposit
    * or borrow limit is crossed.
    * Besides this flag, the particular reserve's flag also needs to be enabled (logical `AND`).
-   * **NOTE:** the manual "target LTV" deleveraging (enabled by the risk council for individual
-   * obligations) is NOT affected by this flag.
+   * **NOTE:** this also affects the individual "target LTV" deleveraging.
    */
   autodeleverageEnabled: number
   borrowDisabled: number
@@ -73,6 +72,9 @@ export interface LendingMarketFields {
    * Note: this amount cannot be recovered, the ctoken associated are never minted
    */
   minInitialDepositAmount: BN
+  /** Whether the obligation orders should be evaluated during liquidations. */
+  obligationOrdersEnabled: number
+  padding2: Array<number>
   padding1: Array<BN>
 }
 
@@ -97,8 +99,7 @@ export interface LendingMarketJSON {
    * Whether the obligations on this market should be subject to auto-deleveraging after deposit
    * or borrow limit is crossed.
    * Besides this flag, the particular reserve's flag also needs to be enabled (logical `AND`).
-   * **NOTE:** the manual "target LTV" deleveraging (enabled by the risk council for individual
-   * obligations) is NOT affected by this flag.
+   * **NOTE:** this also affects the individual "target LTV" deleveraging.
    */
   autodeleverageEnabled: number
   borrowDisabled: number
@@ -145,6 +146,9 @@ export interface LendingMarketJSON {
    * Note: this amount cannot be recovered, the ctoken associated are never minted
    */
   minInitialDepositAmount: string
+  /** Whether the obligation orders should be evaluated during liquidations. */
+  obligationOrdersEnabled: number
+  padding2: Array<number>
   padding1: Array<string>
 }
 
@@ -169,8 +173,7 @@ export class LendingMarket {
    * Whether the obligations on this market should be subject to auto-deleveraging after deposit
    * or borrow limit is crossed.
    * Besides this flag, the particular reserve's flag also needs to be enabled (logical `AND`).
-   * **NOTE:** the manual "target LTV" deleveraging (enabled by the risk council for individual
-   * obligations) is NOT affected by this flag.
+   * **NOTE:** this also affects the individual "target LTV" deleveraging.
    */
   readonly autodeleverageEnabled: number
   readonly borrowDisabled: number
@@ -217,6 +220,9 @@ export class LendingMarket {
    * Note: this amount cannot be recovered, the ctoken associated are never minted
    */
   readonly minInitialDepositAmount: BN
+  /** Whether the obligation orders should be evaluated during liquidations. */
+  readonly obligationOrdersEnabled: number
+  readonly padding2: Array<number>
   readonly padding1: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -250,7 +256,9 @@ export class LendingMarket {
     borsh.u64("minValueSkipLiquidationBfChecks"),
     borsh.u64("individualAutodeleverageMarginCallPeriodSecs"),
     borsh.u64("minInitialDepositAmount"),
-    borsh.array(borsh.u64(), 170, "padding1"),
+    borsh.u8("obligationOrdersEnabled"),
+    borsh.array(borsh.u8(), 7, "padding2"),
+    borsh.array(borsh.u64(), 169, "padding1"),
   ])
 
   constructor(fields: LendingMarketFields) {
@@ -288,6 +296,8 @@ export class LendingMarket {
     this.individualAutodeleverageMarginCallPeriodSecs =
       fields.individualAutodeleverageMarginCallPeriodSecs
     this.minInitialDepositAmount = fields.minInitialDepositAmount
+    this.obligationOrdersEnabled = fields.obligationOrdersEnabled
+    this.padding2 = fields.padding2
     this.padding1 = fields.padding1
   }
 
@@ -367,6 +377,8 @@ export class LendingMarket {
       individualAutodeleverageMarginCallPeriodSecs:
         dec.individualAutodeleverageMarginCallPeriodSecs,
       minInitialDepositAmount: dec.minInitialDepositAmount,
+      obligationOrdersEnabled: dec.obligationOrdersEnabled,
+      padding2: dec.padding2,
       padding1: dec.padding1,
     })
   }
@@ -406,6 +418,8 @@ export class LendingMarket {
       individualAutodeleverageMarginCallPeriodSecs:
         this.individualAutodeleverageMarginCallPeriodSecs.toString(),
       minInitialDepositAmount: this.minInitialDepositAmount.toString(),
+      obligationOrdersEnabled: this.obligationOrdersEnabled,
+      padding2: this.padding2,
       padding1: this.padding1.map((item) => item.toString()),
     }
   }
@@ -452,6 +466,8 @@ export class LendingMarket {
         obj.individualAutodeleverageMarginCallPeriodSecs
       ),
       minInitialDepositAmount: new BN(obj.minInitialDepositAmount),
+      obligationOrdersEnabled: obj.obligationOrdersEnabled,
+      padding2: obj.padding2,
       padding1: obj.padding1.map((item) => new BN(item)),
     })
   }

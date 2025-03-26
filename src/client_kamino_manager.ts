@@ -1570,7 +1570,8 @@ function parseReserveConfigFromFile(reserveConfigFromFile: any): ReserveConfig {
     liquidationThresholdPct: reserveConfigFromFile.liquidationThresholdPct,
     minLiquidationBonusBps: reserveConfigFromFile.minLiquidationBonusBps,
     protocolLiquidationFeePct: reserveConfigFromFile.protocolLiquidationFeePct,
-    protocolTakeRatePct: reserveConfigFromFile.protocolLiquidationFeePct,
+    protocolOrderExecutionFeePct: reserveConfigFromFile.protocolOrderExecutionFeePct,
+    protocolTakeRatePct: reserveConfigFromFile.protocolTakeRatePct,
     assetTier: reserveConfigFromFile.assetTier,
     maxLiquidationBonusBps: reserveConfigFromFile.maxLiquidationBonusBps,
     badDebtLiquidationBonusBps: reserveConfigFromFile.badDebtLiquidationBonusBps,
@@ -1621,8 +1622,7 @@ function parseReserveConfigFromFile(reserveConfigFromFile: any): ReserveConfig {
     borrowLimitAgainstThisCollateralInElevationGroup: parseReserveBorrowLimitAgainstCollInEmode(reserveConfigFromFile),
     deleveragingBonusIncreaseBpsPerDay: new BN(reserveConfigFromFile.deleveragingBonusIncreaseBpsPerDay),
     reserved1: Array(1).fill(0),
-    reserved2: Array(2).fill(0),
-    reserved3: Array(8).fill(0),
+    reserved2: Array(9).fill(0),
   };
 
   return new ReserveConfig(reserveConfigFields);
@@ -1700,7 +1700,8 @@ function parseReserveConfigToFile(reserveConfig: ReserveConfig) {
     liquidationThresholdPct: reserveConfig.liquidationThresholdPct,
     minLiquidationBonusBps: reserveConfig.minLiquidationBonusBps,
     protocolLiquidationFeePct: reserveConfig.protocolLiquidationFeePct,
-    protocolTakeRatePct: reserveConfig.protocolLiquidationFeePct,
+    protocolOrderExecutionFeePct: reserveConfig.protocolOrderExecutionFeePct,
+    protocolTakeRatePct: reserveConfig.protocolTakeRatePct,
     assetTier: reserveConfig.assetTier,
     maxLiquidationBonusBps: reserveConfig.maxLiquidationBonusBps,
     badDebtLiquidationBonusBps: reserveConfig.badDebtLiquidationBonusBps,
@@ -1742,7 +1743,6 @@ function parseReserveConfigToFile(reserveConfig: ReserveConfig) {
       reserveConfig.borrowLimitAgainstThisCollateralInElevationGroup.map((entry) => entry.toString()),
     deleveragingBonusIncreaseBpsPerDay: reserveConfig.deleveragingBonusIncreaseBpsPerDay.toString(),
     reserved1: Array(2).fill(0),
-    reserved2: Array(2).fill(0),
-    reserved3: Array(8).fill(0),
+    reserved2: Array(9).fill(0),
   };
 }

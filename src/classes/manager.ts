@@ -1070,6 +1070,7 @@ const EXCLUDED_LENDING_MARKET_KEYS = [
   'reserved0',
   'reserved1',
   'padding1',
+  'padding2',
   'elevationGroupPadding',
   'quoteCurrency',
 ] as const;
@@ -1323,6 +1324,17 @@ const updateLendingMarketConfig = (
         });
       }
       break;
+    case 'obligationOrdersEnabled':
+      if (market.obligationOrdersEnabled !== newMarket.obligationOrdersEnabled) {
+        updateLendingMarketIxnsArgs.push({
+          mode: UpdateLendingMarketMode.UpdateObligationOrdersEnabled.discriminator,
+          value: updateMarketConfigEncodedValue(
+            UpdateLendingMarketMode.UpdateObligationOrdersEnabled.discriminator,
+            newMarket.autodeleverageEnabled
+          ),
+        });
+      }
+      break;
     default:
       assertNever(key);
   }
@@ -1375,6 +1387,7 @@ function updateMarketConfigEncodedValue(
     case UpdateLendingMarketMode.UpdateInsolvencyRiskLtv.discriminator:
     case UpdateLendingMarketMode.UpdatePriceRefreshTriggerToMaxAgePct.discriminator:
     case UpdateLendingMarketMode.UpdateAutodeleverageEnabled.discriminator:
+    case UpdateLendingMarketMode.UpdateObligationOrdersEnabled.discriminator:
     case UpdateLendingMarketMode.UpdateBorrowingDisabled.discriminator:
       buffer.writeUIntLE(value as number, 0, 1);
       break;

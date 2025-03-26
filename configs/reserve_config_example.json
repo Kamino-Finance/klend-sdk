@@ -4,6 +4,7 @@
   "liquidationThresholdPct": 75,
   "minLiquidationBonusBps": 500,
   "protocolLiquidationFeePct": 0,
+  "protocolOrderExecutionFeePct": 0,
   "protocolTakeRatePct": 0,
   "assetTier": 0,
   "multiplierSideBoost": [1, 1],

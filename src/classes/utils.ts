@@ -332,6 +332,27 @@ export function assertNever(x: never): never {
   throw new Error('Unexpected object: ' + x);
 }
 
+export function orThrow(message: string): never {
+  throw new Error(message);
+}
+
+export function getSingleElement<T>(array: T[], message: string): T {
+  if (array.length !== 1) {
+    throw new Error(`${message} (found ${array.length})`);
+  }
+  return array[0];
+}
+
+/**
+ * Returns an integer {@link Decimal} nearest to the given one.
+ *
+ * NOTE: the `Decimal.round()` should actually be called `.trunc()` (by default, it uses floor rounding). In most cases,
+ * we prefer the traditional behavior (as `Math.round()`).
+ */
+export function roundNearest(decimal: Decimal): Decimal {
+  return decimal.toDecimalPlaces(0, Decimal.ROUND_HALF_CEIL);
+}
+
 /**
  * Fetch median slot duration in milliseconds from the last 10 epochs
  */

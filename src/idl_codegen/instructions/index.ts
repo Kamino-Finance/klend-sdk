@@ -183,6 +183,11 @@ export type {
 } from "./initReferrerStateAndShortUrl"
 export { deleteReferrerStateAndShortUrl } from "./deleteReferrerStateAndShortUrl"
 export type { DeleteReferrerStateAndShortUrlAccounts } from "./deleteReferrerStateAndShortUrl"
+export { setObligationOrder } from "./setObligationOrder"
+export type {
+  SetObligationOrderArgs,
+  SetObligationOrderAccounts,
+} from "./setObligationOrder"
 export { idlMissingTypes } from "./idlMissingTypes"
 export type {
   IdlMissingTypesArgs,

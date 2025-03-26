@@ -35,8 +35,8 @@ export interface ObligationFields {
   borrowsAssetTiers: Array<number>
   /** The elevation group id the obligation opted into. */
   elevationGroup: number
-  /** The number of deprecated reserves the obligation has a deposit */
-  numOfObsoleteReserves: number
+  /** The number of obsolete reserves the obligation has a deposit in */
+  numOfObsoleteDepositReserves: number
   /** Marked = 1 if borrows array is not empty, 0 = borrows empty */
   hasDebt: number
   /** Wallet address of the referrer */
@@ -50,6 +50,8 @@ export interface ObligationFields {
   autodeleverageTargetLtvPct: number
   /** The lowest max LTV found amongst the collateral deposits */
   lowestReserveDepositMaxLtvPct: number
+  /** The number of obsolete reserves the obligation has a borrow in */
+  numOfObsoleteBorrowReserves: number
   reserved: Array<number>
   highestBorrowFactorPct: BN
   /**
@@ -57,6 +59,11 @@ export interface ObligationFields {
    * Zero if not currently subject to deleveraging.
    */
   autodeleverageMarginCallStartedTimestamp: BN
+  /**
+   * Owner-defined, liquidator-executed orders applicable to this obligation.
+   * Typical use-cases would be a stop-loss and a take-profit (possibly co-existing).
+   */
+  orders: Array<types.ObligationOrderFields>
   padding3: Array<BN>
 }
 
@@ -91,8 +98,8 @@ export interface ObligationJSON {
   borrowsAssetTiers: Array<number>
   /** The elevation group id the obligation opted into. */
   elevationGroup: number
-  /** The number of deprecated reserves the obligation has a deposit */
-  numOfObsoleteReserves: number
+  /** The number of obsolete reserves the obligation has a deposit in */
+  numOfObsoleteDepositReserves: number
   /** Marked = 1 if borrows array is not empty, 0 = borrows empty */
   hasDebt: number
   /** Wallet address of the referrer */
@@ -106,6 +113,8 @@ export interface ObligationJSON {
   autodeleverageTargetLtvPct: number
   /** The lowest max LTV found amongst the collateral deposits */
   lowestReserveDepositMaxLtvPct: number
+  /** The number of obsolete reserves the obligation has a borrow in */
+  numOfObsoleteBorrowReserves: number
   reserved: Array<number>
   highestBorrowFactorPct: string
   /**
@@ -113,6 +122,11 @@ export interface ObligationJSON {
    * Zero if not currently subject to deleveraging.
    */
   autodeleverageMarginCallStartedTimestamp: string
+  /**
+   * Owner-defined, liquidator-executed orders applicable to this obligation.
+   * Typical use-cases would be a stop-loss and a take-profit (possibly co-existing).
+   */
+  orders: Array<types.ObligationOrderJSON>
   padding3: Array<string>
 }
 
@@ -148,8 +162,8 @@ export class Obligation {
   readonly borrowsAssetTiers: Array<number>
   /** The elevation group id the obligation opted into. */
   readonly elevationGroup: number
-  /** The number of deprecated reserves the obligation has a deposit */
-  readonly numOfObsoleteReserves: number
+  /** The number of obsolete reserves the obligation has a deposit in */
+  readonly numOfObsoleteDepositReserves: number
   /** Marked = 1 if borrows array is not empty, 0 = borrows empty */
   readonly hasDebt: number
   /** Wallet address of the referrer */
@@ -163,6 +177,8 @@ export class Obligation {
   readonly autodeleverageTargetLtvPct: number
   /** The lowest max LTV found amongst the collateral deposits */
   readonly lowestReserveDepositMaxLtvPct: number
+  /** The number of obsolete reserves the obligation has a borrow in */
+  readonly numOfObsoleteBorrowReserves: number
   readonly reserved: Array<number>
   readonly highestBorrowFactorPct: BN
   /**
@@ -170,6 +186,11 @@ export class Obligation {
    * Zero if not currently subject to deleveraging.
    */
   readonly autodeleverageMarginCallStartedTimestamp: BN
+  /**
+   * Owner-defined, liquidator-executed orders applicable to this obligation.
+   * Typical use-cases would be a stop-loss and a take-profit (possibly co-existing).
+   */
+  readonly orders: Array<types.ObligationOrder>
   readonly padding3: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -192,16 +213,18 @@ export class Obligation {
     borsh.array(borsh.u8(), 8, "depositsAssetTiers"),
     borsh.array(borsh.u8(), 5, "borrowsAssetTiers"),
     borsh.u8("elevationGroup"),
-    borsh.u8("numOfObsoleteReserves"),
+    borsh.u8("numOfObsoleteDepositReserves"),
     borsh.u8("hasDebt"),
     borsh.publicKey("referrer"),
     borsh.u8("borrowingDisabled"),
     borsh.u8("autodeleverageTargetLtvPct"),
     borsh.u8("lowestReserveDepositMaxLtvPct"),
-    borsh.array(borsh.u8(), 5, "reserved"),
+    borsh.u8("numOfObsoleteBorrowReserves"),
+    borsh.array(borsh.u8(), 4, "reserved"),
     borsh.u64("highestBorrowFactorPct"),
     borsh.u64("autodeleverageMarginCallStartedTimestamp"),
-    borsh.array(borsh.u64(), 125, "padding3"),
+    borsh.array(types.ObligationOrder.layout(), 2, "orders"),
+    borsh.array(borsh.u64(), 93, "padding3"),
   ])
 
   constructor(fields: ObligationFields) {
@@ -226,16 +249,20 @@ export class Obligation {
     this.depositsAssetTiers = fields.depositsAssetTiers
     this.borrowsAssetTiers = fields.borrowsAssetTiers
     this.elevationGroup = fields.elevationGroup
-    this.numOfObsoleteReserves = fields.numOfObsoleteReserves
+    this.numOfObsoleteDepositReserves = fields.numOfObsoleteDepositReserves
     this.hasDebt = fields.hasDebt
     this.referrer = fields.referrer
     this.borrowingDisabled = fields.borrowingDisabled
     this.autodeleverageTargetLtvPct = fields.autodeleverageTargetLtvPct
     this.lowestReserveDepositMaxLtvPct = fields.lowestReserveDepositMaxLtvPct
+    this.numOfObsoleteBorrowReserves = fields.numOfObsoleteBorrowReserves
     this.reserved = fields.reserved
     this.highestBorrowFactorPct = fields.highestBorrowFactorPct
     this.autodeleverageMarginCallStartedTimestamp =
       fields.autodeleverageMarginCallStartedTimestamp
+    this.orders = fields.orders.map(
+      (item) => new types.ObligationOrder({ ...item })
+    )
     this.padding3 = fields.padding3
   }
 
@@ -307,16 +334,22 @@ export class Obligation {
       depositsAssetTiers: dec.depositsAssetTiers,
       borrowsAssetTiers: dec.borrowsAssetTiers,
       elevationGroup: dec.elevationGroup,
-      numOfObsoleteReserves: dec.numOfObsoleteReserves,
+      numOfObsoleteDepositReserves: dec.numOfObsoleteDepositReserves,
       hasDebt: dec.hasDebt,
       referrer: dec.referrer,
       borrowingDisabled: dec.borrowingDisabled,
       autodeleverageTargetLtvPct: dec.autodeleverageTargetLtvPct,
       lowestReserveDepositMaxLtvPct: dec.lowestReserveDepositMaxLtvPct,
+      numOfObsoleteBorrowReserves: dec.numOfObsoleteBorrowReserves,
       reserved: dec.reserved,
       highestBorrowFactorPct: dec.highestBorrowFactorPct,
       autodeleverageMarginCallStartedTimestamp:
         dec.autodeleverageMarginCallStartedTimestamp,
+      orders: dec.orders.map(
+        (
+          item: any /* eslint-disable-line @typescript-eslint/no-explicit-any */
+        ) => types.ObligationOrder.fromDecoded(item)
+      ),
       padding3: dec.padding3,
     })
   }
@@ -340,16 +373,18 @@ export class Obligation {
       depositsAssetTiers: this.depositsAssetTiers,
       borrowsAssetTiers: this.borrowsAssetTiers,
       elevationGroup: this.elevationGroup,
-      numOfObsoleteReserves: this.numOfObsoleteReserves,
+      numOfObsoleteDepositReserves: this.numOfObsoleteDepositReserves,
       hasDebt: this.hasDebt,
       referrer: this.referrer.toString(),
       borrowingDisabled: this.borrowingDisabled,
       autodeleverageTargetLtvPct: this.autodeleverageTargetLtvPct,
       lowestReserveDepositMaxLtvPct: this.lowestReserveDepositMaxLtvPct,
+      numOfObsoleteBorrowReserves: this.numOfObsoleteBorrowReserves,
       reserved: this.reserved,
       highestBorrowFactorPct: this.highestBorrowFactorPct.toString(),
       autodeleverageMarginCallStartedTimestamp:
         this.autodeleverageMarginCallStartedTimestamp.toString(),
+      orders: this.orders.map((item) => item.toJSON()),
       padding3: this.padding3.map((item) => item.toString()),
     }
   }
@@ -379,17 +414,19 @@ export class Obligation {
       depositsAssetTiers: obj.depositsAssetTiers,
       borrowsAssetTiers: obj.borrowsAssetTiers,
       elevationGroup: obj.elevationGroup,
-      numOfObsoleteReserves: obj.numOfObsoleteReserves,
+      numOfObsoleteDepositReserves: obj.numOfObsoleteDepositReserves,
       hasDebt: obj.hasDebt,
       referrer: new PublicKey(obj.referrer),
       borrowingDisabled: obj.borrowingDisabled,
       autodeleverageTargetLtvPct: obj.autodeleverageTargetLtvPct,
       lowestReserveDepositMaxLtvPct: obj.lowestReserveDepositMaxLtvPct,
+      numOfObsoleteBorrowReserves: obj.numOfObsoleteBorrowReserves,
       reserved: obj.reserved,
       highestBorrowFactorPct: new BN(obj.highestBorrowFactorPct),
       autodeleverageMarginCallStartedTimestamp: new BN(
         obj.autodeleverageMarginCallStartedTimestamp
       ),
+      orders: obj.orders.map((item) => types.ObligationOrder.fromJSON(item)),
       padding3: obj.padding3.map((item) => new BN(item)),
     })
   }

@@ -16,7 +16,7 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateProtocolTakeRate
   | UpdateConfigMode.UpdateFeesBorrowFee
   | UpdateConfigMode.UpdateFeesFlashLoanFee
-  | UpdateConfigMode.UpdateFeesReferralFeeBps
+  | UpdateConfigMode.DeprecatedUpdateFeesReferralFeeBps
   | UpdateConfigMode.UpdateDepositLimit
   | UpdateConfigMode.UpdateBorrowLimit
   | UpdateConfigMode.UpdateTokenInfoLowerHeuristic
@@ -36,8 +36,8 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateEntireReserveConfig
   | UpdateConfigMode.UpdateDebtWithdrawalCap
   | UpdateConfigMode.UpdateDepositWithdrawalCap
-  | UpdateConfigMode.UpdateDebtWithdrawalCapCurrentTotal
-  | UpdateConfigMode.UpdateDepositWithdrawalCapCurrentTotal
+  | UpdateConfigMode.DeprecatedUpdateDebtWithdrawalCapCurrentTotal
+  | UpdateConfigMode.DeprecatedUpdateDepositWithdrawalCapCurrentTotal
   | UpdateConfigMode.UpdateBadDebtLiquidationBonusBps
   | UpdateConfigMode.UpdateMinLiquidationBonusBps
   | UpdateConfigMode.UpdateDeleveragingMarginCallPeriod
@@ -58,6 +58,7 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateHostFixedInterestRateBps
   | UpdateConfigMode.UpdateAutodeleverageEnabled
   | UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay
+  | UpdateConfigMode.UpdateProtocolOrderExecutionFee
 export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateLoanToValuePctJSON
   | UpdateConfigMode.UpdateMaxLiquidationBonusBpsJSON
@@ -66,7 +67,7 @@ export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateProtocolTakeRateJSON
   | UpdateConfigMode.UpdateFeesBorrowFeeJSON
   | UpdateConfigMode.UpdateFeesFlashLoanFeeJSON
-  | UpdateConfigMode.UpdateFeesReferralFeeBpsJSON
+  | UpdateConfigMode.DeprecatedUpdateFeesReferralFeeBpsJSON
   | UpdateConfigMode.UpdateDepositLimitJSON
   | UpdateConfigMode.UpdateBorrowLimitJSON
   | UpdateConfigMode.UpdateTokenInfoLowerHeuristicJSON
@@ -86,8 +87,8 @@ export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateEntireReserveConfigJSON
   | UpdateConfigMode.UpdateDebtWithdrawalCapJSON
   | UpdateConfigMode.UpdateDepositWithdrawalCapJSON
-  | UpdateConfigMode.UpdateDebtWithdrawalCapCurrentTotalJSON
-  | UpdateConfigMode.UpdateDepositWithdrawalCapCurrentTotalJSON
+  | UpdateConfigMode.DeprecatedUpdateDebtWithdrawalCapCurrentTotalJSON
+  | UpdateConfigMode.DeprecatedUpdateDepositWithdrawalCapCurrentTotalJSON
   | UpdateConfigMode.UpdateBadDebtLiquidationBonusBpsJSON
   | UpdateConfigMode.UpdateMinLiquidationBonusBpsJSON
   | UpdateConfigMode.UpdateDeleveragingMarginCallPeriodJSON
@@ -108,6 +109,7 @@ export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateHostFixedInterestRateBpsJSON
   | UpdateConfigMode.UpdateAutodeleverageEnabledJSON
   | UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDayJSON
+  | UpdateConfigMode.UpdateProtocolOrderExecutionFeeJSON
 
 export { UpdateLendingMarketConfigValue }
 
@@ -157,6 +159,7 @@ export type UpdateLendingMarketModeKind =
   | UpdateLendingMarketMode.UpdateName
   | UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs
   | UpdateLendingMarketMode.UpdateInitialDepositAmount
+  | UpdateLendingMarketMode.UpdateObligationOrdersEnabled
 export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateOwnerJSON
   | UpdateLendingMarketMode.UpdateEmergencyModeJSON
@@ -180,6 +183,7 @@ export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateNameJSON
   | UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecsJSON
   | UpdateLendingMarketMode.UpdateInitialDepositAmountJSON
+  | UpdateLendingMarketMode.UpdateObligationOrdersEnabledJSON
 
 export { LastUpdate } from "./LastUpdate"
 export type { LastUpdateFields, LastUpdateJSON } from "./LastUpdate"
@@ -200,6 +204,11 @@ export type {
   ObligationLiquidityFields,
   ObligationLiquidityJSON,
 } from "./ObligationLiquidity"
+export { ObligationOrder } from "./ObligationOrder"
+export type {
+  ObligationOrderFields,
+  ObligationOrderJSON,
+} from "./ObligationOrder"
 export { AssetTier }
 
 export type AssetTierKind =

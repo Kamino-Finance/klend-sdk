@@ -48,6 +48,7 @@ import {
   requestElevationGroup,
   RequestElevationGroupAccounts,
   RequestElevationGroupArgs,
+  setObligationOrder,
   withdrawObligationCollateralAndRedeemReserveCollateral,
   withdrawObligationCollateralAndRedeemReserveCollateralV2,
   withdrawReferrerFees,
@@ -77,6 +78,7 @@ import { Reserve } from '../idl_codegen/accounts';
 import { VanillaObligation } from '../utils/ObligationType';
 import { PROGRAM_ID } from '../lib';
 import { Scope } from '@kamino-finance/scope-sdk';
+import { KaminoObligationOrder } from './obligationOrder';
 
 export type ActionType =
   | 'deposit'
@@ -1072,7 +1074,7 @@ export class KaminoAction {
     obligationOwner: PublicKey,
     obligation: KaminoObligation | ObligationType,
     useV2Ixs: boolean,
-    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined = undefined,
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas, and creates all other token atas if they don't exist
     requestElevationGroup: boolean = false,
@@ -1152,6 +1154,29 @@ export class KaminoAction {
     axn.addWithdrawReferrerFeesIxs();
 
     return axn;
+  }
+
+  /**
+   * Builds an instruction for setting the new state of one of the given obligation's orders.
+   *
+   * In other words: it will overwrite the given slot in the {@link Obligation.orders} array. This possibly includes
+   * setting the `null` state (i.e. cancelling the order).
+   */
+  static buildSetObligationOrderIxn(
+    kaminoMarket: KaminoMarket,
+    obligation: KaminoObligation,
+    index: number,
+    order: KaminoObligationOrder | null
+  ): TransactionInstruction {
+    return setObligationOrder(
+      { index, order: order !== null ? order.toState() : KaminoObligationOrder.NULL_STATE },
+      {
+        lendingMarket: kaminoMarket.getAddress(),
+        obligation: obligation.obligationAddress,
+        owner: obligation.state.owner,
+      },
+      kaminoMarket.programId
+    );
   }
 
   async getTransactions() {

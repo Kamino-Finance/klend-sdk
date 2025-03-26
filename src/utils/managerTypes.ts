@@ -292,6 +292,7 @@ function buildReserveConfig(fields: {
     liquidationThresholdPct: fields.configParams.liquidationThresholdPct,
     minLiquidationBonusBps: fields.configParams.minLiquidationBonusBps,
     protocolLiquidationFeePct: 0,
+    protocolOrderExecutionFeePct: 0,
     protocolTakeRatePct: fields.configParams.protocolTakeRate,
     assetTier: 0,
     maxLiquidationBonusBps: fields.configParams.maxLiquidationBonusBps,
@@ -345,8 +346,7 @@ function buildReserveConfig(fields: {
     borrowLimitAgainstThisCollateralInElevationGroup: Array(32).fill(new BN(0)),
     deleveragingBonusIncreaseBpsPerDay: new BN(100),
     reserved1: Array(1).fill(0),
-    reserved2: Array(2).fill(0),
-    reserved3: Array(8).fill(0),
+    reserved2: Array(9).fill(0),
   };
 
   return new ReserveConfig(reserveConfigFields);
