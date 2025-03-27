@@ -316,11 +316,13 @@ export class KaminoVaultClient {
    * This method updates the vault reserve allocation cofnig for an exiting vault reserve, or adds a new reserve to the vault if it does not exist.
    * @param vault - vault to be updated
    * @param reserveAllocationConfig - new reserve allocation config
+   * @param [signer] - optional parameter to pass a different signer for the instruction. If not provided, the admin of the vault will be used
    * @returns - a struct with an instruction to update the reserve allocation and an optional list of instructions to update the lookup table for the allocation changes
    */
   async updateReserveAllocationIxs(
     vault: KaminoVault,
-    reserveAllocationConfig: ReserveAllocationConfig
+    reserveAllocationConfig: ReserveAllocationConfig,
+    signer?: PublicKey
   ): Promise<UpdateReserveAllocationIxs> {
     const vaultState: VaultState = await vault.getState(this.getConnection());
     const reserveState: Reserve = reserveAllocationConfig.getReserveState();
@@ -331,8 +333,9 @@ export class KaminoVaultClient {
       this._kaminoVaultProgramId
     );
 
+    const allocationSigner = signer ? signer : vaultState.vaultAdminAuthority;
     const updateReserveAllocationAccounts: UpdateReserveAllocationAccounts = {
-      signer: vaultState.vaultAdminAuthority,
+      signer: allocationSigner,
       vaultState: vault.address,
       baseVaultAuthority: vaultState.baseVaultAuthority,
       reserveCollateralMint: reserveState.collateral.mintPubkey,
