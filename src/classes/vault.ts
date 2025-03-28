@@ -1114,7 +1114,7 @@ export class KaminoVaultClient {
       const diffInReserveTokens = computedAllocation.sub(reserveAllocationLiquidityAmount);
       const diffInReserveLamports = collToLamportsDecimal(diffInReserveTokens, vaultState.tokenMintDecimals.toNumber());
       // if the diff for the reserve is smaller than the min invest amount, we do not need to invest or disinvest
-      if (diffInReserveLamports.abs().gte(new Decimal(minInvestAmount.toString()))) {
+      if (diffInReserveLamports.abs().gt(new Decimal(minInvestAmount.toString()))) {
         if (computedAllocation.lt(reserveAllocationLiquidityAmount)) {
           reservesToDisinvestFrom.push(reservePubkey);
         } else {
