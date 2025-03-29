@@ -1104,6 +1104,7 @@ export class KaminoVaultClient {
       const reserveState = allReservesStateMap.get(reservePubkey)!;
       const computedAllocation = computedReservesAllocation.get(reservePubkey)!;
       const currentCTokenAllocation = curentVaultAllocations.get(reservePubkey)!.ctokenAllocation;
+      const currentAllocationCap = curentVaultAllocations.get(reservePubkey)!.tokenAllocationCap;
 
       const reserveCollExchangeRate = reserveState.getCollateralExchangeRate();
       const reserveAllocationLiquidityAmount = lamportsToDecimal(
@@ -1114,11 +1115,16 @@ export class KaminoVaultClient {
       const diffInReserveTokens = computedAllocation.sub(reserveAllocationLiquidityAmount);
       const diffInReserveLamports = collToLamportsDecimal(diffInReserveTokens, vaultState.tokenMintDecimals.toNumber());
       // if the diff for the reserve is smaller than the min invest amount, we do not need to invest or disinvest
-      if (diffInReserveLamports.abs().gt(new Decimal(minInvestAmount.toString()))) {
+      const minInvestAmountLamports = new Decimal(minInvestAmount.toString());
+      if (diffInReserveLamports.abs().gt(minInvestAmountLamports)) {
         if (computedAllocation.lt(reserveAllocationLiquidityAmount)) {
           reservesToDisinvestFrom.push(reservePubkey);
         } else {
-          reservesToInvestInto.push(reservePubkey);
+          const actualTarget = currentAllocationCap.gt(computedAllocation) ? computedAllocation : currentAllocationCap;
+          const lamportsToAddToReserve = actualTarget.sub(reserveAllocationLiquidityAmount);
+          if (lamportsToAddToReserve.gt(minInvestAmountLamports)) {
+            reservesToInvestInto.push(reservePubkey);
+          }
         }
       }
     }
