@@ -613,11 +613,15 @@ export class KaminoManager {
       }
     );
 
-    const markets = await Promise.all(
-      lendingMarketsAccounts.map((account) =>
-        KaminoMarket.load(this._connection, account.pubkey, this.recentSlotDurationMs, this._kaminoLendProgramId)
-      )
+    const marketPromises = lendingMarketsAccounts.map(account => 
+      KaminoMarket.load(this._connection, account.pubkey, this.recentSlotDurationMs, this._kaminoLendProgramId)
+        .catch(error => {
+          console.error(`Error loading market ${account.pubkey}:`, error.message);
+          return null;
+        })
     );
+    
+    const markets = await Promise.all(marketPromises);
     return markets.filter((market): market is KaminoMarket => market !== null);
   }
 
