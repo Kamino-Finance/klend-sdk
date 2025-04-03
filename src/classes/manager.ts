@@ -1336,7 +1336,7 @@ const updateLendingMarketConfig = (
           mode: UpdateLendingMarketMode.UpdateObligationOrdersEnabled.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateObligationOrdersEnabled.discriminator,
-            newMarket.autodeleverageEnabled
+            newMarket.obligationOrdersEnabled
           ),
         });
       }
