@@ -21,6 +21,8 @@ export interface WithdrawAccounts {
     tokenProgram: PublicKey
     sharesTokenProgram: PublicKey
     klendProgram: PublicKey
+    eventAuthority: PublicKey
+    program: PublicKey
   }
   withdrawFromReserveAccounts: {
     vaultState: PublicKey
@@ -33,6 +35,8 @@ export interface WithdrawAccounts {
     reserveCollateralTokenProgram: PublicKey
     instructionSysvarAccount: PublicKey
   }
+  eventAuthority: PublicKey
+  program: PublicKey
 }
 
 export const layout = borsh.struct([borsh.u64("sharesAmount")])
@@ -99,6 +103,16 @@ export function withdraw(
       isWritable: false,
     },
     {
+      pubkey: accounts.withdrawFromAvailable.eventAuthority,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
+      pubkey: accounts.withdrawFromAvailable.program,
+      isSigner: false,
+      isWritable: false,
+    },
+    {
       pubkey: accounts.withdrawFromReserveAccounts.vaultState,
       isSigner: false,
       isWritable: true,
@@ -144,6 +158,8 @@ export function withdraw(
       isSigner: false,
       isWritable: false,
     },
+    { pubkey: accounts.eventAuthority, isSigner: false, isWritable: false },
+    { pubkey: accounts.program, isSigner: false, isWritable: false },
   ]
   const identifier = Buffer.from([183, 18, 70, 156, 148, 109, 161, 34])
   const buffer = Buffer.alloc(1000)

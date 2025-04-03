@@ -109,7 +109,7 @@ const TOKEN_VAULT_SEED = 'token_vault';
 const CTOKEN_VAULT_SEED = 'ctoken_vault';
 const BASE_VAULT_AUTHORITY_SEED = 'authority';
 const SHARES_SEED = 'shares';
-
+const EVENT_AUTHORITY_SEED = '__event_authority';
 export const INITIAL_DEPOSIT_LAMPORTS = 1000;
 
 /**
@@ -794,6 +794,7 @@ export class KaminoVaultClient {
     ]);
     createAtasIxns.push(createSharesAtaIxns);
 
+    const eventAuthority = getEventAuthorityPda(this._kaminoVaultProgramId);
     const depoistAccounts: DepositAccounts = {
       user: user,
       vaultState: vault.address,
@@ -806,6 +807,8 @@ export class KaminoVaultClient {
       tokenProgram: tokenProgramID,
       klendProgram: this._kaminoLendProgramId,
       sharesTokenProgram: TOKEN_PROGRAM_ID,
+      eventAuthority: eventAuthority,
+      program: this._kaminoVaultProgramId,
     };
 
     const depositArgs: DepositArgs = {
@@ -1276,6 +1279,7 @@ export class KaminoVaultClient {
   ): TransactionInstruction {
     const lendingMarketAuth = lendingMarketAuthPda(marketAddress, this._kaminoLendProgramId)[0];
 
+    const eventAuthority = getEventAuthorityPda(this._kaminoVaultProgramId);
     const withdrawAccounts: WithdrawAccounts = {
       withdrawFromAvailable: {
         user,
@@ -1289,6 +1293,8 @@ export class KaminoVaultClient {
         tokenProgram: vaultState.tokenProgram,
         sharesTokenProgram: TOKEN_PROGRAM_ID,
         klendProgram: this._kaminoLendProgramId,
+        eventAuthority: eventAuthority,
+        program: this._kaminoVaultProgramId,
       },
       withdrawFromReserveAccounts: {
         vaultState: vault.address,
@@ -1301,6 +1307,8 @@ export class KaminoVaultClient {
         reserveCollateralTokenProgram: TOKEN_PROGRAM_ID,
         instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
       },
+      eventAuthority: eventAuthority,
+      program: this._kaminoVaultProgramId,
     };
 
     const withdrawArgs: WithdrawArgs = {
@@ -1341,6 +1349,7 @@ export class KaminoVaultClient {
     userTokenAta: PublicKey,
     shareAmountLamports: Decimal
   ): Promise<TransactionInstruction> {
+    const eventAuthority = getEventAuthorityPda(this._kaminoVaultProgramId);
     const withdrawFromAvailableAccounts: WithdrawFromAvailableAccounts = {
       user,
       vaultState: vault.address,
@@ -1353,6 +1362,8 @@ export class KaminoVaultClient {
       tokenProgram: vaultState.tokenProgram,
       sharesTokenProgram: TOKEN_PROGRAM_ID,
       klendProgram: this._kaminoLendProgramId,
+      eventAuthority: eventAuthority,
+      program: this._kaminoVaultProgramId,
     };
 
     const withdrawFromAvailableArgs: WithdrawFromAvailableArgs = {
@@ -2686,6 +2697,10 @@ export function getCTokenVaultPda(vaultAddress: PublicKey, reserveAddress: Publi
     [Buffer.from(CTOKEN_VAULT_SEED), vaultAddress.toBytes(), reserveAddress.toBytes()],
     kaminoVaultProgramId
   )[0];
+}
+
+export function getEventAuthorityPda(kaminoVaultProgramId: PublicKey) {
+  return PublicKey.findProgramAddressSync([Buffer.from(EVENT_AUTHORITY_SEED)], kaminoVaultProgramId)[0];
 }
 
 export type VaultHolder = {

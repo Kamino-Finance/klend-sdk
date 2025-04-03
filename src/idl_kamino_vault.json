@@ -180,6 +180,16 @@
           "name": "sharesTokenProgram",
           "isMut": false,
           "isSigner": false
+        },
+        {
+          "name": "eventAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "program",
+          "isMut": false,
+          "isSigner": false
         }
       ],
       "args": [
@@ -249,6 +259,16 @@
               "name": "klendProgram",
               "isMut": false,
               "isSigner": false
+            },
+            {
+              "name": "eventAuthority",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "program",
+              "isMut": false,
+              "isSigner": false
             }
           ]
         },
@@ -301,6 +321,16 @@
               "isSigner": false
             }
           ]
+        },
+        {
+          "name": "eventAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "program",
+          "isMut": false,
+          "isSigner": false
         }
       ],
       "args": [
@@ -720,6 +750,16 @@
         },
         {
           "name": "klendProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "eventAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "program",
           "isMut": false,
           "isSigner": false
         }
@@ -1198,26 +1238,24 @@
           {
             "name": "reserved2",
             "docs": [
-              "[DEPRECATED] Boost for side (debt or collateral)"
+              "[DEPRECATED] Space that used to hold 2 fields:",
+              "- Boost for side (debt or collateral)",
+              "- Reward points multiplier per obligation type",
+              "Can be re-used after making sure all underlying production account data is zeroed."
             ],
             "type": {
               "array": [
                 "u8",
-                2
+                9
               ]
             }
           },
           {
-            "name": "reserved3",
+            "name": "protocolOrderExecutionFeePct",
             "docs": [
-              "[DEPRECATED] Reward points multiplier per obligation type"
+              "Cut of the order execution bonus that the protocol receives, as a percentage"
             ],
-            "type": {
-              "array": [
-                "u8",
-                8
-              ]
-            }
+            "type": "u8"
           },
           {
             "name": "protocolTakeRatePct",
@@ -1980,6 +2018,78 @@
           }
         ]
       }
+    }
+  ],
+  "events": [
+    {
+      "name": "DepositResultEvent",
+      "fields": [
+        {
+          "name": "sharesToMint",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "tokenToDeposit",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "crankFundsToDeposit",
+          "type": "u64",
+          "index": false
+        }
+      ]
+    },
+    {
+      "name": "DepositUserAtaBalanceEvent",
+      "fields": [
+        {
+          "name": "userAtaBalance",
+          "type": "u64",
+          "index": false
+        }
+      ]
+    },
+    {
+      "name": "SharesToWithdrawEvent",
+      "fields": [
+        {
+          "name": "sharesAmount",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "userSharesBefore",
+          "type": "u64",
+          "index": false
+        }
+      ]
+    },
+    {
+      "name": "WithdrawResultEvent",
+      "fields": [
+        {
+          "name": "sharesToBurn",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "availableToSendToUser",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "investedToDisinvestCtokens",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "investedLiquidityToSendToUser",
+          "type": "u64",
+          "index": false
+        }
+      ]
     }
   ],
   "errors": [
