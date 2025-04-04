@@ -1478,7 +1478,6 @@ export class KaminoObligation {
     let accSf = new BN(0);
     for (const value of borrow.cumulativeBorrowRateBsf.value.reverse()) {
       accSf = accSf.add(value);
-      accSf.shrn(64);
     }
     return new Fraction(accSf).toDecimal();
   }
