@@ -32,7 +32,12 @@ import {
   CreateKaminoMarketParams,
   createReserveIxs,
   ENV,
+  getAllLendingMarketAccounts,
+  getAllOracleAccounts,
+  getAllReserveAccounts,
+  getMedianSlotDurationInMsFromLastEpochs,
   getReserveOracleConfigs,
+  getTokenOracleDataSync,
   initLendingMarket,
   InitLendingMarketAccounts,
   InitLendingMarketArgs,
@@ -44,6 +49,7 @@ import {
   MarketWithAddress,
   parseForChangesReserveConfigAndGetIxs,
   parseOracleType,
+  parseTokenSymbol,
   PubkeyHashMap,
   Reserve,
   ReserveWithAddress,
@@ -86,6 +92,7 @@ import {
   WithdrawIxs,
 } from './types';
 import { FarmState } from '@kamino-finance/farms-sdk/dist';
+import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
 
 /**
  * KaminoManager is a class that provides a high-level interface to interact with the Kamino Lend and Kamino Vault programs, in order to create and manage a market, as well as vaults
@@ -600,29 +607,72 @@ export class KaminoManager {
    * @returns an array of all lending markets
    */
   async getAllMarkets(): Promise<KaminoMarket[]> {
-    const lendingMarketsAccounts = await getProgramAccounts(
-      this.getConnection(),
-      this._kaminoLendProgramId,
-      LendingMarket.layout.span + 8,
-      {
-        commitment: this.getConnection().commitment ?? 'processed',
-        filters: [
-          { dataSize: LendingMarket.layout.span + 8 },
-          { memcmp: { offset: 0, bytes: bs58.encode(LendingMarket.discriminator) } },
-        ],
-      }
-    );
+    // Get all lending markets
+    const marketGenerator = getAllLendingMarketAccounts(this.getConnection());
+    const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-    const marketPromises = lendingMarketsAccounts.map(account => 
-      KaminoMarket.load(this._connection, account.pubkey, this.recentSlotDurationMs, this._kaminoLendProgramId)
-        .catch(error => {
-          console.error(`Error loading market ${account.pubkey}:`, error.message);
-          return null;
-        })
-    );
-    
-    const markets = await Promise.all(marketPromises);
-    return markets.filter((market): market is KaminoMarket => market !== null);
+    const lendingMarketPairs: [PublicKey, LendingMarket][] = [];
+    for await (const pair of marketGenerator) {
+      lendingMarketPairs.push(pair);
+    }
+
+    // Get all reserves
+    const allReserveAccounts = await getAllReserveAccounts(this.getConnection());
+    const reservePairs: [PublicKey, Reserve, AccountInfo<Buffer>][] = [];
+    for await (const pair of allReserveAccounts) {
+      reservePairs.push(pair);
+    }
+    const allReserves = reservePairs.map(([, reserve]) => reserve);
+
+    // Get all oracle accounts
+    const allOracleAccounts = await getAllOracleAccounts(this.getConnection(), allReserves);
+    const switchboardV2 = await SwitchboardProgram.loadMainnet(this.getConnection());
+
+    // Group reserves by market
+    const marketToReserve = new PubkeyHashMap<
+      PublicKey,
+      [PublicKey, Reserve, AccountInfo<Buffer>][]
+    >();
+    for (const [reserveAddress, reserveState, buffer] of reservePairs) {
+      const marketAddress = reserveState.lendingMarket;
+      if (!marketToReserve.has(marketAddress)) {
+        marketToReserve.set(marketAddress, [[reserveAddress, reserveState, buffer]]);
+      } else {
+        marketToReserve.get(marketAddress)?.push([reserveAddress, reserveState, buffer]);
+      }
+    }
+
+    const combinedMarkets = lendingMarketPairs.map(([pubkey, market]) => {
+      const reserves = marketToReserve.get(pubkey);
+      const reservesByAddress = new PubkeyHashMap<PublicKey, KaminoReserve>();
+      if (!reserves) {
+        console.log(`Market ${pubkey.toString()} ${parseTokenSymbol(market.name)} has no reserves`);
+      } else {
+        const allBuffers = reserves.map(([, , account]) => account);
+        const allReserves = reserves.map(([, reserve]) => reserve);
+        const reservesAndOracles = getTokenOracleDataSync(allOracleAccounts, switchboardV2, allReserves);
+        reservesAndOracles.forEach(([reserve, oracle], index) => {
+          if (!oracle) {
+            console.log('Manager > getAllMarkets: oracle not found for reserve', reserve.config.tokenInfo.name);
+            return;
+          }
+
+          const kaminoReserve = KaminoReserve.initialize(
+            allBuffers[index],
+            reserves[index][0],
+            reserves[index][1],
+            oracle,
+            this.getConnection(),
+            this.recentSlotDurationMs
+          );
+          reservesByAddress.set(kaminoReserve.address, kaminoReserve);
+        });
+      }
+
+      return KaminoMarket.loadWithReserves(this.getConnection(), market, reservesByAddress, pubkey, slotDuration);
+    });
+
+    return combinedMarkets;
   }
 
   /**

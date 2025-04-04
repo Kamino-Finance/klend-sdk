@@ -40,17 +40,15 @@ export type ScopePriceRefreshConfig = {
   scopeFeed: string;
 };
 
-// TODO: Add freshness of the latest price to match sc logic
-export async function getTokenOracleData(
-  connection: Connection,
+export function getTokenOracleDataSync(
+  allOracleAccounts: AllOracleAccounts,
+  switchboardV2: SwitchboardProgram,
   reserves: Reserve[]
-): Promise<Array<[Reserve, TokenOracleData | undefined]>> {
-  const allOracleAccounts = await getAllOracleAccounts(connection, reserves);
+) {
   const tokenOracleDataForReserves: Array<[Reserve, TokenOracleData | undefined]> = [];
   const pythCache = new PubkeyHashMap<PublicKey, PythPrices>();
   const switchboardCache = new PubkeyHashMap<PublicKey, CandidatePrice>();
   const scopeCache = new PubkeyHashMap<PublicKey, OraclePrices>();
-  let switchboardV2: SwitchboardProgram | undefined;
   for (const reserve of reserves) {
     let currentBest: CandidatePrice | undefined = undefined;
     const oracle = {
@@ -66,9 +64,6 @@ export async function getTokenOracleData(
       }
     }
     if (isNotNullPubkey(oracle.switchboardFeedAddress)) {
-      if (!switchboardV2) {
-        switchboardV2 = await SwitchboardProgram.loadMainnet(connection);
-      }
       const switchboardPrice = cacheOrGetSwitchboardPrice(
         oracle.switchboardFeedAddress,
         switchboardCache,
@@ -107,6 +102,16 @@ export async function getTokenOracleData(
     tokenOracleDataForReserves.push([reserve, tokenOracleData]);
   }
   return tokenOracleDataForReserves;
+}
+
+// TODO: Add freshness of the latest price to match sc logic
+export async function getTokenOracleData(
+  connection: Connection,
+  reserves: Reserve[]
+): Promise<Array<[Reserve, TokenOracleData | undefined]>> {
+  const allOracleAccounts = await getAllOracleAccounts(connection, reserves);
+  const switchboardV2 = await SwitchboardProgram.loadMainnet(connection);
+  return getTokenOracleDataSync(allOracleAccounts, switchboardV2, reserves);
 }
 
 export type AllOracleAccounts = PubkeyHashMap<PublicKey, AccountInfo<Buffer>>;

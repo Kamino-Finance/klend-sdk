@@ -112,6 +112,17 @@ export class KaminoMarket {
     return new KaminoMarket(connection, market, marketAddress.toString(), reserves, recentSlotDurationMs, programId);
   }
 
+  static loadWithReserves(
+    connection: Connection,
+    market: LendingMarket,
+    reserves: Map<PublicKey, KaminoReserve>,
+    marketAddress: PublicKey,
+    recentSlotDurationMs: number,
+    programId: PublicKey = PROGRAM_ID
+  ) {
+    return new KaminoMarket(connection, market, marketAddress.toString(), reserves, recentSlotDurationMs, programId);
+  }
+
   async reload(): Promise<void> {
     const market = await LendingMarket.fetch(this.connection, this.getAddress(), this.programId);
     if (market === null) {

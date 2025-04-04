@@ -12,6 +12,7 @@ import {
   getAllObligationAccounts,
   getAllReserveAccounts,
   getAllLendingMarketAccounts,
+  KaminoManager,
 } from './lib';
 import * as fs from 'fs';
 import { Connection, GetProgramAccountsFilter, Keypair, PublicKey } from '@solana/web3.js';
@@ -19,7 +20,7 @@ import { BN } from '@coral-xyz/anchor';
 import { Reserve } from './idl_codegen/accounts';
 import { buildAndSendTxnWithLogs, buildVersionedTransaction } from './utils/instruction';
 import { VanillaObligation } from './utils/ObligationType';
-import { parseTokenSymbol } from './classes/utils';
+import { getMedianSlotDurationInMsFromLastEpochs, parseTokenSymbol } from './classes/utils';
 import { Env, initEnv } from '../tests/runner/setup_utils';
 import { initializeFarmsForReserve } from '../tests/runner/farms/farms_operations';
 import { Scope } from '@kamino-finance/scope-sdk';
@@ -73,6 +74,30 @@ async function main() {
         );
       }
       console.log(`Total lending markets: ${count}`);
+    });
+
+  commands
+    .command('print-all-markets-lite')
+    .option(`--rpc <string>`, 'The RPC URL')
+    .action(async ({ rpc }) => {
+      const startTime = Date.now();
+
+      const connection = new Connection(rpc, {});
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+      const kaminoManager = new KaminoManager(connection, slotDuration);
+      const allMarkets = await kaminoManager.getAllMarkets();
+      for (const market of allMarkets) {
+        console.log(
+          `Market: ${market.getName()} Address: ${
+            market.address
+          } Deposit TVL: ${market.getTotalDepositTVL()} Borrow TVL: ${market.getTotalBorrowTVL()} TVL: ${market
+            .getTotalDepositTVL()
+            .minus(market.getTotalBorrowTVL())}`
+        );
+      }
+
+      const duration = Date.now() - startTime;
+      console.log(`Execution duration: ${duration}ms`);
     });
 
   commands
