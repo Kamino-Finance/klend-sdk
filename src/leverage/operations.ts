@@ -27,7 +27,7 @@ import {
   getTransferWsolIxns,
   getLookupTableAccount,
   removeBudgetAndAtaIxns,
-  uniqueAccounts,
+  uniqueAccountsWithProgramIds,
 } from '../utils';
 import {
   adjustDepositLeverageCalcs,
@@ -163,7 +163,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
     elevationGroupOverride
   );
 
-  const uniqueKlendAccounts = uniqueAccounts(klendIxs.instructions);
+  const uniqueKlendAccounts = uniqueAccountsWithProgramIds(klendIxs.instructions);
 
   const swapInputAmount = toLamports(
     !collIsKtoken ? calcs.swapDebtTokenIn : calcs.singleSidedDepositKtokenOnly,
@@ -677,7 +677,7 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
     useV2Ixs
   );
 
-  const uniqueKlendAccounts = uniqueAccounts(klendIxs.instructions);
+  const uniqueKlendAccounts = uniqueAccountsWithProgramIds(klendIxs.instructions);
 
   const swapInputAmount = toLamports(
     calcs.collTokenSwapIn,
@@ -1104,7 +1104,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
       useV2Ixs
     );
 
-    const uniqueKlendAccounts = uniqueAccounts(klendIxs.instructions);
+    const uniqueKlendAccounts = uniqueAccountsWithProgramIds(klendIxs.instructions);
 
     const swapInputAmount = toLamports(
       !collIsKtoken ? calcs.borrowAmount : calcs.amountToFlashBorrowDebt,
@@ -1209,7 +1209,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
       useV2Ixs
     );
 
-    const uniqueKlendAccounts = uniqueAccounts(klendIxs.instructions);
+    const uniqueKlendAccounts = uniqueAccountsWithProgramIds(klendIxs.instructions);
 
     const swapInputAmount = toLamports(
       calcs.withdrawAmountWithSlippageAndFlashLoanFee,

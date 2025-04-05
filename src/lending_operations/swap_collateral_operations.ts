@@ -21,7 +21,7 @@ import {
   PublicKeySet,
   ScopePriceRefreshConfig,
   U64_MAX,
-  uniqueAccounts,
+  uniqueAccountsWithProgramIds,
 } from '../utils';
 import { AddressLookupTableAccount, PublicKey, TransactionInstruction } from '@solana/web3.js';
 import Decimal from 'decimal.js';
@@ -162,7 +162,7 @@ export async function getSwapCollIxns<QuoteResponse>(
 
   // Construct the Klend's own ixns with a fake swap-out (only to learn the klend accounts used):
   const fakeKlendIxns = await getKlendIxns(args, FAKE_TARGET_COLL_SWAP_OUT_AMOUNT, context);
-  const klendAccounts = uniqueAccounts(listIxns(fakeKlendIxns));
+  const klendAccounts = uniqueAccountsWithProgramIds(listIxns(fakeKlendIxns));
 
   // Construct the external swap ixns (and learn the actual swap-out amount):
   const externalSwapIxns = await getExternalSwapIxns(args, klendAccounts, context);

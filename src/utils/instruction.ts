@@ -260,7 +260,7 @@ export function notEmpty<TValue>(value: TValue | null | undefined): value is TVa
   return true;
 }
 
-export function uniqueAccounts(
+export function uniqueAccountsWithProgramIds(
   ixs: TransactionInstruction[],
   addressLookupTables: PublicKey[] | AddressLookupTableAccount[] = []
 ): Array<PublicKey> {
@@ -273,6 +273,7 @@ export function uniqueAccounts(
 
   const uniqueAccounts = new PublicKeySet<PublicKey>(luts);
   ixs.forEach((ixn) => {
+    uniqueAccounts.add(ixn.programId);
     ixn.keys.forEach((key) => {
       uniqueAccounts.add(key.pubkey);
     });

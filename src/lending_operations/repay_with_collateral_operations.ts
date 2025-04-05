@@ -16,7 +16,7 @@ import {
   removeBudgetAndAtaIxns,
   ScopePriceRefreshConfig,
   U64_MAX,
-  uniqueAccounts,
+  uniqueAccountsWithProgramIds,
 } from '../utils';
 import { AddressLookupTableAccount, PublicKey, TransactionInstruction } from '@solana/web3.js';
 import Decimal from 'decimal.js';
@@ -147,7 +147,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
     inputAmountLamports,
     useV2Ixs
   );
-  const uniqueKlendAccounts = uniqueAccounts(klendIxs.instructions);
+  const uniqueKlendAccounts = uniqueAccountsWithProgramIds(klendIxs.instructions);
 
   const swapQuoteInputs: SwapInputs = {
     inputAmountLamports,
