@@ -39,8 +39,7 @@ import {
   positiveOrZero,
   sameLengthArrayEquals,
 } from './utils';
-import { Fraction } from './fraction';
-import BN from 'bn.js';
+import { bfToDecimal, Fraction } from './fraction';
 import { ActionType } from './action';
 import { BorrowCapsAndCounters, ElevationGroupDescription, KaminoMarket } from './market';
 import {
@@ -212,9 +211,7 @@ export class KaminoReserve {
    * @returns the stale cumulative borrow rate of the reserve from the last refresh
    */
   getCumulativeBorrowRate(): Decimal {
-    const cumulativeBorrowRateBsf = this.state.liquidity.cumulativeBorrowRateBsf.value;
-    const accSf = cumulativeBorrowRateBsf.reduce((prev, curr, i) => prev.add(curr.shln(i * 64)), new BN(0));
-    return new Fraction(accSf).toDecimal();
+    return bfToDecimal(this.state.liquidity.cumulativeBorrowRateBsf);
   }
 
   /**

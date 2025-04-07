@@ -5,7 +5,7 @@ import { KaminoReserve } from './reserve';
 import { Obligation } from '../idl_codegen/accounts';
 import { ElevationGroupDescription, KaminoMarket } from './market';
 import BN from 'bn.js';
-import { Fraction } from './fraction';
+import { bfToDecimal, Fraction } from './fraction';
 import {
   ObligationCollateral,
   ObligationCollateralFields,
@@ -1475,12 +1475,7 @@ export class KaminoObligation {
    * @returns Cumulative borrow rate for the specified obligation liquidity/borrow asset
    */
   static getCumulativeBorrowRate(borrow: ObligationLiquidity): Decimal {
-    let accSf = new BN(0);
-    for (const value of borrow.cumulativeBorrowRateBsf.value.reverse()) {
-      accSf = accSf.add(value);
-      accSf.shrn(64);
-    }
-    return new Fraction(accSf).toDecimal();
+    return bfToDecimal(borrow.cumulativeBorrowRateBsf);
   }
 
   public static getRatesForObligation(
