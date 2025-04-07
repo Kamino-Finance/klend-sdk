@@ -418,6 +418,14 @@ export class KaminoMarket {
     return this.reserves.get(address);
   }
 
+  /**
+   * Returns this market's reserve of the given address, or throws an error (including the given description) if such
+   * reserve does not exist.
+   */
+  getExistingReserveByAddress(address: PublicKey, description: string = 'Requested'): KaminoReserve {
+    return checkDefined(this.getReserveByAddress(address), `${description} reserve ${address} not found`);
+  }
+
   getReserveByMint(address: PublicKey): KaminoReserve | undefined {
     for (const reserve of this.reserves.values()) {
       if (reserve.getLiquidityMint().equals(address)) {

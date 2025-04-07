@@ -629,10 +629,7 @@ export class KaminoManager {
     const switchboardV2 = await SwitchboardProgram.loadMainnet(this.getConnection());
 
     // Group reserves by market
-    const marketToReserve = new PubkeyHashMap<
-      PublicKey,
-      [PublicKey, Reserve, AccountInfo<Buffer>][]
-    >();
+    const marketToReserve = new PubkeyHashMap<PublicKey, [PublicKey, Reserve, AccountInfo<Buffer>][]>();
     for (const [reserveAddress, reserveState, buffer] of reservePairs) {
       const marketAddress = reserveState.lendingMarket;
       if (!marketToReserve.has(marketAddress)) {

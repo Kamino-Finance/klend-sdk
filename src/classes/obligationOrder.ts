@@ -486,7 +486,7 @@ export type AvailableOrderExecution = {
 // Internal calculation functions:
 
 function tokenAmountToValue(tokenAmount: TokenAmount, position: Position): Decimal {
-  if (tokenAmount.mint !== position.mintAddress) {
+  if (!tokenAmount.mint.equals(position.mintAddress)) {
     throw new Error(`Value of token amount ${tokenAmount} cannot be computed using data from ${position}`);
   }
   return tokenAmount.amount.mul(position.marketValueRefreshed).div(position.amount);

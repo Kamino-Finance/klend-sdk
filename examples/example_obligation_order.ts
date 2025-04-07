@@ -1,17 +1,17 @@
 import { getConnection } from './utils/connection';
 import {
   buildAndSendTxn,
-  createPriceBasedOrderForUsdPosition,
+  createPriceBasedOrder,
   KaminoAction,
   OrderType,
-  readPriceBasedOrderForUsdPosition,
+  readPriceBasedOrder,
 } from '@kamino-finance/klend-sdk';
 import { EXAMPLE_OBLIGATION, MAIN_MARKET } from './utils/constants';
 import { getLoan, getMarket } from './utils/helpers';
 import { checkNotNull } from '../src/utils/validations';
 import Decimal from 'decimal.js';
 import { getKeypair } from './utils/keypair';
-import { OrderActionType, OrderTriggerType } from '../src';
+import { OrderActionType, PriceBasedOrderTriggerType } from '../src';
 
 (async () => {
   // General set-up:
@@ -29,7 +29,7 @@ import { OrderActionType, OrderTriggerType } from '../src';
   const context = { kaminoMarket, kaminoObligation, stablecoins: ['USDC'] };
 
   // Print the currently-set stop-loss of that obligation:
-  const currentStopLoss = readPriceBasedOrderForUsdPosition(context, OrderType.StopLoss);
+  const currentStopLoss = readPriceBasedOrder(context, OrderType.StopLoss);
   console.log(currentStopLoss);
   // Prints:
   // {
@@ -47,9 +47,9 @@ import { OrderActionType, OrderTriggerType } from '../src';
   // Means: "When SOL < $120, then repay 10 USDC of my debt - I can pay from 0.5% up to 2% bonus SOL to whoever executes that".
 
   // Make that stop-loss more aggressive: increase the trigger price and allow it to repay all USDC.
-  const newStopLoss = createPriceBasedOrderForUsdPosition(context, OrderType.StopLoss, {
+  const newStopLoss = createPriceBasedOrder(context, OrderType.StopLoss, {
     trigger: {
-      type: OrderTriggerType.LongStopLoss,
+      type: PriceBasedOrderTriggerType.LongStopLoss,
       whenCollateralPriceBelow: new Decimal(125),
     },
     action: {
