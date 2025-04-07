@@ -67,7 +67,7 @@ export type ObligationStats = {
    * The LTV at which the obligation becomes subject to liquidation, *suitable for UI display*.
    *
    * Technically, this is a ratio:
-   * - of a sum of all borrows' values multiplied by reserves' borrowFactor (i.e. `userTotalBorrowBorrowFactorAdjusted`)
+   * - of a sum of values of all deposits multiplied by reserves' liquidationLtv (i.e. `borrowLiquidationLimit`)
    * - to a sum of values of all deposits having reserve's liquidationLtv > 0 (i.e. `userTotalLiquidatableDeposit`)
    *
    * Please note that this is different from the smart contract's definition of liquidation LTV (which divides by a sum
@@ -271,7 +271,7 @@ export class KaminoObligation {
   }
 
   /**
-   * Returns obligation orders (including the null ones, i.e. non-active order slots).
+   * Returns obligation orders (including the null ones, i.e. non-active positions in the orders' array).
    */
   getOrders(): Array<KaminoObligationOrder | null> {
     return this.state.orders.map((order) => KaminoObligationOrder.fromState(order));

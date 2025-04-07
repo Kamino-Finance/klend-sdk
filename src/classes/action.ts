@@ -78,7 +78,7 @@ import { Reserve } from '../idl_codegen/accounts';
 import { VanillaObligation } from '../utils/ObligationType';
 import { PROGRAM_ID } from '../lib';
 import { Scope } from '@kamino-finance/scope-sdk';
-import { KaminoObligationOrder } from './obligationOrder';
+import { ObligationOrderAtIndex } from './obligationOrder';
 
 export type ActionType =
   | 'deposit'
@@ -1165,11 +1165,13 @@ export class KaminoAction {
   static buildSetObligationOrderIxn(
     kaminoMarket: KaminoMarket,
     obligation: KaminoObligation,
-    index: number,
-    order: KaminoObligationOrder | null
+    orderAtIndex: ObligationOrderAtIndex
   ): TransactionInstruction {
     return setObligationOrder(
-      { index, order: order !== null ? order.toState() : KaminoObligationOrder.NULL_STATE },
+      {
+        index: orderAtIndex.index,
+        order: orderAtIndex.orderState(),
+      },
       {
         lendingMarket: kaminoMarket.getAddress(),
         obligation: obligation.obligationAddress,

@@ -36,6 +36,7 @@ import { parseTokenSymbol, parseZeroPaddedUtf8 } from './utils';
 import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
 import { ObligationZP } from '../idl_codegen/zero_padding';
 import { getProgramAccounts } from '../utils';
+import { checkDefined } from '../utils/validations';
 
 export interface ReserveRewardInfo {
   rewardsPerSecond: Decimal; // not lamport
@@ -175,13 +176,10 @@ export class KaminoMarket {
     if (elevationGroupId === 0) {
       return null;
     }
-    const elevationGroup = this.getMarketElevationGroupDescriptions().find(
-      (candidate) => candidate.elevationGroup === elevationGroupId
+    return checkDefined(
+      this.getMarketElevationGroupDescriptions().find((candidate) => candidate.elevationGroup === elevationGroupId),
+      `${description} elevation group ${elevationGroupId} not found`
     );
-    if (elevationGroup === undefined) {
-      throw new Error(`${description} elevation group ${elevationGroupId} not found in market ${this.getAddress()}`);
-    }
-    return elevationGroup;
   }
 
   getMinNetValueObligation(): Decimal {
@@ -434,11 +432,7 @@ export class KaminoMarket {
    * such reserve does not exist.
    */
   getExistingReserveByMint(address: PublicKey, description: string = 'Requested'): KaminoReserve {
-    const reserve = this.getReserveByMint(address);
-    if (!reserve) {
-      throw new Error(`${description} reserve with mint ${address} not found in market ${this.getAddress()}`);
-    }
-    return reserve;
+    return checkDefined(this.getReserveByMint(address), `${description} reserve with mint ${address} not found`);
   }
 
   getReserveBySymbol(symbol: string) {
@@ -448,6 +442,14 @@ export class KaminoMarket {
       }
     }
     return undefined;
+  }
+
+  /**
+   * Returns this market's reserve of the given symbol, or throws an error (including the given description) if
+   * such reserve does not exist.
+   */
+  getExistingReserveBySymbol(symbol: string, description: string = 'Requested'): KaminoReserve {
+    return checkDefined(this.getReserveBySymbol(symbol), `${description} reserve with symbol ${symbol} not found`);
   }
 
   getReserveMintBySymbol(symbol: string) {

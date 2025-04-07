@@ -25,5 +25,4 @@ The examples are meant to show how to use the instructions returned by the SDK b
 - The transactions require a priority fee that is not set by SDK, so you need to add an ix to set priority fee
 - The transactions need more compute units than default so you need an instruction to require more compute units
 
-Both these instructions can be generated using `getComputeBudgetAndPriorityFeeIxns`
-function from the SDK
+Both these instructions can be generated using `getComputeBudgetAndPriorityFeeIxns` function from the SDK

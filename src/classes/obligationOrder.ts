@@ -1,12 +1,13 @@
 /* eslint-disable max-classes-per-file */
 import { Fraction } from './fraction';
 import { ObligationOrder } from '../idl_codegen/types';
-import { getSingleElement, orThrow, roundNearest } from './utils';
+import { orThrow, roundNearest } from './utils';
 import Decimal from 'decimal.js';
 import BN from 'bn.js';
 import { KaminoObligation, Position } from './obligation';
 import { TokenAmount } from './types';
 import { ONE_HUNDRED_PCT_IN_BPS } from '../utils';
+import { getSingleElement } from '../utils/validations';
 
 // Polymorphic parts of an order:
 
@@ -16,7 +17,7 @@ import { ONE_HUNDRED_PCT_IN_BPS } from '../utils';
  * When a {@link KaminoObligationOrder.condition} is met by an obligation, the corresponding
  * {@link KaminoObligationOrder.opportunity} becomes available to liquidators.
  */
-interface OrderCondition {
+export interface OrderCondition {
   /**
    * An abstract parameter of the condition, meaningful in context of the condition's type.
    */
@@ -50,7 +51,7 @@ export interface OrderOpportunity {
  * A condition met when obligation's overall "User LTV" is strictly higher than the given threshold.
  */
 export class UserLtvAbove implements OrderCondition {
-  private readonly minUserLtvExclusive: Decimal;
+  readonly minUserLtvExclusive: Decimal;
 
   constructor(minUserLtvExclusive: Decimal.Value) {
     this.minUserLtvExclusive = new Decimal(minUserLtvExclusive);
@@ -72,7 +73,7 @@ export class UserLtvAbove implements OrderCondition {
  * A condition met when obligation's overall "User LTV" is strictly lower than the given threshold.
  */
 export class UserLtvBelow implements OrderCondition {
-  private readonly maxUserLtvExclusive: Decimal;
+  readonly maxUserLtvExclusive: Decimal;
 
   constructor(maxUserLtvExclusive: Decimal.Value) {
     this.maxUserLtvExclusive = new Decimal(maxUserLtvExclusive);
@@ -97,7 +98,7 @@ export class UserLtvBelow implements OrderCondition {
  * May only be applied to single-collateral, single-debt obligations.
  */
 export class DebtCollPriceRatioAbove implements OrderCondition {
-  private readonly minDebtCollPriceRatioExclusive: Decimal;
+  readonly minDebtCollPriceRatioExclusive: Decimal;
 
   constructor(minDebtCollPriceRatioExclusive: Decimal.Value) {
     this.minDebtCollPriceRatioExclusive = new Decimal(minDebtCollPriceRatioExclusive);
@@ -114,8 +115,10 @@ export class DebtCollPriceRatioAbove implements OrderCondition {
       this.minDebtCollPriceRatioExclusive,
       // For single-debt-single-coll obligations, the price ratio is directly proportional
       // to LTV - so we can calculate the "liquidation price ratio" simply by scaling the
-      // current value by the ratio of unhealthy/current LTV:
-      priceRatio.mul(obligation.refreshedStats.liquidationLtv).div(obligation.refreshedStats.loanToValue)
+      // current value by the ratio of unhealthy/current borrow value:
+      priceRatio
+        .mul(obligation.refreshedStats.borrowLiquidationLimit)
+        .div(obligation.refreshedStats.userTotalBorrowBorrowFactorAdjusted)
     );
   }
 }
@@ -127,7 +130,7 @@ export class DebtCollPriceRatioAbove implements OrderCondition {
  * May only be applied to single-collateral, single-debt obligations.
  */
 export class DebtCollPriceRatioBelow implements OrderCondition {
-  private readonly maxDebtCollPriceRatioExclusive: Decimal;
+  readonly maxDebtCollPriceRatioExclusive: Decimal;
 
   constructor(maxDebtCollPriceRatioExclusive: Decimal.Value) {
     this.maxDebtCollPriceRatioExclusive = new Decimal(maxDebtCollPriceRatioExclusive);
@@ -150,7 +153,7 @@ export class DebtCollPriceRatioBelow implements OrderCondition {
  * May only be applied to single-debt obligations.
  */
 export class DeleverageDebtAmount implements OrderOpportunity {
-  private readonly amount: Decimal;
+  readonly amount: Decimal;
 
   constructor(amount: Decimal.Value) {
     this.amount = new Decimal(amount);
@@ -161,7 +164,7 @@ export class DeleverageDebtAmount implements OrderOpportunity {
   }
 
   getMaxRepay(borrows: Array<Position>): TokenAmount {
-    const singleBorrow = getSingleElement(borrows, 'Opportunity type requires a single borrow');
+    const singleBorrow = getSingleElement(borrows, 'borrow');
     return {
       mint: singleBorrow.mintAddress,
       amount: Decimal.min(singleBorrow.amount, this.amount),
@@ -373,6 +376,15 @@ export class KaminoObligationOrder {
   }
 
   /**
+   * Binds this order to the given slot.
+   *
+   * This is just a convenience method for easier interaction with {@link KaminoAction#buildSetObligationOrderIxn()}.
+   */
+  atIndex(index: number): ObligationOrderAtIndex {
+    return new ObligationOrderAtIndex(index, this);
+  }
+
+  /**
    * Calculates the given order's actual execution bonus rate.
    *
    * The min-max bonus range is configured by the user on a per-order basis, and the actual value is interpolated based
@@ -389,15 +401,40 @@ export class KaminoObligationOrder {
       this.minExecutionBonusRate,
       this.maxExecutionBonusRate
     );
-    // Note: instead of the existing `obligation.noBfLoanToValue()`, here we use a formula consistent with the
-    // `obligation.refreshedStats.loanToValue` (that we use in other parts of obligation orders' SDK logic):
-    const userNoBfLtv = obligation.refreshedStats.userTotalBorrow.div(
-      obligation.refreshedStats.userTotalCollateralDeposit
-    );
     // In order to ensure that LTV improves on order execution, we apply the same heuristic formula as for the regular
-    // liquidations:
-    const diffToBadDebt = new Decimal(1).sub(userNoBfLtv);
+    // liquidations. Please note that we deliberately use the `obligation.noBfLoanToValue()`, which is consistent with
+    // the smart contract's calculation:
+    const diffToBadDebt = new Decimal(1).sub(obligation.noBfLoanToValue());
     return Decimal.min(interpolatedBonusRate, diffToBadDebt);
+  }
+}
+
+/**
+ * A single slot within {@link Obligation.orders} (which may contain an order or not).
+ *
+ * This is used as an argument to {@link KaminoAction.buildSetObligationOrderIxn()} to easily set or cancel an order.
+ */
+export class ObligationOrderAtIndex {
+  index: number;
+  order: KaminoObligationOrder | null;
+
+  constructor(index: number, order: KaminoObligationOrder | null) {
+    this.index = index;
+    this.order = order;
+  }
+
+  /**
+   * Creates an empty slot representation (suitable for cancelling an order).
+   */
+  static empty(index: number): ObligationOrderAtIndex {
+    return new ObligationOrderAtIndex(index, null);
+  }
+
+  /**
+   * Returns the on-chain state of the order (potentially a zeroed account data, if the order is not set).
+   */
+  orderState(): ObligationOrder {
+    return this.order !== null ? this.order.toState() : KaminoObligationOrder.NULL_STATE;
   }
 }
 
@@ -496,8 +533,8 @@ function evaluateTakeProfit(currentValue: Decimal, conditionThreshold: Decimal):
 }
 
 function calculateDebtCollPriceRatio(obligation: KaminoObligation): Decimal {
-  const singleBorrow = getSingleElement(obligation.getBorrows(), 'Condition type requires a single borrow');
-  const singleDeposit = getSingleElement(obligation.getDeposits(), 'Condition type requires a single deposit');
+  const singleBorrow = getSingleElement(obligation.getBorrows(), 'borrow');
+  const singleDeposit = getSingleElement(obligation.getDeposits(), 'deposit');
   return calculateTokenPrice(singleBorrow).div(calculateTokenPrice(singleDeposit));
 }
 

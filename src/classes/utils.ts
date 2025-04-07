@@ -336,13 +336,6 @@ export function orThrow(message: string): never {
   throw new Error(message);
 }
 
-export function getSingleElement<T>(array: T[], message: string): T {
-  if (array.length !== 1) {
-    throw new Error(`${message} (found ${array.length})`);
-  }
-  return array[0];
-}
-
 /**
  * Returns an integer {@link Decimal} nearest to the given one.
  *
