@@ -346,7 +346,6 @@ async function buildRepayWithCollateralIxs(
       false,
       requestElevationGroup,
       undefined,
-      undefined,
       referrer
     );
   } else {
@@ -363,7 +362,6 @@ async function buildRepayWithCollateralIxs(
       0,
       false,
       requestElevationGroup,
-      undefined,
       undefined,
       referrer
     );

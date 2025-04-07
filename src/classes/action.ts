@@ -390,8 +390,10 @@ export class KaminoAction {
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false, // to be requested *before* the deposit
-    includeUserMetadata: boolean = true, // if true it includes user metadata
-    createLookupTable: boolean = true,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
     overrideElevationGroupRequest: number | undefined = undefined // if set, when an elevationgroup request is made, it will use this value
@@ -416,11 +418,10 @@ export class KaminoAction {
       'deposit',
       includeAtaIxns,
       requestElevationGroup,
-      includeUserMetadata,
       addInitObligationForFarm,
       useV2Ixs,
       scopeRefreshConfig,
-      createLookupTable,
+      initUserMetadata,
       undefined,
       overrideElevationGroupRequest
     );
@@ -457,8 +458,10 @@ export class KaminoAction {
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
-    includeUserMetadata: boolean = true, // if true it includes user metadata
-    createLookupTable: boolean = true,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
     overrideElevationGroupRequest: number | undefined = undefined // if set, when an elevationgroup request is made, it will use this value
@@ -494,11 +497,10 @@ export class KaminoAction {
       'borrow',
       includeAtaIxns,
       requestElevationGroup,
-      includeUserMetadata,
       addInitObligationForFarm,
       useV2Ixs,
       scopeRefreshConfig,
-      createLookupTable,
+      initUserMetadata,
       undefined,
       overrideElevationGroupRequest
     );
@@ -547,9 +549,8 @@ export class KaminoAction {
       requestElevationGroup,
       false,
       addInitObligationForFarm,
-      false,
       scopeRefreshConfig,
-      false
+      { skipInitialization: true, skipLutCreation: true }
     );
     axn.addDepositReserveLiquidityIx();
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
@@ -591,9 +592,8 @@ export class KaminoAction {
       requestElevationGroup,
       false,
       addInitObligationForFarm,
-      false,
       scopeRefreshConfig,
-      false
+      { skipInitialization: true, skipLutCreation: true }
     );
     axn.addRedeemReserveCollateralIx();
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
@@ -611,8 +611,10 @@ export class KaminoAction {
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas
     requestElevationGroup: boolean = false,
-    includeUserMetadata: boolean = true, // if true it includes user metadata
-    createLookupTable: boolean = true,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0
   ) {
@@ -636,11 +638,10 @@ export class KaminoAction {
       'depositCollateral',
       includeAtaIxns,
       requestElevationGroup,
-      includeUserMetadata,
       addInitObligationForFarm,
       useV2Ixs,
       scopeRefreshConfig,
-      createLookupTable
+      initUserMetadata
     );
     if (useV2Ixs) {
       axn.addDepositObligationCollateralIxV2();
@@ -664,8 +665,10 @@ export class KaminoAction {
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
-    includeUserMetadata: boolean = true, // if true it includes user metadata,
-    createLookupTable: boolean = true,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0
   ) {
@@ -705,11 +708,10 @@ export class KaminoAction {
       'deposit',
       includeAtaIxns,
       requestElevationGroup,
-      includeUserMetadata,
       addInitObligationForFarmForDeposit,
       useV2Ixs,
       undefined,
-      createLookupTable,
+      initUserMetadata,
       twoTokenAction
     );
 
@@ -756,8 +758,10 @@ export class KaminoAction {
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
-    includeUserMetadata: boolean = true, // if true it includes user metadata,
-    createLookupTable: boolean = true,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
     referrer: PublicKey = PublicKey.default
   ) {
     const axn = await KaminoAction.initializeMultiTokenAction(
@@ -783,11 +787,10 @@ export class KaminoAction {
       'depositAndWithdraw',
       includeAtaIxns,
       requestElevationGroup,
-      includeUserMetadata,
       addInitObligationForFarm,
       true,
       scopeRefreshConfig,
-      createLookupTable,
+      initUserMetadata,
       twoTokenAction
     );
     const withdrawCollateralAmount = axn.getWithdrawCollateralAmount(axn.outflowReserve!, axn.outflowAmount!);
@@ -809,8 +812,10 @@ export class KaminoAction {
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
-    includeUserMetadata: boolean = true, // if true it includes user metadata,
-    createLookupTable: boolean = true,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
     referrer: PublicKey = PublicKey.default
   ) {
     const axn = await KaminoAction.initializeMultiTokenAction(
@@ -836,11 +841,10 @@ export class KaminoAction {
       'repayAndWithdrawV2',
       includeAtaIxns,
       requestElevationGroup,
-      includeUserMetadata,
       addInitObligationForFarm,
       true,
       scopeRefreshConfig,
-      createLookupTable,
+      initUserMetadata,
       twoTokenAction
     );
     const withdrawCollateralAmount = axn.getWithdrawCollateralAmount(axn.outflowReserve!, axn.outflowAmount!);
@@ -863,8 +867,10 @@ export class KaminoAction {
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
-    includeUserMetadata: boolean = true, // if true it includes user metadata,
-    createLookupTable: boolean = true,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
     referrer: PublicKey = PublicKey.default
   ) {
     const axn = await KaminoAction.initializeMultiTokenAction(
@@ -891,11 +897,10 @@ export class KaminoAction {
       'repay',
       includeAtaIxns,
       requestElevationGroup,
-      includeUserMetadata,
       addInitObligationForFarmForRepay,
       useV2Ixs,
       undefined,
-      createLookupTable,
+      initUserMetadata,
       twoTokenAction
     );
 
@@ -941,8 +946,10 @@ export class KaminoAction {
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false, // to be requested *after* the withdraw
-    includeUserMetadata: boolean = true, // if true it includes user metadata
-    createLookupTable: boolean = true,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
     overrideElevationGroupRequest?: number,
@@ -974,11 +981,10 @@ export class KaminoAction {
       'withdraw',
       includeAtaIxns,
       requestElevationGroup,
-      includeUserMetadata,
       addInitObligationForFarm,
       useV2Ixs,
       scopeRefreshConfig,
-      createLookupTable,
+      initUserMetadata,
       false,
       overrideElevationGroupRequest
     );
@@ -1023,8 +1029,10 @@ export class KaminoAction {
     extraComputeBudget: number = 1_000_000,
     includeAtaIxns: boolean = true,
     requestElevationGroup: boolean = false,
-    includeUserMetadata: boolean = true,
-    createLookupTable: boolean = true,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
     referrer: PublicKey = PublicKey.default
   ) {
     const axn = await KaminoAction.initialize(
@@ -1048,11 +1056,10 @@ export class KaminoAction {
       'repay',
       includeAtaIxns,
       requestElevationGroup,
-      includeUserMetadata,
       addInitObligationForFarm,
       useV2Ixs,
       scopeRefreshConfig,
-      createLookupTable
+      initUserMetadata
     );
     if (useV2Ixs) {
       await axn.addRepayIxV2();
@@ -1078,8 +1085,10 @@ export class KaminoAction {
     extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
     includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas, and creates all other token atas if they don't exist
     requestElevationGroup: boolean = false,
-    includeUserMetadata: boolean = true, // if true it includes user metadata
-    createLookupTable: boolean = true,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
     referrer: PublicKey = PublicKey.default,
     maxAllowedLtvOverridePercent: number = 0,
     currentSlot: number = 0
@@ -1107,11 +1116,10 @@ export class KaminoAction {
       'liquidate',
       includeAtaIxns,
       requestElevationGroup,
-      includeUserMetadata,
       addInitObligationForFarm,
       useV2Ixs,
       scopeRefreshConfig,
-      createLookupTable
+      initUserMetadata
     );
     if (useV2Ixs) {
       await axn.addLiquidateIxV2(maxAllowedLtvOverridePercent);
@@ -2676,19 +2684,18 @@ export class KaminoAction {
     action: ActionType,
     includeAtaIxns: boolean,
     requestElevationGroup: boolean,
-    includeUserMetadata: boolean,
     addInitObligationForFarm: boolean,
     useV2Ixs: boolean,
     scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    createLookupTable: boolean,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean },
     twoTokenAction: boolean = false,
     overrideElevationGroupRequest?: number
   ) {
     if (!['mint', 'redeem'].includes(action)) {
       const [, ownerUserMetadata] = await this.kaminoMarket.getUserMetadata(this.owner);
-      if (!ownerUserMetadata && includeUserMetadata) {
+      if (!ownerUserMetadata && !initUserMetadata.skipInitialization) {
         let lookupTable: PublicKey = PublicKey.default;
-        if (createLookupTable) {
+        if (!initUserMetadata.skipLutCreation) {
           const [createLutIx, lookupTableAddress] = await createLookupTableIx(
             this.kaminoMarket.getConnection(),
             this.owner

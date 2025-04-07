@@ -552,8 +552,7 @@ async function buildDepositWithLeverageIxns(
     0,
     false,
     elevationGroupOverride === 0 ? false : true, // emode
-    false, // to be checked and created in a setup tx in the UI
-    false, // to be checked and created in a setup tx in the UI
+    { skipInitialization: true, skipLutCreation: true }, // to be checked and created in a setup tx in the UI
     referrer,
     currentSlot
   );
@@ -986,9 +985,8 @@ export async function buildWithdrawWithLeverageIxns(
     undefined,
     0,
     false,
-    false, // to be checked and created in a setup tx in the UI (won't be the case for withdraw anyway as this would be created in deposit)
-    false, // to be checked and created in a setup tx in the UI (won't be the case for withdraw anyway as this would be created in deposit)
-    isClosingPosition,
+    false,
+    { skipInitialization: true, skipLutCreation: true }, // to be checked and created in a setup tx in the UI (won't be the case for withdraw anyway as this would be created in deposit)
     referrer
   );
 
@@ -1547,8 +1545,7 @@ async function buildIncreaseLeverageIxns(
     0,
     false,
     false,
-    false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
-    false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
+    { skipInitialization: true, skipLutCreation: true },
     referrer,
     currentSlot
   );
@@ -1565,8 +1562,7 @@ async function buildIncreaseLeverageIxns(
     0,
     false,
     false,
-    false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
-    false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
+    { skipInitialization: true, skipLutCreation: true }, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     referrer,
     currentSlot
   );
@@ -1739,8 +1735,7 @@ async function buildDecreaseLeverageIxns(
     0,
     false,
     false,
-    false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
-    false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
+    { skipInitialization: true, skipLutCreation: true }, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     referrer
   );
 
@@ -1756,8 +1751,7 @@ async function buildDecreaseLeverageIxns(
     0,
     false,
     false,
-    false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
-    false, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
+    { skipInitialization: true, skipLutCreation: true }, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     referrer,
     currentSlot
   );
