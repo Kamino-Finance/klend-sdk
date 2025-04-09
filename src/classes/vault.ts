@@ -60,6 +60,7 @@ import {
   getTokenBalanceFromAccountInfoLamports,
   numberToLamportsDecimal,
   parseTokenSymbol,
+  pubkeyHashMapToJson,
 } from './utils';
 import { deposit } from '../idl_codegen_kamino_vault/instructions';
 import { withdraw } from '../idl_codegen_kamino_vault/instructions';
@@ -88,7 +89,7 @@ import {
   UpdateVaultConfigIxs,
   UserSharesForVault,
   WithdrawIxs,
-} from './types';
+} from './vault_types';
 import { batchFetch, collToLamportsDecimal, ZERO } from '@kamino-finance/kliquidity-sdk';
 import { FullBPSDecimal } from '@kamino-finance/kliquidity-sdk/dist/utils/CreationParameters';
 import { FarmState } from '@kamino-finance/farms-sdk/dist';
@@ -100,7 +101,6 @@ import {
   getSharesInFarmUserPosition,
   getUserSharesInFarm,
 } from './farm_utils';
-import { printHoldings } from './types_utils';
 
 export const kaminoVaultId = new PublicKey('KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd');
 export const kaminoVaultStagingId = new PublicKey('stKvQfwRsQiKnLtMNVLHKS3exFJmZFsgfzBPWHECUYK');
@@ -2788,3 +2788,12 @@ export type VaultCumulativeInterestWithTimestamp = {
   cumulativeInterest: Decimal;
   timestamp: number;
 };
+
+export function printHoldings(holdings: VaultHoldings) {
+  console.log('Holdings:');
+  console.log('  Available:', holdings.available.toString());
+  console.log('  Invested:', holdings.invested.toString());
+  console.log('  Total AUM including fees:', holdings.totalAUMIncludingFees.toString());
+  console.log('  Pending fees:', holdings.pendingFees.toString());
+  console.log('  Invested in reserves:', pubkeyHashMapToJson(holdings.investedInReserves));
+}

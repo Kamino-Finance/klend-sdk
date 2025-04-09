@@ -10,7 +10,7 @@ import {
   ReserveAllocationConfig,
   KaminoVault,
   getMedianSlotDurationInMsFromLastEpochs,
-} from '../../src/lib';
+} from '@kamino-finance/klend-sdk';
 
 // to remove a reserve from the allocation, set the weight to 0
 (async () => {

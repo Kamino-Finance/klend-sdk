@@ -1,9 +1,7 @@
 import { PubkeyHashMap, SLOTS_PER_SECOND, SLOTS_PER_YEAR } from '../utils';
 import Decimal from 'decimal.js';
 import { AccountInfo, PublicKey } from '@solana/web3.js';
-import { MarketOverview, ReserveOverview } from '../lib';
 import { AccountLayout, NATIVE_MINT } from '@solana/spl-token';
-import { ReserveAllocationOverview } from './types';
 import axios from 'axios';
 
 type ObligationFarmScoreType = {
@@ -276,56 +274,9 @@ export function pubkeyHashMapToJson(map: PubkeyHashMap<PublicKey, any>): { [key:
   return obj;
 }
 
-export function printPubkeyHashMap<V>(map: PubkeyHashMap<PublicKey, V>) {
-  console.log(pubkeyHashMapToJson(map));
-}
-
-export function printReservesOverviewMap(map: PubkeyHashMap<PublicKey, ReserveOverview>) {
-  map.forEach((value, key) => {
-    console.log('Reserve:', key.toString());
-    printReserveOverview(value);
-  });
-}
-
-export function printReserveOverview(reserveOverview: ReserveOverview) {
-  console.log('Total borrowed from reserve:', reserveOverview.totalBorrowedAmount.toString());
-  console.log('Borrowed from the supplied amount:', reserveOverview.amountBorrowedFromSupplied.toString());
-  console.log('Supplied:', reserveOverview.suppliedAmount.toString());
-  console.log('Utilization ratio:', reserveOverview.utilizationRatio.toString());
-  console.log('Liquidation Threshold Pct:', reserveOverview.liquidationThresholdPct.toString());
-  console.log('Supply APY:', reserveOverview.supplyAPY.toString());
-  console.log('Lending market:', reserveOverview.market.toString());
-}
-
-export function printMarketsOverviewMap(map: PubkeyHashMap<PublicKey, MarketOverview>) {
-  map.forEach((value, key) => {
-    console.log('Reserve:', key.toString());
-    printMarketOverview(value);
-  });
-}
-
-export function printMarketOverview(marketOverview: MarketOverview) {
-  console.log('Market overview:');
-  console.log('  Address:', marketOverview.address.toString());
-  console.log('  Min LTV percentage:', marketOverview.minLTVPct.toString());
-  console.log('  Max LTV percentage:', marketOverview.maxLTVPct.toString());
-  marketOverview.reservesAsCollateral.forEach((reserve, _) => {
-    console.log('    Liquidation LTV percentage:', reserve.liquidationLTVPct.toString());
-  });
-}
-
-export function printReservesAllocationOverviewMap(map: PubkeyHashMap<PublicKey, ReserveAllocationOverview>) {
-  map.forEach((value, key) => {
-    console.log('Reserve:', key.toString());
-    printReserveAllocationOverview(value);
-  });
-}
-
-export function printReserveAllocationOverview(reserveAllocationOverview: ReserveAllocationOverview) {
-  console.log('Reserve allocation overview:');
-  console.log('  Target weight:', reserveAllocationOverview.targetWeight.toString());
-  console.log('  Token allocation cap:', reserveAllocationOverview.tokenAllocationCap.toString());
-  console.log('  Ctoken allocation:', reserveAllocationOverview.ctokenAllocation.toString());
+export function toJson(object: any, inline: boolean = false): string {
+  const replacer = (key: any, value: any) => (typeof value === 'bigint' ? value.toString() : value);
+  return inline ? JSON.stringify(object, replacer) : JSON.stringify(object, replacer, 2);
 }
 
 export function assertNever(x: never): never {

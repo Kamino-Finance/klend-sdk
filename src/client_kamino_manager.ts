@@ -26,6 +26,7 @@ import {
   LendingMarket,
   MAINNET_BETA_CHAIN_ID,
   parseZeroPaddedUtf8,
+  printHoldings,
   Reserve,
   ReserveAllocationConfig,
   ReserveWithAddress,
@@ -57,7 +58,6 @@ import {
   PerformanceFeeBps,
 } from './idl_codegen_kamino_vault/types/VaultConfigField';
 import { getAccountOwner } from './utils/rpc';
-import { printHoldings } from './classes/types_utils';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 
 dotenv.config({

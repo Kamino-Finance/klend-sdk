@@ -1,14 +1,14 @@
 import { getConnection } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
+import { Keypair } from '@solana/web3.js';
 import {
   buildAndSendTxn,
   getMedianSlotDurationInMsFromLastEpochs,
   KaminoManager,
   KaminoVault,
   VaultConfigField,
-} from '../../src/lib';
-import { Keypair } from '@solana/web3.js/lib';
+} from '@kamino-finance/klend-sdk';
 
 (async () => {
   const connection = getConnection();

@@ -1,17 +1,20 @@
 import { getConnection } from '../utils/connection';
-import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
 import Decimal from 'decimal.js/decimal';
 import {
   getMedianSlotDurationInMsFromLastEpochs,
   KaminoManager,
   KaminoVault,
-  printMarketsOverviewMap,
-  printPubkeyHashMap,
-  printReservesAllocationOverviewMap,
+  printHoldings,
+} from '@kamino-finance/klend-sdk';
+import {
+  printHoldingsWithUSDValue,
+  printVaultOverview,
   printReservesOverviewMap,
-} from '../../src/lib';
-import { printHoldings, printHoldingsWithUSDValue, printVaultOverview } from '../../src/classes/types_utils';
+  printReservesAllocationOverviewMap,
+  printPubkeyHashMap,
+  printMarketsOverviewMap,
+} from '../utils/helpers';
 
 (async () => {
   const connection = getConnection();

@@ -8,7 +8,7 @@ import {
   KaminoVault,
   buildAndSendTxn,
   getMedianSlotDurationInMsFromLastEpochs,
-} from '../../src/lib';
+} from '@kamino-finance/klend-sdk';
 
 // Note: if the reserve allocation require funds to be invested that need to be disinvested from anoter result you will need to disinvest that one first or use `investAllReservesIxs`
 (async () => {

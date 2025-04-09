@@ -65,3 +65,18 @@ export type Fees = {
   protocolFees: Decimal;
   referrerFees: Decimal;
 };
+
+/**
+ * Some amount of a specific token type.
+ */
+export type TokenAmount = {
+  /**
+   * Token's mint key.
+   */
+  mint: PublicKey;
+
+  /**
+   * Amount, in lamports.
+   */
+  amount: Decimal;
+};

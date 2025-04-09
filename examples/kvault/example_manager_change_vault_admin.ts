@@ -7,7 +7,7 @@ import {
   KaminoManager,
   KaminoVault,
   VaultConfigField,
-} from '../../src/lib';
+} from '@kamino-finance/klend-sdk';
 
 // Note: the admin change is a 2 step process:
 // 1. The current admin changes the pendingAdmin to the new admin pubkey

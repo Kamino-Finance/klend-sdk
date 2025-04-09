@@ -90,7 +90,7 @@ import {
   UpdateVaultConfigIxs,
   UserSharesForVault,
   WithdrawIxs,
-} from './types';
+} from './vault_types';
 import { FarmState } from '@kamino-finance/farms-sdk/dist';
 import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
 

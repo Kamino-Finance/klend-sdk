@@ -2,9 +2,16 @@ import { getConnection } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
 import Decimal from 'decimal.js/decimal';
-import { buildAndSendTxn, getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } from '../../src/lib';
-import { PerformanceFeeBps } from '../../src/idl_codegen_kamino_vault/types/VaultConfigField';
-import { ManagementFeeBps } from '@kamino-finance/klend-sdk/dist/idl_codegen_kamino_vault/types/VaultConfigField';
+import {
+  buildAndSendTxn,
+  getMedianSlotDurationInMsFromLastEpochs,
+  KaminoManager,
+  KaminoVault,
+} from '@kamino-finance/klend-sdk';
+import {
+  PerformanceFeeBps,
+  ManagementFeeBps,
+} from '@kamino-finance/klend-sdk/dist/idl_codegen_kamino_vault/types/VaultConfigField';
 
 (async () => {
   const connection = getConnection();

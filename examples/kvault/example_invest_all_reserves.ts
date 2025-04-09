@@ -1,7 +1,12 @@
 import { getConnection } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
-import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault, buildAndSendTxn } from '../../src/lib';
+import {
+  getMedianSlotDurationInMsFromLastEpochs,
+  KaminoManager,
+  KaminoVault,
+  buildAndSendTxn,
+} from '@kamino-finance/klend-sdk';
 
 // Note: in the internal impl of `investAllReservesIxs` it will firstly disinvest from the reserve that has more tokens than the desired allocation and then invest
 (async () => {

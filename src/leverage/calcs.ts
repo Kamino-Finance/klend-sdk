@@ -1,7 +1,7 @@
 import { PublicKey } from '@solana/web3.js';
 import Decimal from 'decimal.js';
 import { collToLamportsDecimal, Kamino, StrategyWithAddress, TokenAmounts } from '@kamino-finance/kliquidity-sdk';
-import { KaminoMarket, KaminoObligation, KaminoReserve } from '../classes';
+import { KaminoMarket, KaminoObligation, KaminoReserve, toJson } from '../classes';
 import { getExpectedTokenBalanceAfterBorrow } from './utils';
 import {
   AdjustLeverageCalcsResult,
@@ -10,10 +10,6 @@ import {
   WithdrawLeverageCalcsResult,
 } from './types';
 import { fuzzyEqual } from '../utils';
-
-export const toJson = (object: any): string => {
-  return JSON.stringify(object, null, 2);
-};
 
 const closingPositionDiffTolerance = 0.0001;
 

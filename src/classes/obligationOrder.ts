@@ -5,7 +5,7 @@ import { orThrow, roundNearest } from './utils';
 import Decimal from 'decimal.js';
 import BN from 'bn.js';
 import { KaminoObligation, Position } from './obligation';
-import { TokenAmount } from './types';
+import { TokenAmount } from './shared';
 import { ONE_HUNDRED_PCT_IN_BPS } from '../utils';
 import { getSingleElement } from '../utils/validations';
 

@@ -1,4 +1,4 @@
-import { PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { TransactionInstruction } from '@solana/web3.js';
 import Decimal from 'decimal.js/decimal';
 
 /** the populateLUTIxs should be executed in a separate transaction as we cannot create and populate a lookup table in the same tx */
@@ -60,19 +60,4 @@ export type ReserveAllocationOverview = {
 export type APYs = {
   grossAPY: Decimal;
   netAPY: Decimal;
-};
-
-/**
- * Some amount of a specific token type.
- */
-export type TokenAmount = {
-  /**
-   * Token's mint key.
-   */
-  mint: PublicKey;
-
-  /**
-   * Amount, in lamports.
-   */
-  amount: Decimal;
 };

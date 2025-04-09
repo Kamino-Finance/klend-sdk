@@ -1,10 +1,10 @@
 import { getConnection } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
-import { KaminoVaultConfig } from '../../src/classes/vault';
 import { USDC_MINT, USDC_RESERVE_JLP_MARKET } from '../utils/constants';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import Decimal from 'decimal.js/decimal';
 import {
+  KaminoVaultConfig,
   buildAndSendTxn,
   KaminoManager,
   ReserveWithAddress,
@@ -13,7 +13,7 @@ import {
   ReserveAllocationConfig,
   KaminoVault,
   getMedianSlotDurationInMsFromLastEpochs,
-} from '../../src/lib';
+} from '@kamino-finance/klend-sdk';
 
 (async () => {
   const connection = getConnection();

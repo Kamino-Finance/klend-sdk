@@ -1,6 +1,3 @@
-import { getConnection } from '../utils/connection';
-import { getKeypair } from '../utils/keypair';
-import { EXAMPLE_USDC_VAULT } from '../utils/constants';
 import Decimal from 'decimal.js/decimal';
 import {
   buildAndSendTxn,
@@ -8,8 +5,11 @@ import {
   KaminoManager,
   KaminoVault,
   VaultConfigField,
-} from '../../src/lib';
-import { Keypair } from '@solana/web3.js/lib';
+} from '@kamino-finance/klend-sdk';
+import { Keypair } from '@solana/web3.js';
+import { getConnection } from '../utils/connection';
+import { getKeypair } from '../utils/keypair';
+import { EXAMPLE_USDC_VAULT } from '../utils/constants';
 
 (async () => {
   const connection = getConnection();

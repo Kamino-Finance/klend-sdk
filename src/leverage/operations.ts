@@ -8,6 +8,7 @@ import {
   lamportsToNumberDecimal as fromLamports,
   getTokenIdsForScopeRefresh,
   isKaminoObligation,
+  toJson,
 } from '../classes';
 import { getFlashLoanInstructions } from './instructions';
 
@@ -35,7 +36,6 @@ import {
   calcAdjustAmounts,
   depositLeverageCalcs,
   depositLeverageKtokenCalcs,
-  toJson,
   withdrawLeverageCalcs,
 } from './calcs';
 import {

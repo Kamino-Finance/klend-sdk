@@ -4,7 +4,12 @@ import { KaminoVaultConfig } from '../../src/classes/vault';
 import { USDC_MINT } from '../utils/constants';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import Decimal from 'decimal.js/decimal';
-import { buildAndSendTxn, getMedianSlotDurationInMsFromLastEpochs, KaminoManager, sleep } from '../../src/lib';
+import {
+  buildAndSendTxn,
+  getMedianSlotDurationInMsFromLastEpochs,
+  KaminoManager,
+  sleep,
+} from '@kamino-finance/klend-sdk';
 
 (async () => {
   const connection = getConnection();
