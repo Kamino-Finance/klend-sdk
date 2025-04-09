@@ -8,9 +8,9 @@ import {
   shortUrlPda,
 } from '../utils';
 import {
-  getDeleteReferrerStateAndShortUrlIxns,
-  getInitAllReferrerTokenStateIxns,
-  getInitReferrerStateAndShortUrlIxns,
+  getDeleteReferrerStateAndShortUrlIxs,
+  getInitAllReferrerTokenStateIxs,
+  getInitReferrerStateAndShortUrlIxs,
 } from './instructions';
 import { PROGRAM_ID, UserMetadata, ReferrerState, ShortUrl } from '../lib';
 import Decimal from 'decimal.js';
@@ -27,9 +27,9 @@ export const initAllReferrerTokenStates = async ({
   referrer: Keypair;
   kaminoMarket: KaminoMarket;
 }) => {
-  const ixns = await getInitAllReferrerTokenStateIxns({ referrer: referrer.publicKey, kaminoMarket });
+  const ixs = await getInitAllReferrerTokenStateIxs({ referrer: referrer.publicKey, kaminoMarket });
 
-  const tx = await buildVersionedTransaction(kaminoMarket.getConnection(), referrer.publicKey, ixns);
+  const tx = await buildVersionedTransaction(kaminoMarket.getConnection(), referrer.publicKey, ixs);
 
   console.log('Init Referral Token States');
 
@@ -53,9 +53,9 @@ export const createReferrerStateAndShortUrl = async ({
   shortUrl: string;
   programId?: PublicKey;
 }) => {
-  const ixn = getInitReferrerStateAndShortUrlIxns({ referrer: referrer.publicKey, shortUrl, programId });
+  const ix = getInitReferrerStateAndShortUrlIxs({ referrer: referrer.publicKey, shortUrl, programId });
 
-  const tx = await buildVersionedTransaction(connection, referrer.publicKey, [ixn]);
+  const tx = await buildVersionedTransaction(connection, referrer.publicKey, [ix]);
 
   console.log('Init ReferrerState for referrer ' + referrer.publicKey.toBase58() + ' and shortUrl ' + shortUrl);
 
@@ -79,13 +79,13 @@ export const updateReferrerStateAndShortUrl = async ({
   newShortUrl: string;
   programId?: PublicKey;
 }) => {
-  const deleteIxn = await getDeleteReferrerStateAndShortUrlIxns({
+  const deleteIxn = await getDeleteReferrerStateAndShortUrlIxs({
     referrer: referrer.publicKey,
     connection,
     programId,
   });
 
-  const initIxn = getInitReferrerStateAndShortUrlIxns({
+  const initIxn = getInitReferrerStateAndShortUrlIxs({
     referrer: referrer.publicKey,
     shortUrl: newShortUrl,
     programId,

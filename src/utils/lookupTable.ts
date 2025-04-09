@@ -61,13 +61,13 @@ export const extendLookupTableIxs = (
  * @returns - the instruction to create the lookup table and its address
  */
 export function initLookupTableIx(payer: PublicKey, slot: number): [TransactionInstruction, PublicKey] {
-  const [ixn, address] = AddressLookupTableProgram.createLookupTable({
+  const [ix, address] = AddressLookupTableProgram.createLookupTable({
     authority: payer,
     payer,
     recentSlot: slot,
   });
 
-  return [ixn, address];
+  return [ix, address];
 }
 
 /**
@@ -77,12 +77,12 @@ export function initLookupTableIx(payer: PublicKey, slot: number): [TransactionI
  * @returns - the instruction to deactivate the lookup table
  */
 export function deactivateLookupTableIx(payer: PublicKey, lookupTable: PublicKey): TransactionInstruction {
-  const ixn = AddressLookupTableProgram.deactivateLookupTable({
+  const ix = AddressLookupTableProgram.deactivateLookupTable({
     authority: payer,
     lookupTable: lookupTable,
   });
 
-  return ixn;
+  return ix;
 }
 
 /**
@@ -93,13 +93,13 @@ export function deactivateLookupTableIx(payer: PublicKey, lookupTable: PublicKey
  */
 /// this require the LUT to be deactivated at least 500 blocks before
 export function closeLookupTableIx(payer: PublicKey, lookupTable: PublicKey): TransactionInstruction {
-  const ixn = AddressLookupTableProgram.closeLookupTable({
+  const ix = AddressLookupTableProgram.closeLookupTable({
     authority: payer,
     recipient: payer,
     lookupTable: lookupTable,
   });
 
-  return ixn;
+  return ix;
 }
 
 /**

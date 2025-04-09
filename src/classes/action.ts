@@ -309,7 +309,7 @@ export class KaminoAction {
     kaminoMarket: KaminoMarket,
     payer: PublicKey,
     obligation: KaminoObligation,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
     currentSlot: number = 0
   ) {
     //  placeholder for action initialization
@@ -343,7 +343,7 @@ export class KaminoAction {
     payer: PublicKey,
     obligation: KaminoObligation,
     elevationGroup: number,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
     currentSlot: number = 0
   ) {
     const firstReserve = obligation.state.deposits.find(
@@ -382,8 +382,8 @@ export class KaminoAction {
     obligation: KaminoObligation | ObligationType,
     useV2Ixs: boolean,
     scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
-    includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false, // to be requested *before* the deposit
     initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
       skipInitialization: false,
@@ -411,7 +411,7 @@ export class KaminoAction {
 
     await axn.addSupportIxs(
       'deposit',
-      includeAtaIxns,
+      includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarm,
       useV2Ixs,
@@ -450,8 +450,8 @@ export class KaminoAction {
     obligation: KaminoObligation | ObligationType,
     useV2Ixs: boolean,
     scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
-    includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
       skipInitialization: false,
@@ -490,7 +490,7 @@ export class KaminoAction {
 
     await axn.addSupportIxs(
       'borrow',
-      includeAtaIxns,
+      includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarm,
       useV2Ixs,
@@ -516,8 +516,8 @@ export class KaminoAction {
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType,
     scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
-    includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas
     requestElevationGroup: boolean = false,
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0
@@ -540,7 +540,7 @@ export class KaminoAction {
 
     await axn.addSupportIxs(
       'mint',
-      includeAtaIxns,
+      includeAtaIxs,
       requestElevationGroup,
       false,
       addInitObligationForFarm,
@@ -559,8 +559,8 @@ export class KaminoAction {
     owner: PublicKey,
     obligation: KaminoObligation | ObligationType,
     scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
-    includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas
     requestElevationGroup: boolean = false,
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0
@@ -583,7 +583,7 @@ export class KaminoAction {
 
     await axn.addSupportIxs(
       'redeem',
-      includeAtaIxns,
+      includeAtaIxs,
       requestElevationGroup,
       false,
       addInitObligationForFarm,
@@ -603,8 +603,8 @@ export class KaminoAction {
     obligation: KaminoObligation | ObligationType,
     useV2Ixs: boolean,
     scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
-    includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas
     requestElevationGroup: boolean = false,
     initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
       skipInitialization: false,
@@ -631,7 +631,7 @@ export class KaminoAction {
 
     await axn.addSupportIxs(
       'depositCollateral',
-      includeAtaIxns,
+      includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarm,
       useV2Ixs,
@@ -657,8 +657,8 @@ export class KaminoAction {
     obligation: KaminoObligation | ObligationType,
     useV2Ixs: boolean,
     scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
-    includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
       skipInitialization: false,
@@ -701,7 +701,7 @@ export class KaminoAction {
     }
     await axn.addSupportIxs(
       'deposit',
-      includeAtaIxns,
+      includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarmForDeposit,
       useV2Ixs,
@@ -717,14 +717,14 @@ export class KaminoAction {
     }
     await axn.addInBetweenIxs(
       'depositAndBorrow',
-      includeAtaIxns,
+      includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarmForBorrow,
       useV2Ixs
     );
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
 
-    // Create the scope refresh ixn in here to ensure it's the first ixn in the txn
+    // Create the scope refresh ix in here to ensure it's the first ix in the txn
     const allReserves = new PublicKeySet<PublicKey>([
       ...axn.depositReserves,
       ...axn.borrowReserves,
@@ -750,8 +750,8 @@ export class KaminoAction {
     currentSlot: number,
     obligation: KaminoObligation | ObligationType,
     scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
-    includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
       skipInitialization: false,
@@ -780,7 +780,7 @@ export class KaminoAction {
 
     await axn.addSupportIxs(
       'depositAndWithdraw',
-      includeAtaIxns,
+      includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarm,
       true,
@@ -804,8 +804,8 @@ export class KaminoAction {
     currentSlot: number,
     obligation: KaminoObligation | ObligationType,
     scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
-    includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
       skipInitialization: false,
@@ -834,7 +834,7 @@ export class KaminoAction {
 
     await axn.addSupportIxs(
       'repayAndWithdrawV2',
-      includeAtaIxns,
+      includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarm,
       true,
@@ -859,8 +859,8 @@ export class KaminoAction {
     obligation: KaminoObligation | ObligationType,
     useV2Ixs: boolean,
     scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
-    includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false,
     initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
       skipInitialization: false,
@@ -890,7 +890,7 @@ export class KaminoAction {
 
     await axn.addSupportIxs(
       'repay',
-      includeAtaIxns,
+      includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarmForRepay,
       useV2Ixs,
@@ -908,13 +908,13 @@ export class KaminoAction {
 
     await axn.addInBetweenIxs(
       'repayAndWithdraw',
-      includeAtaIxns,
+      includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarmForWithdraw,
       useV2Ixs
     );
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
-    // Create the scope refresh ixn in here to ensure it's the first ixn in the txn
+    // Create the scope refresh ix in here to ensure it's the first ix in the txn
     const allReserves = new PublicKeySet<PublicKey>([
       ...axn.depositReserves,
       ...axn.borrowReserves,
@@ -938,8 +938,8 @@ export class KaminoAction {
     obligation: KaminoObligation | ObligationType,
     useV2Ixs: boolean,
     scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
-    includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
     requestElevationGroup: boolean = false, // to be requested *after* the withdraw
     initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
       skipInitialization: false,
@@ -948,7 +948,7 @@ export class KaminoAction {
     referrer: PublicKey = PublicKey.default,
     currentSlot: number = 0,
     overrideElevationGroupRequest?: number,
-    // Optional customizations which may be needed if the obligation was mutated by some previous ixn.
+    // Optional customizations which may be needed if the obligation was mutated by some previous ix.
     obligationCustomizations?: {
       // Any newly-added deposit reserves.
       addedDepositReserves?: PublicKey[];
@@ -974,7 +974,7 @@ export class KaminoAction {
 
     await axn.addSupportIxs(
       'withdraw',
-      includeAtaIxns,
+      includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarm,
       useV2Ixs,
@@ -1005,8 +1005,8 @@ export class KaminoAction {
    * @param obligation - obligation to repay or the PDA seeds
    * @param currentSlot
    * @param payer - if not set then owner is used
-   * @param extraComputeBudget - if > 0 then adds the ixn
-   * @param includeAtaIxns - if true it includes create and close wsol and token atas
+   * @param extraComputeBudget - if > 0 then adds the ix
+   * @param includeAtaIxs - if true it includes create and close wsol and token atas
    * @param requestElevationGroup
    * @param includeUserMetadata - if true it includes user metadata
    * @param referrer
@@ -1022,7 +1022,7 @@ export class KaminoAction {
     currentSlot: number,
     payer: PublicKey | undefined = undefined,
     extraComputeBudget: number = 1_000_000,
-    includeAtaIxns: boolean = true,
+    includeAtaIxs: boolean = true,
     requestElevationGroup: boolean = false,
     initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
       skipInitialization: false,
@@ -1049,7 +1049,7 @@ export class KaminoAction {
 
     await axn.addSupportIxs(
       'repay',
-      includeAtaIxns,
+      includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarm,
       useV2Ixs,
@@ -1077,8 +1077,8 @@ export class KaminoAction {
     obligation: KaminoObligation | ObligationType,
     useV2Ixs: boolean,
     scopeRefreshConfig: ScopePriceRefreshConfig | undefined = undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ixn
-    includeAtaIxns: boolean = true, // if true it includes create and close wsol and token atas, and creates all other token atas if they don't exist
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas, and creates all other token atas if they don't exist
     requestElevationGroup: boolean = false,
     initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
       skipInitialization: false,
@@ -1109,7 +1109,7 @@ export class KaminoAction {
 
     await axn.addSupportIxs(
       'liquidate',
-      includeAtaIxns,
+      includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarm,
       useV2Ixs,
@@ -2365,14 +2365,14 @@ export class KaminoAction {
 
   async addInBetweenIxs(
     action: ActionType,
-    includeAtaIxns: boolean,
+    includeAtaIxs: boolean,
     requestElevationGroup: boolean,
     addInitObligationForFarm: boolean,
     useV2Ixs: boolean
   ) {
     await this.addSupportIxsWithoutInitObligation(
       action,
-      includeAtaIxns,
+      includeAtaIxs,
       useV2Ixs,
       'inBetween',
       requestElevationGroup,
@@ -2383,29 +2383,29 @@ export class KaminoAction {
   addRefreshObligation(crank: PublicKey) {
     const uniqueReserveAddresses = new PublicKeySet(this.depositReserves.concat(this.borrowReserves)).toArray();
 
-    const addAllToSetupIxns = 'setup';
+    const addAllToSetupIxs = 'setup';
     // Union of addresses
     const allReservesExcludingCurrent = [...uniqueReserveAddresses];
 
-    this.addRefreshReserveIxs(allReservesExcludingCurrent, addAllToSetupIxns);
+    this.addRefreshReserveIxs(allReservesExcludingCurrent, addAllToSetupIxs);
     this.addRefreshFarmsForReserve(
       this.depositReserves.map((r) => this.kaminoMarket.getReserveByAddress(r)!),
-      addAllToSetupIxns,
+      addAllToSetupIxs,
       ReserveFarmKind.Collateral,
       crank
     );
     this.addRefreshFarmsForReserve(
       this.borrowReserves.map((r) => this.kaminoMarket.getReserveByAddress(r)!),
-      addAllToSetupIxns,
+      addAllToSetupIxs,
       ReserveFarmKind.Debt,
       crank
     );
-    this.addRefreshObligationIx(addAllToSetupIxns);
+    this.addRefreshObligationIx(addAllToSetupIxs);
   }
 
   async addSupportIxsWithoutInitObligation(
     action: ActionType,
-    includeAtaIxns: boolean,
+    includeAtaIxs: boolean,
     useV2Ixs: boolean,
     addAsSupportIx: AuxiliaryIx = 'setup',
     requestElevationGroup: boolean = false,
@@ -2414,7 +2414,7 @@ export class KaminoAction {
     overrideElevationGroupRequest?: number
   ) {
     // TODO: why are we not doing this first?
-    if (includeAtaIxns) {
+    if (includeAtaIxs) {
       await this.addAtaIxs(action);
     }
 
@@ -2433,18 +2433,18 @@ export class KaminoAction {
         'depositAndWithdraw',
       ].includes(action)
     ) {
-      // The support ixns in order are:
-      // 0. Init obligation ixn
-      // 0. Token Ata ixns
+      // The support ixs in order are:
+      // 0. Init obligation ix
+      // 0. Token Ata ixs
       // 0. Init obligation for farm
-      // 1. Ixns to refresh the reserves of the obligation not related to the current action
-      // 2. Ixn to refresh the reserve of the current action
-      // 3. Ixn to refresh the obligation
-      // 4. Ixn to refresh the `debt` farm of the obligation
-      // 5. Ixn to refresh the `collateral` farm of the obligation
+      // 1. Ixs to refresh the reserves of the obligation not related to the current action
+      // 2. Ix to refresh the reserve of the current action
+      // 3. Ix to refresh the obligation
+      // 4. Ix to refresh the `debt` farm of the obligation
+      // 5. Ix to refresh the `collateral` farm of the obligation
       // 6. The instruction itself
-      // 7. Ixn to refresh the `debt` farm of the obligation
-      // 8. Ixn to refresh the `collateral` farm of the obligation
+      // 7. Ix to refresh the `debt` farm of the obligation
+      // 8. Ix to refresh the `collateral` farm of the obligation
 
       let currentReserves: KaminoReserve[] = [];
 
@@ -2668,7 +2668,7 @@ export class KaminoAction {
 
       if (!useV2Ixs) {
         if (addAsSupportIx === 'setup') {
-          // If this is an setup ixn (therefore not an in-between), it means it's either a one off action
+          // If this is an setup ix (therefore not an in-between), it means it's either a one off action
           // or the first of a two-token-action
           if (action === 'liquidate') {
             this.addRefreshFarmsForReserve([this.outflowReserve!], addAsSupportIx, ReserveFarmKind.Collateral);
@@ -2700,7 +2700,7 @@ export class KaminoAction {
         } else {
           // If this is an inbetween, it means it's part of a two-token-action
           // so we skip the refresh farm obligation of the first reserve as that operation already happened
-          // add added to 'setup' ixns
+          // add added to 'setup' ixs
           if (action === 'depositAndBorrow') {
             this.addRefreshFarmsForReserve([this.outflowReserve!], addAsSupportIx, ReserveFarmKind.Debt);
           } else if (action === 'repayAndWithdraw') {
@@ -2715,7 +2715,7 @@ export class KaminoAction {
 
   async addSupportIxs(
     action: ActionType,
-    includeAtaIxns: boolean,
+    includeAtaIxs: boolean,
     requestElevationGroup: boolean,
     addInitObligationForFarm: boolean,
     useV2Ixs: boolean,
@@ -2745,7 +2745,7 @@ export class KaminoAction {
 
     await this.addSupportIxsWithoutInitObligation(
       action,
-      includeAtaIxns,
+      includeAtaIxs,
       useV2Ixs,
       'setup',
       requestElevationGroup,

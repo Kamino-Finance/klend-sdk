@@ -1,4 +1,4 @@
-import { getSwapCollIxns } from '@kamino-finance/klend-sdk';
+import { getSwapCollIxs } from '@kamino-finance/klend-sdk';
 import { getConnection } from './utils/connection';
 import { MAIN_MARKET, PYUSD_MINT, USDC_MINT } from './utils/constants';
 import { getMarket } from './utils/helpers';
@@ -27,7 +27,7 @@ import { getKeypair } from './utils/keypair';
 
   const currentSlot = await market.getConnection().getSlot();
 
-  const swapCollIxnsOutputs = await getSwapCollIxns({
+  const swapCollIxsOutputs = await getSwapCollIxs({
     market,
     obligation,
     sourceCollSwapAmount,
@@ -42,7 +42,7 @@ import { getKeypair } from './utils/keypair';
     useV2Ixs: true,
   });
 
-  console.log('simulationDetails', swapCollIxnsOutputs.simulationDetails);
+  console.log('simulationDetails', swapCollIxsOutputs.simulationDetails);
 })().catch(async (e) => {
   console.error(e);
 });

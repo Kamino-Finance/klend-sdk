@@ -35,7 +35,7 @@ export type FlashLoanInfo = {
   flashLoanFee: Decimal;
 };
 
-export type LeverageIxnsOutput = {
+export type LeverageIxsOutput = {
   instructions: TransactionInstruction[];
   flashLoanInfo: FlashLoanInfo;
 };

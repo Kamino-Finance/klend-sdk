@@ -7,13 +7,13 @@ import {
   SwapIxsProvider,
   SwapQuoteProvider,
   getScopeRefreshIx,
-  LeverageIxnsOutput,
+  LeverageIxsOutput,
   FlashLoanInfo,
 } from '../leverage';
 import {
   createAtasIdempotent,
-  getComputeBudgetAndPriorityFeeIxns,
-  removeBudgetAndAtaIxns,
+  getComputeBudgetAndPriorityFeeIxs,
+  removeBudgetAndAtaIxs,
   ScopePriceRefreshConfig,
   U64_MAX,
   uniqueAccountsWithProgramIds,
@@ -128,7 +128,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
   const inputAmountLamports = Decimal.min(withdrawableCollLamports, maxCollNeededFromOracle);
 
   // Build the repay & withdraw collateral tx to get the number of accounts
-  const klendIxs: LeverageIxnsOutput = await buildRepayWithCollateralIxs(
+  const klendIxs: LeverageIxsOutput = await buildRepayWithCollateralIxs(
     kaminoMarket,
     debtReserve,
     collReserve,
@@ -256,7 +256,7 @@ export async function getRepayWithCollIxs<QuoteResponse>({
   );
 
   const swapResponse = await swapper(swapInputs, initialInputs.klendAccounts, swapQuote);
-  const ixs: LeverageIxnsOutput = await buildRepayWithCollateralIxs(
+  const ixs: LeverageIxsOutput = await buildRepayWithCollateralIxs(
     kaminoMarket,
     debtReserve,
     collReserve,
@@ -295,9 +295,9 @@ async function buildRepayWithCollateralIxs(
   debtRepayAmountLamports: Decimal,
   collWithdrawLamports: Decimal,
   useV2Ixs: boolean
-): Promise<LeverageIxnsOutput> {
+): Promise<LeverageIxsOutput> {
   // 1. Create atas & budget txns
-  const budgetIxns = budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxns(1_400_000);
+  const budgetIxs = budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxs(1_400_000);
 
   const atas = [
     { mint: collReserve.getLiquidityMint(), tokenProgram: collReserve.getLiquidityTokenProgram() },
@@ -311,7 +311,7 @@ async function buildRepayWithCollateralIxs(
 
   // 2. Flash borrow & repay the debt to repay amount needed
   const { flashBorrowIxn, flashRepayIxn } = getFlashLoanInstructions({
-    borrowIxnIndex: budgetIxns.length + atasAndIxs.length + (scopeRefreshIxn.length > 0 ? 1 : 0),
+    borrowIxnIndex: budgetIxs.length + atasAndIxs.length + (scopeRefreshIxn.length > 0 ? 1 : 0),
     walletPublicKey: obligation.state.owner,
     lendingMarketAuthority: market.getLendingMarketAuthority(),
     lendingMarketAddress: market.getAddress(),
@@ -369,11 +369,11 @@ async function buildRepayWithCollateralIxs(
 
   // 4. Swap collateral to debt to repay flash loan
   const { preActionIxs, swapIxs } = swapQuoteIxs;
-  const swapInstructions = removeBudgetAndAtaIxns(swapIxs, []);
+  const swapInstructions = removeBudgetAndAtaIxs(swapIxs, []);
 
-  const ixns = [
+  const ixs = [
     ...scopeRefreshIxn,
-    ...budgetIxns,
+    ...budgetIxs,
     ...atasAndIxs.map((x) => x.createAtaIx),
     flashBorrowIxn,
     ...preActionIxs,
@@ -382,12 +382,12 @@ async function buildRepayWithCollateralIxs(
     flashRepayIxn,
   ];
 
-  const res: LeverageIxnsOutput = {
+  const res: LeverageIxsOutput = {
     flashLoanInfo: {
       flashBorrowReserve: debtReserve.address,
       flashLoanFee: debtReserve.getFlashLoanFee(),
     },
-    instructions: ixns,
+    instructions: ixs,
   };
 
   return res;

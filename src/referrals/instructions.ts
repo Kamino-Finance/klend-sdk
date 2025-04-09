@@ -9,7 +9,7 @@ import {
   initReferrerTokenState,
 } from '../lib';
 
-export const getInitAllReferrerTokenStateIxns = async ({
+export const getInitAllReferrerTokenStateIxs = async ({
   referrer,
   kaminoMarket,
   payer = referrer,
@@ -24,7 +24,7 @@ export const getInitAllReferrerTokenStateIxns = async ({
 
   await kaminoMarket.loadReserves();
 
-  const initReferrerTokenStateIxns: TransactionInstruction[] = [];
+  const initReferrerTokenStateIxs: TransactionInstruction[] = [];
 
   const tokenStatesToCreate: [PublicKey, PublicKey][] = [];
   const reserves = kaminoMarket.getReserves();
@@ -53,13 +53,13 @@ export const getInitAllReferrerTokenStateIxns = async ({
       kaminoMarket.programId
     );
 
-    initReferrerTokenStateIxns.push(initReferrerTokenStateIx);
+    initReferrerTokenStateIxs.push(initReferrerTokenStateIx);
   });
 
-  return initReferrerTokenStateIxns;
+  return initReferrerTokenStateIxs;
 };
 
-export const getInitReferrerStateAndShortUrlIxns = ({
+export const getInitReferrerStateAndShortUrlIxs = ({
   referrer,
   shortUrl,
   programId = PROGRAM_ID,
@@ -92,7 +92,7 @@ export const getInitReferrerStateAndShortUrlIxns = ({
 };
 
 // TODO: 1 thing left before adding program id
-export const getDeleteReferrerStateAndShortUrlIxns = async ({
+export const getDeleteReferrerStateAndShortUrlIxs = async ({
   referrer,
   connection,
   programId = PROGRAM_ID,

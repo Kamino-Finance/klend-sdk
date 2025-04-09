@@ -143,13 +143,13 @@ function getRewardPerTimeUnitSecond(reward: RewardInfo) {
 export async function executeUserSetupLutsTransactions(
   connection: Connection,
   wallet: Keypair,
-  setupIxns: Array<Array<TransactionInstruction>>
+  setupIxs: Array<Array<TransactionInstruction>>
 ) {
-  for (const setupIxnsGroup of setupIxns) {
-    if (setupIxnsGroup.length === 0) {
+  for (const setupIxsGroup of setupIxs) {
+    if (setupIxsGroup.length === 0) {
       continue;
     }
-    const txHash = await buildAndSendTxn(connection, wallet, setupIxnsGroup, [], []);
+    const txHash = await buildAndSendTxn(connection, wallet, setupIxsGroup, [], []);
     console.log('txHash', txHash);
   }
 }

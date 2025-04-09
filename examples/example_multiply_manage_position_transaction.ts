@@ -3,7 +3,7 @@ import {
   MultiplyObligation,
   PROGRAM_ID,
   buildAndSendTxn,
-  getComputeBudgetAndPriorityFeeIxns,
+  getComputeBudgetAndPriorityFeeIxs,
 } from '@kamino-finance/klend-sdk';
 import { getConnection } from './utils/connection';
 import { getKeypair } from './utils/keypair';
@@ -44,7 +44,7 @@ import Decimal from 'decimal.js';
     currentSlot
   );
 
-  const computeIxs = getComputeBudgetAndPriorityFeeIxns(1_400_000, new Decimal(500000));
+  const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
   const depositIxs = [
     ...computeIxs,
     ...depositAction.setupIxs,

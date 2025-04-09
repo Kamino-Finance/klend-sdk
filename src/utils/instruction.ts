@@ -66,12 +66,12 @@ export async function buildAndSendTxnWithLogs(
 export async function buildAndSendTxn(
   c: Connection,
   owner: Keypair,
-  ixns: TransactionInstruction[],
+  ixs: TransactionInstruction[],
   signers: Signer[],
   lutAddresses: PublicKey[] = [],
   description: string = ''
 ): Promise<TransactionSignature> {
-  const tx = await buildVersionedTransaction(c, owner.publicKey, ixns, lutAddresses);
+  const tx = await buildVersionedTransaction(c, owner.publicKey, ixs, lutAddresses);
 
   return await buildAndSendTxnWithLogs(c, tx, owner, signers, true, description);
 }
@@ -234,19 +234,19 @@ export async function getLookupTableAccounts(
   return lookupTableAccounts;
 }
 
-export const getComputeBudgetAndPriorityFeeIxns = (
+export const getComputeBudgetAndPriorityFeeIxs = (
   units: number,
   priorityFeeLamports?: Decimal
 ): TransactionInstruction[] => {
-  const ixns: TransactionInstruction[] = [];
-  ixns.push(ComputeBudgetProgram.setComputeUnitLimit({ units }));
+  const ixs: TransactionInstruction[] = [];
+  ixs.push(ComputeBudgetProgram.setComputeUnitLimit({ units }));
 
   if (priorityFeeLamports && priorityFeeLamports.gt(0)) {
     const unitPrice = priorityFeeLamports.mul(10 ** 6).div(units);
-    ixns.push(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: BigInt(unitPrice.floor().toString()) }));
+    ixs.push(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: BigInt(unitPrice.floor().toString()) }));
   }
 
-  return ixns;
+  return ixs;
 };
 
 // filters null values from array and make typescript happy
@@ -272,9 +272,9 @@ export function uniqueAccountsWithProgramIds(
   }
 
   const uniqueAccounts = new PublicKeySet<PublicKey>(luts);
-  ixs.forEach((ixn) => {
-    uniqueAccounts.add(ixn.programId);
-    ixn.keys.forEach((key) => {
+  ixs.forEach((ix) => {
+    uniqueAccounts.add(ix.programId);
+    ix.keys.forEach((key) => {
       uniqueAccounts.add(key.pubkey);
     });
   });

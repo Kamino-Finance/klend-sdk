@@ -368,9 +368,9 @@ async function deposit(connection: Connection, wallet: Keypair, token: string, d
 
   const tx = await buildVersionedTransaction(connection, wallet.publicKey, KaminoAction.actionToIxs(kaminoAction));
 
-  console.log('Deposit SetupIxns:', kaminoAction.setupIxsLabels);
-  console.log('Deposit LendingIxns:', kaminoAction.lendingIxsLabels);
-  console.log('Deposit CleanupIxns:', kaminoAction.cleanupIxsLabels);
+  console.log('Deposit SetupIxs:', kaminoAction.setupIxsLabels);
+  console.log('Deposit LendingIxs:', kaminoAction.lendingIxsLabels);
+  console.log('Deposit CleanupIxs:', kaminoAction.cleanupIxsLabels);
   await buildAndSendTxnWithLogs(connection, tx, wallet, []);
 }
 
@@ -390,9 +390,9 @@ async function withdraw(connection: Connection, wallet: Keypair, token: string, 
 
   const tx = await buildVersionedTransaction(connection, wallet.publicKey, KaminoAction.actionToIxs(kaminoAction));
 
-  console.log('Withdraw SetupIxns:', kaminoAction.setupIxsLabels);
-  console.log('Withdraw LendingIxns:', kaminoAction.lendingIxsLabels);
-  console.log('Withdraw CleanupIxns:', kaminoAction.cleanupIxsLabels);
+  console.log('Withdraw SetupIxs:', kaminoAction.setupIxsLabels);
+  console.log('Withdraw LendingIxs:', kaminoAction.lendingIxsLabels);
+  console.log('Withdraw CleanupIxs:', kaminoAction.cleanupIxsLabels);
   await buildAndSendTxnWithLogs(connection, tx, wallet, []);
 }
 
@@ -412,9 +412,9 @@ async function borrow(connection: Connection, wallet: Keypair, token: string, bo
 
   const tx = await buildVersionedTransaction(connection, wallet.publicKey, KaminoAction.actionToIxs(kaminoAction));
 
-  console.log('Borrow SetupIxns:', kaminoAction.setupIxsLabels);
-  console.log('Borrow LendingIxns:', kaminoAction.lendingIxsLabels);
-  console.log('Borrow CleanupIxns:', kaminoAction.cleanupIxsLabels);
+  console.log('Borrow SetupIxs:', kaminoAction.setupIxsLabels);
+  console.log('Borrow LendingIxs:', kaminoAction.lendingIxsLabels);
+  console.log('Borrow CleanupIxs:', kaminoAction.cleanupIxsLabels);
   await buildAndSendTxnWithLogs(connection, tx, wallet, []);
 }
 
@@ -435,9 +435,9 @@ async function repay(connection: Connection, wallet: Keypair, token: string, bor
 
   const tx = await buildVersionedTransaction(connection, wallet.publicKey, KaminoAction.actionToIxs(kaminoAction));
 
-  console.log('Repay SetupIxns:', kaminoAction.setupIxsLabels);
-  console.log('Repay LendingIxns:', kaminoAction.lendingIxsLabels);
-  console.log('Repay CleanupIxns:', kaminoAction.cleanupIxsLabels);
+  console.log('Repay SetupIxs:', kaminoAction.setupIxsLabels);
+  console.log('Repay LendingIxs:', kaminoAction.lendingIxsLabels);
+  console.log('Repay CleanupIxs:', kaminoAction.cleanupIxsLabels);
   await buildAndSendTxnWithLogs(connection, tx, wallet, []);
 }
 

@@ -1,4 +1,4 @@
-import { getComputeBudgetAndPriorityFeeIxns, getRepayWithCollSwapInputs } from '@kamino-finance/klend-sdk';
+import { getComputeBudgetAndPriorityFeeIxs, getRepayWithCollSwapInputs } from '@kamino-finance/klend-sdk';
 import { getConnection } from './utils/connection';
 import { getKeypair } from './utils/keypair';
 import { MAIN_MARKET, PYUSD_MINT, USDC_MINT } from './utils/constants';
@@ -26,7 +26,7 @@ import { getJupiterQuoter } from './utils/jup_utils';
 
   const repayAmount = obligation?.borrows.get(debtTokenReserve!.address!)?.amount || new Decimal(0);
 
-  const computeIxs = getComputeBudgetAndPriorityFeeIxns(1_400_000, new Decimal(500000));
+  const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
 
   const estimatedStats = await getRepayWithCollSwapInputs({
     repayAmount,

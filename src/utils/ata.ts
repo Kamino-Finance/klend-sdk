@@ -67,7 +67,7 @@ export function getAssociatedTokenAddress(
   return address;
 }
 
-export const getAtasWithCreateIxnsIfMissing = async (
+export const getAtasWithCreateIxsIfMissing = async (
   connection: Connection,
   user: PublicKey,
   mints: Array<{ mint: PublicKey; tokenProgram: PublicKey }>
@@ -109,10 +109,10 @@ export function createAtasIdempotent(
   return res;
 }
 
-export function getTransferWsolIxns(owner: PublicKey, ata: PublicKey, amountLamports: Decimal) {
-  const ixns: TransactionInstruction[] = [];
+export function getTransferWsolIxs(owner: PublicKey, ata: PublicKey, amountLamports: Decimal) {
+  const ixs: TransactionInstruction[] = [];
 
-  ixns.push(
+  ixs.push(
     SystemProgram.transfer({
       fromPubkey: owner,
       toPubkey: ata,
@@ -120,7 +120,7 @@ export function getTransferWsolIxns(owner: PublicKey, ata: PublicKey, amountLamp
     })
   );
 
-  ixns.push(
+  ixs.push(
     new TransactionInstruction({
       keys: [
         {
@@ -134,12 +134,12 @@ export function getTransferWsolIxns(owner: PublicKey, ata: PublicKey, amountLamp
     })
   );
 
-  return ixns;
+  return ixs;
 }
 
-export function removeBudgetAndAtaIxns(ixns: TransactionInstruction[], mints: string[]): TransactionInstruction[] {
-  return ixns.filter((ixn) => {
-    const { programId, keys } = ixn;
+export function removeBudgetAndAtaIxs(ixs: TransactionInstruction[], mints: string[]): TransactionInstruction[] {
+  return ixs.filter((ix) => {
+    const { programId, keys } = ix;
 
     if (programId.equals(ComputeBudgetProgram.programId)) {
       return false;
@@ -195,8 +195,8 @@ export const createWsolAtaIfMissing = async (
   amount: Decimal,
   owner: PublicKey
 ): Promise<CreateWsolAtaIxs> => {
-  const createIxns: TransactionInstruction[] = [];
-  const closeIxns: TransactionInstruction[] = [];
+  const createIxs: TransactionInstruction[] = [];
+  const closeIxs: TransactionInstruction[] = [];
 
   const wsolAta: PublicKey = getAssociatedTokenAddressSync(NATIVE_MINT, owner, true, TOKEN_PROGRAM_ID);
 
@@ -205,7 +205,7 @@ export const createWsolAtaIfMissing = async (
 
   // This checks if we need to create it
   if (isWsolInfoInvalid(wsolAtaAccountInfo)) {
-    createIxns.push(createAssociatedTokenAccountInstruction(owner, wsolAta, owner, NATIVE_MINT, TOKEN_PROGRAM_ID));
+    createIxs.push(createAssociatedTokenAccountInstruction(owner, wsolAta, owner, NATIVE_MINT, TOKEN_PROGRAM_ID));
   }
 
   let wsolExistingBalanceLamports = new Decimal(0);
@@ -219,7 +219,7 @@ export const createWsolAtaIfMissing = async (
   }
 
   if (solDeposit !== null && solDeposit.gt(wsolExistingBalanceLamports)) {
-    createIxns.push(
+    createIxs.push(
       SystemProgram.transfer({
         fromPubkey: owner,
         toPubkey: wsolAta,
@@ -228,9 +228,9 @@ export const createWsolAtaIfMissing = async (
     );
   }
 
-  if (createIxns.length > 0) {
+  if (createIxs.length > 0) {
     // Primitive way of wrapping SOL
-    createIxns.push(
+    createIxs.push(
       new TransactionInstruction({
         keys: [
           {
@@ -245,12 +245,12 @@ export const createWsolAtaIfMissing = async (
     );
   }
 
-  closeIxns.push(createCloseAccountInstruction(wsolAta, owner, owner, [], TOKEN_PROGRAM_ID));
+  closeIxs.push(createCloseAccountInstruction(wsolAta, owner, owner, [], TOKEN_PROGRAM_ID));
 
   return {
     wsolAta,
-    createAtaIxs: createIxns,
-    closeAtaIxs: closeIxns,
+    createAtaIxs: createIxs,
+    closeAtaIxs: closeIxs,
   };
 };
 

@@ -93,11 +93,11 @@ async function main() {
         env.kVaultProgramId
       );
 
-      const { market: marketKp, ixns: createMarketIxns } = await kaminoManager.createMarketIxs({
+      const { market: marketKp, ixs: createMarketIxs } = await kaminoManager.createMarketIxs({
         admin: mode === 'multisig' ? multisigPk : env.payer.publicKey,
       });
 
-      await processTxn(env.client, env.payer, createMarketIxns, mode, 2500, [marketKp]);
+      await processTxn(env.client, env.payer, createMarketIxs, mode, 2500, [marketKp]);
 
       mode === 'execute' && console.log('Market created:', marketKp.publicKey.toBase58());
     });
@@ -142,7 +142,7 @@ async function main() {
           ? getAssociatedTokenAddressSync(tokenMint, multisigPk)
           : getAssociatedTokenAddressSync(tokenMint, env.payer.publicKey);
 
-      const { reserve, txnIxns } = await kaminoManager.addAssetToMarketIxs({
+      const { reserve, txnIxs } = await kaminoManager.addAssetToMarketIxs({
         admin: mode === 'multisig' ? multisigPk : env.payer.publicKey,
         adminLiquiditySource: adminAta,
         marketAddress: marketAddress,
@@ -151,9 +151,9 @@ async function main() {
 
       console.log('reserve: ', reserve.publicKey);
 
-      const _createReserveSig = await processTxn(env.client, env.payer, txnIxns[0], mode, 2500, [reserve]);
+      const _createReserveSig = await processTxn(env.client, env.payer, txnIxs[0], mode, 2500, [reserve]);
 
-      const _updateReserveSig = await processTxn(env.client, env.payer, txnIxns[1], mode, 2500, [], 400_000);
+      const _updateReserveSig = await processTxn(env.client, env.payer, txnIxs[1], mode, 2500, [], 400_000);
 
       mode === 'execute' &&
         console.log(
@@ -207,7 +207,7 @@ async function main() {
 
       const reserveConfig = parseReserveConfigFromFile(reserveConfigFromFile);
 
-      const ixns = await kaminoManager.updateReserveIxs(
+      const ixs = await kaminoManager.updateReserveIxs(
         marketWithAddress,
         reserveAddress,
         reserveConfig,
@@ -215,7 +215,7 @@ async function main() {
         updateEntireConfig
       );
 
-      const _updateReserveSig = await processTxn(env.client, env.payer, ixns, mode, 2500, [], 400_000);
+      const _updateReserveSig = await processTxn(env.client, env.payer, ixs, mode, 2500, [], 400_000);
 
       mode === 'execute' && console.log('Reserve Updated with config -> ', JSON.parse(JSON.stringify(reserveConfig)));
     });
@@ -1242,11 +1242,11 @@ async function main() {
 
       const newLendingMarket = LendingMarket.fromJSON(JSON.parse(fs.readFileSync(lendingMarketConfigPath, 'utf8')));
 
-      const ixns = kaminoManager.updateLendingMarketIxs(marketWithAddress, newLendingMarket);
+      const ixs = kaminoManager.updateLendingMarketIxs(marketWithAddress, newLendingMarket);
 
-      // executing 6 ixns in a txn to make sure they fit
-      for (let ixnIndex = 0; ixnIndex < ixns.length; ixnIndex += 6) {
-        const ixnToExecute = ixns.slice(ixnIndex, ixnIndex + 6);
+      // executing 6 ixs in a txn to make sure they fit
+      for (let ixnIndex = 0; ixnIndex < ixs.length; ixnIndex += 6) {
+        const ixnToExecute = ixs.slice(ixnIndex, ixnIndex + 6);
         const _updateLendingMarketSig = await processTxn(env.client, env.payer, ixnToExecute, mode, 2500, [], 400_000);
       }
 
@@ -1285,9 +1285,9 @@ async function main() {
         env.kVaultProgramId
       );
 
-      const ixn = kaminoManager.updateLendingMarketOwnerIxs(marketWithAddress);
+      const ix = kaminoManager.updateLendingMarketOwnerIxs(marketWithAddress);
 
-      const _updateLendingMarketSig = await processTxn(env.client, env.payer, [ixn], mode, 2500, [], 400_000);
+      const _updateLendingMarketSig = await processTxn(env.client, env.payer, [ix], mode, 2500, [], 400_000);
 
       mode === 'execute' &&
         console.log(
@@ -1340,9 +1340,9 @@ async function main() {
         name: newNameEncoded,
       };
 
-      const ixns = kaminoManager.updateLendingMarketIxs(marketWithAddress, newLendingMarket);
+      const ixs = kaminoManager.updateLendingMarketIxs(marketWithAddress, newLendingMarket);
 
-      const _updateLendingMarketSig = await processTxn(env.client, env.payer, ixns, mode, 2500, [], 400_000);
+      const _updateLendingMarketSig = await processTxn(env.client, env.payer, ixs, mode, 2500, [], 400_000);
 
       mode === 'execute' &&
         console.log(
@@ -1395,9 +1395,9 @@ async function main() {
       };
       const newReserveConfig: ReserveConfig = new ReserveConfig(newReserveConfigFields);
 
-      const ixns = await kaminoManager.updateReserveIxs(marketWithAddress, reserveAddress, newReserveConfig);
+      const ixs = await kaminoManager.updateReserveIxs(marketWithAddress, reserveAddress, newReserveConfig);
 
-      const _updateLendingMarketSig = await processTxn(env.client, env.payer, ixns, mode, 2500, [], 400_000);
+      const _updateLendingMarketSig = await processTxn(env.client, env.payer, ixs, mode, 2500, [], 400_000);
 
       mode === 'execute' &&
         console.log(
@@ -1486,7 +1486,7 @@ export type Env = {
 async function processTxn(
   web3Client: Web3Client,
   admin: Keypair,
-  ixns: TransactionInstruction[],
+  ixs: TransactionInstruction[],
   mode: string,
   priorityFeeMultiplier: number = 2500,
   extraSigners: Signer[],
@@ -1499,7 +1499,7 @@ async function processTxn(
   if (mode === 'multisig') {
     const { blockhash } = await web3Client.connection.getLatestBlockhash();
     const txn = new Transaction();
-    txn.add(...ixns);
+    txn.add(...ixs);
     txn.recentBlockhash = blockhash;
     txn.feePayer = admin.publicKey;
 
@@ -1521,7 +1521,7 @@ async function processTxn(
     }
     tx.recentBlockhash = blockhash;
     tx.feePayer = admin.publicKey;
-    tx.add(...ixns);
+    tx.add(...ixs);
 
     if (mode === 'execute') {
       return await signSendAndConfirmRawTransactionWithRetry({
@@ -1557,10 +1557,10 @@ async function processTxn(
 }
 
 function createAddExtraComputeUnitFeeTransaction(units: number, microLamports: number): TransactionInstruction[] {
-  const ixns: TransactionInstruction[] = [];
-  ixns.push(ComputeBudgetProgram.setComputeUnitLimit({ units }));
-  ixns.push(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: new Decimal(microLamports).floor().toNumber() }));
-  return ixns;
+  const ixs: TransactionInstruction[] = [];
+  ixs.push(ComputeBudgetProgram.setComputeUnitLimit({ units }));
+  ixs.push(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: new Decimal(microLamports).floor().toNumber() }));
+  return ixs;
 }
 
 function parseReserveConfigFromFile(reserveConfigFromFile: any): ReserveConfig {

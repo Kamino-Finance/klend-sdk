@@ -14,7 +14,7 @@ import {
 import { getAssociatedTokenAddressSync, NATIVE_MINT, TOKEN_PROGRAM_ID, unpackAccount } from '@solana/spl-token';
 import {
   getAssociatedTokenAddress,
-  getTransferWsolIxns,
+  getTransferWsolIxs,
   getTokenOracleData,
   KaminoMarket,
   KaminoReserve,
@@ -270,7 +270,7 @@ export class KaminoVaultClient {
       lut.toString()
     );
 
-    const ixns = [createVaultIx, initVaultIx, setLUTIx];
+    const ixs = [createVaultIx, initVaultIx, setLUTIx];
 
     if (vaultConfig.getPerformanceFeeBps() > 0) {
       const setPerformanceFeeIx = this.updateUninitialisedVaultConfigIx(
@@ -279,7 +279,7 @@ export class KaminoVaultClient {
         new VaultConfigField.PerformanceFeeBps(),
         vaultConfig.getPerformanceFeeBps().toString()
       );
-      ixns.push(setPerformanceFeeIx);
+      ixs.push(setPerformanceFeeIx);
     }
     if (vaultConfig.getManagementFeeBps() > 0) {
       const setManagementFeeIx = this.updateUninitialisedVaultConfigIx(
@@ -288,7 +288,7 @@ export class KaminoVaultClient {
         new VaultConfigField.ManagementFeeBps(),
         vaultConfig.getManagementFeeBps().toString()
       );
-      ixns.push(setManagementFeeIx);
+      ixs.push(setManagementFeeIx);
     }
     if (vaultConfig.name && vaultConfig.name.length > 0) {
       const setNameIx = this.updateUninitialisedVaultConfigIx(
@@ -297,14 +297,14 @@ export class KaminoVaultClient {
         new VaultConfigField.Name(),
         vaultConfig.name
       );
-      ixns.push(setNameIx);
+      ixs.push(setNameIx);
     }
 
     return {
       vault: vaultState,
       initVaultIxs: {
         createAtaIfNeededIxs: prerequisiteIxs,
-        initVaultIxs: ixns,
+        initVaultIxs: ixs,
         createLUTIx,
         populateLUTIxs: insertIntoLUTIxs,
         cleanupIxs,
@@ -715,7 +715,7 @@ export class KaminoVaultClient {
       reservesToWithdraw,
       this._kaminoLendProgramId
     );
-    const withdrawIxns: TransactionInstruction[] = await Promise.all(
+    const withdrawIxs: TransactionInstruction[] = await Promise.all(
       reservesToWithdraw.map(async (reserve, index) => {
         if (reserveStates[index] === null) {
           throw new Error(`Reserve ${reserve.toBase58()} not found`);
@@ -734,7 +734,7 @@ export class KaminoVaultClient {
       })
     );
 
-    return [createAtaIx, ...withdrawIxns];
+    return [createAtaIx, ...withdrawIxs];
   }
 
   // async closeVaultIx(vault: KaminoVault): Promise<TransactionInstruction> {
@@ -768,8 +768,8 @@ export class KaminoVaultClient {
 
     const tokenProgramID = vaultState.tokenProgram;
     const userTokenAta = getAssociatedTokenAddress(vaultState.tokenMint, user, true, tokenProgramID);
-    const createAtasIxns: TransactionInstruction[] = [];
-    const closeAtasIxns: TransactionInstruction[] = [];
+    const createAtasIxs: TransactionInstruction[] = [];
+    const closeAtasIxs: TransactionInstruction[] = [];
     if (vaultState.tokenMint.equals(NATIVE_MINT)) {
       const [{ ata: wsolAta, createAtaIx: createWsolAtaIxn }] = createAtasIdempotent(user, [
         {
@@ -777,22 +777,22 @@ export class KaminoVaultClient {
           tokenProgram: TOKEN_PROGRAM_ID,
         },
       ]);
-      createAtasIxns.push(createWsolAtaIxn);
-      const transferWsolIxns = getTransferWsolIxns(
+      createAtasIxs.push(createWsolAtaIxn);
+      const transferWsolIxs = getTransferWsolIxs(
         user,
         wsolAta,
         numberToLamportsDecimal(tokenAmount, vaultState.tokenMintDecimals.toNumber()).ceil()
       );
-      createAtasIxns.push(...transferWsolIxns);
+      createAtasIxs.push(...transferWsolIxs);
     }
 
-    const [{ ata: userSharesAta, createAtaIx: createSharesAtaIxns }] = createAtasIdempotent(user, [
+    const [{ ata: userSharesAta, createAtaIx: createSharesAtaIxs }] = createAtasIdempotent(user, [
       {
         mint: vaultState.sharesMint,
         tokenProgram: TOKEN_PROGRAM_ID,
       },
     ]);
-    createAtasIxns.push(createSharesAtaIxns);
+    createAtasIxs.push(createSharesAtaIxs);
 
     const eventAuthority = getEventAuthorityPda(this._kaminoVaultProgramId);
     const depoistAccounts: DepositAccounts = {
@@ -839,7 +839,7 @@ export class KaminoVaultClient {
     depositIx.keys = depositIx.keys.concat(vaultReservesLendingMarkets);
 
     const depositIxs: DepositIxs = {
-      depositIxs: [...createAtasIxns, depositIx, ...closeAtasIxns],
+      depositIxs: [...createAtasIxs, depositIx, ...closeAtasIxs],
       stakeInFarmIfNeededIxs: [],
     };
 
@@ -930,7 +930,7 @@ export class KaminoVaultClient {
     );
 
     if (vaultAllocation) {
-      const withdrawFromVaultIxs = await this.wihdrdrawWithReserveIxns(
+      const withdrawFromVaultIxs = await this.wihdrdrawWithReserveIxs(
         user,
         kaminoVault,
         shareAmount,
@@ -939,14 +939,14 @@ export class KaminoVaultClient {
       );
       withdrawIxs.withdrawIxs = withdrawFromVaultIxs;
     } else {
-      const withdrawFromVaultIxs = await this.withdrawFromAvailableIxns(user, kaminoVault, shareAmount);
+      const withdrawFromVaultIxs = await this.withdrawFromAvailableIxs(user, kaminoVault, shareAmount);
       withdrawIxs.withdrawIxs = withdrawFromVaultIxs;
     }
 
     return withdrawIxs;
   }
 
-  private async withdrawFromAvailableIxns(
+  private async withdrawFromAvailableIxs(
     user: PublicKey,
     vault: KaminoVault,
     shareAmount: Decimal
@@ -975,7 +975,7 @@ export class KaminoVaultClient {
     return [createAtaIx, withdrawFromAvailableIxn];
   }
 
-  private async wihdrdrawWithReserveIxns(
+  private async wihdrdrawWithReserveIxs(
     user: PublicKey,
     vault: KaminoVault,
     shareAmount: Decimal,
@@ -1041,8 +1041,8 @@ export class KaminoVaultClient {
       });
     }
 
-    const withdrawIxns: TransactionInstruction[] = [];
-    withdrawIxns.push(createAtaIx);
+    const withdrawIxs: TransactionInstruction[] = [];
+    withdrawIxs.push(createAtaIx);
 
     for (let reserveIndex = 0; reserveIndex < reserveWithSharesAmountToWithdraw.length; reserveIndex++) {
       const reserveWithTokens = reserveWithSharesAmountToWithdraw[reserveIndex];
@@ -1070,10 +1070,10 @@ export class KaminoVaultClient {
         sharesToWithdraw,
         vaultReservesState
       );
-      withdrawIxns.push(withdrawFromReserveIx);
+      withdrawIxs.push(withdrawFromReserveIx);
     }
 
-    return withdrawIxns;
+    return withdrawIxs;
   }
 
   /**
@@ -1132,7 +1132,7 @@ export class KaminoVaultClient {
       }
     }
 
-    const investIxnsPromises: Promise<TransactionInstruction[]>[] = [];
+    const investIxsPromises: Promise<TransactionInstruction[]>[] = [];
     // invest first the reserves from which we disinvest, then the other ones
     for (const reserve of reservesToDisinvestFrom) {
       const reserveState = allReservesStateMap.get(reserve);
@@ -1149,7 +1149,7 @@ export class KaminoVaultClient {
         allReservesStateMap,
         false
       );
-      investIxnsPromises.push(investIxsPromise);
+      investIxsPromises.push(investIxsPromise);
     }
 
     for (const reserve of reservesToInvestInto) {
@@ -1167,14 +1167,14 @@ export class KaminoVaultClient {
         allReservesStateMap,
         false
       );
-      investIxnsPromises.push(investIxsPromise);
+      investIxsPromises.push(investIxsPromise);
     }
 
-    let investIxns: TransactionInstruction[] = [];
-    investIxns.push(createAtaIx);
-    investIxns = await Promise.all(investIxnsPromises).then((ixns) => ixns.flat());
+    let investIxs: TransactionInstruction[] = [];
+    investIxs.push(createAtaIx);
+    investIxs = await Promise.all(investIxsPromises).then((ixs) => ixs.flat());
 
-    return investIxns;
+    return investIxs;
   }
 
   // todo: make sure we also check the ata of the investor for the vault token exists
@@ -1488,8 +1488,8 @@ export class KaminoVaultClient {
     let lut = vaultState.vaultLookupTable;
     if (lut.equals(PublicKey.default)) {
       const recentSlot = await this.getConnection().getSlot();
-      const [ixn, address] = initLookupTableIx(vaultState.vaultAdminAuthority, recentSlot);
-      setupLUTIfNeededIxs.push(ixn);
+      const [ix, address] = initLookupTableIx(vaultState.vaultAdminAuthority, recentSlot);
+      setupLUTIfNeededIxs.push(ix);
       lut = address;
 
       // set the new LUT for the vault
@@ -1501,12 +1501,12 @@ export class KaminoVaultClient {
       setupLUTIfNeededIxs.push(updateVaultConfigIxs.updateVaultConfigIx);
     }
 
-    const ixns: TransactionInstruction[] = [];
+    const ixs: TransactionInstruction[] = [];
     let overridenExistentAccounts: PublicKey[] | undefined = undefined;
     if (vaultState.vaultLookupTable.equals(PublicKey.default)) {
       overridenExistentAccounts = [];
     }
-    ixns.push(
+    ixs.push(
       ...(await this.insertIntoLookupTableIxs(
         vaultState.vaultAdminAuthority,
         lut,
@@ -1517,7 +1517,7 @@ export class KaminoVaultClient {
 
     return {
       setupLUTIfNeededIxs,
-      syncLUTIxs: ixns,
+      syncLUTIxs: ixs,
     };
   }
 
@@ -1562,20 +1562,20 @@ export class KaminoVaultClient {
     const missingAccountsList = new PublicKeySet(missingAccounts).toArray();
 
     const chunkSize = 20;
-    const ixns: TransactionInstruction[] = [];
+    const ixs: TransactionInstruction[] = [];
 
     for (let i = 0; i < missingAccountsList.length; i += chunkSize) {
       const chunk = missingAccountsList.slice(i, i + chunkSize);
-      const ixn = AddressLookupTableProgram.extendLookupTable({
+      const ix = AddressLookupTableProgram.extendLookupTable({
         lookupTable,
         authority: payer,
         payer,
         addresses: chunk,
       });
-      ixns.push(ixn);
+      ixs.push(ix);
     }
 
-    return ixns;
+    return ixs;
   }
 
   /** Read the total holdings of a vault and the reserve weights and returns a map from each reserve to how many tokens should be deposited.

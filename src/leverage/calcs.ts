@@ -679,7 +679,7 @@ export function withdrawLeverageCalcs(
     .mul(irSlippageBpsForDebt.add('0.1').div('10_000').add('1'))
     .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
 
-  // 6. Get swap ixns
+  // 6. Get swap ixs
   // 5. Get swap estimations to understand how much we need to borrow from borrow reserve
   // prevent withdrawing more then deposited if we close position
   const depositTokenWithdrawAmount = !isClosingPosition

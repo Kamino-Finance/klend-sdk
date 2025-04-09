@@ -28,7 +28,7 @@ export type KaminoUserMetadata = {
   state: UserMetadata;
 };
 
-export const getUserLutAddressAndSetupIxns = async (
+export const getUserLutAddressAndSetupIxs = async (
   kaminoMarket: KaminoMarket,
   user: PublicKey,
   referrer: PublicKey = PublicKey.default,

@@ -59,8 +59,8 @@ import { OrderActionType, PriceBasedOrderTriggerType } from '../src';
   });
 
   // Create an instruction that will actually set the new order's state on-chain:
-  const ixn = KaminoAction.buildSetObligationOrderIxn(kaminoMarket, kaminoObligation, newStopLoss);
-  const txHash = await buildAndSendTxn(connection, wallet, [ixn], [], []);
+  const ix = KaminoAction.buildSetObligationOrderIxn(kaminoMarket, kaminoObligation, newStopLoss);
+  const txHash = await buildAndSendTxn(connection, wallet, [ix], [], []);
   console.log('txHash', txHash);
 })().catch(async (e) => {
   console.error(e);

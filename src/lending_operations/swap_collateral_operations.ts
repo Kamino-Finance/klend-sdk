@@ -17,7 +17,7 @@ import {
   createAtasIdempotent,
   DEFAULT_MAX_COMPUTE_UNITS,
   getAssociatedTokenAddress,
-  getComputeBudgetAndPriorityFeeIxns,
+  getComputeBudgetAndPriorityFeeIxs,
   PublicKeySet,
   ScopePriceRefreshConfig,
   U64_MAX,
@@ -28,9 +28,9 @@ import Decimal from 'decimal.js';
 import { createCloseAccountInstruction, NATIVE_MINT, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 /**
- * Inputs to the `getSwapCollIxns()` operation.
+ * Inputs to the `getSwapCollIxs()` operation.
  */
-export interface SwapCollIxnsInputs<QuoteResponse> {
+export interface SwapCollIxsInputs<QuoteResponse> {
   /**
    * The amount of source collateral to be swapped-in for the target collateral.
    * This value will be treated exactly (i.e. slippage is not applied here) and thus must not exceed the collateral's
@@ -66,7 +66,7 @@ export interface SwapCollIxnsInputs<QuoteResponse> {
   obligation: KaminoObligation;
   referrer: PublicKey;
   currentSlot: number;
-  budgetAndPriorityFeeIxns?: TransactionInstruction[];
+  budgetAndPriorityFeeIxs?: TransactionInstruction[];
   scopeRefreshConfig?: ScopePriceRefreshConfig;
   useV2Ixs: boolean;
   quoter: SwapQuoteProvider<QuoteResponse>;
@@ -75,9 +75,9 @@ export interface SwapCollIxnsInputs<QuoteResponse> {
 }
 
 /**
- * Outputs from the `getSwapCollIxns()` operation.
+ * Outputs from the `getSwapCollIxs()` operation.
  */
-export interface SwapCollIxnsOutputs<QuoteResponse> {
+export interface SwapCollIxsOutputs<QuoteResponse> {
   /**
    * Instructions for on-chain execution.
    */
@@ -143,12 +143,12 @@ export interface SwapCollIxnsOutputs<QuoteResponse> {
 /**
  * Constructs instructions needed to partially/fully swap the given source collateral for some other collateral type.
  */
-export async function getSwapCollIxns<QuoteResponse>(
-  inputs: SwapCollIxnsInputs<QuoteResponse>
-): Promise<SwapCollIxnsOutputs<QuoteResponse>> {
+export async function getSwapCollIxs<QuoteResponse>(
+  inputs: SwapCollIxsInputs<QuoteResponse>
+): Promise<SwapCollIxsOutputs<QuoteResponse>> {
   const [args, context] = extractArgsAndContext(inputs);
 
-  // Conceptually, we need to construct the following ixns:
+  // Conceptually, we need to construct the following ixs:
   //  0. any set-up, like budgeting and ATAs
   //  1. `flash-borrowed target coll = targetCollReserve.flashBorrow()`
   //  2. `targetCollReserve.deposit(flash-borrowed target coll)`
@@ -157,38 +157,38 @@ export async function getSwapCollIxns<QuoteResponse>(
   //  5. `flashRepay(externally-swapped target coll)`
   // However, there is a cyclic dependency:
   //  - To construct 4. (specifically, to query the external swap quote), we need to know all accounts used by Kamino's
-  //    own ixns.
+  //    own ixs.
   //  - To construct 1. (i.e. flash-borrow), we need to know the target collateral swap-out from 4.
 
-  // Construct the Klend's own ixns with a fake swap-out (only to learn the klend accounts used):
-  const fakeKlendIxns = await getKlendIxns(args, FAKE_TARGET_COLL_SWAP_OUT_AMOUNT, context);
-  const klendAccounts = uniqueAccountsWithProgramIds(listIxns(fakeKlendIxns));
+  // Construct the Klend's own ixs with a fake swap-out (only to learn the klend accounts used):
+  const fakeKlendIxs = await getKlendIxs(args, FAKE_TARGET_COLL_SWAP_OUT_AMOUNT, context);
+  const klendAccounts = uniqueAccountsWithProgramIds(listIxs(fakeKlendIxs));
 
-  // Construct the external swap ixns (and learn the actual swap-out amount):
-  const externalSwapIxns = await getExternalSwapIxns(args, klendAccounts, context);
+  // Construct the external swap ixs (and learn the actual swap-out amount):
+  const externalSwapIxs = await getExternalSwapIxs(args, klendAccounts, context);
 
   // We now have the full information needed to simulate the end-state, so let's check that the operation is legal:
   context.logger(
-    `Expected to swap ${args.sourceCollSwapAmount} ${context.sourceCollReserve.symbol} collateral into ${externalSwapIxns.swapOutAmount} ${context.targetCollReserve.symbol} collateral`
+    `Expected to swap ${args.sourceCollSwapAmount} ${context.sourceCollReserve.symbol} collateral into ${externalSwapIxs.swapOutAmount} ${context.targetCollReserve.symbol} collateral`
   );
-  checkResultingObligationValid(args, externalSwapIxns.swapOutAmount, context);
+  checkResultingObligationValid(args, externalSwapIxs.swapOutAmount, context);
 
-  // Construct the Klend's own ixns with an actual swap-out amount:
-  const klendIxns = await getKlendIxns(args, externalSwapIxns.swapOutAmount, context);
+  // Construct the Klend's own ixs with an actual swap-out amount:
+  const klendIxs = await getKlendIxs(args, externalSwapIxs.swapOutAmount, context);
 
   return {
-    ixs: listIxns(klendIxns, externalSwapIxns.ixns),
-    lookupTables: externalSwapIxns.luts,
+    ixs: listIxs(klendIxs, externalSwapIxs.ixs),
+    lookupTables: externalSwapIxs.luts,
     useV2Ixs: context.useV2Ixs,
     simulationDetails: {
       flashLoan: {
-        targetCollFlashBorrowedAmount: klendIxns.simulationDetails.targetCollFlashBorrowedAmount,
-        targetCollFlashRepaidAmount: externalSwapIxns.swapOutAmount,
+        targetCollFlashBorrowedAmount: klendIxs.simulationDetails.targetCollFlashBorrowedAmount,
+        targetCollFlashRepaidAmount: externalSwapIxs.swapOutAmount,
       },
       externalSwap: {
         sourceCollSwapInAmount: args.sourceCollSwapAmount, // repeated `/inputs.sourceCollSwapAmount`, only for clarity
-        targetCollSwapOutAmount: externalSwapIxns.swapOutAmount, // repeated `../flashLoan.targetCollFlashRepaidAmount`, only for clarity
-        quoteResponse: externalSwapIxns.simulationDetails.quoteResponse,
+        targetCollSwapOutAmount: externalSwapIxs.swapOutAmount, // repeated `../flashLoan.targetCollFlashRepaidAmount`, only for clarity
+        quoteResponse: externalSwapIxs.simulationDetails.quoteResponse,
       },
     },
   };
@@ -201,7 +201,7 @@ type SwapCollArgs = {
 };
 
 type SwapCollContext<QuoteResponse> = {
-  budgetAndPriorityFeeIxns: TransactionInstruction[];
+  budgetAndPriorityFeeIxs: TransactionInstruction[];
   market: KaminoMarket;
   sourceCollReserve: KaminoReserve;
   targetCollReserve: KaminoReserve;
@@ -216,7 +216,7 @@ type SwapCollContext<QuoteResponse> = {
 };
 
 function extractArgsAndContext<QuoteResponse>(
-  inputs: SwapCollIxnsInputs<QuoteResponse>
+  inputs: SwapCollIxsInputs<QuoteResponse>
 ): [SwapCollArgs, SwapCollContext<QuoteResponse>] {
   if (inputs.sourceCollTokenMint.equals(inputs.targetCollTokenMint)) {
     throw new Error(`Cannot swap from/to the same collateral`);
@@ -231,8 +231,8 @@ function extractArgsAndContext<QuoteResponse>(
       newElevationGroup: inputs.market.getExistingElevationGroup(inputs.newElevationGroup, 'Newly-requested'),
     },
     {
-      budgetAndPriorityFeeIxns:
-        inputs.budgetAndPriorityFeeIxns || getComputeBudgetAndPriorityFeeIxns(DEFAULT_MAX_COMPUTE_UNITS),
+      budgetAndPriorityFeeIxs:
+        inputs.budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxs(DEFAULT_MAX_COMPUTE_UNITS),
       sourceCollReserve: inputs.market.getExistingReserveByMint(inputs.sourceCollTokenMint, 'Current collateral'),
       targetCollReserve: inputs.market.getExistingReserveByMint(inputs.targetCollTokenMint, 'Target collateral'),
       logger: console.log,
@@ -248,28 +248,28 @@ function extractArgsAndContext<QuoteResponse>(
   ];
 }
 
-const FAKE_TARGET_COLL_SWAP_OUT_AMOUNT = new Decimal(1); // see the lengthy `getSwapCollIxns()` impl comment
+const FAKE_TARGET_COLL_SWAP_OUT_AMOUNT = new Decimal(1); // see the lengthy `getSwapCollIxs()` impl comment
 
-type SwapCollKlendIxns = {
-  setupIxns: TransactionInstruction[];
+type SwapCollKlendIxs = {
+  setupIxs: TransactionInstruction[];
   targetCollFlashBorrowIxn: TransactionInstruction;
-  depositTargetCollIxns: TransactionInstruction[];
-  withdrawSourceCollIxns: TransactionInstruction[];
+  depositTargetCollIxs: TransactionInstruction[];
+  withdrawSourceCollIxs: TransactionInstruction[];
   targetCollFlashRepayIxn: TransactionInstruction;
-  cleanupIxns: TransactionInstruction[];
+  cleanupIxs: TransactionInstruction[];
   flashLoanInfo: FlashLoanInfo;
   simulationDetails: {
     targetCollFlashBorrowedAmount: Decimal;
   };
 };
 
-async function getKlendIxns(
+async function getKlendIxs(
   args: SwapCollArgs,
   targetCollSwapOutAmount: Decimal,
   context: SwapCollContext<any>
-): Promise<SwapCollKlendIxns> {
-  const { ataCreationIxns, targetCollAta } = getAtaCreationIxns(context);
-  const setupIxns = [...context.budgetAndPriorityFeeIxns, ...ataCreationIxns];
+): Promise<SwapCollKlendIxs> {
+  const { ataCreationIxs, targetCollAta } = getAtaCreationIxs(context);
+  const setupIxs = [...context.budgetAndPriorityFeeIxs, ...ataCreationIxs];
 
   const scopeRefreshIxn = await getScopeRefreshIx(
     context.market,
@@ -280,37 +280,37 @@ async function getKlendIxns(
   );
 
   if (scopeRefreshIxn) {
-    setupIxns.unshift(...scopeRefreshIxn);
+    setupIxs.unshift(...scopeRefreshIxn);
   }
 
   const targetCollFlashBorrowedAmount = calculateTargetCollFlashBorrowedAmount(targetCollSwapOutAmount, context);
-  const { targetCollFlashBorrowIxn, targetCollFlashRepayIxn } = getTargetCollFlashLoanIxns(
+  const { targetCollFlashBorrowIxn, targetCollFlashRepayIxn } = getTargetCollFlashLoanIxs(
     targetCollFlashBorrowedAmount,
-    setupIxns.length,
+    setupIxs.length,
     targetCollAta,
     context
   );
 
-  const depositTargetCollIxns = await getDepositTargetCollIxns(targetCollFlashBorrowedAmount, context);
-  const withdrawSourceCollIxns = await getWithdrawSourceCollIxns(
+  const depositTargetCollIxs = await getDepositTargetCollIxs(targetCollFlashBorrowedAmount, context);
+  const withdrawSourceCollIxs = await getWithdrawSourceCollIxs(
     args,
-    depositTargetCollIxns.removesElevationGroup,
+    depositTargetCollIxs.removesElevationGroup,
     context
   );
 
-  const cleanupIxns = getAtaCloseIxns(context);
+  const cleanupIxs = getAtaCloseIxs(context);
 
   return {
-    setupIxns,
+    setupIxs,
     flashLoanInfo: {
       flashBorrowReserve: context.targetCollReserve.address,
       flashLoanFee: context.targetCollReserve.getFlashLoanFee(),
     },
     targetCollFlashBorrowIxn,
-    depositTargetCollIxns: depositTargetCollIxns.ixns,
-    withdrawSourceCollIxns,
+    depositTargetCollIxs: depositTargetCollIxs.ixs,
+    withdrawSourceCollIxs,
     targetCollFlashRepayIxn,
-    cleanupIxns,
+    cleanupIxs,
     simulationDetails: {
       targetCollFlashBorrowedAmount,
     },
@@ -332,8 +332,8 @@ function calculateTargetCollFlashBorrowedAmount(
   return targetCollFlashRepaidAmount.sub(targetCollFlashLoanFee);
 }
 
-function getAtaCreationIxns(context: SwapCollContext<any>) {
-  const atasAndAtaCreationIxns = createAtasIdempotent(context.obligation.state.owner, [
+function getAtaCreationIxs(context: SwapCollContext<any>) {
+  const atasAndAtaCreationIxs = createAtasIdempotent(context.obligation.state.owner, [
     {
       mint: context.sourceCollReserve.getLiquidityMint(),
       tokenProgram: context.sourceCollReserve.getLiquidityTokenProgram(),
@@ -344,25 +344,25 @@ function getAtaCreationIxns(context: SwapCollContext<any>) {
     },
   ]);
   return {
-    ataCreationIxns: atasAndAtaCreationIxns.map((tuple) => tuple.createAtaIx),
-    targetCollAta: atasAndAtaCreationIxns[1].ata,
+    ataCreationIxs: atasAndAtaCreationIxs.map((tuple) => tuple.createAtaIx),
+    targetCollAta: atasAndAtaCreationIxs[1].ata,
   };
 }
 
-function getAtaCloseIxns(context: SwapCollContext<any>) {
-  const ataCloseIxns: TransactionInstruction[] = [];
+function getAtaCloseIxs(context: SwapCollContext<any>) {
+  const ataCloseIxs: TransactionInstruction[] = [];
   if (
     context.sourceCollReserve.getLiquidityMint().equals(NATIVE_MINT) ||
     context.targetCollReserve.getLiquidityMint().equals(NATIVE_MINT)
   ) {
     const owner = context.obligation.state.owner;
     const wsolAta = getAssociatedTokenAddress(NATIVE_MINT, owner, false);
-    ataCloseIxns.push(createCloseAccountInstruction(wsolAta, owner, owner, [], TOKEN_PROGRAM_ID));
+    ataCloseIxs.push(createCloseAccountInstruction(wsolAta, owner, owner, [], TOKEN_PROGRAM_ID));
   }
-  return ataCloseIxns;
+  return ataCloseIxs;
 }
 
-function getTargetCollFlashLoanIxns(
+function getTargetCollFlashLoanIxs(
   targetCollAmount: Decimal,
   flashBorrowIxnIndex: number,
   destinationAta: PublicKey,
@@ -386,15 +386,15 @@ function getTargetCollFlashLoanIxns(
   return { targetCollFlashBorrowIxn, targetCollFlashRepayIxn };
 }
 
-type DepositTargetCollIxns = {
+type DepositTargetCollIxs = {
   removesElevationGroup: boolean;
-  ixns: TransactionInstruction[];
+  ixs: TransactionInstruction[];
 };
 
-async function getDepositTargetCollIxns(
+async function getDepositTargetCollIxs(
   targetCollAmount: Decimal,
   context: SwapCollContext<any>
-): Promise<DepositTargetCollIxns> {
+): Promise<DepositTargetCollIxs> {
   const removesElevationGroup = mustRemoveElevationGroupBeforeDeposit(context);
   const depositCollAction = await KaminoAction.buildDepositTxns(
     context.market,
@@ -403,9 +403,9 @@ async function getDepositTargetCollIxns(
     context.obligation.state.owner,
     context.obligation,
     context.useV2Ixs,
-    undefined, // we create the scope refresh ixn outside of KaminoAction
+    undefined, // we create the scope refresh ix outside of KaminoAction
     0, // no extra compute budget
-    false, // we do not need ATA ixns here (we construct and close them ourselves)
+    false, // we do not need ATA ixs here (we construct and close them ourselves)
     removesElevationGroup, // we may need to (temporarily) remove the elevation group; the same or a different one will be set on withdraw, if requested
     { skipInitialization: true, skipLutCreation: true }, // we are dealing with an existing obligation, no need to create user metadata
     context.referrer,
@@ -413,7 +413,7 @@ async function getDepositTargetCollIxns(
     removesElevationGroup ? 0 : undefined // only applicable when removing the group
   );
   return {
-    ixns: KaminoAction.actionToIxs(depositCollAction),
+    ixs: KaminoAction.actionToIxs(depositCollAction),
     removesElevationGroup,
   };
 }
@@ -436,7 +436,7 @@ function mustRemoveElevationGroupBeforeDeposit(context: SwapCollContext<any>): b
   return false; // the obligation has some elevation group and the new collateral can be added to it
 }
 
-async function getWithdrawSourceCollIxns(
+async function getWithdrawSourceCollIxs(
   args: SwapCollArgs,
   depositRemovedElevationGroup: boolean,
   context: SwapCollContext<any>
@@ -452,9 +452,9 @@ async function getWithdrawSourceCollIxns(
     context.obligation.state.owner,
     context.obligation,
     context.useV2Ixs,
-    undefined, // we create the scope refresh ixn outside of KaminoAction
+    undefined, // we create the scope refresh ix outside of KaminoAction
     0, // no extra compute budget
-    false, // we do not need ATA ixns here (we construct and close them ourselves)
+    false, // we do not need ATA ixs here (we construct and close them ourselves)
     requestedElevationGroup !== undefined, // the `elevationGroupIdToRequestAfterWithdraw()` has already decided on this
     { skipInitialization: true, skipLutCreation: true }, // we are dealing with an existing obligation, no need to create user metadata
     context.referrer,
@@ -497,20 +497,20 @@ function elevationGroupIdToRequestAfterWithdraw(
   }
 }
 
-type ExternalSwapIxns<QuoteResponse> = {
+type ExternalSwapIxs<QuoteResponse> = {
   swapOutAmount: Decimal;
-  ixns: TransactionInstruction[];
+  ixs: TransactionInstruction[];
   luts: AddressLookupTableAccount[];
   simulationDetails: {
     quoteResponse?: QuoteResponse;
   };
 };
 
-async function getExternalSwapIxns<QuoteResponse>(
+async function getExternalSwapIxs<QuoteResponse>(
   args: SwapCollArgs,
   klendAccounts: PublicKey[],
   context: SwapCollContext<QuoteResponse>
-): Promise<ExternalSwapIxns<QuoteResponse>> {
+): Promise<ExternalSwapIxs<QuoteResponse>> {
   const externalSwapInputs = {
     inputAmountLamports: args.sourceCollSwapAmount.mul(context.sourceCollReserve.getMintFactor()),
     inputMint: context.sourceCollReserve.getLiquidityMint(),
@@ -519,12 +519,12 @@ async function getExternalSwapIxns<QuoteResponse>(
   };
   const externalSwapQuote = await context.quoter(externalSwapInputs, klendAccounts);
   const swapOutAmount = externalSwapQuote.priceAInB.mul(args.sourceCollSwapAmount);
-  const externalSwapIxnsAndLuts = await context.swapper(externalSwapInputs, klendAccounts, externalSwapQuote);
+  const externalSwapIxsAndLuts = await context.swapper(externalSwapInputs, klendAccounts, externalSwapQuote);
   // Note: we can ignore the returned `preActionIxs` field - we do not request any of them from the swapper.
   return {
     swapOutAmount,
-    ixns: externalSwapIxnsAndLuts.swapIxs,
-    luts: externalSwapIxnsAndLuts.lookupTables,
+    ixs: externalSwapIxsAndLuts.swapIxs,
+    luts: externalSwapIxsAndLuts.lookupTables,
     simulationDetails: {
       quoteResponse: externalSwapQuote.quoteResponse,
     },
@@ -606,14 +606,14 @@ function checkResultingObligationValid(
   }
 }
 
-function listIxns(klendIxns: SwapCollKlendIxns, externalSwapIxns?: TransactionInstruction[]): TransactionInstruction[] {
+function listIxs(klendIxs: SwapCollKlendIxs, externalSwapIxs?: TransactionInstruction[]): TransactionInstruction[] {
   return [
-    ...klendIxns.setupIxns,
-    klendIxns.targetCollFlashBorrowIxn,
-    ...klendIxns.depositTargetCollIxns,
-    ...klendIxns.withdrawSourceCollIxns,
-    ...(externalSwapIxns || []),
-    klendIxns.targetCollFlashRepayIxn,
-    ...klendIxns.cleanupIxns,
+    ...klendIxs.setupIxs,
+    klendIxs.targetCollFlashBorrowIxn,
+    ...klendIxs.depositTargetCollIxs,
+    ...klendIxs.withdrawSourceCollIxs,
+    ...(externalSwapIxs || []),
+    klendIxs.targetCollFlashRepayIxn,
+    ...klendIxs.cleanupIxs,
   ];
 }

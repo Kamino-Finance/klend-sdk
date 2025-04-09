@@ -1225,27 +1225,27 @@ function handleConfigUpdate(
   key: ReserveConfigKey,
   reserve: Reserve | undefined,
   reserveConfig: ReserveConfig,
-  updateReserveIxnsArgs: UpdateReserveIxnsArg[]
+  updateReserveIxsArgs: UpdateReserveIxsArg[]
 ): void {
   switch (key) {
     case 'status':
       if (reserve === undefined || reserve.config.status !== reserveConfig.status) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(UpdateConfigMode.UpdateReserveStatus.discriminator, reserveConfig.status)
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(UpdateConfigMode.UpdateReserveStatus.discriminator, reserveConfig.status)
         );
       }
       break;
     case 'assetTier':
       if (reserve === undefined || reserve.config.assetTier !== reserveConfig.assetTier) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(UpdateConfigMode.UpdateAssetTier.discriminator, reserveConfig.assetTier)
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(UpdateConfigMode.UpdateAssetTier.discriminator, reserveConfig.assetTier)
         );
       }
       break;
     case 'hostFixedInterestRateBps':
       if (reserve === undefined || reserve.config.hostFixedInterestRateBps !== reserveConfig.hostFixedInterestRateBps) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateHostFixedInterestRateBps.discriminator,
             reserveConfig.hostFixedInterestRateBps
           )
@@ -1254,8 +1254,8 @@ function handleConfigUpdate(
       break;
     case 'protocolTakeRatePct':
       if (reserve === undefined || reserve.config.protocolTakeRatePct !== reserveConfig.protocolTakeRatePct) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateProtocolTakeRate.discriminator,
             reserveConfig.protocolTakeRatePct
           )
@@ -1267,8 +1267,8 @@ function handleConfigUpdate(
         reserve === undefined ||
         reserve.config.protocolLiquidationFeePct !== reserveConfig.protocolLiquidationFeePct
       ) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateProtocolLiquidationFee.discriminator,
             reserveConfig.protocolLiquidationFeePct
           )
@@ -1280,8 +1280,8 @@ function handleConfigUpdate(
         reserve === undefined ||
         reserve.config.protocolOrderExecutionFeePct !== reserveConfig.protocolOrderExecutionFeePct
       ) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateProtocolOrderExecutionFee.discriminator,
             reserveConfig.protocolOrderExecutionFeePct
           )
@@ -1290,15 +1290,15 @@ function handleConfigUpdate(
       break;
     case 'loanToValuePct':
       if (reserve === undefined || reserve.config.loanToValuePct !== reserveConfig.loanToValuePct) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(UpdateConfigMode.UpdateLoanToValuePct.discriminator, reserveConfig.loanToValuePct)
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(UpdateConfigMode.UpdateLoanToValuePct.discriminator, reserveConfig.loanToValuePct)
         );
       }
       break;
     case 'liquidationThresholdPct':
       if (reserve === undefined || reserve.config.liquidationThresholdPct !== reserveConfig.liquidationThresholdPct) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateLiquidationThresholdPct.discriminator,
             reserveConfig.liquidationThresholdPct
           )
@@ -1307,8 +1307,8 @@ function handleConfigUpdate(
       break;
     case 'minLiquidationBonusBps':
       if (reserve === undefined || reserve.config.minLiquidationBonusBps !== reserveConfig.minLiquidationBonusBps) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateMinLiquidationBonusBps.discriminator,
             reserveConfig.minLiquidationBonusBps
           )
@@ -1317,8 +1317,8 @@ function handleConfigUpdate(
       break;
     case 'maxLiquidationBonusBps':
       if (reserve === undefined || reserve.config.maxLiquidationBonusBps !== reserveConfig.maxLiquidationBonusBps) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator,
             reserveConfig.maxLiquidationBonusBps
           )
@@ -1330,8 +1330,8 @@ function handleConfigUpdate(
         reserve === undefined ||
         reserve.config.badDebtLiquidationBonusBps !== reserveConfig.badDebtLiquidationBonusBps
       ) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateBadDebtLiquidationBonusBps.discriminator,
             reserveConfig.badDebtLiquidationBonusBps
           )
@@ -1343,8 +1343,8 @@ function handleConfigUpdate(
         reserve === undefined ||
         !reserve.config.deleveragingMarginCallPeriodSecs.eq(reserveConfig.deleveragingMarginCallPeriodSecs)
       ) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
             reserveConfig.deleveragingMarginCallPeriodSecs.toNumber()
           )
@@ -1356,8 +1356,8 @@ function handleConfigUpdate(
         reserve === undefined ||
         !reserve.config.deleveragingThresholdDecreaseBpsPerDay.eq(reserveConfig.deleveragingThresholdDecreaseBpsPerDay)
       ) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
             reserveConfig.deleveragingThresholdDecreaseBpsPerDay.toNumber()
           )
@@ -1366,16 +1366,16 @@ function handleConfigUpdate(
       break;
     case 'fees':
       if (reserve === undefined || !reserve.config.fees.borrowFeeSf.eq(reserveConfig.fees.borrowFeeSf)) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateFeesBorrowFee.discriminator,
             reserveConfig.fees.borrowFeeSf.toNumber()
           )
         );
       }
       if (reserve === undefined || !reserve.config.fees.flashLoanFeeSf.eq(reserveConfig.fees.flashLoanFeeSf)) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateFeesFlashLoanFee.discriminator,
             reserveConfig.fees.flashLoanFeeSf.toNumber()
           )
@@ -1384,11 +1384,8 @@ function handleConfigUpdate(
       break;
     case 'borrowRateCurve':
       if (reserve === undefined) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
-            UpdateConfigMode.UpdateBorrowRateCurve.discriminator,
-            reserveConfig.borrowRateCurve
-          )
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(UpdateConfigMode.UpdateBorrowRateCurve.discriminator, reserveConfig.borrowRateCurve)
         );
       } else {
         let shouldBorrowCurveBeUpdated = false;
@@ -1405,8 +1402,8 @@ function handleConfigUpdate(
         }
 
         if (shouldBorrowCurveBeUpdated) {
-          updateReserveIxnsArgs.push(
-            createUpdateReserveIxnsArg(
+          updateReserveIxsArgs.push(
+            createUpdateReserveIxsArg(
               UpdateConfigMode.UpdateBorrowRateCurve.discriminator,
               reserveConfig.borrowRateCurve
             )
@@ -1417,8 +1414,8 @@ function handleConfigUpdate(
       break;
     case 'borrowFactorPct':
       if (reserve === undefined || !reserve.config.borrowFactorPct.eq(reserveConfig.borrowFactorPct)) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateBorrowFactor.discriminator,
             reserveConfig.borrowFactorPct.toNumber()
           )
@@ -1427,8 +1424,8 @@ function handleConfigUpdate(
       break;
     case 'depositLimit':
       if (reserve === undefined || !reserve.config.depositLimit.eq(reserveConfig.depositLimit)) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateDepositLimit.discriminator,
             BigInt(reserveConfig.depositLimit.toString())
           )
@@ -1437,8 +1434,8 @@ function handleConfigUpdate(
       break;
     case 'borrowLimit':
       if (reserve === undefined || !reserve.config.borrowLimit.eq(reserveConfig.borrowLimit)) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateBorrowLimit.discriminator,
             BigInt(reserveConfig.borrowLimit.toString())
           )
@@ -1448,124 +1445,124 @@ function handleConfigUpdate(
     case 'tokenInfo':
       const tokenInfo = reserveConfig.tokenInfo;
       if (reserve === undefined) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(UpdateConfigMode.UpdateTokenInfoName.discriminator, tokenInfo.name)
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(UpdateConfigMode.UpdateTokenInfoName.discriminator, tokenInfo.name)
         );
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateTokenInfoLowerHeuristic.discriminator,
             tokenInfo.heuristic.lower.toNumber()
           )
         );
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateTokenInfoUpperHeuristic.discriminator,
             tokenInfo.heuristic.upper.toNumber()
           )
         );
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator,
             tokenInfo.heuristic.exp.toNumber()
           )
         );
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateTokenInfoTwapDivergence.discriminator,
             tokenInfo.maxTwapDivergenceBps.toNumber()
           )
         );
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateTokenInfoPriceMaxAge.discriminator,
             tokenInfo.maxAgePriceSeconds.toNumber()
           )
         );
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator,
             tokenInfo.maxAgeTwapSeconds.toNumber()
           )
         );
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator,
             tokenInfo.scopeConfiguration.priceChain
           )
         );
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator,
             tokenInfo.scopeConfiguration.twapChain
           )
         );
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateSwitchboardFeed.discriminator,
             tokenInfo.switchboardConfiguration.priceAggregator
           )
         );
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateSwitchboardTwapFeed.discriminator,
             tokenInfo.switchboardConfiguration.twapAggregator
           )
         );
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(UpdateConfigMode.UpdatePythPrice.discriminator, tokenInfo.pythConfiguration.price)
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(UpdateConfigMode.UpdatePythPrice.discriminator, tokenInfo.pythConfiguration.price)
         );
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(UpdateConfigMode.UpdateBlockPriceUsage.discriminator, tokenInfo.blockPriceUsage)
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(UpdateConfigMode.UpdateBlockPriceUsage.discriminator, tokenInfo.blockPriceUsage)
         );
       } else {
         if (!sameLengthArrayEquals(reserve.config.tokenInfo.name, tokenInfo.name)) {
-          updateReserveIxnsArgs.push(
-            createUpdateReserveIxnsArg(UpdateConfigMode.UpdateTokenInfoName.discriminator, tokenInfo.name)
+          updateReserveIxsArgs.push(
+            createUpdateReserveIxsArg(UpdateConfigMode.UpdateTokenInfoName.discriminator, tokenInfo.name)
           );
         }
         if (!reserve.config.tokenInfo.heuristic.lower.eq(tokenInfo.heuristic.lower)) {
-          updateReserveIxnsArgs.push(
-            createUpdateReserveIxnsArg(
+          updateReserveIxsArgs.push(
+            createUpdateReserveIxsArg(
               UpdateConfigMode.UpdateTokenInfoLowerHeuristic.discriminator,
               tokenInfo.heuristic.lower.toNumber()
             )
           );
         }
         if (!reserve.config.tokenInfo.heuristic.upper.eq(tokenInfo.heuristic.upper)) {
-          updateReserveIxnsArgs.push(
-            createUpdateReserveIxnsArg(
+          updateReserveIxsArgs.push(
+            createUpdateReserveIxsArg(
               UpdateConfigMode.UpdateTokenInfoUpperHeuristic.discriminator,
               tokenInfo.heuristic.upper.toNumber()
             )
           );
         }
         if (!reserve.config.tokenInfo.heuristic.exp.eq(tokenInfo.heuristic.exp)) {
-          updateReserveIxnsArgs.push(
-            createUpdateReserveIxnsArg(
+          updateReserveIxsArgs.push(
+            createUpdateReserveIxsArg(
               UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator,
               tokenInfo.heuristic.exp.toNumber()
             )
           );
         }
         if (!reserve.config.tokenInfo.maxTwapDivergenceBps.eq(tokenInfo.maxTwapDivergenceBps)) {
-          updateReserveIxnsArgs.push(
-            createUpdateReserveIxnsArg(
+          updateReserveIxsArgs.push(
+            createUpdateReserveIxsArg(
               UpdateConfigMode.UpdateTokenInfoTwapDivergence.discriminator,
               tokenInfo.maxTwapDivergenceBps.toNumber()
             )
           );
         }
         if (!reserve.config.tokenInfo.maxAgePriceSeconds.eq(tokenInfo.maxAgePriceSeconds)) {
-          updateReserveIxnsArgs.push(
-            createUpdateReserveIxnsArg(
+          updateReserveIxsArgs.push(
+            createUpdateReserveIxsArg(
               UpdateConfigMode.UpdateTokenInfoPriceMaxAge.discriminator,
               tokenInfo.maxAgePriceSeconds.toNumber()
             )
           );
         }
         if (!reserve.config.tokenInfo.maxAgeTwapSeconds.eq(tokenInfo.maxAgeTwapSeconds)) {
-          updateReserveIxnsArgs.push(
-            createUpdateReserveIxnsArg(
+          updateReserveIxsArgs.push(
+            createUpdateReserveIxsArg(
               UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator,
               tokenInfo.maxAgeTwapSeconds.toNumber()
             )
@@ -1577,8 +1574,8 @@ function handleConfigUpdate(
             tokenInfo.scopeConfiguration.priceChain
           )
         ) {
-          updateReserveIxnsArgs.push(
-            createUpdateReserveIxnsArg(
+          updateReserveIxsArgs.push(
+            createUpdateReserveIxsArg(
               UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator,
               tokenInfo.scopeConfiguration.priceChain
             )
@@ -1590,8 +1587,8 @@ function handleConfigUpdate(
             tokenInfo.scopeConfiguration.twapChain
           )
         ) {
-          updateReserveIxnsArgs.push(
-            createUpdateReserveIxnsArg(
+          updateReserveIxsArgs.push(
+            createUpdateReserveIxsArg(
               UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator,
               tokenInfo.scopeConfiguration.twapChain
             )
@@ -1602,8 +1599,8 @@ function handleConfigUpdate(
             tokenInfo.switchboardConfiguration.priceAggregator
           )
         ) {
-          updateReserveIxnsArgs.push(
-            createUpdateReserveIxnsArg(
+          updateReserveIxsArgs.push(
+            createUpdateReserveIxsArg(
               UpdateConfigMode.UpdateSwitchboardFeed.discriminator,
               tokenInfo.switchboardConfiguration.priceAggregator
             )
@@ -1614,29 +1611,26 @@ function handleConfigUpdate(
             tokenInfo.switchboardConfiguration.twapAggregator
           )
         ) {
-          updateReserveIxnsArgs.push(
-            createUpdateReserveIxnsArg(
+          updateReserveIxsArgs.push(
+            createUpdateReserveIxsArg(
               UpdateConfigMode.UpdateSwitchboardTwapFeed.discriminator,
               tokenInfo.switchboardConfiguration.twapAggregator
             )
           );
         }
         if (!reserve.config.tokenInfo.pythConfiguration.price.equals(tokenInfo.pythConfiguration.price)) {
-          updateReserveIxnsArgs.push(
-            createUpdateReserveIxnsArg(
-              UpdateConfigMode.UpdatePythPrice.discriminator,
-              tokenInfo.pythConfiguration.price
-            )
+          updateReserveIxsArgs.push(
+            createUpdateReserveIxsArg(UpdateConfigMode.UpdatePythPrice.discriminator, tokenInfo.pythConfiguration.price)
           );
         }
         if (reserve.config.tokenInfo.blockPriceUsage !== tokenInfo.blockPriceUsage) {
-          updateReserveIxnsArgs.push(
-            createUpdateReserveIxnsArg(UpdateConfigMode.UpdateBlockPriceUsage.discriminator, tokenInfo.blockPriceUsage)
+          updateReserveIxsArgs.push(
+            createUpdateReserveIxsArg(UpdateConfigMode.UpdateBlockPriceUsage.discriminator, tokenInfo.blockPriceUsage)
           );
         }
         if (!reserve.config.tokenInfo.scopeConfiguration.priceFeed.equals(tokenInfo.scopeConfiguration.priceFeed)) {
-          updateReserveIxnsArgs.push(
-            createUpdateReserveIxnsArg(
+          updateReserveIxsArgs.push(
+            createUpdateReserveIxsArg(
               UpdateConfigMode.UpdateScopePriceFeed.discriminator,
               tokenInfo.scopeConfiguration.priceFeed
             )
@@ -1652,8 +1646,8 @@ function handleConfigUpdate(
           reserveConfig.depositWithdrawalCap.configIntervalLengthSeconds
         )
       ) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator, [
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator, [
             reserveConfig.depositWithdrawalCap.configCapacity.toNumber(),
             reserveConfig.depositWithdrawalCap.configIntervalLengthSeconds.toNumber(),
           ])
@@ -1668,8 +1662,8 @@ function handleConfigUpdate(
           reserveConfig.debtWithdrawalCap.configIntervalLengthSeconds
         )
       ) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator, [
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator, [
             reserveConfig.debtWithdrawalCap.configCapacity.toNumber(),
             reserveConfig.debtWithdrawalCap.configIntervalLengthSeconds.toNumber(),
           ])
@@ -1681,8 +1675,8 @@ function handleConfigUpdate(
         reserve === undefined ||
         !sameLengthArrayEquals(reserve.config.elevationGroups, reserveConfig.elevationGroups)
       ) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(UpdateConfigMode.UpdateElevationGroup.discriminator, reserveConfig.elevationGroups)
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(UpdateConfigMode.UpdateElevationGroup.discriminator, reserveConfig.elevationGroups)
         );
       }
       break;
@@ -1691,8 +1685,8 @@ function handleConfigUpdate(
         reserve === undefined ||
         reserve.config.disableUsageAsCollOutsideEmode !== reserveConfig.disableUsageAsCollOutsideEmode
       ) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator,
             reserveConfig.disableUsageAsCollOutsideEmode
           )
@@ -1704,8 +1698,8 @@ function handleConfigUpdate(
         reserve === undefined ||
         reserve.config.utilizationLimitBlockBorrowingAbovePct !== reserveConfig.utilizationLimitBlockBorrowingAbovePct
       ) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
             reserveConfig.utilizationLimitBlockBorrowingAbovePct
           )
@@ -1714,8 +1708,8 @@ function handleConfigUpdate(
       break;
     case 'autodeleverageEnabled':
       if (reserve === undefined || reserve.config.autodeleverageEnabled !== reserveConfig.autodeleverageEnabled) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
             reserveConfig.autodeleverageEnabled
           )
@@ -1727,8 +1721,8 @@ function handleConfigUpdate(
         reserve === undefined ||
         !reserve.config.borrowLimitOutsideElevationGroup.eq(reserveConfig.borrowLimitOutsideElevationGroup)
       ) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator,
             reserveConfig.borrowLimitOutsideElevationGroup.toNumber()
           )
@@ -1743,8 +1737,8 @@ function handleConfigUpdate(
           reserveConfig.borrowLimitAgainstThisCollateralInElevationGroup
         )
       ) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.discriminator,
             reserveConfig.borrowLimitAgainstThisCollateralInElevationGroup.map((borrowLimit) => borrowLimit.toNumber())
           )
@@ -1756,8 +1750,8 @@ function handleConfigUpdate(
         reserve === undefined ||
         !reserve.config.deleveragingBonusIncreaseBpsPerDay.eq(reserveConfig.deleveragingBonusIncreaseBpsPerDay)
       ) {
-        updateReserveIxnsArgs.push(
-          createUpdateReserveIxnsArg(
+        updateReserveIxsArgs.push(
+          createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
             reserveConfig.deleveragingBonusIncreaseBpsPerDay.toNumber()
           )
@@ -1769,10 +1763,10 @@ function handleConfigUpdate(
   }
 }
 
-function createUpdateReserveIxnsArg(
+function createUpdateReserveIxsArg(
   discriminator: UpdateConfigModeKind['discriminator'],
   value: number | number[] | bigint | BorrowRateCurve | PublicKey
-): UpdateReserveIxnsArg {
+): UpdateReserveIxsArg {
   return {
     // Note: below we add 1 to the discriminator, because UpdateConfigMode in SC starts from 1, while the idl-codegen
     // creates the TS counterparts starting from 0:
@@ -1816,24 +1810,24 @@ export function parseForChangesReserveConfigAndGetIxs(
   reserveConfig: ReserveConfig,
   programId: PublicKey
 ) {
-  let updateReserveIxnsArgs: UpdateReserveIxnsArg[] = [];
+  let updateReserveIxsArgs: UpdateReserveIxsArg[] = [];
   for (const key in reserveConfig.toEncodable()) {
     if (isExcludedReserveConfigKey(key)) {
       continue;
     }
-    handleConfigUpdate(key as ReserveConfigKey, reserve, reserveConfig, updateReserveIxnsArgs);
+    handleConfigUpdate(key as ReserveConfigKey, reserve, reserveConfig, updateReserveIxsArgs);
   }
 
-  const ixns: TransactionInstruction[] = [];
+  const ixs: TransactionInstruction[] = [];
 
-  updateReserveIxnsArgs = sortIxnsByPriority(updateReserveIxnsArgs);
+  updateReserveIxsArgs = sortIxsByPriority(updateReserveIxsArgs);
 
-  updateReserveIxnsArgs.forEach((updateReserveConfigArgs) => {
+  updateReserveIxsArgs.forEach((updateReserveConfigArgs) => {
     let skipValidation = false;
     if (modeMatches(updateReserveConfigArgs.mode) && !reserve?.liquidity.availableAmount.gten(MIN_INITIAL_DEPOSIT)) {
       skipValidation = true;
     }
-    ixns.push(
+    ixs.push(
       updateReserveConfigIx(
         marketWithAddress,
         reserveAddress,
@@ -1845,7 +1839,7 @@ export function parseForChangesReserveConfigAndGetIxs(
     );
   });
 
-  return ixns;
+  return ixs;
 }
 
 export function updateReserveConfigEncodedValue(
@@ -1972,7 +1966,7 @@ export type ReserveWithAddress = {
   state: Reserve;
 };
 
-export type UpdateReserveIxnsArg = {
+export type UpdateReserveIxsArg = {
   mode: number;
   value: Uint8Array;
 };
@@ -1990,10 +1984,10 @@ export const modeMatches = (mode: number): boolean => {
   return validModes.includes(mode);
 };
 
-// Sort update reserve ixns, to first have the oracle config updates first
+// Sort update reserve ixs, to first have the oracle config updates first
 // In order to skip the validation for the scope config updates
-export const sortIxnsByPriority = (updateReserveIxnsArgs: UpdateReserveIxnsArg[]) => {
-  return updateReserveIxnsArgs.sort((a, b) => {
+export const sortIxsByPriority = (updateReserveIxsArgs: UpdateReserveIxsArg[]) => {
+  return updateReserveIxsArgs.sort((a, b) => {
     const isPriorityA = a.mode === 20 || a.mode === 16;
     const isPriorityB = b.mode === 20 || b.mode === 16;
     if (isPriorityA && !isPriorityB) {

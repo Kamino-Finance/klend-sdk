@@ -2,9 +2,9 @@ import {
   MultiplyObligation,
   PROGRAM_ID,
   buildAndSendTxn,
-  getComputeBudgetAndPriorityFeeIxns,
-  getUserLutAddressAndSetupIxns,
-  getWithdrawWithLeverageIxns,
+  getComputeBudgetAndPriorityFeeIxs,
+  getUserLutAddressAndSetupIxs,
+  getWithdrawWithLeverageIxs,
   lamportsToNumberDecimal,
 } from '@kamino-finance/klend-sdk';
 import { getConnection } from './utils/connection';
@@ -52,7 +52,7 @@ import { Scope } from '@kamino-finance/scope-sdk/';
   // This is the setup step that should happen each time the user has to extend it's LookupTable with missing keys
   // Or when the user doesn't have his LUT and UserMetadata table created yet
   // This will return an empty array in case the lut is already created and extended
-  const [userLookupTable, txsIxns] = await getUserLutAddressAndSetupIxns(
+  const [userLookupTable, txsIxs] = await getUserLutAddressAndSetupIxs(
     market,
     wallet.publicKey,
     PublicKey.default,
@@ -64,7 +64,7 @@ import { Scope } from '@kamino-finance/scope-sdk/';
   const debtTokenReserve = market.getReserveByMint(debtTokenMint);
   const collTokenReserve = market.getReserveByMint(collTokenMint);
 
-  await executeUserSetupLutsTransactions(connection, wallet, txsIxns);
+  await executeUserSetupLutsTransactions(connection, wallet, txsIxs);
 
   const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, PROGRAM_ID); // new LeverageObligation(collTokenMint, debtTokenMint, PROGRAM_ID); for leverage
   const obligationAddress = obligationType.toPda(market.getAddress(), wallet.publicKey);
@@ -90,9 +90,9 @@ import { Scope } from '@kamino-finance/scope-sdk/';
 
   console.log('Price debt to coll', priceCollToDebt.toString());
 
-  const computeIxs = getComputeBudgetAndPriorityFeeIxns(1_400_000, new Decimal(500000));
+  const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
 
-  const { ixs, lookupTables, swapInputs } = await getWithdrawWithLeverageIxns<QuoteResponse>({
+  const { ixs, lookupTables, swapInputs } = await getWithdrawWithLeverageIxs<QuoteResponse>({
     owner: wallet.publicKey,
     kaminoMarket: market,
     debtTokenMint: debtTokenMint,

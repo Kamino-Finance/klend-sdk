@@ -134,17 +134,15 @@ export class KaminoManager {
    * This is a function that helps quickly setting up a reserve for an asset with a default config. The config can be modified later on.
    * @param params.admin - the admin of the market
    * @returns market keypair - keypair used for market account creation -> to be signed with when executing the transaction
-   * @returns ixns - an array of ixns for creating and initializing the market account
+   * @returns ixs - an array of ixs for creating and initializing the market account
    */
-  async createMarketIxs(
-    params: CreateKaminoMarketParams
-  ): Promise<{ market: Keypair; ixns: TransactionInstruction[] }> {
+  async createMarketIxs(params: CreateKaminoMarketParams): Promise<{ market: Keypair; ixs: TransactionInstruction[] }> {
     const marketAccount = Keypair.generate();
     const size = LendingMarket.layout.span + 8;
     const [lendingMarketAuthority, _] = lendingMarketAuthPda(marketAccount.publicKey, this._kaminoLendProgramId);
-    const createMarketIxns: TransactionInstruction[] = [];
+    const createMarketIxs: TransactionInstruction[] = [];
 
-    createMarketIxns.push(
+    createMarketIxs.push(
       SystemProgram.createAccount({
         fromPubkey: params.admin,
         newAccountPubkey: marketAccount.publicKey,
@@ -166,9 +164,9 @@ export class KaminoManager {
       quoteCurrency: Array(32).fill(0),
     };
 
-    createMarketIxns.push(initLendingMarket(args, accounts, this._kaminoLendProgramId));
+    createMarketIxs.push(initLendingMarket(args, accounts, this._kaminoLendProgramId));
 
-    return { market: marketAccount, ixns: createMarketIxns };
+    return { market: marketAccount, ixs: createMarketIxs };
   }
 
   /**
@@ -177,11 +175,11 @@ export class KaminoManager {
    * @param params.marketAddress - the market to create a reserve for, only the market admin can create a reserve for the market
    * @param params.assetConfig - an object that helps generate a default reserve config with some inputs which have to be configured before calling this function
    * @returns reserve - keypair used for reserve creation -> to be signed with when executing the transaction
-   * @returns txnIxns - an array of arrays of ixns -> first array for reserve creation, second for updating it with correct params
+   * @returns txnIxs - an array of arrays of ixs -> first array for reserve creation, second for updating it with correct params
    */
   async addAssetToMarketIxs(
     params: AddAssetToMarketParams
-  ): Promise<{ reserve: Keypair; txnIxns: TransactionInstruction[][] }> {
+  ): Promise<{ reserve: Keypair; txnIxs: TransactionInstruction[][] }> {
     const market = await LendingMarket.fetch(this._connection, params.marketAddress, this._kaminoLendProgramId);
     if (!market) {
       throw new Error('Market not found');
@@ -208,11 +206,11 @@ export class KaminoManager {
       false
     );
 
-    const txnIxns: TransactionInstruction[][] = [];
-    txnIxns.push(createReserveInstructions);
-    txnIxns.push(updateReserveInstructions);
+    const txnIxs: TransactionInstruction[][] = [];
+    txnIxs.push(createReserveInstructions);
+    txnIxs.push(updateReserveInstructions);
 
-    return { reserve: reserveAccount, txnIxns };
+    return { reserve: reserveAccount, txnIxs };
   }
 
   /**
@@ -325,7 +323,7 @@ export class KaminoManager {
    * @param config - the new reserve configuration to be used for the update
    * @param reserveStateOverride - the reserve state, useful to provide, if already fetched outside this method, in order to avoid an extra rpc call to fetch it. Make sure the reserveConfig has not been updated since fetching the reserveState that you pass in.
    * @param updateEntireConfig - when set to false, it will only update fields that are different between @param config and reserveState.config, set to true it will always update entire reserve config. An entire reserveConfig update might be too large for a multisig transaction
-   * @returns - an array of multiple update ixns. If there are many fields that are being updated without the updateEntireConfig=true, multiple transactions might be required to fit all ixns.
+   * @returns - an array of multiple update ixs. If there are many fields that are being updated without the updateEntireConfig=true, multiple transactions might be required to fit all ixs.
    */
   async updateReserveIxs(
     marketWithAddress: MarketWithAddress,
@@ -337,12 +335,12 @@ export class KaminoManager {
     const reserveState = reserveStateOverride
       ? reserveStateOverride
       : (await Reserve.fetch(this._connection, reserve, this._kaminoLendProgramId))!;
-    const ixns: TransactionInstruction[] = [];
+    const ixs: TransactionInstruction[] = [];
 
     if (!reserveState || updateEntireConfig) {
-      ixns.push(updateEntireReserveConfigIx(marketWithAddress, reserve, config, this._kaminoLendProgramId));
+      ixs.push(updateEntireReserveConfigIx(marketWithAddress, reserve, config, this._kaminoLendProgramId));
     } else {
-      ixns.push(
+      ixs.push(
         ...parseForChangesReserveConfigAndGetIxs(
           marketWithAddress,
           reserveState,
@@ -353,7 +351,7 @@ export class KaminoManager {
       );
     }
 
-    return ixns;
+    return ixs;
   }
 
   /**
@@ -1140,11 +1138,11 @@ const updateLendingMarketConfig = (
   market: LendingMarket,
   newMarket: LendingMarket
 ): { mode: number; value: Buffer }[] => {
-  const updateLendingMarketIxnsArgs: { mode: number; value: Buffer }[] = [];
+  const updateLendingMarketIxsArgs: { mode: number; value: Buffer }[] = [];
   switch (key) {
     case 'lendingMarketOwner': {
       if (!market.lendingMarketOwner.equals(newMarket.lendingMarketOwner)) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateOwner.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateOwner.discriminator,
@@ -1156,7 +1154,7 @@ const updateLendingMarketConfig = (
     }
     case 'lendingMarketOwnerCached':
       if (!market.lendingMarketOwnerCached.equals(newMarket.lendingMarketOwnerCached)) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateOwner.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateOwner.discriminator,
@@ -1167,7 +1165,7 @@ const updateLendingMarketConfig = (
       break;
     case 'referralFeeBps':
       if (market.referralFeeBps !== newMarket.referralFeeBps) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateReferralFeeBps.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateReferralFeeBps.discriminator,
@@ -1178,7 +1176,7 @@ const updateLendingMarketConfig = (
       break;
     case 'emergencyMode':
       if (market.emergencyMode !== newMarket.emergencyMode) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateEmergencyMode.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateEmergencyMode.discriminator,
@@ -1189,7 +1187,7 @@ const updateLendingMarketConfig = (
       break;
     case 'autodeleverageEnabled':
       if (market.autodeleverageEnabled !== newMarket.autodeleverageEnabled) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateAutodeleverageEnabled.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateAutodeleverageEnabled.discriminator,
@@ -1200,7 +1198,7 @@ const updateLendingMarketConfig = (
       break;
     case 'borrowDisabled':
       if (market.borrowDisabled !== newMarket.borrowDisabled) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateBorrowingDisabled.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateBorrowingDisabled.discriminator,
@@ -1211,7 +1209,7 @@ const updateLendingMarketConfig = (
       break;
     case 'priceRefreshTriggerToMaxAgePct':
       if (market.priceRefreshTriggerToMaxAgePct !== newMarket.priceRefreshTriggerToMaxAgePct) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdatePriceRefreshTriggerToMaxAgePct.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdatePriceRefreshTriggerToMaxAgePct.discriminator,
@@ -1222,7 +1220,7 @@ const updateLendingMarketConfig = (
       break;
     case 'liquidationMaxDebtCloseFactorPct':
       if (market.liquidationMaxDebtCloseFactorPct !== newMarket.liquidationMaxDebtCloseFactorPct) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateLiquidationCloseFactor.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateLiquidationCloseFactor.discriminator,
@@ -1233,7 +1231,7 @@ const updateLendingMarketConfig = (
       break;
     case 'insolvencyRiskUnhealthyLtvPct':
       if (market.insolvencyRiskUnhealthyLtvPct !== newMarket.insolvencyRiskUnhealthyLtvPct) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateInsolvencyRiskLtv.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateInsolvencyRiskLtv.discriminator,
@@ -1244,7 +1242,7 @@ const updateLendingMarketConfig = (
       break;
     case 'minFullLiquidationValueThreshold':
       if (!market.minFullLiquidationValueThreshold.eq(newMarket.minFullLiquidationValueThreshold)) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateMinFullLiquidationThreshold.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateMinFullLiquidationThreshold.discriminator,
@@ -1255,7 +1253,7 @@ const updateLendingMarketConfig = (
       break;
     case 'maxLiquidatableDebtMarketValueAtOnce':
       if (!market.maxLiquidatableDebtMarketValueAtOnce.eq(newMarket.maxLiquidatableDebtMarketValueAtOnce)) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateLiquidationMaxValue.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateLiquidationMaxValue.discriminator,
@@ -1266,7 +1264,7 @@ const updateLendingMarketConfig = (
       break;
     case 'globalAllowedBorrowValue':
       if (!market.globalAllowedBorrowValue.eq(newMarket.globalAllowedBorrowValue)) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateGlobalAllowedBorrow.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateGlobalAllowedBorrow.discriminator,
@@ -1277,7 +1275,7 @@ const updateLendingMarketConfig = (
       break;
     case 'riskCouncil':
       if (!market.riskCouncil.equals(newMarket.riskCouncil)) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateRiskCouncil.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateRiskCouncil.discriminator,
@@ -1298,7 +1296,7 @@ const updateLendingMarketConfig = (
           market.elevationGroups[i].maxReservesAsCollateral !== newMarket.elevationGroups[i].maxReservesAsCollateral ||
           !market.elevationGroups[i].debtReserve.equals(newMarket.elevationGroups[i].debtReserve)
         ) {
-          updateLendingMarketIxnsArgs.push({
+          updateLendingMarketIxsArgs.push({
             mode: UpdateLendingMarketMode.UpdateElevationGroup.discriminator,
             value: updateMarketConfigEncodedValue(
               UpdateLendingMarketMode.UpdateElevationGroup.discriminator,
@@ -1314,7 +1312,7 @@ const updateLendingMarketConfig = (
       break;
     case 'minNetValueInObligationSf':
       if (!market.minNetValueInObligationSf.eq(newMarket.minNetValueInObligationSf)) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateMinNetValueObligationPostAction.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateMinNetValueObligationPostAction.discriminator,
@@ -1325,7 +1323,7 @@ const updateLendingMarketConfig = (
       break;
     case 'minValueSkipLiquidationBfChecks':
       if (!market.minValueSkipLiquidationBfChecks.eq(newMarket.minValueSkipLiquidationBfChecks)) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheck.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheck.discriminator,
@@ -1336,7 +1334,7 @@ const updateLendingMarketConfig = (
       break;
     case 'minValueSkipLiquidationLtvChecks':
       if (!market.minValueSkipLiquidationLtvChecks.eq(newMarket.minValueSkipLiquidationLtvChecks)) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheck.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheck.discriminator,
@@ -1349,7 +1347,7 @@ const updateLendingMarketConfig = (
       if (
         market.individualAutodeleverageMarginCallPeriodSecs !== newMarket.individualAutodeleverageMarginCallPeriodSecs
       ) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs.discriminator,
@@ -1360,7 +1358,7 @@ const updateLendingMarketConfig = (
       break;
     case 'name':
       if (!sameLengthArrayEquals(market.name, newMarket.name)) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateName.discriminator,
           value: updateMarketConfigEncodedValue(UpdateLendingMarketMode.UpdateName.discriminator, newMarket.name),
         });
@@ -1368,7 +1366,7 @@ const updateLendingMarketConfig = (
       break;
     case 'minInitialDepositAmount':
       if (!market.minInitialDepositAmount.eq(newMarket.minInitialDepositAmount)) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateInitialDepositAmount.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateInitialDepositAmount.discriminator,
@@ -1379,7 +1377,7 @@ const updateLendingMarketConfig = (
       break;
     case 'obligationOrdersEnabled':
       if (market.obligationOrdersEnabled !== newMarket.obligationOrdersEnabled) {
-        updateLendingMarketIxnsArgs.push({
+        updateLendingMarketIxsArgs.push({
           mode: UpdateLendingMarketMode.UpdateObligationOrdersEnabled.discriminator,
           value: updateMarketConfigEncodedValue(
             UpdateLendingMarketMode.UpdateObligationOrdersEnabled.discriminator,
@@ -1391,7 +1389,7 @@ const updateLendingMarketConfig = (
     default:
       assertNever(key);
   }
-  return updateLendingMarketIxnsArgs;
+  return updateLendingMarketIxsArgs;
 };
 
 function parseForChangesMarketConfigAndGetIxs(
@@ -1400,19 +1398,19 @@ function parseForChangesMarketConfigAndGetIxs(
   programId: PublicKey
 ): TransactionInstruction[] {
   const market = marketWithAddress.state;
-  const updateLendingMarketIxnsArgs: { mode: number; value: Buffer }[] = [];
+  const updateLendingMarketIxsArgs: { mode: number; value: Buffer }[] = [];
 
   for (const key in market.toJSON()) {
     if (isExcludedLendingMarketKey(key)) {
       continue;
     }
-    updateLendingMarketIxnsArgs.push(...updateLendingMarketConfig(key as LendingMarketKey, market, newMarket));
+    updateLendingMarketIxsArgs.push(...updateLendingMarketConfig(key as LendingMarketKey, market, newMarket));
   }
 
-  const ixns: TransactionInstruction[] = [];
+  const ixs: TransactionInstruction[] = [];
 
-  updateLendingMarketIxnsArgs.forEach((updateLendingMarketConfigArgs) => {
-    ixns.push(
+  updateLendingMarketIxsArgs.forEach((updateLendingMarketConfigArgs) => {
+    ixs.push(
       updateMarketConfigIx(
         marketWithAddress,
         updateLendingMarketConfigArgs.mode,
@@ -1422,7 +1420,7 @@ function parseForChangesMarketConfigAndGetIxs(
     );
   });
 
-  return ixns;
+  return ixs;
 }
 
 function updateMarketConfigEncodedValue(

@@ -32,7 +32,7 @@ export async function getTokenToKtokenSwapper<QuoteResponse>(
   slippagePct: Decimal,
   swapper: SwapIxsProvider<QuoteResponse>,
   priceAinB: PriceAinBProvider,
-  includeAtaIxns: boolean = true
+  includeAtaIxs: boolean = true
 ): Promise<SwapIxsProvider<QuoteResponse>> {
   return async (
     inputs: SwapInputs,
@@ -58,7 +58,7 @@ export async function getTokenToKtokenSwapper<QuoteResponse>(
       inputs.amountDebtAtaBalance,
       swapper,
       priceAinB,
-      includeAtaIxns,
+      includeAtaIxs,
       klendAccounts,
       quote
     ))!;
@@ -84,7 +84,7 @@ export async function getKtokenDepositIxs<QuoteResponse>(
   amountExpectedDepositAtaBalance: Decimal,
   swapper: SwapIxsProvider<QuoteResponse>,
   priceAinB: PriceAinBProvider,
-  includeAtaIxns: boolean = true,
+  includeAtaIxs: boolean = true,
   klendAccounts: Array<PublicKey>,
   quote: SwapQuote<QuoteResponse>
 ) {
@@ -106,7 +106,7 @@ export async function getKtokenDepositIxs<QuoteResponse>(
       swapProviderToKaminoSwapProvider(swapper, klendAccounts, quote),
       tokensBalances,
       priceAinBDecimal,
-      includeAtaIxns
+      includeAtaIxs
     );
   } else if (tokenBMint.equals(depositTokenMint)) {
     const aBalance = await getTokenAccountBalanceDecimal(connection, tokenAMint, depositor);
@@ -120,7 +120,7 @@ export async function getKtokenDepositIxs<QuoteResponse>(
       swapProviderToKaminoSwapProvider(swapper, klendAccounts, quote),
       tokensBalances,
       priceAinBDecimal,
-      includeAtaIxns
+      includeAtaIxs
     );
   } else {
     throw Error('Deposit token is neither A nor B in the strategy');

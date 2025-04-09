@@ -2,9 +2,9 @@ import {
   MultiplyObligation,
   PROGRAM_ID,
   buildAndSendTxn,
-  getAdjustLeverageIxns,
-  getComputeBudgetAndPriorityFeeIxns,
-  getUserLutAddressAndSetupIxns,
+  getAdjustLeverageIxs,
+  getComputeBudgetAndPriorityFeeIxs,
+  getUserLutAddressAndSetupIxs,
 } from '@kamino-finance/klend-sdk';
 import { getConnection } from './utils/connection';
 import { getKeypair } from './utils/keypair';
@@ -50,7 +50,7 @@ import { Scope } from '@kamino-finance/scope-sdk/';
   // This is the setup step that should happen each time the user has to extend it's LookupTable with missing keys
   // Or when the user doesn't have his LUT and UserMetadata table created yet
   // This will return an empty array in case the lut is already created and extended
-  const [userLookupTable, txsIxns] = await getUserLutAddressAndSetupIxns(
+  const [userLookupTable, txsIxs] = await getUserLutAddressAndSetupIxs(
     market,
     wallet.publicKey,
     PublicKey.default,
@@ -62,7 +62,7 @@ import { Scope } from '@kamino-finance/scope-sdk/';
   const debtTokenReserve = market.getReserveByMint(debtTokenMint);
   const collTokenReserve = market.getReserveByMint(collTokenMint);
 
-  await executeUserSetupLutsTransactions(connection, wallet, txsIxns);
+  await executeUserSetupLutsTransactions(connection, wallet, txsIxs);
 
   const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, PROGRAM_ID); // new LeverageObligation(collTokenMint, debtTokenMint, PROGRAM_ID); for leverage
   const obligationAddress = obligationType.toPda(market.getAddress(), wallet.publicKey);
@@ -86,9 +86,9 @@ import { Scope } from '@kamino-finance/scope-sdk/';
 
   // First adjust down to 2x leverage
 
-  const computeIxs = getComputeBudgetAndPriorityFeeIxns(1_400_000, new Decimal(500000));
+  const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
 
-  const { ixs, lookupTables, swapInputs } = await getAdjustLeverageIxns<QuoteResponse>({
+  const { ixs, lookupTables, swapInputs } = await getAdjustLeverageIxs<QuoteResponse>({
     owner: wallet.publicKey,
     kaminoMarket: market,
     debtTokenMint: debtTokenMint,
@@ -127,9 +127,9 @@ import { Scope } from '@kamino-finance/scope-sdk/';
   // Now adjust back to 3x leverage
 
   {
-    const computeIxs = getComputeBudgetAndPriorityFeeIxns(1_400_000, new Decimal(500000));
+    const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
 
-    const { ixs, lookupTables, swapInputs } = await getAdjustLeverageIxns<QuoteResponse>({
+    const { ixs, lookupTables, swapInputs } = await getAdjustLeverageIxs<QuoteResponse>({
       owner: wallet.publicKey,
       kaminoMarket: market,
       debtTokenMint: debtTokenMint,
