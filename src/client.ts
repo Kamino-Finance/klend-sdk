@@ -364,7 +364,7 @@ async function deposit(connection: Connection, wallet: Keypair, token: string, d
     true,
     { scope: new Scope('mainnet-beta', connection), scopeFeed: 'hubble' }
   );
-  console.log('User obligation', kaminoAction.obligation!.obligationAddress.toString());
+  console.log('User obligation', kaminoAction.getObligationPda().toString());
 
   const tx = await buildVersionedTransaction(connection, wallet.publicKey, KaminoAction.actionToIxs(kaminoAction));
 
@@ -386,7 +386,7 @@ async function withdraw(connection: Connection, wallet: Keypair, token: string, 
     true,
     { scope: new Scope('mainnet-beta', connection), scopeFeed: 'hubble' }
   );
-  console.log('User obligation', kaminoAction.obligation!.obligationAddress.toString());
+  console.log('User obligation', kaminoAction.getObligationPda().toString());
 
   const tx = await buildVersionedTransaction(connection, wallet.publicKey, KaminoAction.actionToIxs(kaminoAction));
 
@@ -408,7 +408,7 @@ async function borrow(connection: Connection, wallet: Keypair, token: string, bo
     true,
     { scope: new Scope('mainnet-beta', connection), scopeFeed: 'hubble' }
   );
-  console.log('User obligation', kaminoAction.obligation!.obligationAddress.toString());
+  console.log('User obligation', kaminoAction.getObligationPda().toString());
 
   const tx = await buildVersionedTransaction(connection, wallet.publicKey, KaminoAction.actionToIxs(kaminoAction));
 
@@ -431,7 +431,7 @@ async function repay(connection: Connection, wallet: Keypair, token: string, bor
     { scope: new Scope('mainnet-beta', connection), scopeFeed: 'hubble' },
     await connection.getSlot()
   );
-  console.log('User obligation', kaminoAction.obligation!.obligationAddress.toString());
+  console.log('User obligation', kaminoAction.getObligationPda().toString());
 
   const tx = await buildVersionedTransaction(connection, wallet.publicKey, KaminoAction.actionToIxs(kaminoAction));
 

@@ -70,7 +70,7 @@ import {
   obligationFarmStatePda,
 } from '../utils';
 import { getTokenIdsForScopeRefresh, KaminoMarket } from './market';
-import { KaminoObligation } from './obligation';
+import { isKaminoObligation, KaminoObligation } from './obligation';
 import { KaminoReserve } from './reserve';
 import { ReserveFarmKind } from '../idl_codegen/types';
 import { farmsId } from '@kamino-finance/farms-sdk';
@@ -109,7 +109,7 @@ export class KaminoAction {
   owner: PublicKey;
   payer: PublicKey;
 
-  obligation: KaminoObligation | null = null;
+  obligation: KaminoObligation | ObligationType;
 
   referrer: PublicKey;
 
@@ -155,7 +155,7 @@ export class KaminoAction {
   private constructor(
     kaminoMarket: KaminoMarket,
     owner: PublicKey,
-    obligation: KaminoObligation | ObligationType | null,
+    obligation: KaminoObligation | ObligationType,
     mint: PublicKey,
     positions: number,
     amount: string | BN,
@@ -169,13 +169,8 @@ export class KaminoAction {
     referrer?: PublicKey,
     payer?: PublicKey
   ) {
-    if (obligation instanceof KaminoObligation) {
-      this.obligation = obligation;
-    } else if (obligation !== null) {
-      this.obligationType = obligation;
-    }
-
     this.kaminoMarket = kaminoMarket;
+    this.obligation = obligation;
     this.owner = owner;
     this.payer = payer ?? owner;
     this.amount = new BN(amount);
@@ -1471,7 +1466,8 @@ export class KaminoAction {
       this.kaminoMarket.programId
     );
     borrowIx.keys =
-      this.obligation!.state.elevationGroup > 0 || this.obligation!.refreshedStats.potentialElevationGroupUpdate > 0
+      isKaminoObligation(this.obligation) &&
+      (this.obligation.state.elevationGroup > 0 || this.obligation.refreshedStats.potentialElevationGroupUpdate > 0)
         ? borrowIx.keys.concat([...depositReserveAccountMetas])
         : borrowIx.keys;
     this.lendingIxs.push(borrowIx);
@@ -1525,7 +1521,8 @@ export class KaminoAction {
       this.kaminoMarket.programId
     );
     borrowIx.keys =
-      this.obligation!.state.elevationGroup > 0 || this.obligation!.refreshedStats.potentialElevationGroupUpdate > 0
+      isKaminoObligation(this.obligation) &&
+      (this.obligation.state.elevationGroup > 0 || this.obligation.refreshedStats.potentialElevationGroupUpdate > 0)
         ? borrowIx.keys.concat([...depositReserveAccountMetas])
         : borrowIx.keys;
     this.lendingIxs.push(borrowIx);
@@ -1633,7 +1630,9 @@ export class KaminoAction {
     );
 
     repayIx.keys =
-      this.obligation!.state.elevationGroup > 0 ? repayIx.keys.concat([...depositReserveAccountMetas]) : repayIx.keys;
+      isKaminoObligation(this.obligation) && this.obligation.state.elevationGroup > 0
+        ? repayIx.keys.concat([...depositReserveAccountMetas])
+        : repayIx.keys;
 
     this.lendingIxs.push(repayIx);
   }
@@ -1682,7 +1681,10 @@ export class KaminoAction {
     );
 
     repayIx.keys =
-      this.obligation!.state.elevationGroup > 0 ? repayIx.keys.concat([...depositReserveAccountMetas]) : repayIx.keys;
+      // TODO: potential elev group update?
+      isKaminoObligation(this.obligation) && this.obligation.state.elevationGroup > 0
+        ? repayIx.keys.concat([...depositReserveAccountMetas])
+        : repayIx.keys;
 
     this.lendingIxs.push(repayIx);
   }
@@ -2129,6 +2131,10 @@ export class KaminoAction {
     );
     this.lendingIxsLabels.push(`withdrawObligationCollateralAndRedeemReserveCollateralV2`);
 
+    if (!isKaminoObligation(this.obligation)) {
+      throw new Error(`obligation is not a KaminoObligation`);
+    }
+
     const depositReservesList = this.getAdditionalDepositReservesList();
 
     const depositReserveAccountMetas = depositReservesList.map((reserve) => {
@@ -2168,7 +2174,8 @@ export class KaminoAction {
       this.kaminoMarket.programId
     );
 
-    repayIx.keys = repayIx.keys.concat([...depositReserveAccountMetas]);
+    repayIx.keys =
+      this.obligation.state.elevationGroup > 0 ? repayIx.keys.concat([...depositReserveAccountMetas]) : repayIx.keys;
 
     this.lendingIxs.push(repayIx);
     if (!this.outflowReserve) {
@@ -2228,6 +2235,10 @@ export class KaminoAction {
       throw Error(`Withdraw reserve during liquidation is not defined`);
     }
 
+    if (!isKaminoObligation(this.obligation)) {
+      throw new Error(`obligation is not a KaminoObligation`);
+    }
+
     const depositReservesList = this.getAdditionalDepositReservesList();
     const depositReserveAccountMetas = depositReservesList.map((reserve) => {
       return { pubkey: reserve, isSigner: false, isWritable: true };
@@ -2265,7 +2276,7 @@ export class KaminoAction {
       this.kaminoMarket.programId
     );
     liquidateIx.keys =
-      this.obligation!.state.elevationGroup > 0
+      this.obligation.state.elevationGroup > 0
         ? liquidateIx.keys.concat([...depositReserveAccountMetas])
         : liquidateIx.keys;
     this.lendingIxs.push(liquidateIx);
@@ -2275,6 +2286,10 @@ export class KaminoAction {
     this.lendingIxsLabels.push(`liquidateObligationAndRedeemReserveCollateralV2`);
     if (!this.outflowReserve) {
       throw Error(`Withdraw reserve during liquidation is not defined`);
+    }
+
+    if (!isKaminoObligation(this.obligation)) {
+      throw new Error(`obligation is not a KaminoObligation`);
     }
 
     const depositReservesList = this.getAdditionalDepositReservesList();
@@ -2446,7 +2461,7 @@ export class KaminoAction {
         if (action === 'depositAndBorrow' || action === 'repayAndWithdraw' || action === 'repayAndWithdrawV2') {
           currentReserves = [this.reserve, this.outflowReserve];
           if (action === 'depositAndBorrow') {
-            if (this.obligation) {
+            if (isKaminoObligation(this.obligation)) {
               const deposit = this.obligation.getDepositByReserve(this.reserve.address);
               if (!deposit) {
                 this.preLoadedDepositReservesSameTx.push(this.reserve.address);
@@ -2512,7 +2527,10 @@ export class KaminoAction {
       this.addRefreshReserveIxs(currentReserveAddresses.toArray(), addAsSupportIx);
 
       if (action === 'repayAndWithdraw' && addAsSupportIx === 'inBetween') {
-        const repayObligationLiquidity = this.obligation!.getBorrowByReserve(this.reserve.address);
+        if (!isKaminoObligation(this.obligation)) {
+          throw new Error(`obligation is not a KaminoObligation`);
+        }
+        const repayObligationLiquidity = this.obligation.getBorrowByReserve(this.reserve.address);
         if (!repayObligationLiquidity) {
           throw new Error(`Could not find debt reserve ${this.reserve.address} in obligation`);
         }
@@ -2526,7 +2544,10 @@ export class KaminoAction {
 
       if (requestElevationGroup) {
         if (action === 'repay' || action === 'repayAndWithdrawV2') {
-          const repayObligationLiquidity = this.obligation!.borrows.get(this.reserve.address);
+          if (!isKaminoObligation(this.obligation)) {
+            throw new Error(`obligation is not a KaminoObligation`);
+          }
+          const repayObligationLiquidity = this.obligation.getBorrowByReserve(this.reserve.address);
 
           if (!repayObligationLiquidity) {
             throw new Error(`Could not find debt reserve ${this.reserve.address} in obligation`);
@@ -2534,8 +2555,8 @@ export class KaminoAction {
 
           if (
             repayObligationLiquidity.amount.lte(new Decimal(this.amount.toString())) &&
-            this.obligation!.borrows.size === 1 &&
-            this.obligation?.state.elevationGroup !== 0
+            this.obligation.borrows.size === 1 &&
+            this.obligation.state.elevationGroup !== 0
           ) {
             this.addRefreshReserveIxs(allReservesExcludingCurrent, 'cleanup');
             // Skip the borrow reserve, since we repay in the same tx
@@ -2558,7 +2579,10 @@ export class KaminoAction {
               debtReserve = this.outflowReserve!.address;
               addAsSupportIx = 'inBetween';
             } else if (action === 'borrow') {
-              const depositReserve = this.obligation!.state.deposits.find(
+              if (!isKaminoObligation(this.obligation)) {
+                throw new Error(`obligation is not a KaminoObligation`);
+              }
+              const depositReserve = this.obligation.state.deposits.find(
                 (x) => !x.depositReserve.equals(PublicKey.default)
               )!.depositReserve;
               const collReserve = this.kaminoMarket.getReserveByAddress(depositReserve);
@@ -2592,27 +2616,36 @@ export class KaminoAction {
               const eModeGroup = groups.find((group) => group.id === eModeGroupWithMaxLtvAndDebtReserve)!.id;
               console.log('Setting eModeGroup to', eModeGroup);
 
-              if (eModeGroup !== 0 && eModeGroup !== this.obligation?.state.elevationGroup) {
+              if (
+                eModeGroup !== 0 &&
+                eModeGroup !== (isKaminoObligation(this.obligation) ? this.obligation.state.elevationGroup : 0)
+              ) {
                 newElevationGroup = eModeGroup;
               }
             }
           }
 
-          console.log('newElevationGroup', newElevationGroup, addAsSupportIx);
-          if (newElevationGroup >= 0 && newElevationGroup !== this.obligation?.state.elevationGroup) {
+          if (
+            newElevationGroup >= 0 &&
+            newElevationGroup !== (isKaminoObligation(this.obligation) ? this.obligation.state.elevationGroup : 0)
+          ) {
             this.addRequestElevationIx(newElevationGroup, addAsSupportIx);
             this.addRefreshReserveIxs(allReservesExcludingCurrent, addAsSupportIx);
             this.addRefreshReserveIxs(currentReserveAddresses.toArray(), addAsSupportIx);
             this.addRefreshObligationIx(addAsSupportIx);
 
             if (action === 'borrow') {
-              this.obligation!.refreshedStats.potentialElevationGroupUpdate = newElevationGroup;
+              if (!isKaminoObligation(this.obligation)) {
+                throw new Error(`obligation is not a KaminoObligation`);
+              }
+              this.obligation.refreshedStats.potentialElevationGroupUpdate = newElevationGroup;
             }
           }
         } else if (
           action === 'deposit' &&
           overrideElevationGroupRequest !== undefined &&
-          overrideElevationGroupRequest !== this.obligation?.state.elevationGroup
+          overrideElevationGroupRequest !==
+            (isKaminoObligation(this.obligation) ? this.obligation.state.elevationGroup : 0)
         ) {
           const addAsSupportIx: AuxiliaryIx = 'setup';
           console.log('Deposit: Requesting elevation group', overrideElevationGroupRequest);
@@ -3062,7 +3095,7 @@ export class KaminoAction {
     farms.forEach((arg: [number, PublicKey, PublicKey]) => {
       const args: InitObligationFarmsForReserveArgs = { mode: arg[0] };
       const accounts: InitObligationFarmsForReserveAccounts = {
-        owner: this.obligation ? this.obligation.state.owner : this.owner,
+        owner: isKaminoObligation(this.obligation) ? this.obligation.state.owner : this.owner,
         payer: this.owner,
         obligation: this.getObligationPda(),
         lendingMarketAuthority: this.kaminoMarket.getLendingMarketAuthority(),
@@ -3090,14 +3123,14 @@ export class KaminoAction {
   }
 
   private addInitObligationIxs() {
-    if (!this.obligation) {
+    if (!isKaminoObligation(this.obligation)) {
       const obligationPda = this.getObligationPda();
       const [userMetadataAddress, _bump] = userMetadataPda(this.owner, this.kaminoMarket.programId);
       const initObligationIx = initObligation(
         {
           args: {
-            tag: this.obligationType!.toArgs().tag,
-            id: this.obligationType!.toArgs().id,
+            tag: this.obligation.toArgs().tag,
+            id: this.obligation.toArgs().id,
           },
         },
         {
@@ -3105,8 +3138,8 @@ export class KaminoAction {
           feePayer: this.payer,
           obligation: obligationPda,
           lendingMarket: this.kaminoMarket.getAddress(),
-          seed1Account: this.obligationType!.toArgs().seed1,
-          seed2Account: this.obligationType!.toArgs().seed2,
+          seed1Account: this.obligation.toArgs().seed1,
+          seed2Account: this.obligation.toArgs().seed2,
           ownerUserMetadata: userMetadataAddress,
           rent: SYSVAR_RENT_PUBKEY,
           systemProgram: SystemProgram.programId,
@@ -3301,7 +3334,11 @@ export class KaminoAction {
 
     let safeRepay = new BN(this.amount);
 
-    if (this.obligation && (action === 'repay' || action === 'repayAndWithdrawV2') && this.amount.eq(new BN(U64_MAX))) {
+    if (
+      isKaminoObligation(this.obligation) &&
+      (action === 'repay' || action === 'repayAndWithdrawV2') &&
+      this.amount.eq(new BN(U64_MAX))
+    ) {
       const borrow = this.obligation.state.borrows.find(
         (borrow) => borrow.borrowReserve.toString() === this.reserve.address.toString()
       );
@@ -3512,9 +3549,13 @@ export class KaminoAction {
   }
 
   getObligationPda(): PublicKey {
-    return this.obligation
+    return isKaminoObligation(this.obligation)
       ? this.obligation.obligationAddress
-      : this.obligationType!.toPda(this.kaminoMarket.getAddress(), this.owner);
+      : this.obligation.toPda(this.kaminoMarket.getAddress(), this.owner);
+  }
+
+  isObligationInitialized() {
+    return this.obligation instanceof KaminoObligation;
   }
 
   getAdditionalDepositReservesList(): PublicKey[] {
