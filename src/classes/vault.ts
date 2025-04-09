@@ -1616,6 +1616,9 @@ export class KaminoVaultClient {
       totalAllocation = totalAllocation.add(allocation.targetWeight);
     });
     const expectedHoldingsDistribution = new PubkeyHashMap<PublicKey, Decimal>();
+    allReserves.forEach((reserve) => {
+      expectedHoldingsDistribution.set(reserve, new Decimal(0));
+    });
 
     let totalLeftToInvest = holdings.totalAUMIncludingFees.sub(holdings.pendingFees);
     let currentAllocationSum = totalAllocation;
