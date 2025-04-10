@@ -2138,6 +2138,7 @@ export class KaminoVaultClient {
         .map((filteredReserve) => {
           const reserveAsCollateral: ReserveAsCollateral = {
             mint: filteredReserve.getLiquidityMint(),
+            address: filteredReserve.address,
             liquidationLTVPct: new Decimal(filteredReserve.state.config.liquidationThresholdPct),
           };
           marketOverview.reservesAsCollateral.push(reserveAsCollateral);
@@ -2762,6 +2763,7 @@ export type MarketOverview = {
 export type ReserveAsCollateral = {
   mint: PublicKey;
   liquidationLTVPct: Decimal;
+  address: PublicKey;
 };
 
 export type VaultOverview = {

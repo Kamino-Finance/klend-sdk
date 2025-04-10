@@ -984,8 +984,13 @@ export class KaminoManager {
    *
    * @returns a hashmap from each reserve pubkey to the market overview of the collaterals that can be used and the min and max loan to value ratio in that market
    */
-  async getVaultCollaterals(vaultState: VaultState, slot: number): Promise<PubkeyHashMap<PublicKey, MarketOverview>> {
-    return this._vaultClient.getVaultCollaterals(vaultState, slot);
+  async getVaultCollaterals(
+    vaultState: VaultState,
+    slot: number,
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>,
+    kaminoMarkets?: KaminoMarket[]
+  ): Promise<PubkeyHashMap<PublicKey, MarketOverview>> {
+    return this._vaultClient.getVaultCollaterals(vaultState, slot, vaultReservesMap, kaminoMarkets);
   }
 
   /**
