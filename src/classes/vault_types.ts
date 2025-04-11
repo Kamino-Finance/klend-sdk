@@ -8,6 +8,7 @@ export type InitVaultIxs = {
   createLUTIx: TransactionInstruction;
   populateLUTIxs: TransactionInstruction[];
   cleanupIxs: TransactionInstruction[];
+  initSharesMetadataIx: TransactionInstruction;
 };
 
 export type AcceptVaultOwnershipIxs = {

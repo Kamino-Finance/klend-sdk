@@ -70,6 +70,7 @@ import { Fraction } from './fraction';
 import {
   createAtasIdempotent,
   createWsolAtaIfMissing,
+  getKVaultSharesMetadataPda,
   lendingMarketAuthPda,
   PublicKeySet,
   SECONDS_PER_YEAR,
@@ -101,6 +102,7 @@ import {
   getSharesInFarmUserPosition,
   getUserSharesInFarm,
 } from './farm_utils';
+import { getInitializeKVaultSharesMetadataIx, getUpdateSharesMetadataIx, resolveMetadata } from '../utils/metadata';
 
 export const kaminoVaultId = new PublicKey('KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd');
 export const kaminoVaultStagingId = new PublicKey('stKvQfwRsQiKnLtMNVLHKS3exFJmZFsgfzBPWHECUYK');
@@ -110,6 +112,10 @@ const CTOKEN_VAULT_SEED = 'ctoken_vault';
 const BASE_VAULT_AUTHORITY_SEED = 'authority';
 const SHARES_SEED = 'shares';
 const EVENT_AUTHORITY_SEED = '__event_authority';
+export const METADATA_SEED = 'metadata';
+
+export const METADATA_PROGRAM_ID: PublicKey = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+
 export const INITIAL_DEPOSIT_LAMPORTS = 1000;
 
 /**
@@ -300,6 +306,16 @@ export class KaminoVaultClient {
       ixs.push(setNameIx);
     }
 
+    const metadataIx = await this.getSetSharesMetadataIx(
+      this.getConnection(),
+      vaultConfig.admin,
+      vaultState.publicKey,
+      sharesMint,
+      baseVaultAuthority,
+      vaultConfig.vaultTokenSymbol,
+      vaultConfig.vaultTokenName
+    );
+
     return {
       vault: vaultState,
       initVaultIxs: {
@@ -308,8 +324,55 @@ export class KaminoVaultClient {
         createLUTIx,
         populateLUTIxs: insertIntoLUTIxs,
         cleanupIxs,
+        initSharesMetadataIx: metadataIx,
       },
     };
+  }
+
+  /**
+   * This method creates an instruction to set the shares metadata for a vault
+   * @param vault - the vault to set the shares metadata for
+   * @param tokenName - the name of the token in the vault (symbol; e.g. "USDC" which becomes "kVUSDC")
+   * @param extraName - the extra string appended to the prefix("Kamino Vault USDC <extraName>")
+   * @returns - an instruction to set the shares metadata for the vault
+   */
+  async getSetSharesMetadataIx(
+    connection: Connection,
+    vaultAdmin: PublicKey,
+    vault: PublicKey,
+    sharesMint: PublicKey,
+    baseVaultAuthority: PublicKey,
+    tokenName: string,
+    extraName: string
+  ) {
+    const [sharesMintMetadata] = getKVaultSharesMetadataPda(sharesMint);
+
+    const { name, symbol, uri } = resolveMetadata(vault, sharesMint, extraName, tokenName);
+
+    const ix =
+      (await connection.getAccountInfo(sharesMintMetadata)) === null
+        ? await getInitializeKVaultSharesMetadataIx(
+            connection,
+            vaultAdmin,
+            vault,
+            sharesMint,
+            baseVaultAuthority,
+            name,
+            symbol,
+            uri
+          )
+        : await getUpdateSharesMetadataIx(
+            connection,
+            vaultAdmin,
+            vault,
+            sharesMint,
+            baseVaultAuthority,
+            name,
+            symbol,
+            uri
+          );
+
+    return ix;
   }
 
   /**
@@ -2644,9 +2707,12 @@ export class KaminoVaultConfig {
   readonly performanceFeeRatePercentage: Decimal;
   /** The management fee rate of the vault, as percents, expressed as a decimal */
   readonly managementFeeRatePercentage: Decimal;
-  /** The name to be stored on cain for the vault (max 40 characters). */
+  /** The name to be stored on chain for the vault (max 40 characters). */
   readonly name: string;
-
+  /** The symbol of the vault token to be stored (max 5 characters). E.g. USDC for a vault using USDC as token. */
+  readonly vaultTokenSymbol: string;
+  /** The name of the vault token to be stored (max 10 characters), after the prefix `Kamino Vault <vaultTokenSymbol>`. E.g. USDC Vault for a vault using USDC as token. */
+  readonly vaultTokenName: string;
   constructor(args: {
     admin: PublicKey;
     tokenMint: PublicKey;
@@ -2654,6 +2720,8 @@ export class KaminoVaultConfig {
     performanceFeeRatePercentage: Decimal;
     managementFeeRatePercentage: Decimal;
     name: string;
+    vaultTokenSymbol: string;
+    vaultTokenName: string;
   }) {
     this.admin = args.admin;
     this.tokenMint = args.tokenMint;
@@ -2661,6 +2729,8 @@ export class KaminoVaultConfig {
     this.managementFeeRatePercentage = args.managementFeeRatePercentage;
     this.tokenMintProgramId = args.tokenMintProgramId;
     this.name = args.name;
+    this.vaultTokenSymbol = args.vaultTokenSymbol;
+    this.vaultTokenName = args.vaultTokenName;
   }
 
   getPerformanceFeeBps(): number {

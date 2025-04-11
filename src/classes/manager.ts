@@ -223,6 +223,26 @@ export class KaminoManager {
   }
 
   /**
+   * This method creates an instruction to set the shares metadata for a vault
+   * @param vault - the vault to set the shares metadata for
+   * @param tokenName - the name of the token in the vault (symbol; e.g. "USDC" which becomes "kVUSDC")
+   * @param extraName - the extra string appended to the prefix("Kamino Vault USDC <extraName>")
+   * @returns - an instruction to set the shares metadata for the vault
+   */
+  async getSetSharesMetadataIx(vault: KaminoVault, tokenName: string, extraName: string) {
+    const vaultState = await vault.getState(this._connection);
+    return this._vaultClient.getSetSharesMetadataIx(
+      this._connection,
+      vaultState.vaultAdminAuthority,
+      vault.address,
+      vaultState.sharesMint,
+      vaultState.baseVaultAuthority,
+      tokenName,
+      extraName
+    );
+  }
+
+  /**
    * This method updates the vault reserve allocation cofnig for an exiting vault reserve, or adds a new reserve to the vault if it does not exist.
    * @param vault - vault to be updated
    * @param reserveAllocationConfig - new reserve allocation config

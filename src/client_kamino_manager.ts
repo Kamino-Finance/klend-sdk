@@ -252,10 +252,12 @@ async function main() {
       `--mode <string>`,
       'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
     )
-    .option(`--name`, 'The onchain name of the strat')
+    .requiredOption('--name <string>', 'The onchain name of the strat')
+    .requiredOption('--tokenName <string>', 'The name of the token in the vault')
+    .requiredOption('--extraTokenName <string>', 'The extra string appended to the token symbol')
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ mint, mode, name, staging, multisig }) => {
+    .action(async ({ mint, mode, name, tokenName, extraTokenName, staging, multisig }) => {
       const env = initializeClient(mode === 'multisig', staging);
       const tokenMint = new PublicKey(mint);
 
@@ -279,6 +281,8 @@ async function main() {
         performanceFeeRatePercentage: new Decimal(0.0),
         managementFeeRatePercentage: new Decimal(0.0),
         name,
+        vaultTokenSymbol: tokenName,
+        vaultTokenName: extraTokenName,
       });
 
       const { vault: vaultKp, initVaultIxs: instructions } = await kaminoManager.createVaultIxs(kaminoVaultConfig);
@@ -294,7 +298,35 @@ async function main() {
       await sleep(2000);
       const _populateLUTSig = await processTxn(env.client, env.payer, instructions.populateLUTIxs, mode, 2500, []);
 
+      const _setSharesMetadataSig = await processTxn(
+        env.client,
+        env.payer,
+        [instructions.initSharesMetadataIx],
+        mode,
+        2500,
+        []
+      );
       mode === 'execute' && console.log('Vault created:', vaultKp.publicKey.toBase58());
+    });
+
+  commands
+    .command('set-shares-metadata')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption('--symbol <string>', 'The symbol of the kVault token')
+    .requiredOption('--extraName <string>', 'The name of the kVault token, appended to the symbol')
+    .action(async ({ vault, symbol, extraName }) => {
+      const env = initializeClient(false, false);
+      const kVault = new KaminoVault(new PublicKey(vault));
+
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
+      const ix = await kaminoManager.getSetSharesMetadataIx(kVault, symbol, extraName);
+
+      await processTxn(env.client, env.payer, [ix], 'execute', 2500, []);
     });
 
   commands

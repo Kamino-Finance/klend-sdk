@@ -29,6 +29,8 @@ import {
     performanceFeeRatePercentage: new Decimal(1.0),
     managementFeeRatePercentage: new Decimal(2.0),
     name: 'example vault',
+    vaultTokenSymbol: 'USDC',
+    vaultTokenName: 'USDC Vault',
   });
   const { vault: vaultKp, initVaultIxs: instructions } = await kaminoManager.createVaultIxs(kaminoVaultConfig);
 

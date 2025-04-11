@@ -1,6 +1,7 @@
 import { PublicKey } from '@solana/web3.js';
 import { PROGRAM_ID } from '../idl_codegen/programId';
 import { farmsId } from '@kamino-finance/farms-sdk';
+import { METADATA_PROGRAM_ID, METADATA_SEED } from '../classes/vault';
 
 /**
  * Lending market authority seed
@@ -203,4 +204,16 @@ export function obligationFarmStatePda(farm: PublicKey, obligation: PublicKey) {
     [Buffer.from(BASE_SEED_USER_STATE), farm.toBytes(), obligation.toBytes()],
     farmsId
   )[0];
+}
+
+/**
+ * Returns the PDA for the kVault shares metadata
+ * @param mint
+ * @returns [pda, bump]
+ */
+export function getKVaultSharesMetadataPda(mint: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(METADATA_SEED), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    METADATA_PROGRAM_ID
+  );
 }
