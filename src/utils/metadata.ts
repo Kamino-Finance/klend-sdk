@@ -11,7 +11,6 @@ import {
 } from '../lib';
 
 export function resolveMetadata(
-  vaultAddress: PublicKey,
   kTokenMint: PublicKey,
   extra: string,
   inputToken?: string,
@@ -35,7 +34,7 @@ export function resolveMetadata(
     name = inputName;
     symbol = inputSymbol;
   }
-  const uri = inputUri ?? resolveMetadataUriFromMint(vaultAddress, kTokenMint);
+  const uri = inputUri ?? resolveMetadataUriFromMint(kTokenMint);
 
   return { name, symbol, uri };
 }
@@ -48,8 +47,8 @@ export function resolveMetadataFromToken(token: string, extra: string): { name: 
   return { name, symbol };
 }
 
-export function resolveMetadataUriFromMint(vault: PublicKey, mint: PublicKey): string {
-  return `https://api.kamino.finance/kvault-tokens/${vault.toBase58()}/${mint.toBase58()}/metadata`;
+export function resolveMetadataUriFromMint(mint: PublicKey): string {
+  return `https://api.kamino.finance/kvault-tokens/${mint.toBase58()}/metadata`;
 }
 
 export async function getInitializeKVaultSharesMetadataIx(

@@ -347,7 +347,7 @@ export class KaminoVaultClient {
   ) {
     const [sharesMintMetadata] = getKVaultSharesMetadataPda(sharesMint);
 
-    const { name, symbol, uri } = resolveMetadata(vault, sharesMint, extraName, tokenName);
+    const { name, symbol, uri } = resolveMetadata(sharesMint, extraName, tokenName);
 
     const ix =
       (await connection.getAccountInfo(sharesMintMetadata)) === null
