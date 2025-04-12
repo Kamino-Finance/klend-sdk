@@ -2409,8 +2409,10 @@ export class KaminoVaultClient {
       vaultCollaterals: vaultCollaterals,
       theoreticalSupplyAPY: vaultTheoreticalAPYs,
       totalBorrowed: totalInvestedAndBorrowed.totalBorrowed,
+      totalBorrowedUSD: totalInvestedAndBorrowed.totalBorrowed.mul(price),
       utilizationRatio: totalInvestedAndBorrowed.utilizationRatio,
       totalSupplied: totalInvestedAndBorrowed.totalInvested,
+      totalSuppliedUSD: totalInvestedAndBorrowed.totalInvested.mul(price),
     };
   }
 
@@ -2842,7 +2844,9 @@ export type VaultOverview = {
   vaultCollaterals: PubkeyHashMap<PublicKey, MarketOverview>;
   theoreticalSupplyAPY: APYs;
   totalBorrowed: Decimal;
+  totalBorrowedUSD: Decimal;
   totalSupplied: Decimal;
+  totalSuppliedUSD: Decimal;
   utilizationRatio: Decimal;
 };
 

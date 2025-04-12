@@ -42,7 +42,7 @@ export function resolveMetadata(
 export function resolveMetadataFromToken(token: string, extra: string): { name: string; symbol: string } {
   console.log('token', token);
   console.log('extra', extra);
-  const name = `Kamino Vault ${token} ${extra}`;
+  const name = `kVault ${token} ${extra}`;
   const symbol = `kV${token.toUpperCase()}`;
   return { name, symbol };
 }

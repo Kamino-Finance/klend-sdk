@@ -27,16 +27,16 @@ import {
     managementFeeRatePercentage: new Decimal(2.0),
     name: 'example',
     vaultTokenSymbol: 'USDC',
-    vaultTokenName: 'USDC Vault',
+    vaultTokenName: 'Example',
   });
 
   const { vault: vaultKp, initVaultIxs: instructions } = await kaminoManager.createVaultIxs(kaminoVaultConfig);
 
-  // initialize vault and lookup table for the vault
+  // initialize vault, lookup table for the vault and shares metadata
   await buildAndSendTxn(
     connection,
     wallet,
-    [...instructions.initVaultIxs, instructions.createLUTIx],
+    [...instructions.initVaultIxs, instructions.createLUTIx, instructions.initSharesMetadataIx],
     [vaultKp],
     [],
     'InitVault'

@@ -290,7 +290,7 @@ async function main() {
       const _createVaultSig = await processTxn(
         env.client,
         env.payer,
-        [...instructions.initVaultIxs, instructions.createLUTIx],
+        [...instructions.initVaultIxs, instructions.createLUTIx, instructions.initSharesMetadataIx],
         mode,
         2500,
         [vaultKp]
@@ -1086,12 +1086,15 @@ async function main() {
         vaultState.sharesMintDecimals.toString()
       );
 
+      const vaultOverview = await kaminoManager.getVaultOverview(vaultState, new Decimal(1.0), slot);
+
       console.log('farm', vaultState.vaultFarm.toString());
       console.log('vault token mint', vaultState.tokenMint.toBase58());
       console.log('Name: ', kaminoManager.getDecodedVaultName(kaminoVault.state!));
       console.log('Shares issued: ', sharesIssued);
       printHoldings(holdings);
       console.log(`Tokens per share for vault ${vaultAddress.toBase58()}: ${tokensPerShare}`);
+      console.log('vaultOverview', vaultOverview);
     });
 
   commands.command('get-oracle-mappings').action(async () => {
