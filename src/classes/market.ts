@@ -245,6 +245,20 @@ export class KaminoMarket {
     return maxLeverage;
   }
 
+  getCommonElevationGroupsForPair(collReserve: KaminoReserve, debtReserve: KaminoReserve): number[] {
+    const groupsColl = new Set(collReserve.state.config.elevationGroups);
+    const groupsDebt = new Set(debtReserve.state.config.elevationGroups);
+
+    return [...groupsColl].filter(
+      (item) =>
+        groupsDebt.has(item) &&
+        item !== 0 &&
+        this.state.elevationGroups[item - 1].allowNewLoans !== 0 &&
+        collReserve.state.config.borrowLimitAgainstThisCollateralInElevationGroup[item - 1].gt(new BN(0)) &&
+        this.state.elevationGroups[item - 1].debtReserve.equals(debtReserve.address)
+    );
+  }
+
   getMaxAndLiquidationLtvAndBorrowFactorForPair(
     collTokenMint: PublicKey,
     debtTokenMint: PublicKey
@@ -256,15 +270,7 @@ export class KaminoMarket {
       throw Error('Could not find one of the reserves.');
     }
 
-    const groupsColl = new Set(collReserve.state.config.elevationGroups);
-    const groupsDebt = new Set(debtReserve.state.config.elevationGroups);
-    const commonElevationGroups = [...groupsColl].filter(
-      (item) =>
-        groupsDebt.has(item) &&
-        item !== 0 &&
-        this.state.elevationGroups[item - 1].allowNewLoans !== 0 &&
-        collReserve.state.config.borrowLimitAgainstThisCollateralInElevationGroup[item - 1].gt(new BN(0))
-    );
+    const commonElevationGroups = this.getCommonElevationGroupsForPair(collReserve, debtReserve);
 
     // Ltv factor for coll token
     const maxCollateralLtv =

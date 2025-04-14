@@ -1301,11 +1301,7 @@ export class KaminoObligation {
     );
 
     for (const [_, value] of this.deposits.entries()) {
-      const depositReserve = market.getReserveByAddress(value.reserveAddress);
-
-      if (!depositReserve) {
-        throw new Error('Reserve not found');
-      }
+      const depositReserve = market.getExistingReserveByAddress(value.reserveAddress);
 
       const depositReserveEmodeGroups = depositReserve.state.config.elevationGroups;
 

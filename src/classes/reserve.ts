@@ -506,12 +506,8 @@ export class KaminoReserve {
   }
 
   getMaxBorrowAmountWithCollReserve(market: KaminoMarket, collReserve: KaminoReserve, slot: number): Decimal {
-    const groupsColl = collReserve.state.config.elevationGroups;
-    const groupsDebt = this.state.config.elevationGroups;
     const groups = market.state.elevationGroups;
-    const commonElevationGroups = [...groupsColl].filter(
-      (item) => groupsDebt.includes(item) && item !== 0 && groups[item - 1].debtReserve.equals(this.address)
-    );
+    const commonElevationGroups = market.getCommonElevationGroupsForPair(collReserve, this);
 
     let eModeGroup = 0;
 

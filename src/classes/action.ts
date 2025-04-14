@@ -2566,43 +2566,31 @@ export class KaminoAction {
         } else if (action === 'depositAndBorrow' || action === 'borrow') {
           let newElevationGroup: number = -1;
           let addAsSupportIx: AuxiliaryIx = 'setup';
+          let debtReserve = this.reserve;
+          let collReserve = this.reserve;
 
           if (overrideElevationGroupRequest !== undefined) {
             newElevationGroup = overrideElevationGroupRequest;
           } else {
-            let emodeGroupsDebt = this.reserve.state.config.elevationGroups;
-            let emodeGroupsColl = this.reserve.state.config.elevationGroups;
-            let debtReserve = this.reserve.address;
-
             if (action === 'depositAndBorrow') {
-              emodeGroupsDebt = this.outflowReserve!.state.config.elevationGroups;
-              debtReserve = this.outflowReserve!.address;
+              debtReserve = this.outflowReserve!;
               addAsSupportIx = 'inBetween';
             } else if (action === 'borrow') {
               if (!isKaminoObligation(this.obligation)) {
                 throw new Error(`obligation is not a KaminoObligation`);
               }
-              const depositReserve = this.obligation.state.deposits.find(
-                (x) => !x.depositReserve.equals(PublicKey.default)
-              )!.depositReserve;
-              const collReserve = this.kaminoMarket.getReserveByAddress(depositReserve);
-              emodeGroupsColl = collReserve!.state.config.elevationGroups;
+              const depositReserve = this.obligation.deposits.values().next().value;
+              if (!depositReserve) {
+                throw new Error('No deposit reserve found in obligation, cannot borrow against it');
+              }
+              collReserve = this.kaminoMarket.getExistingReserveByAddress(depositReserve.reserveAddress);
+
               addAsSupportIx = 'setup';
             }
 
             const groups = this.kaminoMarket.state.elevationGroups;
-            const commonElevationGroups = [...emodeGroupsColl].filter(
-              (item) => emodeGroupsDebt.includes(item) && item !== 0 && groups[item - 1].debtReserve.equals(debtReserve)
-            );
 
-            console.log(
-              'Groups of coll reserve',
-              emodeGroupsColl,
-              'Groups of debt reserve',
-              emodeGroupsDebt,
-              'Common groups',
-              commonElevationGroups
-            );
+            const commonElevationGroups = this.kaminoMarket.getCommonElevationGroupsForPair(collReserve, debtReserve);
 
             if (commonElevationGroups.length === 0) {
               console.log('No common elevation groups found, staying with default');
