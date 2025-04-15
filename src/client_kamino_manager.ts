@@ -290,13 +290,20 @@ async function main() {
       const _createVaultSig = await processTxn(
         env.client,
         env.payer,
-        [...instructions.initVaultIxs, instructions.createLUTIx, instructions.initSharesMetadataIx],
+        [...instructions.createAtaIfNeededIxs, ...instructions.initVaultIxs, instructions.createLUTIx],
         mode,
         2500,
         [vaultKp]
       );
       await sleep(2000);
-      const _populateLUTSig = await processTxn(env.client, env.payer, instructions.populateLUTIxs, mode, 2500, []);
+      const _populateLUTSig = await processTxn(
+        env.client,
+        env.payer,
+        [...instructions.populateLUTIxs, ...instructions.cleanupIxs],
+        mode,
+        2500,
+        []
+      );
 
       const _setSharesMetadataSig = await processTxn(
         env.client,
@@ -677,6 +684,42 @@ async function main() {
       const withdrawPendingFeesSig = await processTxn(env.client, env.payer, instructions, mode, 2500, []);
 
       mode === 'execute' && console.log('Pending fees withdrawn:', withdrawPendingFeesSig);
+    });
+
+  commands
+    .command('remove-vault-allocation')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption('--reserve <string>', 'Reserve address')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ vault, reserve, mode, staging, multisig }) => {
+      const env = initializeClient(mode === 'multisig', staging);
+      const reserveAddress = new PublicKey(reserve);
+      const vaultAddress = new PublicKey(vault);
+
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+
+      const kaminoManager = new KaminoManager(
+        env.connection,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.kLendProgramId,
+        env.kVaultProgramId
+      );
+
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
+      const instruction = await kaminoManager.removeReserveFromAllocationIx(kaminoVault, reserveAddress);
+
+      if (instruction) {
+        const updateVaultAllocationSig = await processTxn(env.client, env.payer, [instruction], mode, 2500, []);
+
+        mode === 'execute' && console.log('Vault allocation updated:', updateVaultAllocationSig);
+      }
     });
 
   commands
