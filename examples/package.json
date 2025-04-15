@@ -32,6 +32,7 @@
     "multiply-loan-info-and-pnl": "yarn tsx example_multiply_loan_info_and_pnl.ts",
     "multiply-manage-position-transaction": "yarn tsx example_multiply_manage_position_transaction.ts",
     "get-obligations-on-reserve-filter": "yarn tsx example_get_obligations_based_on_reserve_filter.ts",
+    "change-market-admin": "yarn tsx example_change_market_admin.ts",
     "build": "rm -rf dist/; tsc"
   },
   "dependencies": {

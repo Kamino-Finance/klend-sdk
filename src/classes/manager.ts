@@ -93,6 +93,7 @@ import {
 } from './vault_types';
 import { FarmState } from '@kamino-finance/farms-sdk/dist';
 import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
+import { getSquadsMultisigAdminsAndThreshold, walletIsSquadsMultisig, WalletType } from '../utils/multisig';
 
 /**
  * KaminoManager is a class that provides a high-level interface to interact with the Kamino Lend and Kamino Vault programs, in order to create and manage a market, as well as vaults
@@ -1124,10 +1125,23 @@ export class KaminoManager {
   }
 
   /**
+   * This retruns an array of instructions to be used to update the pending lending market admin; if the admin is the same the list will be empty otherwise it will have an instruction to update the cached (pending) admin
+   * @param marketWithAddress - the market address and market state object
+   * @param newAdmin - the new admin
+   * @returns - an array of instructions
+   */
+  updatePendingLendingMarketAdminIx(
+    marketWithAddress: MarketWithAddress,
+    newAdmin: PublicKey
+  ): TransactionInstruction[] {
+    const newMarket = new LendingMarket({ ...marketWithAddress.state, lendingMarketOwnerCached: newAdmin });
+    return this.updateLendingMarketIxs(marketWithAddress, newMarket);
+  }
+
+  /**
    * This retruns an instruction to be used to update the market owner. This can only be executed by the current lendingMarketOwnerCached
    * @param marketWithAddress - the market address and market state object
-   * @param newMarket - the lending market state with the new configuration - to be build we new config options from the previous state
-   * @returns - an array of instructions
+   * @returns - an instruction for the new owner
    */
   updateLendingMarketOwnerIxs(marketWithAddress: MarketWithAddress): TransactionInstruction {
     const accounts: UpdateLendingMarketOwnerAccounts = {
@@ -1137,8 +1151,61 @@ export class KaminoManager {
 
     return updateLendingMarketOwner(accounts, this._kaminoLendProgramId);
   }
-} // KaminoManager
 
+  /**
+   * This will check if the given wallet is a squads multisig
+   * @param wallet - the wallet to check
+   * @returns true if the wallet is a squads multisig, false otherwise
+   */
+  static async walletIsSquadsMultisig(wallet: PublicKey) {
+    return walletIsSquadsMultisig(wallet);
+  }
+
+  /**
+   * This will get the wallet type, admins number and threshold for the given authority
+   * @param connection - the connection to use
+   * @param address - the address to get the wallet info for
+   * @returns the wallet type, admins number and threshold
+   */
+  static async getMarketOrVaultAdminInfo(connection: Connection, address: PublicKey): Promise<WalletType | undefined> {
+    try {
+      // Try to fetch vault state first
+      const vaultState = await VaultState.fetch(connection, address);
+      if (!vaultState) {
+        throw new Error('Vault not found');
+      }
+      return await KaminoManager.getWalletInfo(connection, vaultState.vaultAdminAuthority);
+    } catch (error) {
+      // If vault not found, try to fetch market state
+      const market = await LendingMarket.fetch(connection, address);
+      if (!market) {
+        return undefined;
+      }
+      return await KaminoManager.getWalletInfo(connection, market.lendingMarketOwner);
+    }
+  }
+
+  /**
+   * Helper method to get wallet information for a given authority
+   */
+  private static async getWalletInfo(connection: Connection, authority: PublicKey): Promise<WalletType> {
+    const isSquadsMultisig = await KaminoManager.walletIsSquadsMultisig(authority);
+    let walletAdminsNumber = 1;
+    let walletThreshold = 1;
+
+    if (isSquadsMultisig) {
+      const { adminsNumber, threshold } = await getSquadsMultisigAdminsAndThreshold(authority);
+      walletAdminsNumber = adminsNumber;
+      walletThreshold = threshold;
+    }
+
+    return {
+      walletType: isSquadsMultisig ? 'squadsMultisig' : 'simpleWallet',
+      walletAdminsNumber,
+      walletThreshold,
+    };
+  }
+} // KaminoManager
 export type BaseLendingMarketKey = keyof LendingMarketFields;
 const EXCLUDED_LENDING_MARKET_KEYS = [
   'version',
