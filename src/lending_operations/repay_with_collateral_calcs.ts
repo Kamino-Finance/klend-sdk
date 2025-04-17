@@ -2,7 +2,11 @@ import Decimal from 'decimal.js';
 import { KaminoMarket, KaminoObligation, KaminoReserve, numberToLamportsDecimal } from '../classes';
 import { PublicKey } from '@solana/web3.js';
 import { lamportsToDecimal } from '../classes/utils';
-import { MaxWithdrawLtvCheck, getMaxWithdrawLtvCheck } from './repay_with_collateral_operations';
+import {
+  MaxWithdrawLtvCheck,
+  getMaxCollateralFromRepayAmount,
+  getMaxWithdrawLtvCheck,
+} from './repay_with_collateral_operations';
 
 export function calcRepayAmountWithSlippage(
   kaminoMarket: KaminoMarket,
@@ -16,7 +20,7 @@ export function calcRepayAmountWithSlippage(
   repayAmountLamports: Decimal;
   flashRepayAmountLamports: Decimal;
 } {
-  const irSlippageBpsForDebt = obligation
+  const interestRateAccrued = obligation
     .estimateObligationInterestRate(
       kaminoMarket,
       debtReserve,
@@ -24,9 +28,9 @@ export function calcRepayAmountWithSlippage(
       currentSlot
     )
     .toDecimalPlaces(debtReserve.state.liquidity.mintDecimals.toNumber(), Decimal.ROUND_CEIL);
-  // add 0.1% to irSlippageBpsForDebt because we don't want to estimate slightly less than SC and end up not reapying enough
+  // add 0.1% to interestRateAccrued because we don't want to estimate slightly less than SC and end up not repaying enough
   const repayAmountIrAdjusted = amount
-    .mul(irSlippageBpsForDebt.mul(new Decimal('1.001')))
+    .mul(interestRateAccrued.mul(new Decimal('1.001')))
     .toDecimalPlaces(debtReserve.state.liquidity.mintDecimals.toNumber(), Decimal.ROUND_CEIL);
 
   let repayAmount: Decimal;
@@ -34,7 +38,7 @@ export function calcRepayAmountWithSlippage(
   if (
     repayAmountIrAdjusted.greaterThanOrEqualTo(
       lamportsToDecimal(
-        obligation.borrows.get(debtReserve.address)?.amount || new Decimal(0),
+        obligation.getBorrowByReserve(debtReserve.address)?.amount || new Decimal(0),
         debtReserve.stats.decimals
       )
     )
@@ -83,8 +87,7 @@ export function calcMaxWithdrawCollateral(
   debtReserveAddr: PublicKey,
   repayAmountLamports: Decimal
 ): {
-  repayAmountLamports: Decimal;
-  withdrawableCollLamports: Decimal;
+  maxWithdrawableCollLamports: Decimal;
   canWithdrawAllColl: boolean;
   repayingAllDebt: boolean;
 } {
@@ -92,8 +95,9 @@ export function calcMaxWithdrawCollateral(
   const borrow = obligation.getBorrowByReserve(debtReserveAddr)!;
   const depositReserve = market.getReserveByAddress(deposit.reserveAddress)!;
   const debtReserve = market.getReserveByAddress(borrow.reserveAddress)!;
-  const depositTotalLamports = deposit.amount.floor();
+  const depositTotalLamports = deposit.amount.floor(); // TODO: can remove floor, we have lamports only for deposits
 
+  // Calculate the market value of the remaining debt after repaying
   const remainingBorrowLamports = borrow.amount.sub(repayAmountLamports).ceil();
   const remainingBorrowAmount = remainingBorrowLamports.div(debtReserve.getMintFactor());
   let remainingBorrowsValue = remainingBorrowAmount.mul(debtReserve.getOracleMarketPrice());
@@ -103,17 +107,31 @@ export function calcMaxWithdrawCollateral(
       .filter((p) => !p.reserveAddress.equals(borrow.reserveAddress))
       .reduce((acc, b) => acc.add(b.marketValueRefreshed), new Decimal('0'));
   }
-  const maxWithdrawLtvCheck = getMaxWithdrawLtvCheck(obligation);
 
-  let remainingDepositsValueWithLtv = new Decimal('0');
+  const hypotheticalWithdrawLamports = getMaxCollateralFromRepayAmount(
+    repayAmountLamports.div(debtReserve.getMintFactor()),
+    debtReserve,
+    depositReserve
+  );
+
+  // Calculate the max withdraw ltv we can withdraw up to
+  const maxWithdrawLtvCheck = getMaxWithdrawLtvCheck(
+    obligation,
+    repayAmountLamports,
+    debtReserve,
+    hypotheticalWithdrawLamports,
+    depositReserve
+  );
+  // Calculate the max borrowable value remaining against deposits
+  let maxBorrowableValueRemainingAgainstDeposits = new Decimal('0');
   if (obligation.getDeposits().length > 1) {
-    remainingDepositsValueWithLtv = obligation
+    maxBorrowableValueRemainingAgainstDeposits = obligation
       .getDeposits()
       .filter((p) => !p.reserveAddress.equals(deposit.reserveAddress))
       .reduce((acc, d) => {
         const { maxLtv, liquidationLtv } = obligation.getLtvForReserve(
           market,
-          market.getReserveByAddress(d.reserveAddress)!
+          market.getExistingReserveByAddress(d.reserveAddress)
         );
         const maxWithdrawLtv =
           maxWithdrawLtvCheck === MaxWithdrawLtvCheck.LIQUIDATION_THRESHOLD ? liquidationLtv : maxLtv;
@@ -121,11 +139,11 @@ export function calcMaxWithdrawCollateral(
       }, new Decimal('0'));
   }
 
-  // can withdraw all coll
-  if (remainingDepositsValueWithLtv.gte(remainingBorrowsValue)) {
+  // if the remaining borrow value is less than the
+  // this means that the user's ltv is less or equal to the max ltv
+  if (maxBorrowableValueRemainingAgainstDeposits.gte(remainingBorrowsValue)) {
     return {
-      repayAmountLamports: repayAmountLamports,
-      withdrawableCollLamports: depositTotalLamports,
+      maxWithdrawableCollLamports: depositTotalLamports,
       canWithdrawAllColl: true,
       repayingAllDebt: repayAmountLamports.gte(borrow.amount),
     };
@@ -138,16 +156,15 @@ export function calcMaxWithdrawCollateral(
       maxWithdrawLtvCheck === MaxWithdrawLtvCheck.LIQUIDATION_THRESHOLD ? collLiquidationLtv : collMaxLtv;
     const numerator = deposit.marketValueRefreshed
       .mul(maxWithdrawLtv)
-      .add(remainingDepositsValueWithLtv)
+      .add(maxBorrowableValueRemainingAgainstDeposits)
       .sub(remainingBorrowsValue);
 
     const denominator = depositReserve.getOracleMarketPrice().mul(maxWithdrawLtv);
     const maxCollWithdrawAmount = numerator.div(denominator);
-    const withdrawableCollLamports = maxCollWithdrawAmount.mul(depositReserve.getMintFactor()).floor();
+    const maxWithdrawableCollLamports = maxCollWithdrawAmount.mul(depositReserve.getMintFactor()).floor();
 
     return {
-      repayAmountLamports: repayAmountLamports,
-      withdrawableCollLamports,
+      maxWithdrawableCollLamports,
       canWithdrawAllColl: false,
       repayingAllDebt: repayAmountLamports.gte(borrow.amount),
     };
@@ -158,7 +175,7 @@ export function estimateDebtRepaymentWithColl(props: {
   collAmount: Decimal; // in decimals
   priceDebtToColl: Decimal;
   slippagePct: Decimal;
-  flashBorrowReserveFlashLoanFeePercentage: Decimal;
+  flashLoanFeePct: Decimal;
   kaminoMarket: KaminoMarket;
   debtTokenMint: PublicKey;
   obligation: KaminoObligation;
@@ -168,34 +185,32 @@ export function estimateDebtRepaymentWithColl(props: {
     collAmount,
     priceDebtToColl,
     slippagePct,
-    flashBorrowReserveFlashLoanFeePercentage,
+    flashLoanFeePct,
     kaminoMarket,
     debtTokenMint,
     obligation,
     currentSlot,
   } = props;
-  const slippage = slippagePct.div('100');
-  const flashLoanFee = flashBorrowReserveFlashLoanFeePercentage.div('100');
-  const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
-  if (debtReserve === undefined) {
-    throw new Error('Debt reserve not found');
-  }
+  const slippageMultiplier = new Decimal(1.0).add(slippagePct.div('100'));
+  const flashLoanFeeMultiplier = new Decimal(1.0).add(flashLoanFeePct.div('100'));
 
-  const debtAfterSwap = collAmount.div(new Decimal(1.0).add(slippage)).div(priceDebtToColl);
-  const debtAfterFlashLoanRepay = debtAfterSwap.div(new Decimal(1.0).add(flashLoanFee));
+  const debtReserve = kaminoMarket.getExistingReserveByMint(debtTokenMint);
 
-  const irSlippageBpsForDebt = obligation
+  const debtAfterSwap = collAmount.div(slippageMultiplier).div(priceDebtToColl);
+  const debtAfterFlashLoanRepay = debtAfterSwap.div(flashLoanFeeMultiplier);
+
+  const accruedInterestRate = obligation
     .estimateObligationInterestRate(
       kaminoMarket,
       debtReserve,
-      obligation?.state.borrows.find((borrow) => borrow.borrowReserve?.equals(debtReserve.address))!,
+      obligation.getObligationLiquidityByReserve(debtReserve.address),
       currentSlot
     )
     .toDecimalPlaces(debtReserve.state.liquidity.mintDecimals.toNumber(), Decimal.ROUND_CEIL);
 
   // Estimate slightly more, by adding 1% to IR in order to avoid the case where UI users can repay the max we allow them
   const debtIrAdjusted = debtAfterFlashLoanRepay
-    .div(irSlippageBpsForDebt.mul(new Decimal('1.01')))
+    .div(accruedInterestRate.mul(new Decimal('1.01')))
     .toDecimalPlaces(debtReserve.state.liquidity.mintDecimals.toNumber(), Decimal.ROUND_CEIL);
 
   return debtIrAdjusted;
@@ -205,19 +220,21 @@ export function estimateCollNeededForDebtRepayment(props: {
   debtAmount: Decimal; // in decimals
   priceDebtToColl: Decimal;
   slippagePct: Decimal;
-  flashBorrowReserveFlashLoanFeePercentage: Decimal;
+  flashLoanFeePct: Decimal;
 }): Decimal {
   const {
     debtAmount, // in decimals
     priceDebtToColl,
     slippagePct,
-    flashBorrowReserveFlashLoanFeePercentage,
+    flashLoanFeePct,
   } = props;
-  const slippage = slippagePct.div('100');
-  const flashLoanFee = flashBorrowReserveFlashLoanFeePercentage.div('100');
+  const slippageRatio = slippagePct.div('100');
+  const flashLoanFeeRatio = flashLoanFeePct.div('100');
+  const slippageMultiplier = new Decimal(1.0).add(slippageRatio);
+  const flashLoanFeeMultiplier = new Decimal(1.0).add(flashLoanFeeRatio);
 
-  const debtFlashLoanRepay = debtAmount.mul(new Decimal(1.0).add(flashLoanFee));
-  const collToSwap = debtFlashLoanRepay.mul(new Decimal(1.0).add(slippage)).mul(priceDebtToColl);
+  const debtFlashLoanRepay = debtAmount.mul(flashLoanFeeMultiplier);
+  const collToSwap = debtFlashLoanRepay.mul(slippageMultiplier).mul(priceDebtToColl);
 
   return collToSwap;
 }

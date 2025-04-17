@@ -83,14 +83,8 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
   flashLoanInfo: FlashLoanInfo;
   initialInputs: RepayWithCollInitialInputs<QuoteResponse>;
 }> {
-  const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
-  const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
-  if (!collReserve) {
-    throw new Error(`Collateral reserve with mint ${collTokenMint} not found in market ${kaminoMarket.getAddress()}`);
-  }
-  if (!debtReserve) {
-    throw new Error(`Debt reserve with mint ${debtTokenMint} not found in market ${kaminoMarket.getAddress()}`);
-  }
+  const collReserve = kaminoMarket.getExistingReserveByMint(collTokenMint);
+  const debtReserve = kaminoMarket.getExistingReserveByMint(debtTokenMint);
 
   const {
     repayAmountLamports,
@@ -110,7 +104,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
       `Collateral position not found for ${collReserve.stats.symbol} reserve ${collReserve.address} in obligation ${obligation.obligationAddress}`
     );
   }
-  const { withdrawableCollLamports } = calcMaxWithdrawCollateral(
+  const { maxWithdrawableCollLamports } = calcMaxWithdrawCollateral(
     kaminoMarket,
     obligation,
     collReserve.address,
@@ -118,14 +112,8 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
     repayAmountLamports
   );
 
-  // sanity check: we have extra collateral to swap, but we want to ensure we don't quote for way more than needed and get a bad px
-  const maxCollNeededFromOracle = finalRepayAmount
-    .mul(debtReserve.getOracleMarketPrice())
-    .div(collReserve.getOracleMarketPrice())
-    .mul('1.1')
-    .mul(collReserve.getMintFactor())
-    .ceil();
-  const inputAmountLamports = Decimal.min(withdrawableCollLamports, maxCollNeededFromOracle);
+  const maxCollNeededFromOracle = getMaxCollateralFromRepayAmount(finalRepayAmount, debtReserve, collReserve);
+  const inputAmountLamports = Decimal.min(maxWithdrawableCollLamports, maxCollNeededFromOracle);
 
   // Build the repay & withdraw collateral tx to get the number of accounts
   const klendIxs: LeverageIxsOutput = await buildRepayWithCollateralIxs(
@@ -153,7 +141,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
     inputAmountLamports,
     inputMint: collTokenMint,
     outputMint: debtTokenMint,
-    amountDebtAtaBalance: new Decimal(0), // only used for kTokens
+    amountDebtAtaBalance: undefined, // only used for kTokens
   };
 
   const swapQuote = await quoter(swapQuoteInputs, uniqueKlendAccounts);
@@ -171,13 +159,13 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
       minOutAmountLamports: flashRepayAmountLamports,
       inputMint: collTokenMint,
       outputMint: debtTokenMint,
-      amountDebtAtaBalance: new Decimal(0), // only used for kTokens
+      amountDebtAtaBalance: undefined, // only used for kTokens
     },
     flashLoanInfo: klendIxs.flashLoanInfo,
     initialInputs: {
       debtRepayAmountLamports: repayAmountLamports,
       flashRepayAmountLamports,
-      maxCollateralWithdrawLamports: withdrawableCollLamports,
+      maxCollateralWithdrawLamports: maxWithdrawableCollLamports,
       swapQuote,
       currentSlot,
       klendAccounts: uniqueKlendAccounts,
@@ -223,17 +211,8 @@ export async function getRepayWithCollIxs<QuoteResponse>({
   const { debtRepayAmountLamports, flashRepayAmountLamports, maxCollateralWithdrawLamports, swapQuote } = initialInputs;
   const { inputAmountLamports: collSwapInLamports } = swapInputs;
 
-  const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
-
-  if (!collReserve) {
-    throw new Error(`Collateral reserve with mint ${collTokenMint} not found in market ${kaminoMarket.getAddress()}`);
-  }
-
-  const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
-
-  if (!debtReserve) {
-    throw new Error(`Debt reserve with mint ${debtTokenMint} not found in market ${kaminoMarket.getAddress()}`);
-  }
+  const collReserve = kaminoMarket.getExistingReserveByMint(collTokenMint);
+  const debtReserve = kaminoMarket.getExistingReserveByMint(debtTokenMint);
 
   // the client should use these values to prevent this input, but the tx may succeed, so we don't want to fail
   // there is also a chance that the tx will consume debt token from the user's ata which they would not expect
@@ -326,7 +305,13 @@ async function buildRepayWithCollateralIxs(
 
   const requestElevationGroup = !isClosingPosition && obligation.state.elevationGroup !== 0;
 
-  const maxWithdrawLtvCheck = getMaxWithdrawLtvCheck(obligation);
+  const maxWithdrawLtvCheck = getMaxWithdrawLtvCheck(
+    obligation,
+    debtRepayAmountLamports,
+    debtReserve,
+    collWithdrawLamports,
+    collReserve
+  );
 
   // 3. Repay using the flash borrowed funds & withdraw collateral to swap and pay the flash loan
   let repayAndWithdrawAction;
@@ -393,8 +378,74 @@ async function buildRepayWithCollateralIxs(
   return res;
 }
 
-export const getMaxWithdrawLtvCheck = (obligation: KaminoObligation) => {
+export const getMaxWithdrawLtvCheck = (
+  obligation: KaminoObligation,
+  repayAmountLamports: Decimal,
+  debtReserve: KaminoReserve,
+  collWithdrawAmount: Decimal,
+  collReserve: KaminoReserve
+) => {
+  const [finalLtv, finalMaxLtv] = calculatePostOperationLtv(
+    obligation,
+    repayAmountLamports,
+    debtReserve,
+    collWithdrawAmount,
+    collReserve
+  );
+
+  if (finalLtv.lte(finalMaxLtv)) {
+    return MaxWithdrawLtvCheck.MAX_LTV;
+  }
+
   return obligation.refreshedStats.userTotalBorrowBorrowFactorAdjusted.gte(obligation.refreshedStats.borrowLimit)
     ? MaxWithdrawLtvCheck.LIQUIDATION_THRESHOLD
     : MaxWithdrawLtvCheck.MAX_LTV;
 };
+
+function calculatePostOperationLtv(
+  obligation: KaminoObligation,
+  repayAmountLamports: Decimal,
+  debtReserve: KaminoReserve,
+  collWithdrawAmount: Decimal,
+  collReserve: KaminoReserve
+): [Decimal, Decimal] {
+  const repayValue = repayAmountLamports
+    .div(debtReserve.getMintFactor())
+    .mul(debtReserve.getOracleMarketPrice())
+    .mul(debtReserve.getBorrowFactor());
+  const collWithdrawValue = collWithdrawAmount.div(collReserve.getMintFactor()).mul(collReserve.getOracleMarketPrice());
+
+  // Calculate new borrow value and deposit value
+  const newBorrowBfValue = Decimal.max(
+    new Decimal(0),
+    obligation.refreshedStats.userTotalBorrowBorrowFactorAdjusted.sub(repayValue)
+  );
+  const newDepositValue = Decimal.max(
+    new Decimal(0),
+    obligation.refreshedStats.userTotalDeposit.sub(collWithdrawValue)
+  );
+  
+  const newMaxBorrowableValue = Decimal.max(
+    new Decimal(0),
+    obligation.refreshedStats.borrowLimit.sub(collWithdrawValue.mul(collReserve.stats.loanToValue))
+  );
+
+  const newMaxLtv = newMaxBorrowableValue.div(newDepositValue);
+
+  // return final ltv and final max ltv
+  return [newBorrowBfValue.div(newDepositValue), newMaxLtv];
+}
+
+export function getMaxCollateralFromRepayAmount(
+  repayAmount: Decimal,
+  debtReserve: KaminoReserve,
+  collReserve: KaminoReserve
+) {
+  // sanity check: we have extra collateral to swap, but we want to ensure we don't quote for way more than needed and get a bad px
+  return repayAmount
+    .mul(debtReserve.getOracleMarketPrice())
+    .div(collReserve.getOracleMarketPrice())
+    .mul('1.1')
+    .mul(collReserve.getMintFactor())
+    .ceil();
+}

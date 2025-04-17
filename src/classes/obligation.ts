@@ -1458,6 +1458,16 @@ export class KaminoObligation {
     );
   }
 
+  getObligationLiquidityByReserve(reserveAddress: PublicKey): ObligationLiquidity {
+    const obligationLiquidity = this.state.borrows.find((borrow) => borrow.borrowReserve.equals(reserveAddress));
+
+    if (!obligationLiquidity) {
+      throw new Error(`Obligation liquidity not found given reserve ${reserveAddress.toString()}`);
+    }
+
+    return obligationLiquidity;
+  }
+
   /**
    *
    * @returns Total borrowed amount for the specified obligation liquidity/borrow asset
