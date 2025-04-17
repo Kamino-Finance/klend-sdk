@@ -22,6 +22,11 @@ export type UpdateReserveAllocationIxs = {
   updateLUTIxs: TransactionInstruction[];
 };
 
+export type WithdrawAndBlockReserveIxs = {
+  updateReserveAllocationIxs: TransactionInstruction[];
+  investIxs: TransactionInstruction[];
+};
+
 export type UpdateVaultConfigIxs = {
   updateVaultConfigIx: TransactionInstruction;
   updateLUTIxs: TransactionInstruction[];

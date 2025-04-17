@@ -1484,6 +1484,15 @@ async function main() {
         );
     });
 
+  commands
+    .command('get-market-or-vault-admin-info')
+    .requiredOption('--address <string>', 'Address of the market or vault')
+    .action(async ({ address }) => {
+      const env = initializeClient(false, false);
+      const adminInfo = await KaminoManager.getMarketOrVaultAdminInfo(env.connection, new PublicKey(address));
+      console.log(adminInfo);
+    });
+
   await commands.parseAsync();
 }
 

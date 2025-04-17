@@ -89,6 +89,7 @@ import {
   UpdateReserveAllocationIxs,
   UpdateVaultConfigIxs,
   UserSharesForVault,
+  WithdrawAndBlockReserveIxs,
   WithdrawIxs,
 } from './vault_types';
 import { batchFetch, collToLamportsDecimal, ZERO } from '@kamino-finance/kliquidity-sdk';
@@ -441,6 +442,56 @@ export class KaminoVaultClient {
     };
 
     return updateReserveAllocationIxs;
+  }
+
+  /**
+   * This method withdraws all the funds from a reserve and blocks it from being invested by setting its weight and ctoken allocation to 0
+   * @param vault - the vault to withdraw the funds from
+   * @param reserve - the reserve to withdraw the funds from
+   * @param payer - the payer of the transaction. If not provided, the admin of the vault will be used
+   * @returns - a struct with an instruction to update the reserve allocation and an optional list of instructions to update the lookup table for the allocation changes
+   */
+  async withdrawEverythingAndBLockReserve(
+    vault: KaminoVault,
+    reserve: PublicKey,
+    payer?: PublicKey
+  ): Promise<WithdrawAndBlockReserveIxs> {
+    const vaultState = await vault.getState(this.getConnection());
+
+    const reserveIsPartOfAllocation = vaultState.vaultAllocationStrategy.some((allocation) =>
+      allocation.reserve.equals(reserve)
+    );
+
+    const withdrawAndBlockReserveIxs: WithdrawAndBlockReserveIxs = {
+      updateReserveAllocationIxs: [],
+      investIxs: [],
+    };
+    if (!reserveIsPartOfAllocation) {
+      return withdrawAndBlockReserveIxs;
+    }
+
+    const reserveState = await Reserve.fetch(this.getConnection(), reserve);
+    if (!reserveState) {
+      return withdrawAndBlockReserveIxs;
+    }
+    const reserveWithAddress: ReserveWithAddress = {
+      address: reserve,
+      state: reserveState,
+    };
+    const reserveAllocationConfig = new ReserveAllocationConfig(reserveWithAddress, 0, new Decimal(0));
+
+    // update allocation to have 0 weight and 0 cap
+    const updateAllocIxs = await this.updateReserveAllocationIxs(vault, reserveAllocationConfig);
+
+    const investPayer = payer ? payer : vaultState.vaultAdminAuthority;
+    const investIx = await this.investSingleReserveIxs(investPayer, vault, reserveWithAddress);
+    withdrawAndBlockReserveIxs.updateReserveAllocationIxs = [
+      updateAllocIxs.updateReserveAllocationIx,
+      ...updateAllocIxs.updateLUTIxs,
+    ];
+    withdrawAndBlockReserveIxs.investIxs = investIx;
+
+    return withdrawAndBlockReserveIxs;
   }
 
   /**
