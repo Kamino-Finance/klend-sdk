@@ -279,12 +279,12 @@ export class KaminoManager {
    * @param payer - the payer of the transaction. If not provided, the admin of the vault will be used
    * @returns - a struct with an instruction to update the reserve allocation and an optional list of instructions to update the lookup table for the allocation changes
    */
-  async withdrawEverythingAndBLockReserve(
+  async withdrawEverythingAndBlockInvestReserve(
     vault: KaminoVault,
     reserve: PublicKey,
     payer?: PublicKey
   ): Promise<WithdrawAndBlockReserveIxs> {
-    return this._vaultClient.withdrawEverythingAndBLockReserve(vault, reserve, payer);
+    return this._vaultClient.withdrawEverythingAndBlockInvestReserve(vault, reserve, payer);
   }
 
   /**

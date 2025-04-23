@@ -41,8 +41,6 @@ import {
     }
     await buildAndSendTxn(connection, investor, ixs, [], [], 'Disinvest all from all reserves');
   }
-
-  // then send tx to block invest
 })().catch(async (e) => {
   console.error(e);
 });

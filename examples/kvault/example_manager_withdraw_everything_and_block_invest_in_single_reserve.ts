@@ -18,7 +18,7 @@ import {
   const kaminoVault = new KaminoVault(EXAMPLE_USDC_VAULT);
   const reserveToDisinvestFrom = new PublicKey('Ga4rZytCpq1unD4DbEJ5bkHeUz9g3oh9AAFEi6vSauXp');
 
-  const withdrawAllAndBlockReserveIxs = await kaminoManager.withdrawEverythingAndBLockReserve(
+  const withdrawAllAndBlockReserveIxs = await kaminoManager.withdrawEverythingAndBlockInvestReserve(
     kaminoVault,
     reserveToDisinvestFrom,
     investor.publicKey
@@ -43,8 +43,6 @@ import {
     [],
     'Disinvest all from reserve'
   );
-
-  // then send tx to block invest
 })().catch(async (e) => {
   console.error(e);
 });
