@@ -485,11 +485,51 @@ export class KaminoVaultClient {
 
     const investPayer = payer ? payer : vaultState.vaultAdminAuthority;
     const investIx = await this.investSingleReserveIxs(investPayer, vault, reserveWithAddress);
-    withdrawAndBlockReserveIxs.updateReserveAllocationIxs = [
-      updateAllocIxs.updateReserveAllocationIx,
-      ...updateAllocIxs.updateLUTIxs,
-    ];
+    withdrawAndBlockReserveIxs.updateReserveAllocationIxs = [updateAllocIxs.updateReserveAllocationIx];
     withdrawAndBlockReserveIxs.investIxs = investIx;
+
+    return withdrawAndBlockReserveIxs;
+  }
+
+  /**
+   * This method withdraws all the funds from all the reserves and blocks them from being invested by setting their weight and ctoken allocation to 0
+   * @param vault - the vault to withdraw the invested funds from
+   * @param [vaultReservesMap] - optional parameter to pass a map of the vault reserves. If not provided, the reserves will be loaded from the vault
+   * @param [payer] - optional parameter to pass a different payer for the transaction. If not provided, the admin of the vault will be used; this is the payer for the invest ixs and it should have an ATA and some lamports (2x no_of_reserves) of the token vault
+   * @returns - a struct with an instruction to update the reserve allocation and an optional list of instructions to update the lookup table for the allocation changes
+   */
+  async withdrawEverythingFromAllReservesAndBlockInvest(
+    vault: KaminoVault,
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>,
+    payer?: PublicKey
+  ): Promise<WithdrawAndBlockReserveIxs> {
+    const vaultState = await vault.getState(this.getConnection());
+
+    const reserves = this.getVaultReserves(vaultState);
+    const withdrawAndBlockReserveIxs: WithdrawAndBlockReserveIxs = {
+      updateReserveAllocationIxs: [],
+      investIxs: [],
+    };
+
+    if (!vaultReservesMap) {
+      vaultReservesMap = await this.loadVaultReserves(vaultState);
+    }
+
+    for (const reserve of reserves) {
+      const reserveWithAddress: ReserveWithAddress = {
+        address: reserve,
+        state: vaultReservesMap.get(reserve)!.state,
+      };
+      const reserveAllocationConfig = new ReserveAllocationConfig(reserveWithAddress, 0, new Decimal(0));
+
+      // update allocation to have 0 weight and 0 cap
+      const updateAllocIxs = await this.updateReserveAllocationIxs(vault, reserveAllocationConfig);
+      withdrawAndBlockReserveIxs.updateReserveAllocationIxs.push(updateAllocIxs.updateReserveAllocationIx);
+    }
+
+    const investPayer = payer ? payer : vaultState.vaultAdminAuthority;
+    const investIxs = await this.investAllReservesIxs(investPayer, vault);
+    withdrawAndBlockReserveIxs.investIxs = investIxs;
 
     return withdrawAndBlockReserveIxs;
   }

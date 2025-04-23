@@ -89,6 +89,7 @@ import {
   UpdateReserveAllocationIxs,
   UpdateVaultConfigIxs,
   UserSharesForVault,
+  WithdrawAndBlockReserveIxs,
   WithdrawIxs,
 } from './vault_types';
 import { FarmState } from '@kamino-finance/farms-sdk/dist';
@@ -269,6 +270,36 @@ export class KaminoManager {
     reserve: PublicKey
   ): Promise<TransactionInstruction | undefined> {
     return this._vaultClient.removeReserveFromAllocationIx(vault, reserve);
+  }
+
+  /**
+   * This method withdraws all the funds from a reserve and blocks it from being invested by setting its weight and ctoken allocation to 0
+   * @param vault - the vault to withdraw the funds from
+   * @param reserve - the reserve to withdraw the funds from
+   * @param payer - the payer of the transaction. If not provided, the admin of the vault will be used
+   * @returns - a struct with an instruction to update the reserve allocation and an optional list of instructions to update the lookup table for the allocation changes
+   */
+  async withdrawEverythingAndBLockReserve(
+    vault: KaminoVault,
+    reserve: PublicKey,
+    payer?: PublicKey
+  ): Promise<WithdrawAndBlockReserveIxs> {
+    return this._vaultClient.withdrawEverythingAndBLockReserve(vault, reserve, payer);
+  }
+
+  /**
+   * This method withdraws all the funds from all the reserves and blocks them from being invested by setting their weight and ctoken allocation to 0
+   * @param vault - the vault to withdraw the invested funds from
+   * @param [vaultReservesMap] - optional parameter to pass a map of the vault reserves. If not provided, the reserves will be loaded from the vault
+   * @param [payer] - optional parameter to pass a different payer for the transaction. If not provided, the admin of the vault will be used; this is the payer for the invest ixs and it should have an ATA and some lamports (2x no_of_reserves) of the token vault
+   * @returns - a struct with an instruction to update the reserve allocation and an optional list of instructions to update the lookup table for the allocation changes
+   */
+  async withdrawEverythingFromAllReservesAndBlockInvest(
+    vault: KaminoVault,
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>,
+    payer?: PublicKey
+  ): Promise<WithdrawAndBlockReserveIxs> {
+    return this._vaultClient.withdrawEverythingFromAllReservesAndBlockInvest(vault, vaultReservesMap, payer);
   }
 
   // async closeVault(vault: KaminoVault): Promise<TransactionInstruction> {
