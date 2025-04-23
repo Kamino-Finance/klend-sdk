@@ -81,8 +81,8 @@ import { Scope } from '@kamino-finance/scope-sdk/';
   const priceCollToDebt = await getPriceAinB(collTokenMint, debtTokenMint);
   const priceDebtToColl = await getPriceAinB(debtTokenMint, collTokenMint);
 
-  console.log('Price debt to coll', priceCollToDebt.toString());
-  console.log('Price coll to debt', priceDebtToColl.toString());
+  console.log('Price coll to debt', priceCollToDebt.toString());
+  console.log('Price debt to coll', priceDebtToColl.toString());
 
   // First adjust down to 2x leverage
 

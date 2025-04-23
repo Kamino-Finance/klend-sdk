@@ -40,7 +40,7 @@ export async function getTokenToKtokenSwapper<QuoteResponse>(
     quote: SwapQuote<QuoteResponse>
   ): Promise<SwapIxs> => {
     const slippageBps = new Decimal(slippagePct).mul('100');
-    const mintInDecimals = kaminoMarket.getReserveByMint(inputs.inputMint)!.state.liquidity.mintDecimals.toNumber();
+    const mintInDecimals = kaminoMarket.getExistingReserveByMint(inputs.inputMint).getMintDecimals();
     const amountIn = lamportsToNumberDecimal(inputs.inputAmountLamports, mintInDecimals);
     console.debug('Depositing token', inputs.inputMint.toString(), ' for ', inputs.outputMint.toString(), 'ktoken');
     if (inputs.amountDebtAtaBalance === undefined) {
@@ -134,7 +134,7 @@ export async function getKtokenToTokenSwapper<QuoteResponse>(
   swapper: SwapIxsProvider<QuoteResponse>
 ): Promise<SwapIxsProvider<QuoteResponse>> {
   return async (inputs: SwapInputs, klendAccounts: Array<PublicKey>, quote: SwapQuote<QuoteResponse>) => {
-    const amountInDecimals = kaminoMarket.getReserveByMint(inputs.inputMint)!.state.liquidity.mintDecimals.toNumber();
+    const amountInDecimals = kaminoMarket.getExistingReserveByMint(inputs.inputMint).getMintDecimals();
     const amountToWithdraw = lamportsToNumberDecimal(inputs.inputAmountLamports, amountInDecimals);
     const kaminoStrategy = await kamino.getStrategyByKTokenMint(inputs.inputMint);
 
@@ -298,13 +298,13 @@ export const getExpectedTokenBalanceAfterBorrow = async (
   mint: PublicKey,
   owner: PublicKey,
   amountToBorrowLamports: Decimal,
-  amountToBorrowmintDecimals: number
+  amountToBorrowMintDecimals: number
 ) => {
   const initialUserTokenABalance = await getTokenAccountBalanceDecimal(connection, mint, owner);
 
   return initialUserTokenABalance
-    .add(lamportsToNumberDecimal(amountToBorrowLamports, amountToBorrowmintDecimals))
-    .toDecimalPlaces(amountToBorrowmintDecimals);
+    .add(lamportsToNumberDecimal(amountToBorrowLamports, amountToBorrowMintDecimals))
+    .toDecimalPlaces(amountToBorrowMintDecimals);
 };
 
 export const isBorrowingEnabled = (reserve: KaminoReserve) => {

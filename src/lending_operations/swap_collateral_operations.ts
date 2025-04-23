@@ -252,10 +252,10 @@ const FAKE_TARGET_COLL_SWAP_OUT_AMOUNT = new Decimal(1); // see the lengthy `get
 
 type SwapCollKlendIxs = {
   setupIxs: TransactionInstruction[];
-  targetCollFlashBorrowIxn: TransactionInstruction;
+  targetCollFlashBorrowIx: TransactionInstruction;
   depositTargetCollIxs: TransactionInstruction[];
   withdrawSourceCollIxs: TransactionInstruction[];
-  targetCollFlashRepayIxn: TransactionInstruction;
+  targetCollFlashRepayIx: TransactionInstruction;
   cleanupIxs: TransactionInstruction[];
   flashLoanInfo: FlashLoanInfo;
   simulationDetails: {
@@ -284,7 +284,7 @@ async function getKlendIxs(
   }
 
   const targetCollFlashBorrowedAmount = calculateTargetCollFlashBorrowedAmount(targetCollSwapOutAmount, context);
-  const { targetCollFlashBorrowIxn, targetCollFlashRepayIxn } = getTargetCollFlashLoanIxs(
+  const { targetCollFlashBorrowIx, targetCollFlashRepayIx } = getTargetCollFlashLoanIxs(
     targetCollFlashBorrowedAmount,
     setupIxs.length,
     targetCollAta,
@@ -306,10 +306,10 @@ async function getKlendIxs(
       flashBorrowReserve: context.targetCollReserve.address,
       flashLoanFee: context.targetCollReserve.getFlashLoanFee(),
     },
-    targetCollFlashBorrowIxn,
+    targetCollFlashBorrowIx,
     depositTargetCollIxs: depositTargetCollIxs.ixs,
     withdrawSourceCollIxs,
-    targetCollFlashRepayIxn,
+    targetCollFlashRepayIx,
     cleanupIxs,
     simulationDetails: {
       targetCollFlashBorrowedAmount,
@@ -364,26 +364,24 @@ function getAtaCloseIxs(context: SwapCollContext<any>) {
 
 function getTargetCollFlashLoanIxs(
   targetCollAmount: Decimal,
-  flashBorrowIxnIndex: number,
+  flashBorrowIxIndex: number,
   destinationAta: PublicKey,
   context: SwapCollContext<any>
 ) {
-  const { flashBorrowIxn: targetCollFlashBorrowIxn, flashRepayIxn: targetCollFlashRepayIxn } = getFlashLoanInstructions(
-    {
-      borrowIxnIndex: flashBorrowIxnIndex,
-      walletPublicKey: context.obligation.state.owner,
-      lendingMarketAuthority: context.market.getLendingMarketAuthority(),
-      lendingMarketAddress: context.market.getAddress(),
-      reserve: context.targetCollReserve,
-      amountLamports: targetCollAmount.mul(context.targetCollReserve.getMintFactor()),
-      destinationAta,
-      // TODO(referrals): once we support referrals, we will have to replace the placeholder args below:
-      referrerAccount: context.market.programId,
-      referrerTokenState: context.market.programId,
-      programId: context.market.programId,
-    }
-  );
-  return { targetCollFlashBorrowIxn, targetCollFlashRepayIxn };
+  const { flashBorrowIx: targetCollFlashBorrowIx, flashRepayIx: targetCollFlashRepayIx } = getFlashLoanInstructions({
+    borrowIxIndex: flashBorrowIxIndex,
+    walletPublicKey: context.obligation.state.owner,
+    lendingMarketAuthority: context.market.getLendingMarketAuthority(),
+    lendingMarketAddress: context.market.getAddress(),
+    reserve: context.targetCollReserve,
+    amountLamports: targetCollAmount.mul(context.targetCollReserve.getMintFactor()),
+    destinationAta,
+    // TODO(referrals): once we support referrals, we will have to replace the placeholder args below:
+    referrerAccount: context.market.programId,
+    referrerTokenState: context.market.programId,
+    programId: context.market.programId,
+  });
+  return { targetCollFlashBorrowIx, targetCollFlashRepayIx };
 }
 
 type DepositTargetCollIxs = {
@@ -609,11 +607,11 @@ function checkResultingObligationValid(
 function listIxs(klendIxs: SwapCollKlendIxs, externalSwapIxs?: TransactionInstruction[]): TransactionInstruction[] {
   return [
     ...klendIxs.setupIxs,
-    klendIxs.targetCollFlashBorrowIxn,
+    klendIxs.targetCollFlashBorrowIx,
     ...klendIxs.depositTargetCollIxs,
     ...klendIxs.withdrawSourceCollIxs,
     ...(externalSwapIxs || []),
-    klendIxs.targetCollFlashRepayIxn,
+    klendIxs.targetCollFlashRepayIx,
     ...klendIxs.cleanupIxs,
   ];
 }

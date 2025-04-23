@@ -13,14 +13,14 @@ import { fuzzyEqual } from '../utils';
 
 const closingPositionDiffTolerance = 0.0001;
 
-export enum FormTabs {
+export enum LeverageOption {
   deposit = 'Deposit',
   withdraw = 'Withdraw',
   adjust = 'Adjust',
   close = 'Close',
 }
 
-export interface LeverageFormsCalcsArgs {
+export interface LeverageCalcsArgs {
   depositAmount: Decimal;
   withdrawAmount: Decimal;
   deposited: Decimal;
@@ -29,14 +29,14 @@ export interface LeverageFormsCalcsArgs {
   selectedTokenMint: PublicKey;
   collTokenMint: PublicKey;
   targetLeverage: Decimal;
-  activeTab: FormTabs;
-  flashBorrowReserveFlashLoanFeePercentage: Decimal;
+  activeLeverageOption: LeverageOption;
+  flashLoanFeeRatio: Decimal;
   debtBorrowFactorPct: Decimal;
   priceCollToDebt: Decimal;
   priceDebtToColl: Decimal;
 }
 
-export interface FormsCalcsResult {
+export interface LeverageCalcsResult {
   earned: Decimal;
   totalDeposited: Decimal;
   totalBorrowed: Decimal;
@@ -56,14 +56,14 @@ export async function calculateMultiplyEffects(
     selectedTokenMint,
     collTokenMint,
     targetLeverage,
-    activeTab,
-    flashBorrowReserveFlashLoanFeePercentage,
+    activeLeverageOption,
+    flashLoanFeeRatio,
     debtBorrowFactorPct,
     priceCollToDebt,
     priceDebtToColl,
-  }: LeverageFormsCalcsArgs,
+  }: LeverageCalcsArgs,
   logEstimations = false
-): Promise<FormsCalcsResult> {
+): Promise<LeverageCalcsResult> {
   // calculate estimations for deposit operation
   const {
     adjustDepositPosition: depositModeEstimatedDepositAmount,
@@ -75,7 +75,7 @@ export async function calculateMultiplyEffects(
     targetLeverage,
     selectedTokenMint,
     collTokenMint: collTokenMint,
-    flashLoanFee: flashBorrowReserveFlashLoanFeePercentage,
+    flashLoanFee: flashLoanFeeRatio,
   });
 
   // calculate estimations for withdraw operation
@@ -101,14 +101,14 @@ export async function calculateMultiplyEffects(
     collTokenMint,
     totalDeposited: new Decimal(deposited),
     totalBorrowed: new Decimal(borrowed),
-    flashLoanFee: flashBorrowReserveFlashLoanFeePercentage, // TODO: is this the right flash borrow?
+    flashLoanFee: flashLoanFeeRatio, // TODO: is this the right flash borrow?
   });
 
   if (logEstimations) {
     console.log(
       'Estimations',
       toJson({
-        activeTab,
+        activeLeverageOption,
         depositModeEstimatedDepositAmount,
         depositModeEstimatedBorrowAmount,
         withdrawModeEstimatedDepositTokenWithdrawn,
@@ -121,16 +121,16 @@ export async function calculateMultiplyEffects(
 
   let [isClosingPosition, totalDeposited, totalBorrowed] = [false, new Decimal(0), new Decimal(0)];
 
-  switch (activeTab) {
-    case FormTabs.deposit: {
+  switch (activeLeverageOption) {
+    case LeverageOption.deposit: {
       // Deposit and Adjust never clos the position
       isClosingPosition = false;
       totalDeposited = deposited.add(depositModeEstimatedDepositAmount);
       totalBorrowed = borrowed.add(depositModeEstimatedBorrowAmount);
       break;
     }
-    case FormTabs.close:
-    case FormTabs.withdraw: {
+    case LeverageOption.close:
+    case LeverageOption.withdraw: {
       isClosingPosition =
         (withdrawModeEstimatedDepositTokenWithdrawn.gte(new Decimal(deposited)) ||
           withdrawModeEstimatedBorrowTokenWithdrawn.gte(new Decimal(borrowed)) ||
@@ -146,7 +146,7 @@ export async function calculateMultiplyEffects(
       totalBorrowed = isClosingPosition ? new Decimal(0) : borrowed.sub(withdrawModeEstimatedBorrowTokenWithdrawn);
       break;
     }
-    case FormTabs.adjust: {
+    case LeverageOption.adjust: {
       // Deposit and Adjust never clos the position
       isClosingPosition = false;
       totalDeposited = deposited.add(adjustModeEstimatedDepositAmount);
@@ -186,12 +186,12 @@ export const calcBorrowAmount = ({
   depositTokenAmount,
   targetLeverage,
   priceCollToDebt,
-  flashBorrowFee,
+  flashLoanFeeRatio,
 }: {
   depositTokenAmount: Decimal;
   targetLeverage: Decimal;
   priceCollToDebt: Decimal;
-  flashBorrowFee: Decimal;
+  flashLoanFeeRatio: Decimal;
 }) => {
   const initialCollAmountInCollToken = depositTokenAmount;
 
@@ -199,7 +199,7 @@ export const calcBorrowAmount = ({
   const finalDebtAmountInCollToken = finalCollAmountInCollToken.sub(initialCollAmountInCollToken);
   const finalDebtAmountInDebtToken = finalDebtAmountInCollToken.mul(priceCollToDebt);
 
-  const flashFeeFactor = new Decimal(1).add(flashBorrowFee);
+  const flashFeeFactor = new Decimal(1).add(flashLoanFeeRatio);
   const debtTokenToBorrow = finalDebtAmountInDebtToken.mul(flashFeeFactor);
 
   return debtTokenToBorrow;
@@ -269,7 +269,7 @@ export function calcWithdrawAmounts(params: WithdrawParams): WithdrawResult {
     depositTokenAmount: initialDepositInCollateralToken.minus(amountToWithdrawDepositToken),
     priceCollToDebt: new Decimal(priceCollToDebt),
     targetLeverage: new Decimal(targetLeverage),
-    flashBorrowFee: new Decimal(0),
+    flashLoanFeeRatio: new Decimal(0),
   });
 
   const adjustDepositPosition = currentDepositPosition.minus(targetDeposit);
@@ -347,7 +347,7 @@ export function calcAdjustAmounts({
     depositTokenAmount: initialDeposit,
     priceCollToDebt: new Decimal(priceCollToDebt),
     targetLeverage: new Decimal(targetLeverage),
-    flashBorrowFee: flashLoanFee,
+    flashLoanFeeRatio: flashLoanFee,
   });
 
   const adjustDepositPosition = targetDeposit.minus(currentDepositPosition);
@@ -393,7 +393,7 @@ export const estimateDepositMode = ({
     depositTokenAmount: depositCollTokenAmount,
     targetLeverage: new Decimal(targetLeverage),
     priceCollToDebt: new Decimal(priceCollToDebt),
-    flashBorrowFee: new Decimal(flashLoanFee),
+    flashLoanFeeRatio: new Decimal(flashLoanFee),
   });
 
   const slippageFactor = new Decimal(1).add(slippagePct.div(new Decimal(100)));
@@ -673,11 +673,11 @@ export function withdrawLeverageCalcs(
   // Add slippage for the accrued interest rate amount
   const irSlippageBpsForDebt = obligation!
     .estimateObligationInterestRate(market, debtReserve!, obligation?.state.borrows[0]!, currentSlot)
-    .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
-  // add 0.1 to irSlippageBpsForDebt because we don't want to estimate slightly less than SC and end up not reapying enough
+    .toDecimalPlaces(debtReserve?.getMintDecimals()!, Decimal.ROUND_CEIL);
+  // add 0.1 to irSlippageBpsForDebt because we don't want to estimate slightly less than SC and end up not repaying enough
   const repayAmount = initialRepayAmount
     .mul(irSlippageBpsForDebt.add('0.1').div('10_000').add('1'))
-    .toDecimalPlaces(debtReserve?.state.liquidity.mintDecimals.toNumber()!, Decimal.ROUND_CEIL);
+    .toDecimalPlaces(debtReserve?.getMintDecimals()!, Decimal.ROUND_CEIL);
 
   // 6. Get swap ixs
   // 5. Get swap estimations to understand how much we need to borrow from borrow reserve

@@ -276,7 +276,14 @@ export class KaminoReserve {
    * @returns 10^mint_decimals
    */
   getMintFactor(): Decimal {
-    return new Decimal(10).pow(this.state.liquidity.mintDecimals.toNumber());
+    return new Decimal(10).pow(this.getMintDecimals());
+  }
+
+  /**
+   * @returns mint_decimals of the liquidity token
+   */
+  getMintDecimals(): number {
+    return this.state.liquidity.mintDecimals.toNumber();
   }
 
   /**
@@ -875,7 +882,7 @@ export class KaminoReserve {
 
       // Reserve info
       symbol: parseTokenSymbol(parsedData.config.tokenInfo.name),
-      decimals: this.state.liquidity.mintDecimals.toNumber(),
+      decimals: this.getMintDecimals(),
       accumulatedProtocolFees: this.getAccumulatedProtocolFees().div(this.getMintFactor()),
       mintTotalSupply,
       depositLimitCrossedTimestamp: parsedData.liquidity.depositLimitCrossedTimestamp.toNumber(),

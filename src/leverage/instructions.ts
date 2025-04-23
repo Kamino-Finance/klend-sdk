@@ -12,7 +12,7 @@ import {
 import Decimal from 'decimal.js';
 
 export const getFlashLoanInstructions = (args: {
-  borrowIxnIndex: number;
+  borrowIxIndex: number;
   walletPublicKey: PublicKey;
   lendingMarketAuthority: PublicKey;
   lendingMarketAddress: PublicKey;
@@ -23,7 +23,7 @@ export const getFlashLoanInstructions = (args: {
   referrerTokenState: PublicKey;
   programId: PublicKey;
 }) => {
-  const flashBorrowIxn = getBorrowFlashLoanInstruction({
+  const flashBorrowIx = getBorrowFlashLoanInstruction({
     walletPublicKey: args.walletPublicKey,
     lendingMarketAuthority: args.lendingMarketAuthority,
     lendingMarketAddress: args.lendingMarketAddress,
@@ -34,8 +34,8 @@ export const getFlashLoanInstructions = (args: {
     referrerTokenState: args.referrerTokenState,
     programId: args.programId,
   });
-  const flashRepayIxn = getRepayFlashLoanInstruction({
-    borrowIxnIndex: args.borrowIxnIndex,
+  const flashRepayIx = getRepayFlashLoanInstruction({
+    borrowIxIndex: args.borrowIxIndex,
     walletPublicKey: args.walletPublicKey,
     lendingMarketAuthority: args.lendingMarketAuthority,
     lendingMarketAddress: args.lendingMarketAddress,
@@ -47,7 +47,7 @@ export const getFlashLoanInstructions = (args: {
     programId: args.programId,
   });
 
-  return { flashBorrowIxn, flashRepayIxn };
+  return { flashBorrowIx, flashRepayIx };
 };
 
 export const getBorrowFlashLoanInstruction = ({
@@ -93,7 +93,7 @@ export const getBorrowFlashLoanInstruction = ({
 };
 
 export const getRepayFlashLoanInstruction = ({
-  borrowIxnIndex,
+  borrowIxIndex,
   walletPublicKey,
   lendingMarketAuthority,
   lendingMarketAddress,
@@ -104,7 +104,7 @@ export const getRepayFlashLoanInstruction = ({
   referrerTokenState,
   programId,
 }: {
-  borrowIxnIndex: number;
+  borrowIxIndex: number;
   walletPublicKey: PublicKey;
   lendingMarketAuthority: PublicKey;
   lendingMarketAddress: PublicKey;
@@ -116,7 +116,7 @@ export const getRepayFlashLoanInstruction = ({
   programId: PublicKey;
 }) => {
   const args: FlashRepayReserveLiquidityArgs = {
-    borrowInstructionIndex: borrowIxnIndex,
+    borrowInstructionIndex: borrowIxIndex,
     liquidityAmount: new anchor.BN(amountLamports.floor().toString()),
   };
 

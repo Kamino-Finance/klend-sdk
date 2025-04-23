@@ -27,7 +27,7 @@ import {
   getComputeBudgetAndPriorityFeeIxs,
   getTransferWsolIxs,
   getLookupTableAccount,
-  removeBudgetAndAtaIxs,
+  removeBudgetIxs,
   uniqueAccountsWithProgramIds,
 } from '../utils';
 import {
@@ -128,16 +128,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
 
   console.log('Ops Calcs', toJson(calcs));
 
-  let obligationType: ObligationType;
-  if (obligationTypeTagOverride === ObligationTypeTag.Multiply) {
-    // multiply
-    obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, kaminoMarket.programId);
-  } else if (obligationTypeTagOverride === ObligationTypeTag.Leverage) {
-    // leverage
-    obligationType = new LeverageObligation(collTokenMint, debtTokenMint, kaminoMarket.programId);
-  } else {
-    throw Error('Obligation type tag not supported for leverage, please use 1 - multiply or 3 - leverage');
-  }
+  const obligationType = checkObligationType(obligationTypeTagOverride, collTokenMint, debtTokenMint, kaminoMarket);
 
   // Build the repay & withdraw collateral tx to get the number of accounts
   const klendIxs: LeverageIxsOutput = await buildDepositWithLeverageIxs(
@@ -435,7 +426,6 @@ async function buildDepositWithLeverageIxs(
   useV2Ixs: boolean,
   elevationGroupOverride?: number
 ): Promise<LeverageIxsOutput> {
-  const budgetIxs = budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxs(3000000);
   const collTokenMint = collReserve.getLiquidityMint();
   const debtTokenMint = debtReserve.getLiquidityMint();
   const collTokenAta = getAssociatedTokenAddressSync(
@@ -452,54 +442,20 @@ async function buildDepositWithLeverageIxs(
   );
 
   // 1. Create atas & budget ixs
-  let mintsToCreateAtas: Array<{ mint: PublicKey; tokenProgram: PublicKey }>;
-  if (collIsKtoken) {
-    const secondTokenAta = strategy!.strategy.tokenAMint.equals(debtTokenMint)
-      ? strategy!.strategy.tokenBMint
-      : strategy!.strategy.tokenAMint;
-    const secondTokenTokenProgarm = strategy!.strategy.tokenAMint.equals(debtTokenMint)
-      ? strategy!.strategy.tokenBTokenProgram.equals(PublicKey.default)
-        ? TOKEN_PROGRAM_ID
-        : strategy!.strategy.tokenBTokenProgram
-      : strategy!.strategy.tokenATokenProgram.equals(PublicKey.default)
-      ? TOKEN_PROGRAM_ID
-      : strategy!.strategy.tokenATokenProgram;
-    mintsToCreateAtas = [
-      {
-        mint: collTokenMint,
-        tokenProgram: collReserve.getLiquidityTokenProgram(),
-      },
-      {
-        mint: debtTokenMint,
-        tokenProgram: debtReserve.getLiquidityTokenProgram(),
-      },
-      {
-        mint: collReserve.getCTokenMint(),
-        tokenProgram: TOKEN_PROGRAM_ID,
-      },
-      {
-        mint: secondTokenAta,
-        tokenProgram: secondTokenTokenProgarm,
-      },
-    ];
-  } else {
-    mintsToCreateAtas = [
-      {
-        mint: collTokenMint,
-        tokenProgram: collReserve.getLiquidityTokenProgram(),
-      },
-      {
-        mint: debtTokenMint,
-        tokenProgram: debtReserve.getLiquidityTokenProgram(),
-      },
-      {
-        mint: collReserve!.getCTokenMint(),
-        tokenProgram: TOKEN_PROGRAM_ID,
-      },
-    ];
-  }
 
-  const atasAndCreateIxs = createAtasIdempotent(owner, mintsToCreateAtas);
+  const { budgetIxs, createAtasIxs, scopeRefreshIx } = await getSetupIxs(
+    owner,
+    market,
+    obligation,
+    collTokenMint,
+    collReserve,
+    collIsKtoken,
+    debtTokenMint,
+    debtReserve,
+    strategy,
+    scopeRefreshConfig,
+    budgetAndPriorityFeeIxs
+  );
 
   const fillWsolAtaIxs: TransactionInstruction[] = [];
   if (depositTokenIsSol) {
@@ -512,13 +468,11 @@ async function buildDepositWithLeverageIxs(
     );
   }
 
-  const scopeRefreshIxn = await getScopeRefreshIx(market, collReserve, debtReserve, obligation, scopeRefreshConfig);
-
   // 2. Flash borrow & repay the collateral amount needed for given leverage
   // if user deposits coll, then we borrow the diff, else we borrow the entire amount
-  const { flashBorrowIxn, flashRepayIxn } = getFlashLoanInstructions({
-    borrowIxnIndex:
-      budgetIxs.length + atasAndCreateIxs.length + fillWsolAtaIxs.length + (scopeRefreshIxn.length > 0 ? 1 : 0),
+  const { flashBorrowIx, flashRepayIx } = getFlashLoanInstructions({
+    borrowIxIndex:
+      budgetIxs.length + createAtasIxs.length + fillWsolAtaIxs.length + (scopeRefreshIx.length > 0 ? 1 : 0),
     walletPublicKey: owner,
     lendingMarketAuthority: market.getLendingMarketAuthority(),
     lendingMarketAddress: market.getAddress(),
@@ -559,44 +513,27 @@ async function buildDepositWithLeverageIxs(
 
   // 4. Swap
   const { swapIxs } = swapQuoteIxs;
-  const swapInstructions = removeBudgetAndAtaIxs(swapIxs, []);
+  const swapInstructions = removeBudgetIxs(swapIxs);
   const flashBorrowReserve = !collIsKtoken ? collReserve : debtReserve;
   const flashLoanInfo = {
     flashBorrowReserve: flashBorrowReserve.address,
     flashLoanFee: flashBorrowReserve.getFlashLoanFee(),
   };
 
-  if (!collIsKtoken) {
-    return {
-      flashLoanInfo,
-      instructions: [
-        ...scopeRefreshIxn,
-        ...budgetIxs,
-        ...atasAndCreateIxs.map((x) => x.createAtaIx),
-        ...fillWsolAtaIxs,
-        ...[flashBorrowIxn],
-        ...KaminoAction.actionToIxs(kaminoDepositAndBorrowAction),
-        ...swapInstructions,
-        ...[flashRepayIxn],
-      ],
-    };
-  } else {
-    return {
-      flashLoanInfo,
-      instructions: [
-        ...scopeRefreshIxn,
-        ...budgetIxs,
-        ...atasAndCreateIxs.map((x) => x.createAtaIx),
-        ...fillWsolAtaIxs,
-        ...[flashBorrowIxn],
-        ...swapInstructions,
-        ...kaminoDepositAndBorrowAction.setupIxs,
-        ...KaminoAction.actionToLendingIxs(kaminoDepositAndBorrowAction),
-        ...kaminoDepositAndBorrowAction.cleanupIxs,
-        ...[flashRepayIxn],
-      ],
-    };
-  }
+  return {
+    flashLoanInfo,
+    instructions: [
+      ...scopeRefreshIx,
+      ...budgetIxs,
+      ...createAtasIxs,
+      ...fillWsolAtaIxs,
+      ...[flashBorrowIx],
+      ...(collIsKtoken ? swapInstructions : []),
+      ...KaminoAction.actionToIxs(kaminoDepositAndBorrowAction),
+      ...(collIsKtoken ? [] : swapInstructions),
+      ...[flashRepayIx],
+    ],
+  };
 }
 
 export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
@@ -633,8 +570,7 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
   const collIsKtoken = await isKtoken(collTokenMint);
   const strategy = collIsKtoken ? (await kamino!.getStrategyByKTokenMint(collTokenMint))! : undefined;
 
-  const solTokenReserve = kaminoMarket.getReserveByMint(NATIVE_MINT);
-  const depositTokenIsSol = !solTokenReserve ? false : selectedTokenMint.equals(solTokenReserve!.getLiquidityMint());
+  const inputTokenIsSol = selectedTokenMint.equals(NATIVE_MINT);
 
   const calcs = withdrawLeverageCalcs(
     kaminoMarket,
@@ -662,7 +598,7 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
     referrer,
     currentSlot,
     isClosingPosition,
-    depositTokenIsSol,
+    inputTokenIsSol,
     scopeRefreshConfig,
     calcs,
     budgetAndPriorityFeeIxs,
@@ -678,16 +614,13 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
 
   const uniqueKlendAccounts = uniqueAccountsWithProgramIds(klendIxs.instructions);
 
-  const swapInputAmount = toLamports(
-    calcs.collTokenSwapIn,
-    collReserve!.state.liquidity.mintDecimals.toNumber()
-  ).ceil();
+  const swapInputAmount = toLamports(calcs.collTokenSwapIn, collReserve!.getMintDecimals()).ceil();
 
   const swapInputsForQuote: SwapInputs = {
     inputAmountLamports: swapInputAmount.mul(new Decimal(1).add(quoteBufferBps.div(FullBPS))),
     inputMint: collTokenMint,
     outputMint: debtTokenMint,
-    amountDebtAtaBalance: new Decimal(0), // Only needed for ktokens deposits
+    amountDebtAtaBalance: undefined, // Only needed for ktokens deposits
   };
 
   const swapQuote = await quoter(swapInputsForQuote, uniqueKlendAccounts);
@@ -709,10 +642,7 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
     slippagePct
   );
 
-  const swapInputAmountQuotePrice = toLamports(
-    calcsQuotePrice.collTokenSwapIn,
-    collReserve!.state.liquidity.mintDecimals.toNumber()
-  ).ceil();
+  const swapInputAmountQuotePrice = toLamports(calcsQuotePrice.collTokenSwapIn, collReserve!.getMintDecimals()).ceil();
 
   return {
     swapInputs: {
@@ -762,8 +692,7 @@ export async function getWithdrawWithLeverageIxs<QuoteResponse>({
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
 
-  const solTokenReserve = kaminoMarket.getReserveByMint(NATIVE_MINT);
-  const depositTokenIsSol = !solTokenReserve ? false : selectedTokenMint.equals(solTokenReserve!.getLiquidityMint());
+  const inputTokenIsSol = selectedTokenMint.equals(NATIVE_MINT);
   const { swapInputs, initialInputs } = await getWithdrawWithLeverageSwapInputs({
     owner,
     kaminoMarket,
@@ -826,7 +755,7 @@ export async function getWithdrawWithLeverageIxs<QuoteResponse>({
     referrer,
     currentSlot,
     isClosingPosition,
-    depositTokenIsSol,
+    inputTokenIsSol,
     scopeRefreshConfig,
     initialInputs.calcs,
     budgetAndPriorityFeeIxs,
@@ -877,62 +806,26 @@ export async function buildWithdrawWithLeverageIxs(
     debtReserve.getLiquidityTokenProgram()
   );
   // 1. Create atas & budget txns & user metadata
-  let mintsToCreateAtas: Array<{ mint: PublicKey; tokenProgram: PublicKey }>;
-  if (collIsKtoken) {
-    const secondTokenAta = strategy!.strategy.tokenAMint.equals(debtTokenMint)
-      ? strategy!.strategy.tokenBMint
-      : strategy!.strategy.tokenAMint;
-    const secondTokenTokenProgram = strategy!.strategy.tokenAMint.equals(debtTokenMint)
-      ? strategy!.strategy.tokenBTokenProgram.equals(PublicKey.default)
-        ? TOKEN_PROGRAM_ID
-        : strategy!.strategy.tokenBTokenProgram
-      : strategy!.strategy.tokenATokenProgram.equals(PublicKey.default)
-      ? TOKEN_PROGRAM_ID
-      : strategy!.strategy.tokenATokenProgram;
-    mintsToCreateAtas = [
-      {
-        mint: collTokenMint,
-        tokenProgram: collReserve.getLiquidityTokenProgram(),
-      },
-      {
-        mint: debtTokenMint,
-        tokenProgram: debtReserve.getLiquidityTokenProgram(),
-      },
-      {
-        mint: collReserve.getCTokenMint(),
-        tokenProgram: TOKEN_PROGRAM_ID,
-      },
-      {
-        mint: secondTokenAta,
-        tokenProgram: secondTokenTokenProgram,
-      },
-    ];
-  } else {
-    mintsToCreateAtas = [
-      {
-        mint: collTokenMint,
-        tokenProgram: collReserve!.getLiquidityTokenProgram(),
-      },
-      {
-        mint: debtTokenMint,
-        tokenProgram: debtReserve!.getLiquidityTokenProgram(),
-      },
-      {
-        mint: collReserve!.getCTokenMint(),
-        tokenProgram: TOKEN_PROGRAM_ID,
-      },
-    ];
-  }
 
-  const atasAndCreateIxs = createAtasIdempotent(owner, mintsToCreateAtas);
+  const { budgetIxs, createAtasIxs, scopeRefreshIx } = await getSetupIxs(
+    owner,
+    market,
+    obligation,
+    collTokenMint,
+    collReserve,
+    collIsKtoken,
+    debtTokenMint,
+    debtReserve,
+    strategy,
+    scopeRefreshConfig,
+    budgetAndPriorityFeeIxs
+  );
 
   const closeWsolAtaIxs: TransactionInstruction[] = [];
   if (depositTokenIsSol || debtTokenMint.equals(NATIVE_MINT)) {
     const wsolAta = getAssociatedTokenAddress(NATIVE_MINT, owner, false);
     closeWsolAtaIxs.push(createCloseAccountInstruction(wsolAta, owner, owner, [], TOKEN_PROGRAM_ID));
   }
-
-  const budgetIxs = budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxs(3000000);
 
   // TODO: Mihai/Marius check if we can improve this logic and not convert any SOL
   // This is here so that we have enough wsol to repay in case the kAB swapped to sol after estimates is not enough
@@ -949,14 +842,12 @@ export async function buildWithdrawWithLeverageIxs(
     );
   }
 
-  const scopeRefreshIxn = await getScopeRefreshIx(market, collReserve, debtReserve, obligation, scopeRefreshConfig);
-
   // 2. Prepare the flash borrow and flash repay amounts and ixs
   // We borrow exactly how much we need to repay
   // and repay that + flash amount fee
-  const { flashBorrowIxn, flashRepayIxn } = getFlashLoanInstructions({
-    borrowIxnIndex:
-      budgetIxs.length + atasAndCreateIxs.length + fillWsolAtaIxs.length + (scopeRefreshIxn.length > 0 ? 1 : 0),
+  const { flashBorrowIx, flashRepayIx } = getFlashLoanInstructions({
+    borrowIxIndex:
+      budgetIxs.length + createAtasIxs.length + fillWsolAtaIxs.length + (scopeRefreshIx.length > 0 ? 1 : 0),
     walletPublicKey: owner,
     lendingMarketAuthority: market.getLendingMarketAuthority(),
     lendingMarketAddress: market.getAddress(),
@@ -990,7 +881,7 @@ export async function buildWithdrawWithLeverageIxs(
     referrer
   );
 
-  const swapInstructions = removeBudgetAndAtaIxs(swapQuoteIxs.swapIxs, []);
+  const swapInstructions = removeBudgetIxs(swapQuoteIxs.swapIxs);
 
   return {
     flashLoanInfo: {
@@ -998,14 +889,14 @@ export async function buildWithdrawWithLeverageIxs(
       flashBorrowReserve: debtReserve.address,
     },
     instructions: [
-      ...scopeRefreshIxn,
+      ...scopeRefreshIx,
       ...budgetIxs,
-      ...atasAndCreateIxs.map((x) => x.createAtaIx),
+      ...createAtasIxs,
       ...fillWsolAtaIxs,
-      ...[flashBorrowIxn],
+      ...[flashBorrowIx],
       ...KaminoAction.actionToIxs(repayAndWithdrawAction),
       ...swapInstructions,
-      ...[flashRepayIxn],
+      ...[flashRepayIx],
       ...closeWsolAtaIxs,
     ],
   };
@@ -1143,7 +1034,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
 
     const swapInputAmountQuotePrice = toLamports(
       !collIsKtoken ? calcsQuotePrice.borrowAmount : calcsQuotePrice.amountToFlashBorrowDebt,
-      debtReserve.state.liquidity.mintDecimals.toNumber()
+      debtReserve.getMintDecimals()
     ).ceil();
 
     let expectedDebtTokenAtaBalance = new Decimal(0);
@@ -1156,7 +1047,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
           !collIsKtoken ? calcsQuotePrice.borrowAmount : calcsQuotePrice.amountToFlashBorrowDebt,
           debtReserve.stats.decimals
         ).floor(),
-        debtReserve.state.liquidity.mintDecimals.toNumber()
+        debtReserve.getMintDecimals()
       );
     }
 
@@ -1218,7 +1109,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
       inputAmountLamports: swapInputAmount.mul(new Decimal(1).add(quoteBufferBps.div(FullBPS))),
       inputMint: collTokenMint,
       outputMint: debtTokenMint,
-      amountDebtAtaBalance: new Decimal(0), // Only needed for ktokens deposits
+      amountDebtAtaBalance: undefined, // Only needed for ktokens deposits
     };
 
     const swapQuote = await quoter(swapInputsForQuote, uniqueKlendAccounts);
@@ -1243,7 +1134,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
 
     const swapInputAmountQuotePrice = toLamports(
       calcsQuotePrice.withdrawAmountWithSlippageAndFlashLoanFee,
-      collReserve.state.liquidity.mintDecimals.toNumber()
+      collReserve.getMintDecimals()
     ).ceil();
 
     return {
@@ -1252,7 +1143,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         minOutAmountLamports: toLamports(calcsQuotePrice.adjustBorrowPosition.abs(), debtReserve.stats.decimals),
         inputMint: collTokenMint,
         outputMint: debtTokenMint,
-        amountDebtAtaBalance: new Decimal(0), // Only needed for ktokens deposits
+        amountDebtAtaBalance: undefined, // Only needed for ktokens deposits
       },
       flashLoanInfo: klendIxs.flashLoanInfo,
       initialInputs: {
@@ -1442,83 +1333,39 @@ async function buildIncreaseLeverageIxs(
   budgetAndPriorityFeeIxs: TransactionInstruction[] | undefined,
   useV2Ixs: boolean
 ): Promise<LeverageIxsOutput> {
-  const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
-  const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
+  const collReserve = kaminoMarket.getExistingReserveByMint(collTokenMint);
+  const debtReserve = kaminoMarket.getExistingReserveByMint(debtTokenMint);
   const debtTokenAta = getAssociatedTokenAddressSync(
     debtTokenMint,
     owner,
     false,
-    debtReserve!.getLiquidityTokenProgram()
+    debtReserve.getLiquidityTokenProgram()
   );
   const collTokenAta = getAssociatedTokenAddressSync(
     collTokenMint,
     owner,
     false,
-    collReserve!.getLiquidityTokenProgram()
+    collReserve.getLiquidityTokenProgram()
   );
 
   // 1. Create atas & budget txns
-  const budgetIxs = budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxs(3000000);
-  let mintsToCreateAtas: Array<{ mint: PublicKey; tokenProgram: PublicKey }>;
-  if (collIsKtoken) {
-    const secondTokenAta = strategy!.strategy.tokenAMint.equals(debtTokenMint)
-      ? strategy!.strategy.tokenBMint
-      : strategy!.strategy.tokenAMint;
-    const secondTokenTokenProgarm = strategy?.strategy.tokenAMint.equals(debtTokenMint)
-      ? strategy!.strategy.tokenBTokenProgram.equals(PublicKey.default)
-        ? TOKEN_PROGRAM_ID
-        : strategy!.strategy.tokenBTokenProgram
-      : strategy!.strategy.tokenATokenProgram.equals(PublicKey.default)
-      ? TOKEN_PROGRAM_ID
-      : strategy!.strategy.tokenATokenProgram;
-    mintsToCreateAtas = [
-      {
-        mint: collTokenMint,
-        tokenProgram: collReserve!.getLiquidityTokenProgram(),
-      },
-      {
-        mint: debtTokenMint,
-        tokenProgram: debtReserve!.getLiquidityTokenProgram(),
-      },
-      {
-        mint: collReserve!.getCTokenMint(),
-        tokenProgram: TOKEN_PROGRAM_ID,
-      },
-      {
-        mint: secondTokenAta,
-        tokenProgram: secondTokenTokenProgarm,
-      },
-    ];
-  } else {
-    mintsToCreateAtas = [
-      {
-        mint: collTokenMint,
-        tokenProgram: collReserve!.getLiquidityTokenProgram(),
-      },
-      {
-        mint: debtTokenMint,
-        tokenProgram: debtReserve!.getLiquidityTokenProgram(),
-      },
-      {
-        mint: collReserve!.getCTokenMint(),
-        tokenProgram: TOKEN_PROGRAM_ID,
-      },
-    ];
-  }
-
-  const atasAndCreateIxs = createAtasIdempotent(owner, mintsToCreateAtas);
-
-  const scopeRefreshIxn = await getScopeRefreshIx(
+  const { budgetIxs, createAtasIxs, scopeRefreshIx } = await getSetupIxs(
+    owner,
     kaminoMarket,
-    collReserve!,
-    debtReserve!,
     obligation,
-    scopeRefreshConfig
+    collTokenMint,
+    collReserve,
+    collIsKtoken,
+    debtTokenMint,
+    debtReserve,
+    strategy,
+    scopeRefreshConfig,
+    budgetAndPriorityFeeIxs
   );
 
   // 2. Create borrow flash loan instruction
-  const { flashBorrowIxn, flashRepayIxn } = getFlashLoanInstructions({
-    borrowIxnIndex: budgetIxs.length + atasAndCreateIxs.length + (scopeRefreshIxn.length > 0 ? 1 : 0), // TODO: how about user metadata ixs
+  const { flashBorrowIx, flashRepayIx } = getFlashLoanInstructions({
+    borrowIxIndex: budgetIxs.length + createAtasIxs.length + (scopeRefreshIx.length > 0 ? 1 : 0), // TODO: how about user metadata ixs
     walletPublicKey: owner,
     lendingMarketAuthority: kaminoMarket.getLendingMarketAuthority(),
     lendingMarketAddress: kaminoMarket.getAddress(),
@@ -1567,29 +1414,19 @@ async function buildIncreaseLeverageIxs(
     currentSlot
   );
 
-  const swapInstructions = removeBudgetAndAtaIxs(swapQuoteIxs.swapIxs, []);
+  const swapInstructions = removeBudgetIxs(swapQuoteIxs.swapIxs);
 
-  const ixs = !collIsKtoken
-    ? [
-        ...scopeRefreshIxn,
-        ...budgetIxs,
-        ...atasAndCreateIxs.map((x) => x.createAtaIx),
-        ...[flashBorrowIxn],
-        ...KaminoAction.actionToIxs(depositAction),
-        ...KaminoAction.actionToIxs(borrowAction),
-        ...swapInstructions,
-        ...[flashRepayIxn],
-      ]
-    : [
-        ...scopeRefreshIxn,
-        ...budgetIxs,
-        ...atasAndCreateIxs.map((x) => x.createAtaIx),
-        ...[flashBorrowIxn],
-        ...swapInstructions,
-        ...KaminoAction.actionToIxs(depositAction),
-        ...KaminoAction.actionToIxs(borrowAction),
-        ...[flashRepayIxn],
-      ];
+  const ixs = [
+    ...scopeRefreshIx,
+    ...budgetIxs,
+    ...createAtasIxs,
+    ...[flashBorrowIx],
+    ...(collIsKtoken ? swapInstructions : []),
+    ...KaminoAction.actionToIxs(depositAction),
+    ...KaminoAction.actionToIxs(borrowAction),
+    ...(collIsKtoken ? [] : swapInstructions),
+    ...[flashRepayIx],
+  ];
 
   const flashBorrowReserve = !collIsKtoken ? collReserve! : debtReserve!;
   const res: LeverageIxsOutput = {
@@ -1622,64 +1459,29 @@ async function buildDecreaseLeverageIxs(
   budgetAndPriorityFeeIxs: TransactionInstruction[] | undefined,
   useV2Ixs: boolean
 ): Promise<LeverageIxsOutput> {
-  const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
-  const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
+  const collReserve = kaminoMarket.getExistingReserveByMint(collTokenMint);
+  const debtReserve = kaminoMarket.getExistingReserveByMint(debtTokenMint);
   const debtTokenAta = getAssociatedTokenAddressSync(
     debtTokenMint,
     owner,
     false,
-    debtReserve!.getLiquidityTokenProgram()
+    debtReserve.getLiquidityTokenProgram()
   );
 
   // 1. Create atas & budget txns
-  const budgetIxs = budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxs(3000000);
-  let mintsToCreateAtas: Array<{ mint: PublicKey; tokenProgram: PublicKey }>;
-  if (collIsKtoken) {
-    const secondTokenAta = strategy!.strategy.tokenAMint.equals(debtTokenMint)
-      ? strategy!.strategy.tokenBMint
-      : strategy!.strategy.tokenAMint;
-    const secondTokenTokenProgarm = strategy?.strategy.tokenAMint.equals(debtTokenMint)
-      ? strategy!.strategy.tokenBTokenProgram.equals(PublicKey.default)
-        ? TOKEN_PROGRAM_ID
-        : strategy!.strategy.tokenBTokenProgram
-      : strategy!.strategy.tokenATokenProgram.equals(PublicKey.default)
-      ? TOKEN_PROGRAM_ID
-      : strategy!.strategy.tokenATokenProgram;
-    mintsToCreateAtas = [
-      {
-        mint: collTokenMint,
-        tokenProgram: collReserve!.getLiquidityTokenProgram(),
-      },
-      {
-        mint: debtTokenMint,
-        tokenProgram: debtReserve!.getLiquidityTokenProgram(),
-      },
-      {
-        mint: collReserve!.getCTokenMint(),
-        tokenProgram: TOKEN_PROGRAM_ID,
-      },
-      {
-        mint: secondTokenAta,
-        tokenProgram: secondTokenTokenProgarm,
-      },
-    ];
-  } else {
-    mintsToCreateAtas = [
-      {
-        mint: collTokenMint,
-        tokenProgram: collReserve!.getLiquidityTokenProgram(),
-      },
-      {
-        mint: debtTokenMint,
-        tokenProgram: debtReserve!.getLiquidityTokenProgram(),
-      },
-      {
-        mint: collReserve!.getCTokenMint(),
-        tokenProgram: TOKEN_PROGRAM_ID,
-      },
-    ];
-  }
-  const atasAndCreateIxs = createAtasIdempotent(owner, mintsToCreateAtas);
+  const { budgetIxs, createAtasIxs, scopeRefreshIx } = await getSetupIxs(
+    owner,
+    kaminoMarket,
+    obligation,
+    collTokenMint,
+    collReserve,
+    collIsKtoken,
+    debtTokenMint,
+    debtReserve,
+    strategy,
+    scopeRefreshConfig,
+    budgetAndPriorityFeeIxs
+  );
 
   // TODO: Mihai/Marius check if we can improve this logic and not convert any SOL
   // This is here so that we have enough wsol to repay in case the kAB swapped to sol after estimates is not enough
@@ -1697,18 +1499,10 @@ async function buildDecreaseLeverageIxs(
     );
   }
 
-  const scopeRefreshIxn = await getScopeRefreshIx(
-    kaminoMarket,
-    collReserve!,
-    debtReserve!,
-    obligation,
-    scopeRefreshConfig
-  );
-
   // 3. Flash borrow & repay amount to repay (debt)
-  const { flashBorrowIxn, flashRepayIxn } = getFlashLoanInstructions({
-    borrowIxnIndex:
-      budgetIxs.length + atasAndCreateIxs.length + fillWsolAtaIxs.length + (scopeRefreshIxn.length > 0 ? 1 : 0),
+  const { flashBorrowIx, flashRepayIx } = getFlashLoanInstructions({
+    borrowIxIndex:
+      budgetIxs.length + createAtasIxs.length + fillWsolAtaIxs.length + (scopeRefreshIx.length > 0 ? 1 : 0),
     walletPublicKey: owner,
     lendingMarketAuthority: kaminoMarket.getLendingMarketAuthority(),
     lendingMarketAddress: kaminoMarket.getAddress(),
@@ -1756,18 +1550,18 @@ async function buildDecreaseLeverageIxs(
     currentSlot
   );
 
-  const swapInstructions = removeBudgetAndAtaIxs(swapQuoteIxs.swapIxs, []);
+  const swapInstructions = removeBudgetIxs(swapQuoteIxs.swapIxs);
 
   const ixs = [
-    ...scopeRefreshIxn,
+    ...scopeRefreshIx,
     ...budgetIxs,
-    ...atasAndCreateIxs.map((x) => x.createAtaIx),
+    ...createAtasIxs,
     ...fillWsolAtaIxs,
-    ...[flashBorrowIxn],
+    ...[flashBorrowIx],
     ...KaminoAction.actionToIxs(repayAction),
     ...KaminoAction.actionToIxs(withdrawAction),
     ...swapInstructions,
-    ...[flashRepayIxn],
+    ...[flashRepayIx],
     ...closeWsolAtaIxs,
   ];
 
@@ -1781,6 +1575,47 @@ async function buildDecreaseLeverageIxs(
 
   return res;
 }
+
+export const getSetupIxs = async (
+  owner: PublicKey,
+  kaminoMarket: KaminoMarket,
+  obligation: KaminoObligation | ObligationType | undefined,
+  collTokenMint: PublicKey,
+  collReserve: KaminoReserve,
+  collIsKtoken: boolean,
+  debtTokenMint: PublicKey,
+  debtReserve: KaminoReserve,
+  strategy: StrategyWithAddress | undefined,
+  scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+  budgetAndPriorityFeeIxs: TransactionInstruction[] | undefined
+) => {
+  const budgetIxs = budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxs(3000000);
+
+  const mintsWithTokenPrograms = getTokenMintsWithTokenPrograms(
+    collTokenMint,
+    collReserve,
+    debtTokenMint,
+    debtReserve,
+    collIsKtoken,
+    strategy
+  );
+
+  const createAtasIxs = createAtasIdempotent(owner, mintsWithTokenPrograms).map((x) => x.createAtaIx);
+
+  const scopeRefreshIx = await getScopeRefreshIx(
+    kaminoMarket,
+    collReserve,
+    debtReserve,
+    obligation,
+    scopeRefreshConfig
+  );
+
+  return {
+    budgetIxs,
+    createAtasIxs,
+    scopeRefreshIx,
+  };
+};
 
 export const getScopeRefreshIx = async (
   market: KaminoMarket,
@@ -1813,4 +1648,76 @@ export const getScopeRefreshIx = async (
   }
 
   return scopeRefreshIxs;
+};
+
+const checkObligationType = (
+  obligationTypeTag: ObligationTypeTag,
+  collTokenMint: PublicKey,
+  debtTokenMint: PublicKey,
+  kaminoMarket: KaminoMarket
+) => {
+  let obligationType: ObligationType;
+  if (obligationTypeTag === ObligationTypeTag.Multiply) {
+    // multiply
+    obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, kaminoMarket.programId);
+  } else if (obligationTypeTag === ObligationTypeTag.Leverage) {
+    // leverage
+    obligationType = new LeverageObligation(collTokenMint, debtTokenMint, kaminoMarket.programId);
+  } else {
+    throw Error('Obligation type tag not supported for leverage, please use 1 - multiply or 3 - leverage');
+  }
+
+  return obligationType;
+};
+
+type MintWithTokenProgram = {
+  mint: PublicKey;
+  tokenProgram: PublicKey;
+};
+
+const getTokenMintsWithTokenPrograms = (
+  collTokenMint: PublicKey,
+  collReserve: KaminoReserve,
+  debtTokenMint: PublicKey,
+  debtReserve: KaminoReserve,
+  collIsKtoken: boolean,
+  strategy: StrategyWithAddress | undefined
+): Array<MintWithTokenProgram> => {
+  const mintsWithTokenPrograms = [
+    {
+      mint: collTokenMint,
+      tokenProgram: collReserve.getLiquidityTokenProgram(),
+    },
+    {
+      mint: debtTokenMint,
+      tokenProgram: debtReserve.getLiquidityTokenProgram(),
+    },
+    {
+      mint: collReserve.getCTokenMint(),
+      tokenProgram: TOKEN_PROGRAM_ID,
+    },
+  ];
+
+  if (collIsKtoken) {
+    let kTokenAta: PublicKey;
+    let kTokenTokenProgram: PublicKey;
+    if (strategy!.strategy.tokenAMint.equals(debtTokenMint)) {
+      kTokenAta = strategy!.strategy.tokenBMint;
+      kTokenTokenProgram = strategy!.strategy.tokenBTokenProgram.equals(PublicKey.default)
+        ? TOKEN_PROGRAM_ID
+        : strategy!.strategy.tokenBTokenProgram;
+    } else {
+      kTokenAta = strategy!.strategy.tokenAMint;
+      kTokenTokenProgram = strategy!.strategy.tokenATokenProgram.equals(PublicKey.default)
+        ? TOKEN_PROGRAM_ID
+        : strategy!.strategy.tokenATokenProgram;
+    }
+
+    mintsWithTokenPrograms.push({
+      mint: kTokenAta,
+      tokenProgram: kTokenTokenProgram,
+    });
+  }
+
+  return mintsWithTokenPrograms;
 };

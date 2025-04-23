@@ -2602,7 +2602,6 @@ export class KaminoAction {
               });
 
               const eModeGroup = groups.find((group) => group.id === eModeGroupWithMaxLtvAndDebtReserve)!.id;
-              console.log('Setting eModeGroup to', eModeGroup);
 
               if (
                 eModeGroup !== 0 &&

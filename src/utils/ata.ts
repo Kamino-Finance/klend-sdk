@@ -7,14 +7,7 @@ import {
   createCloseAccountInstruction,
   getAssociatedTokenAddressSync,
 } from '@solana/spl-token';
-import {
-  AccountInfo,
-  ComputeBudgetProgram,
-  Connection,
-  PublicKey,
-  SystemProgram,
-  TransactionInstruction,
-} from '@solana/web3.js';
+import { AccountInfo, Connection, PublicKey, SystemProgram, TransactionInstruction } from '@solana/web3.js';
 import Decimal from 'decimal.js';
 import { collToLamportsDecimal, DECIMALS_SOL } from '@kamino-finance/kliquidity-sdk/dist';
 
@@ -135,24 +128,6 @@ export function getTransferWsolIxs(owner: PublicKey, ata: PublicKey, amountLampo
   );
 
   return ixs;
-}
-
-export function removeBudgetAndAtaIxs(ixs: TransactionInstruction[], mints: string[]): TransactionInstruction[] {
-  return ixs.filter((ix) => {
-    const { programId, keys } = ix;
-
-    if (programId.equals(ComputeBudgetProgram.programId)) {
-      return false;
-    }
-
-    if (programId.equals(ASSOCIATED_TOKEN_PROGRAM_ID)) {
-      const mint = keys[3];
-
-      return !mints.includes(mint.pubkey.toString());
-    }
-
-    return true;
-  });
 }
 
 export async function getTokenAccountBalance(connection: Connection, tokenAccount: PublicKey): Promise<number> {

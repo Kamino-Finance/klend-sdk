@@ -128,10 +128,10 @@ export function getJupiterQuoter(
 
     const inAmount = new Decimal(quoteResponse.inAmount).div(inputMintReserve.getMintFactor());
     const minAmountOut = new Decimal(quoteResponse.otherAmountThreshold).div(outputMintReserve.getMintFactor());
-    const priceDebtToColl = minAmountOut.div(inAmount);
+    const priceAInB = minAmountOut.div(inAmount);
 
     return {
-      priceAInB: priceDebtToColl,
+      priceAInB,
       quoteResponse,
     };
   };

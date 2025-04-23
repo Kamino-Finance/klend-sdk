@@ -281,3 +281,15 @@ export function uniqueAccountsWithProgramIds(
 
   return uniqueAccounts.toArray();
 }
+
+export function removeBudgetIxs(ixs: TransactionInstruction[]): TransactionInstruction[] {
+  return ixs.filter((ix) => {
+    const { programId } = ix;
+
+    if (programId.equals(ComputeBudgetProgram.programId)) {
+      return false;
+    }
+
+    return true;
+  });
+}

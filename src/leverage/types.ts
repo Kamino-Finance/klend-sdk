@@ -1,7 +1,7 @@
 import { AddressLookupTableAccount, PublicKey, TransactionInstruction } from '@solana/web3.js';
 import Decimal from 'decimal.js';
 import { KaminoMarket, KaminoObligation } from '../classes';
-import { InstructionsWithLookupTables, Kamino, StrategyWithAddress } from '@kamino-finance/kliquidity-sdk';
+import { Kamino, StrategyWithAddress } from '@kamino-finance/kliquidity-sdk';
 import { ObligationType, ObligationTypeTag, ScopePriceRefreshConfig } from '../utils';
 
 export type SwapQuoteProvider<QuoteResponse> = (
@@ -48,23 +48,42 @@ export type SwapInputs = {
   amountDebtAtaBalance: Decimal | undefined;
 };
 
-export type KaminoDepositSwapOverride = (
-  kaminoMarket: KaminoMarket,
-  kamino: Kamino,
-  depositor: PublicKey,
-  amountInMint: PublicKey,
-  amountOutMint: PublicKey,
-  amountIn: Decimal,
-  slippageFactor: Decimal,
-  amountDebtAtaBalance: Decimal
-) => Promise<InstructionsWithLookupTables>;
-
-export type DepositLeverageIxsResponse<QuoteResponse> = {
+export type BaseLeverageIxsResponse = {
   ixs: TransactionInstruction[];
   lookupTables: AddressLookupTableAccount[];
   swapInputs: SwapInputs;
   flashLoanInfo: FlashLoanInfo;
-  initialInputs: DepositLeverageInitialInputs<QuoteResponse>;
+};
+
+export type LeverageInitialInputs<LeverageCalcsResult, QuoteResponse> = {
+  calcs: LeverageCalcsResult;
+  swapQuote: SwapQuote<QuoteResponse>;
+  currentSlot: number;
+  klendAccounts: Array<PublicKey>;
+  collIsKtoken: boolean;
+  obligation: KaminoObligation | ObligationType | undefined;
+  strategy: StrategyWithAddress | undefined;
+};
+
+export interface BaseLeverageSwapInputsProps<QuoteResponse> {
+  owner: PublicKey;
+  kaminoMarket: KaminoMarket;
+  debtTokenMint: PublicKey;
+  collTokenMint: PublicKey;
+  referrer: PublicKey;
+  currentSlot: number;
+  slippagePct: Decimal;
+  budgetAndPriorityFeeIxs?: TransactionInstruction[];
+  kamino: Kamino | undefined;
+  scopeRefreshConfig?: ScopePriceRefreshConfig;
+  quoteBufferBps: Decimal;
+  isKtoken: IsKtokenProvider;
+  quoter: SwapQuoteProvider<QuoteResponse>;
+  useV2Ixs: boolean;
+}
+
+export type DepositLeverageIxsResponse<QuoteResponse> = BaseLeverageIxsResponse & {
+  initialInputs: LeverageInitialInputs<DepositLeverageCalcsResult, QuoteResponse>;
 };
 
 export type DepositLeverageInitialInputs<QuoteResponse> = {
@@ -77,31 +96,17 @@ export type DepositLeverageInitialInputs<QuoteResponse> = {
   strategy: StrategyWithAddress | undefined;
 };
 
-export interface DepositWithLeverageSwapInputsProps<QuoteResponse> {
-  owner: PublicKey;
-  kaminoMarket: KaminoMarket;
-  debtTokenMint: PublicKey;
-  collTokenMint: PublicKey;
+export interface DepositWithLeverageSwapInputsProps<QuoteResponse> extends BaseLeverageSwapInputsProps<QuoteResponse> {
   obligation: KaminoObligation | null;
   obligationTypeTagOverride: ObligationTypeTag;
-  referrer: PublicKey;
-  currentSlot: number;
   depositAmount: Decimal;
   priceDebtToColl: Decimal;
-  slippagePct: Decimal;
   targetLeverage: Decimal;
   selectedTokenMint: PublicKey;
-  budgetAndPriorityFeeIxs?: TransactionInstruction[];
-  kamino: Kamino | undefined;
-  scopeRefreshConfig?: ScopePriceRefreshConfig;
-  quoteBufferBps: Decimal;
   priceAinB: PriceAinBProvider;
-  isKtoken: IsKtokenProvider;
-  quoter: SwapQuoteProvider<QuoteResponse>;
   // currently only used to disable requesting elevation group when this value is 0
   // to be implemented properly in the future
   elevationGroupOverride?: number;
-  useV2Ixs: boolean;
 }
 
 export interface DepositWithLeverageProps<QuoteResponse> extends DepositWithLeverageSwapInputsProps<QuoteResponse> {
@@ -120,12 +125,8 @@ export type DepositLeverageCalcsResult = {
   requiredCollateralKtokenOnly: Decimal;
 };
 
-export type WithdrawLeverageIxsResponse<QuoteResponse> = {
-  ixs: TransactionInstruction[];
-  lookupTables: AddressLookupTableAccount[];
-  swapInputs: SwapInputs;
-  flashLoanInfo: FlashLoanInfo;
-  initialInputs: WithdrawLeverageInitialInputs<QuoteResponse>;
+export type WithdrawLeverageIxsResponse<QuoteResponse> = BaseLeverageIxsResponse & {
+  initialInputs: LeverageInitialInputs<WithdrawLeverageCalcsResult, QuoteResponse>;
 };
 
 export type WithdrawLeverageInitialInputs<QuoteResponse> = {
@@ -138,28 +139,14 @@ export type WithdrawLeverageInitialInputs<QuoteResponse> = {
   strategy: StrategyWithAddress | undefined;
 };
 
-export interface WithdrawWithLeverageSwapInputsProps<QuoteResponse> {
-  owner: PublicKey;
-  kaminoMarket: KaminoMarket;
-  debtTokenMint: PublicKey;
-  collTokenMint: PublicKey;
+export interface WithdrawWithLeverageSwapInputsProps<QuoteResponse> extends BaseLeverageSwapInputsProps<QuoteResponse> {
   obligation: KaminoObligation;
   deposited: Decimal;
   borrowed: Decimal;
-  referrer: PublicKey;
-  currentSlot: number;
   withdrawAmount: Decimal;
   priceCollToDebt: Decimal;
-  slippagePct: Decimal;
   isClosingPosition: boolean;
   selectedTokenMint: PublicKey;
-  budgetAndPriorityFeeIxs?: TransactionInstruction[];
-  kamino: Kamino | undefined;
-  scopeRefreshConfig?: ScopePriceRefreshConfig;
-  quoteBufferBps: Decimal;
-  isKtoken: IsKtokenProvider;
-  quoter: SwapQuoteProvider<QuoteResponse>;
-  useV2Ixs: boolean;
 }
 
 export interface WithdrawWithLeverageProps<QuoteResponse> extends WithdrawWithLeverageSwapInputsProps<QuoteResponse> {
@@ -174,12 +161,10 @@ export type WithdrawLeverageCalcsResult = {
   debtTokenExpectedSwapOut: Decimal;
 };
 
-export type AdjustLeverageIxsResponse<QuoteResponse> = {
-  ixs: TransactionInstruction[];
-  lookupTables: AddressLookupTableAccount[];
-  swapInputs: SwapInputs;
-  flashLoanInfo: FlashLoanInfo;
-  initialInputs: AdjustLeverageInitialInputs<QuoteResponse>;
+export type AdjustLeverageIxsResponse<QuoteResponse> = BaseLeverageIxsResponse & {
+  initialInputs: LeverageInitialInputs<AdjustLeverageCalcsResult, QuoteResponse> & {
+    isDeposit: boolean;
+  };
 };
 
 export type AdjustLeverageInitialInputs<QuoteResponse> = {
@@ -193,28 +178,14 @@ export type AdjustLeverageInitialInputs<QuoteResponse> = {
   strategy: StrategyWithAddress | undefined;
 };
 
-export interface AdjustLeverageSwapInputsProps<QuoteResponse> {
-  owner: PublicKey;
-  kaminoMarket: KaminoMarket;
-  debtTokenMint: PublicKey;
-  collTokenMint: PublicKey;
+export interface AdjustLeverageSwapInputsProps<QuoteResponse> extends BaseLeverageSwapInputsProps<QuoteResponse> {
   obligation: KaminoObligation;
   depositedLamports: Decimal;
   borrowedLamports: Decimal;
-  referrer: PublicKey;
-  currentSlot: number;
   targetLeverage: Decimal;
   priceCollToDebt: Decimal;
   priceDebtToColl: Decimal;
-  slippagePct: Decimal;
-  budgetAndPriorityFeeIxs?: TransactionInstruction[];
-  kamino: Kamino | undefined;
-  scopeRefreshConfig?: ScopePriceRefreshConfig;
-  quoteBufferBps: Decimal;
   priceAinB: PriceAinBProvider;
-  isKtoken: IsKtokenProvider;
-  quoter: SwapQuoteProvider<QuoteResponse>;
-  useV2Ixs: boolean;
 }
 
 export interface AdjustLeverageProps<QuoteResponse> extends AdjustLeverageSwapInputsProps<QuoteResponse> {
