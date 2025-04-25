@@ -95,6 +95,7 @@ import {
 import { FarmState } from '@kamino-finance/farms-sdk/dist';
 import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
 import { getSquadsMultisigAdminsAndThreshold, walletIsSquadsMultisig, WalletType } from '../utils/multisig';
+import { decodeVaultState } from '../utils/vault';
 
 /**
  * KaminoManager is a class that provides a high-level interface to interact with the Kamino Lend and Kamino Vault programs, in order to create and manage a market, as well as vaults
@@ -761,7 +762,7 @@ export class KaminoManager {
         throw new Error(`kaminoVault with pubkey ${kaminoVault.pubkey.toString()} does not exist`);
       }
 
-      const kaminoVaultAccount = VaultState.decode(kaminoVault.account.data);
+      const kaminoVaultAccount = decodeVaultState(kaminoVault.account.data);
       if (!kaminoVaultAccount) {
         throw Error(`kaminoVault with pubkey ${kaminoVault.pubkey.toString()} could not be decoded`);
       }
@@ -825,6 +826,15 @@ export class KaminoManager {
     }
     return result;
   };
+
+  /**
+   * Get all vaults for a given token
+   * @param token - the token to get all vaults for
+   * @returns an array of all vaults for the given token
+   */
+  async getAllVaultsForToken(token: PublicKey): Promise<Array<KaminoVault>> {
+    return this._vaultClient.getAllVaultsForToken(token);
+  }
 
   /**
    * This will return an VaultHoldings object which contains the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve

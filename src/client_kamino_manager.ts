@@ -1163,6 +1163,18 @@ async function main() {
     console.log('all vaults', allVaults);
   });
 
+  commands
+    .command('get-all-vaults-for-token')
+    .requiredOption('--token <string>', 'Token address')
+    .action(async ({ token }) => {
+      const env = initializeClient(false, false);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+
+      const kaminoManager = new KaminoManager(env.connection, slotDuration, env.kLendProgramId, env.kVaultProgramId);
+      const allVaults = await kaminoManager.getAllVaultsForToken(new PublicKey(token));
+      console.log('all vaults for token ', token, allVaults);
+    });
+
   commands.command('get-all-vaults-pks').action(async () => {
     const env = initializeClient(false, false);
     const kaminoManager = new KaminoManager(

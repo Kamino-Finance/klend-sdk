@@ -104,6 +104,7 @@ import {
   getUserSharesInFarm,
 } from './farm_utils';
 import { getInitializeKVaultSharesMetadataIx, getUpdateSharesMetadataIx, resolveMetadata } from '../utils/metadata';
+import { decodeVaultState } from '../utils/vault';
 
 export const kaminoVaultId = new PublicKey('KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd');
 export const kaminoVaultStagingId = new PublicKey('stKvQfwRsQiKnLtMNVLHKS3exFJmZFsgfzBPWHECUYK');
@@ -1997,6 +1998,37 @@ export class KaminoVaultClient {
       },
     ];
 
+    return await this.getAllVaultsWithFilter(filters);
+  }
+
+  /**
+   * Get all vaults for a given token
+   * @param token - the token to get all vaults for
+   * @returns an array of all vaults for the given token
+   */
+  async getAllVaultsForToken(token: PublicKey): Promise<Array<KaminoVault>> {
+    const filters = [
+      {
+        dataSize: VaultState.layout.span + 8,
+      },
+      {
+        memcmp: {
+          offset: 0,
+          bytes: bs58.encode(VaultState.discriminator),
+        },
+      },
+      {
+        memcmp: {
+          offset: 80, // tokenMint offset: 8 + 32 + 32 + 8 (discriminator + vaultAdminAuthority + baseVaultAuthority + baseVaultAuthorityBump)
+          bytes: token.toBase58(),
+        },
+      },
+    ];
+
+    return await this.getAllVaultsWithFilter(filters);
+  }
+
+  private async getAllVaultsWithFilter(filters: any): Promise<Array<KaminoVault>> {
     const kaminoVaults: GetProgramAccountsResponse = await getProgramAccounts(
       this.getConnection(),
       this._kaminoVaultProgramId,
@@ -2012,7 +2044,7 @@ export class KaminoVaultClient {
         throw new Error(`kaminoVault with pubkey ${kaminoVault.pubkey.toString()} does not exist`);
       }
 
-      const kaminoVaultAccount = VaultState.decode(kaminoVault.account.data);
+      const kaminoVaultAccount = decodeVaultState(kaminoVault.account.data);
       if (!kaminoVaultAccount) {
         throw Error(`kaminoVault with pubkey ${kaminoVault.pubkey.toString()} could not be decoded`);
       }
