@@ -965,6 +965,26 @@
     uuid "^10.0.0"
     zstddec "^0.1.0"
 
+"@kamino-finance/kliquidity-sdk@8.2.1":
+  version "8.2.1"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/kliquidity-sdk/-/kliquidity-sdk-8.2.1.tgz#a4c0104885d4d5f0676224f53f4a75f38a07aeab"
+  integrity sha512-gMz9d9QoMCBdhubNTsTPrDkFcJHyz+6nMvNux+/MzBU6qIK95kC4dGnaXofYsHApD9z5YY5CYMEYzbdceTBQMg==
+  dependencies:
+    "@coral-xyz/anchor" "^0.29.0"
+    "@coral-xyz/borsh" "^0.30.1"
+    "@hubbleprotocol/hubble-config" "^5.0.0"
+    "@jup-ag/api" "^6.0.38"
+    "@kamino-finance/scope-sdk" "^8.0.2"
+    "@orca-so/whirlpool-client-sdk" "^0.0.8"
+    "@orca-so/whirlpool-sdk" "^0.4.2"
+    "@raydium-io/raydium-sdk-v2" "=0.1.111-alpha"
+    "@solana/spl-token" "^0.4.9"
+    "@solana/web3.js" "^1.95.8"
+    axios "^1.7.8"
+    bn.js "^5.2.1"
+    bs58 "^6.0.0"
+    decimal.js "^10.3.1"
+
 "@kamino-finance/kliquidity-sdk@^6.4.0":
   version "6.5.1"
   resolved "https://registry.yarnpkg.com/@kamino-finance/kliquidity-sdk/-/kliquidity-sdk-6.5.1.tgz#86e162c5be42f01a77ddc43ba562dc1539b88365"
@@ -989,26 +1009,6 @@
   version "7.0.13"
   resolved "https://registry.yarnpkg.com/@kamino-finance/kliquidity-sdk/-/kliquidity-sdk-7.0.13.tgz#050b793fd67abfa987c619e98e5db7a75f6c30ba"
   integrity sha512-EHhmDpiln68WAAOxueqCkk5XfHYEi1kP4WoOSH/LE8KqAhsVsaBV4gWLkrVCqQmQDpdzOGa7FyOSjVdJf8qyyA==
-  dependencies:
-    "@coral-xyz/anchor" "^0.29.0"
-    "@coral-xyz/borsh" "^0.30.1"
-    "@hubbleprotocol/hubble-config" "^5.0.0"
-    "@jup-ag/api" "^6.0.38"
-    "@kamino-finance/scope-sdk" "^8.0.2"
-    "@orca-so/whirlpool-client-sdk" "^0.0.8"
-    "@orca-so/whirlpool-sdk" "^0.4.2"
-    "@raydium-io/raydium-sdk-v2" "=0.1.111-alpha"
-    "@solana/spl-token" "^0.4.9"
-    "@solana/web3.js" "^1.95.8"
-    axios "^1.7.8"
-    bn.js "^5.2.1"
-    bs58 "^6.0.0"
-    decimal.js "^10.3.1"
-
-"@kamino-finance/kliquidity-sdk@^8.1.3":
-  version "8.1.3"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/kliquidity-sdk/-/kliquidity-sdk-8.1.3.tgz#ffd130b410effba239b82f8ac512e618cda82255"
-  integrity sha512-exyt5Iu/4qXThDQuh4CYVp9GCexkUbft1DLFEGIerybOGvlV1eICVBGDYSKpKSIGQ0uTO5Tq1SYg0zJrqreCtQ==
   dependencies:
     "@coral-xyz/anchor" "^0.29.0"
     "@coral-xyz/borsh" "^0.30.1"
