@@ -23,8 +23,12 @@ import Decimal from 'decimal.js';
 
 const DEFAULT_MAX_ACCOUNTS_BUFFER = 2;
 const MAX_LOCKED_ACCOUNTS = 64;
-const JUPITER_PRICE_API = 'https://api.jup.ag/price/v2';
-const DEFAULT_JUP_V6_BASE_URL = 'https://quote-api.jup.ag/v6';
+const JUPITER_PRICE_API = 'https://lite-api.jup.ag/price/v2';
+const JUPITER_SWAP_API = 'https://lite-api.jup.ag/swap/v1';
+
+const swapApiClient = createJupiterApiClient({
+  basePath: JUPITER_SWAP_API,
+});
 
 export type ErrorBody = {
   error: string;
@@ -78,9 +82,6 @@ async function quote(
   { swapMode = SwapMode.ExactIn, onlyDirectRoutes = true, slippageBps }: SwapConfig,
   maxAccs?: number
 ): Promise<QuoteResponse> {
-  const quoteApi = createJupiterApiClient({
-    basePath: DEFAULT_JUP_V6_BASE_URL,
-  });
   try {
     const quoteParameters: QuoteGetRequest = {
       inputMint: inputMint.toBase58(),
@@ -91,7 +92,7 @@ async function quote(
       swapMode,
       ...(maxAccs ? { maxAccounts: maxAccs } : {}),
     };
-    return await quoteApi.quoteGet(quoteParameters);
+    return await swapApiClient.quoteGet(quoteParameters);
   } catch (e) {
     if (e instanceof ResponseError) {
       const body = (await e.response.json()) as ErrorBody;
@@ -167,9 +168,6 @@ async function swapTxFromQuote(
   swapConfig: SwapConfig
 ): Promise<SwapTxResponse> {
   let swap: SwapInstructionsResponse;
-  const quoteApi = createJupiterApiClient({
-    basePath: DEFAULT_JUP_V6_BASE_URL,
-  });
   try {
     const swapParameters: SwapInstructionsPostRequest = {
       swapRequest: {
@@ -185,7 +183,7 @@ async function swapTxFromQuote(
         useTokenLedger: swapConfig.useTokenLedger,
       },
     };
-    swap = await quoteApi.swapInstructionsPost(swapParameters);
+    swap = await swapApiClient.swapInstructionsPost(swapParameters);
   } catch (e) {
     if (e instanceof ResponseError) {
       const body = (await e.response.json()) as ErrorBody;
