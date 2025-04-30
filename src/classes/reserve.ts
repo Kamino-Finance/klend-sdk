@@ -1727,7 +1727,7 @@ function handleConfigUpdate(
         updateReserveIxsArgs.push(
           createUpdateReserveIxsArg(
             UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator,
-            reserveConfig.borrowLimitOutsideElevationGroup.toNumber()
+            BigInt(reserveConfig.borrowLimitOutsideElevationGroup.toString())
           )
         );
       }

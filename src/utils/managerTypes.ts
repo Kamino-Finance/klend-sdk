@@ -185,6 +185,8 @@ export class DebtConfig implements AssetConfig {
   readonly mintDecimals: number;
   readonly mintTokenProgram: PublicKey;
   assetReserveConfigParams: AssetReserveConfigParams;
+  borrowLimitOutsideElevationGroup?: Decimal;
+  debtWithdrawalCapConfigCapacity?: Decimal;
 
   constructor(fields: {
     mint: PublicKey;
@@ -193,11 +195,15 @@ export class DebtConfig implements AssetConfig {
     mintDecimals: number;
     priceFeed: PriceFeed;
     borrowRateCurve: BorrowRateCurve;
+    borrowLimitOutsideElevationGroup?: Decimal;
+    debtWithdrawalCapConfigCapacity?: Decimal;
   }) {
     this.mint = fields.mint;
     this.tokenName = fields.tokenName;
     this.mintDecimals = fields.mintDecimals;
     this.mintTokenProgram = fields.mintTokenProgram;
+    this.borrowLimitOutsideElevationGroup = fields.borrowLimitOutsideElevationGroup;
+    this.debtWithdrawalCapConfigCapacity = fields.debtWithdrawalCapConfigCapacity;
 
     // TODO: verify defaults and ensure opinionated
     this.assetReserveConfigParams = DefaultConfigParams;
@@ -214,6 +220,8 @@ export class DebtConfig implements AssetConfig {
       configParams: this.assetReserveConfigParams,
       mintDecimals: this.mintDecimals,
       tokenName: this.tokenName,
+      borrowLimitOutsideElevationGroup: this.borrowLimitOutsideElevationGroup,
+      debtWithdrawalCapConfigCapacity: this.debtWithdrawalCapConfigCapacity,
     });
   }
 }
@@ -285,6 +293,8 @@ function buildReserveConfig(fields: {
   configParams: AssetReserveConfigParams;
   mintDecimals: number;
   tokenName: string;
+  borrowLimitOutsideElevationGroup?: Decimal;
+  debtWithdrawalCapConfigCapacity?: Decimal;
 }): ReserveConfig {
   const reserveConfigFields: ReserveConfigFields = {
     status: 0,
@@ -323,13 +333,17 @@ function buildReserveConfig(fields: {
     } as TokenInfo,
     borrowRateCurve: fields.configParams.borrowRateCurve,
     depositWithdrawalCap: new WithdrawalCaps({
-      configCapacity: new BN(0),
+      configCapacity: new BN(
+        numberToLamportsDecimal(fields.configParams.depositLimit ?? new Decimal(0), fields.mintDecimals).floor().toString()
+      ),
       currentTotal: new BN(0),
       lastIntervalStartTimestamp: new BN(0),
       configIntervalLengthSeconds: new BN(0),
     }),
     debtWithdrawalCap: new WithdrawalCaps({
-      configCapacity: new BN(0),
+      configCapacity: new BN(
+        numberToLamportsDecimal(fields.debtWithdrawalCapConfigCapacity ?? new Decimal(0), fields.mintDecimals).floor().toString()
+      ),
       currentTotal: new BN(0),
       lastIntervalStartTimestamp: new BN(0),
       configIntervalLengthSeconds: new BN(0),
@@ -342,7 +356,9 @@ function buildReserveConfig(fields: {
     utilizationLimitBlockBorrowingAbovePct: 0,
     hostFixedInterestRateBps: 0,
     autodeleverageEnabled: 0,
-    borrowLimitOutsideElevationGroup: new BN(0),
+    borrowLimitOutsideElevationGroup: new BN(
+      numberToLamportsDecimal(fields.borrowLimitOutsideElevationGroup ?? new Decimal(0), fields.mintDecimals).floor().toString()
+    ),
     borrowLimitAgainstThisCollateralInElevationGroup: Array(32).fill(new BN(0)),
     deleveragingBonusIncreaseBpsPerDay: new BN(100),
     reserved1: Array(1).fill(0),
