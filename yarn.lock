@@ -871,10 +871,10 @@
     commander "^9.3.0"
     decimal.js "^10.4.3"
 
-"@kamino-finance/farms-sdk@2.4.2":
-  version "2.4.2"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-2.4.2.tgz#6ad3031c301522f37f2509252438107c406fbfdb"
-  integrity sha512-wTHfEaA1QBeTuAyOdU960PNO9yyoQkLlyW53dsjyV2mnRJw6Lp0spkmEJy3uZ/jd+jasFIbwiTA2LpZq34FwOA==
+"@kamino-finance/farms-sdk@3.0.2":
+  version "3.0.2"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-3.0.2.tgz#e3041f7161f16c54ae31d81a11453d65e1b235b4"
+  integrity sha512-VpdMVL1hKAvn8A2sw7aZMxiOi6ecgiqdlM1OrYB/g4kH/n4W8OZuYTHwSZV6OhougAQEnDdFQ9uLAFtthmu/jQ==
   dependencies:
     "@coral-xyz/anchor" "^0.28.0"
     "@coral-xyz/borsh" "^0.28.0"

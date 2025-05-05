@@ -1083,7 +1083,9 @@ async function main() {
       const walletAddress = new PublicKey(wallet);
       const userShares = await kaminoManager.getUserSharesBalanceAllVaults(walletAddress);
       userShares.forEach((userShares, vaultAddress) => {
-        console.log(`User shares for vault ${vaultAddress}: ${userShares}`);
+        console.log(
+          `User shares for vault ${vaultAddress}: staked shares ${userShares.stakedShares} unstaked shares ${userShares.unstakedShares} total shares ${userShares.totalShares}`
+        );
       });
     });
 

@@ -94,12 +94,11 @@ import {
 } from './vault_types';
 import { batchFetch, collToLamportsDecimal, ZERO } from '@kamino-finance/kliquidity-sdk';
 import { FullBPSDecimal } from '@kamino-finance/kliquidity-sdk/dist/utils/CreationParameters';
-import { FarmState } from '@kamino-finance/farms-sdk/dist';
+import { Farms, FarmState } from '@kamino-finance/farms-sdk/dist';
 import { getAccountsInLUT, initLookupTableIx } from '../utils/lookupTable';
 import {
   getFarmStakeIxs,
   getFarmUnstakeAndWithdrawIxs,
-  getFarmUserStatePDA,
   getSharesInFarmUserPosition,
   getUserSharesInFarm,
 } from './farm_utils';
@@ -1854,10 +1853,17 @@ export class KaminoVaultClient {
     vaultsOverride?: Array<KaminoVault>
   ): Promise<PubkeyHashMap<PublicKey, UserSharesForVault>> {
     const vaults = vaultsOverride ? vaultsOverride : await this.getAllVaults();
+
+    // read all user shares stake in vault farms
+    const farmClient = new Farms(this.getConnection());
+    const allUserFarmStates = await farmClient.getAllUserStatesForUser(user);
+    const allUserFarmStatesMap = new PubkeyHashMap<PublicKey, UserState>();
+    allUserFarmStates.forEach((userFarmState) => {
+      allUserFarmStatesMap.set(userFarmState.userState.farmState, userFarmState.userState);
+    });
     // stores vault address for each userSharesAta
     const vaultUserShareBalance = new PubkeyHashMap<PublicKey, UserSharesForVault>();
 
-    const vaultToUserFarmStateAddress = new PubkeyHashMap<PublicKey, PublicKey>();
     const userSharesAtaArray: PublicKey[] = [];
     vaults.forEach(async (vault) => {
       const state = vault.state;
@@ -1868,22 +1874,39 @@ export class KaminoVaultClient {
       userSharesAtaArray.push(userSharesAta);
 
       if (await vault.hasFarm(this.getConnection())) {
-        const farmUserState = await getFarmUserStatePDA(this.getConnection(), user, state.vaultFarm);
-        vaultToUserFarmStateAddress.set(vault.address, farmUserState);
+        const userFarmState = allUserFarmStatesMap.get(state.vaultFarm);
+        if (userFarmState) {
+          console.log('there is a farm state for vault', vault.address.toBase58());
+          const stakedShares = getSharesInFarmUserPosition(userFarmState, state.sharesMintDecimals.toNumber());
+          console.log('staked shares', stakedShares);
+          const userSharesBalance = vaultUserShareBalance.get(vault.address);
+          if (userSharesBalance) {
+            userSharesBalance.stakedShares = stakedShares;
+            userSharesBalance.totalShares = userSharesBalance.unstakedShares.add(userSharesBalance.stakedShares);
+            vaultUserShareBalance.set(vault.address, userSharesBalance);
+          } else {
+            vaultUserShareBalance.set(vault.address, {
+              unstakedShares: new Decimal(0),
+              stakedShares,
+              totalShares: stakedShares,
+            });
+          }
+        }
       }
     });
 
-    const [userSharesAtaAccounts, userFarmStates] = await Promise.all([
-      this.getConnection().getMultipleAccountsInfo(userSharesAtaArray),
-      UserState.fetchMultiple(this.getConnection(), Array.from(vaultToUserFarmStateAddress.values())),
-    ]);
+    const userSharesAtaAccounts = await this.getConnection().getMultipleAccountsInfo(userSharesAtaArray);
 
     userSharesAtaAccounts.forEach((userShareAtaAccount, index) => {
-      const userSharesForVault: UserSharesForVault = {
-        unstakedShares: new Decimal(0),
-        stakedShares: new Decimal(0),
-        totalShares: new Decimal(0),
-      };
+      let userSharesForVault = vaultUserShareBalance.get(vaults[index].address);
+      if (!userSharesForVault) {
+        userSharesForVault = {
+          unstakedShares: new Decimal(0),
+          stakedShares: new Decimal(0),
+          totalShares: new Decimal(0),
+        };
+      }
+
       if (!userShareAtaAccount) {
         vaultUserShareBalance.set(vaults[index].address, userSharesForVault);
       } else {
@@ -1893,23 +1916,6 @@ export class KaminoVaultClient {
         userSharesForVault.totalShares = userSharesForVault.unstakedShares.add(userSharesForVault.stakedShares);
         vaultUserShareBalance.set(vaults[index].address, userSharesForVault);
       }
-    });
-
-    userFarmStates.forEach((userFarmState, _) => {
-      if (!userFarmState) {
-        return;
-      }
-      const farmState = userFarmState.farmState;
-      // find the vault which has the farm
-      const vault = vaults.find((vault) => vault.state!.vaultFarm.equals(farmState));
-      if (!vault) {
-        throw new Error(`Vault with farm ${farmState.toBase58()} not found`);
-      }
-
-      const shares = getSharesInFarmUserPosition(userFarmState, vault.state!.sharesMintDecimals.toNumber());
-      const userSharesBalance = vaultUserShareBalance.get(vault.address);
-      userSharesBalance!.stakedShares = shares;
-      vaultUserShareBalance.set(vault.address, userSharesBalance!);
     });
 
     return vaultUserShareBalance;
