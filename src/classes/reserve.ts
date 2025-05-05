@@ -606,7 +606,7 @@ export class KaminoReserve {
   ) {
     return (
       this.calcSimulatedBorrowRate(amount, action, slot, referralFeeBps, outflowAmount) +
-      this.getFixedHostInterestRate().toNumber()
+      this.getFixedHostInterestRate().toNumber() * this.slotAdjustmentFactor()
     );
   }
 
@@ -644,8 +644,9 @@ export class KaminoReserve {
   }
 
   calculateBorrowAPR(slot: number, referralFeeBps: number) {
+    const slotAdjustmentFactor = this.slotAdjustmentFactor();
     const borrowRate = this.calculateEstimatedBorrowRate(slot, referralFeeBps);
-    return borrowRate + this.getFixedHostInterestRate().toNumber();
+    return borrowRate + this.getFixedHostInterestRate().toNumber() * slotAdjustmentFactor;
   }
 
   /**
