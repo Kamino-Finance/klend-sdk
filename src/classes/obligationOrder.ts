@@ -8,6 +8,7 @@ import { KaminoObligation, Position } from './obligation';
 import { TokenAmount } from './shared';
 import { ONE_HUNDRED_PCT_IN_BPS } from '../utils';
 import { getSingleElement } from '../utils/validations';
+import { KaminoMarket } from './market';
 
 // Polymorphic parts of an order:
 
@@ -300,7 +301,10 @@ export class KaminoObligationOrder {
    *
    * May return `undefined` when the order's condition is not met.
    */
-  findMaxAvailableExecution(obligation: KaminoObligation): AvailableOrderExecution | undefined {
+  findMaxAvailableExecution(
+    kaminoMarket: KaminoMarket,
+    obligation: KaminoObligation
+  ): AvailableOrderExecution | undefined {
     const conditionHit = this.condition.evaluate(obligation);
     if (conditionHit === null) {
       return undefined; // condition not met - cannot execute
@@ -311,9 +315,24 @@ export class KaminoObligationOrder {
     const executionBonusRate = this.calculateExecutionBonusRate(conditionHit, obligation);
     const executionBonusFactor = new Decimal(1).add(executionBonusRate);
     const maxWithdrawValue = maxRepayValue.mul(executionBonusFactor);
-    const [actualWithdrawValue, withdrawDeposit] = obligation
+
+    // The order execution only allows us to pick the lowest-liquidation-LTV deposit for withdrawal (excluding 0-LTV
+    // assets, which are never liquidatable), hence we pre-filter the candidate deposits:
+    const liquidationLtvsOfDeposits = obligation
       .getDeposits()
-      .map((deposit): [Decimal, Position] => {
+      .map((deposit): [Decimal, Position] => [
+        obligation.getLtvForReserve(kaminoMarket, deposit.reserveAddress).liquidationLtv,
+        deposit,
+      ]);
+    const liquidatableDeposits = liquidationLtvsOfDeposits.filter(([liquidationLtv, _deposit]) => liquidationLtv.gt(0));
+    // Note: in theory, we could use the Obligation's `lowestReserveDepositLiquidationLtv` (cached by SC) here, but it
+    // is equally easy to just find the minimum (and avoid any issues related to stale `KaminoObligation` state or
+    // `Decimal` rounding/comparison).
+    const minLiquidationLtv = Decimal.min(...liquidatableDeposits.map(([liquidationLtv, _deposit]) => liquidationLtv));
+
+    const [actualWithdrawValue, withdrawDeposit] = liquidatableDeposits
+      .filter(([liquidationLtv, _deposit]) => liquidationLtv.eq(minLiquidationLtv))
+      .map(([_liquidationLtv, deposit]): [Decimal, Position] => {
         const availableWithdrawValue = Decimal.min(deposit.marketValueRefreshed, maxWithdrawValue);
         return [availableWithdrawValue, deposit];
       })

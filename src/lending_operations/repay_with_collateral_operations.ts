@@ -424,7 +424,7 @@ function calculatePostOperationLtv(
     new Decimal(0),
     obligation.refreshedStats.userTotalDeposit.sub(collWithdrawValue)
   );
-  
+
   const newMaxBorrowableValue = Decimal.max(
     new Decimal(0),
     obligation.refreshedStats.borrowLimit.sub(collWithdrawValue.mul(collReserve.stats.loanToValue))

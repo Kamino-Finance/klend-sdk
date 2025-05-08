@@ -436,11 +436,16 @@ export class KaminoObligation {
 
   /**
    * Get the loan to value and liquidation loan to value for a collateral token reserve as ratios, accounting for the obligation elevation group if it is active
-   * @param market
-   * @param reserve
    */
-  public getLtvForReserve(market: KaminoMarket, reserve: KaminoReserve): { maxLtv: Decimal; liquidationLtv: Decimal } {
-    return KaminoObligation.getLtvForReserve(market, reserve, this.state.elevationGroup);
+  public getLtvForReserve(
+    market: KaminoMarket,
+    reserveAddress: PublicKey
+  ): { maxLtv: Decimal; liquidationLtv: Decimal } {
+    return KaminoObligation.getLtvForReserve(
+      market,
+      market.getExistingReserveByAddress(reserveAddress),
+      this.state.elevationGroup
+    );
   }
 
   /**

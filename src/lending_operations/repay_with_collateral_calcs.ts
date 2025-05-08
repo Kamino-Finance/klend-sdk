@@ -129,10 +129,7 @@ export function calcMaxWithdrawCollateral(
       .getDeposits()
       .filter((p) => !p.reserveAddress.equals(deposit.reserveAddress))
       .reduce((acc, d) => {
-        const { maxLtv, liquidationLtv } = obligation.getLtvForReserve(
-          market,
-          market.getExistingReserveByAddress(d.reserveAddress)
-        );
+        const { maxLtv, liquidationLtv } = obligation.getLtvForReserve(market, d.reserveAddress);
         const maxWithdrawLtv =
           maxWithdrawLtvCheck === MaxWithdrawLtvCheck.LIQUIDATION_THRESHOLD ? liquidationLtv : maxLtv;
         return acc.add(d.marketValueRefreshed.mul(maxWithdrawLtv));
@@ -150,7 +147,7 @@ export function calcMaxWithdrawCollateral(
   } else {
     const { maxLtv: collMaxLtv, liquidationLtv: collLiquidationLtv } = obligation.getLtvForReserve(
       market,
-      market.getReserveByAddress(depositReserve.address)!
+      depositReserve.address
     );
     const maxWithdrawLtv =
       maxWithdrawLtvCheck === MaxWithdrawLtvCheck.LIQUIDATION_THRESHOLD ? collLiquidationLtv : collMaxLtv;
