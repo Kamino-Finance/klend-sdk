@@ -609,13 +609,21 @@ async function main() {
       const acceptVaultOwnershipSig = await processTxn(
         env.client,
         env.payer,
-        [instructions.acceptVaultOwnershipIx, ...instructions.updateLUTIxs],
+        [instructions.acceptVaultOwnershipIx],
         mode,
         2500,
         []
       );
 
       mode === 'execute' && console.log('Vault ownership accepted:', acceptVaultOwnershipSig);
+
+      // send the LUT mgmt ixs one by one
+      const lutIxs = [...instructions.updateLUTIxs];
+      for (let i = 0; i < lutIxs.length; i ++) {
+        const lutIxsGroup = lutIxs.slice(i, i + 1);
+        const lutIxsSig = await processTxn(env.client, env.payer, lutIxsGroup, mode, 2500, []);
+        mode === 'execute' && console.log('LUT updated:', lutIxsSig);
+      }
     });
 
   commands
@@ -1599,12 +1607,14 @@ async function processTxn(
   }
   if (mode === 'multisig') {
     const { blockhash } = await web3Client.connection.getLatestBlockhash();
-    const txn = new Transaction();
-    txn.add(...ixs);
-    txn.recentBlockhash = blockhash;
-    txn.feePayer = admin.publicKey;
+    for (const ix of ixs) {
+      const txn = new Transaction();
+      txn.add(ix);
+      txn.recentBlockhash = blockhash;
+      txn.feePayer = admin.publicKey;
 
-    console.log(binary_to_base58(txn.serializeMessage()));
+      console.log(`${binary_to_base58(txn.serializeMessage())} \n`);
+    }
 
     return '';
   } else {
