@@ -127,6 +127,14 @@ export async function getUserSharesInFarm(
   farmTokenDecimals: number
 ): Promise<Decimal> {
   const farmClient = new Farms(connection);
+  const userStatePDA = getUserStatePDA(farmClient.getProgramID(), farm, user);
+  // if the user state does not exist, return 0
+  const userState = await connection.getAccountInfo(userStatePDA);
+  if (!userState) {
+    return new Decimal(0);
+  }
+
+  // if the user state exists, return the user shares
   return farmClient.getUserTokensInUndelegatedFarm(user, farm, farmTokenDecimals);
 }
 

@@ -619,7 +619,7 @@ async function main() {
 
       // send the LUT mgmt ixs one by one
       const lutIxs = [...instructions.updateLUTIxs];
-      for (let i = 0; i < lutIxs.length; i ++) {
+      for (let i = 0; i < lutIxs.length; i++) {
         const lutIxsGroup = lutIxs.slice(i, i + 1);
         const lutIxsSig = await processTxn(env.client, env.payer, lutIxsGroup, mode, 2500, []);
         mode === 'execute' && console.log('LUT updated:', lutIxsSig);
@@ -1076,7 +1076,11 @@ async function main() {
       const walletAddress = new PublicKey(wallet);
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kVaultProgramId);
       const userShares = await kaminoManager.getUserSharesBalanceSingleVault(walletAddress, kaminoVault);
-      console.log(`User shares for vault ${vaultAddress.toBase58()}: ${userShares}`);
+      console.log(
+        `User shares for vault ${vaultAddress.toBase58()}: unstaked shares: ${
+          userShares.unstakedShares
+        } staked shares: ${userShares.stakedShares} total shares: ${userShares.totalShares}`
+      );
     });
 
   commands

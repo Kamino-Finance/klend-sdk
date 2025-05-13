@@ -1084,7 +1084,7 @@ export class KaminoVaultClient {
     );
 
     if (vaultAllocation) {
-      const withdrawFromVaultIxs = await this.wihdrdrawWithReserveIxs(
+      const withdrawFromVaultIxs = await this.withdrawWithReserveIxs(
         user,
         kaminoVault,
         shareAmount,
@@ -1129,7 +1129,7 @@ export class KaminoVaultClient {
     return [createAtaIx, withdrawFromAvailableIxn];
   }
 
-  private async wihdrdrawWithReserveIxs(
+  private async withdrawWithReserveIxs(
     user: PublicKey,
     vault: KaminoVault,
     shareAmount: Decimal,
@@ -1139,7 +1139,6 @@ export class KaminoVaultClient {
     const vaultState = await vault.getState(this.getConnection());
 
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
-
     const userSharesAta = getAssociatedTokenAddress(vaultState.sharesMint, user);
     const [{ ata: userTokenAta, createAtaIx }] = createAtasIdempotent(user, [
       {
@@ -1162,9 +1161,12 @@ export class KaminoVaultClient {
     let isFirstWithdraw = true;
 
     if (tokenLeftToWithdraw.lte(0)) {
-      // Availabe enough to withdraw all - using first reserve as it does not matter
+      // Availabe enough to withdraw all - using the first existent reserve
+      const firstReserve = vaultState.vaultAllocationStrategy.find(
+        (reserve) => !reserve.reserve.equals(PublicKey.default)
+      );
       reserveWithSharesAmountToWithdraw.push({
-        reserve: vaultState.vaultAllocationStrategy[0].reserve,
+        reserve: firstReserve!.reserve,
         shares: shareLamportsToWithdraw,
       });
     } else {
@@ -1197,7 +1199,6 @@ export class KaminoVaultClient {
 
     const withdrawIxs: TransactionInstruction[] = [];
     withdrawIxs.push(createAtaIx);
-
     for (let reserveIndex = 0; reserveIndex < reserveWithSharesAmountToWithdraw.length; reserveIndex++) {
       const reserveWithTokens = reserveWithSharesAmountToWithdraw[reserveIndex];
       const reserveState = vaultReservesState.get(reserveWithTokens.reserve);
