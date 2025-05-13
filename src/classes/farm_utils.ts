@@ -1,3 +1,4 @@
+import { BN } from '@coral-xyz/anchor';
 import {
   Farms,
   FarmState,
@@ -74,9 +75,8 @@ export async function getFarmUnstakeIx(
     throw new Error(`User state not found for ${user}`);
   }
 
-  const x = new Decimal(lamportsToUnstake.toString()).mul(WAD);
-  console.log('lamportsToUnstake', lamportsToUnstake.toString());
-  return farmClient.unstakeIx(user, farmAddress, x.toString(), scopePricesArg);
+  const scaledLamportsToUnstake = new BN(lamportsToUnstake.toString()).mul(new BN(WAD.toString()));
+  return farmClient.unstakeIx(user, farmAddress, scaledLamportsToUnstake.toString(), scopePricesArg);
 }
 
 // withdrawing from a farm is a 2 step operation: first we unstake the tokens from the farm, then we withdraw them
