@@ -636,14 +636,6 @@ export class KaminoObligation {
     let newObligationDeposits = this.state.deposits;
     let newObligationBorrows = this.state.borrows;
 
-    // Print deposits and borrows before
-    for (const deposit of this.state.deposits) {
-      console.log(`Before Deposit: ${deposit.depositReserve.toBase58()} - ${deposit.depositedAmount}`);
-    }
-    for (const borrow of this.state.borrows) {
-      console.log(`Before Borrow: ${borrow.borrowReserve.toBase58()} - ${borrow.borrowedAmountSf}`);
-    }
-
     switch (action) {
       case 'deposit': {
         if (amountCollateral === undefined || mintCollateral === undefined) {
@@ -757,14 +749,6 @@ export class KaminoObligation {
       collateralExchangeRates,
       null
     );
-
-    // Print deposits and borrows after
-    for (const deposit of newObligationDeposits) {
-      console.log(`After Deposit: ${deposit.depositReserve.toBase58()} - ${deposit.depositedAmount}`);
-    }
-    for (const borrow of newObligationBorrows) {
-      console.log(`After Borrow: ${borrow.borrowReserve.toBase58()} - ${borrow.borrowedAmountSf}`);
-    }
 
     newStats = refreshedStats;
     newDeposits = deposits;
