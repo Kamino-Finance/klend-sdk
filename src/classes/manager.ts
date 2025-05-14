@@ -657,9 +657,9 @@ export class KaminoManager {
    * Get all lending markets
    * @returns an array of all lending markets
    */
-  async getAllMarkets(): Promise<KaminoMarket[]> {
+  async getAllMarkets(programId: PublicKey = PROGRAM_ID): Promise<KaminoMarket[]> {
     // Get all lending markets
-    const marketGenerator = getAllLendingMarketAccounts(this.getConnection());
+    const marketGenerator = getAllLendingMarketAccounts(this.getConnection(), programId);
     const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
     const lendingMarketPairs: [PublicKey, LendingMarket][] = [];

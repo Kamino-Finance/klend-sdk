@@ -56,10 +56,11 @@ export async function* getAllReserveAccounts(
 }
 
 export async function* getAllLendingMarketAccounts(
-  connection: Connection
+  connection: Connection,
+  programId: PublicKey = PROGRAM_ID
 ): AsyncGenerator<[PublicKey, LendingMarket], void, unknown> {
   // due to relatively very low count of lending markets, we technically don't really need a generator, but let's keep it consistent within this file
-  const lendingMarkets = await connection.getProgramAccounts(PROGRAM_ID, {
+  const lendingMarkets = await connection.getProgramAccounts(programId, {
     filters: [
       {
         dataSize: LendingMarket.layout.span + 8,
