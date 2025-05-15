@@ -75,7 +75,7 @@ export async function getFarmUnstakeIx(
     throw new Error(`User state not found for ${user}`);
   }
 
-  const scaledLamportsToUnstake = new BN(lamportsToUnstake.toString()).mul(new BN(WAD.toString()));
+  const scaledLamportsToUnstake = new BN(lamportsToUnstake.floor().toString()).mul(new BN(WAD.toString()));
   return farmClient.unstakeIx(user, farmAddress, scaledLamportsToUnstake.toString(), scopePricesArg);
 }
 

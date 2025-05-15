@@ -966,7 +966,9 @@ export class KaminoVaultClient {
     };
 
     const depositArgs: DepositArgs = {
-      maxAmount: new BN(numberToLamportsDecimal(tokenAmount, vaultState.tokenMintDecimals.toNumber()).toString()),
+      maxAmount: new BN(
+        numberToLamportsDecimal(tokenAmount, vaultState.tokenMintDecimals.toNumber()).floor().toString()
+      ),
     };
 
     const depositIx = deposit(depositArgs, depoistAccounts, this._kaminoVaultProgramId);
