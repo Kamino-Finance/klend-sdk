@@ -1016,8 +1016,8 @@ export class KaminoManager {
   /**
    * This will compute the PDA that is used as delegatee in Farms program to compute the user state PDA
    */
-  computeUserFarmStateForUserInVault(farmProgramID: PublicKey, vault: PublicKey, user: PublicKey) {
-    return this._vaultClient.computeUserFarmStateDelegateePDAForUserInVault(farmProgramID, vault, user);
+  computeUserFarmStateForUserInVault(farmProgramID: PublicKey, vault: PublicKey, reserve: PublicKey, user: PublicKey) {
+    return this._vaultClient.computeUserFarmStateDelegateePDAForUserInVault(farmProgramID, reserve, vault, user);
   }
 
   /**
