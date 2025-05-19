@@ -2787,6 +2787,14 @@ export class KaminoVaultClient {
       performanceFee: performanceFee,
     };
   }
+
+  computeUserFarmStateDelegateePDAForUserInVault(
+    farmProgramID: PublicKey,
+    vault: PublicKey,
+    user: PublicKey
+  ): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync([vault.toBuffer(), user.toBuffer()], farmProgramID);
+  }
 } // KaminoVaultClient
 
 export class KaminoVault {

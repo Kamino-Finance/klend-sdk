@@ -1014,6 +1014,13 @@ export class KaminoManager {
   }
 
   /**
+   * This will compute the PDA that is used as delegatee in Farms program to compute the user state PDA
+   */
+  computeUserFarmStateForUserInVault(farmProgramID: PublicKey, vault: PublicKey, user: PublicKey) {
+    return this._vaultClient.computeUserFarmStateDelegateePDAForUserInVault(farmProgramID, vault, user);
+  }
+
+  /**
    * This will load the onchain state for all the reserves that the vault has allocations for
    * @param vaultState - the vault state to load reserves for
    * @returns a hashmap from each reserve pubkey to the reserve state
