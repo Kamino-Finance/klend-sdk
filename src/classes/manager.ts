@@ -960,7 +960,7 @@ export class KaminoManager {
     slot: number,
     vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<APYs> {
-    return this._vaultClient.getVaultTheoreticalAPY(vault, slot, vaultReserves);
+    return this._vaultClient.getVaultActualAPY(vault, slot, vaultReserves);
   }
 
   /**
