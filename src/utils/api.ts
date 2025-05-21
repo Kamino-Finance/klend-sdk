@@ -5,29 +5,43 @@ import { CDN_ENDPOINT, getApiEndpoint } from '../utils';
 import { IBackOffOptions, backOff } from 'exponential-backoff';
 import { PROGRAM_ID } from '../lib';
 
+export type ApiFilterOptions = {
+  includeCurated?: boolean;
+};
+
 /**
  * Fetch config from the API
  * A good place to start to find active klend markets without expensive RPC calls
  *
  * @param programId - The program id to retrieve config for
  * @param source - CDN is a json file hosted in the cloud, API is a webserver
+ * @param filterOptions - Config options to filter markets by
  */
 export async function getMarketsFromApi(
   programId: PublicKey = PROGRAM_ID,
-  source: 'API' | 'CDN' = 'CDN'
+  source: 'API' | 'CDN' = 'CDN',
+  filterOptions: ApiFilterOptions = {},
 ): Promise<ConfigType> {
-  let configs: ConfigType = {} as ConfigType;
+  const defaultedFilterOptions: Required<ApiFilterOptions> = {
+    includeCurated: filterOptions.includeCurated || true
+  };
 
+  let unfilteredConfigs: ConfigType = {} as ConfigType;
   if (source === 'CDN') {
-    configs = (await backOff(() => axios.get(CDN_ENDPOINT), KAMINO_CDN_RETRY)).data[programId.toString()] as ConfigType;
+    unfilteredConfigs = (await backOff(() => axios.get(CDN_ENDPOINT), KAMINO_CDN_RETRY)).data[programId.toString()] as ConfigType;
   }
 
-  if (!configs || isEmptyObject(configs)) {
+  if (!unfilteredConfigs || isEmptyObject(unfilteredConfigs)) {
     const API_ENDPOINT = getApiEndpoint(programId);
-    configs = (await backOff(() => axios.get(API_ENDPOINT), KAMINO_API_RETRY)).data as ConfigType;
+    unfilteredConfigs = (await backOff(() => axios.get(API_ENDPOINT), KAMINO_API_RETRY)).data as ConfigType;
   }
 
-  return configs;
+  return unfilteredConfigs.filter((c) => {
+    if (!defaultedFilterOptions.includeCurated) {
+      return !c.isCurated;
+    }
+    return true;
+  });
 }
 
 export const KAMINO_CDN_RETRY: Partial<IBackOffOptions> = {

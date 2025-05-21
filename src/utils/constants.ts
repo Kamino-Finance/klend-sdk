@@ -27,7 +27,7 @@ export function getApiEndpoint(programId: PublicKey) {
   }
 }
 
-export const CDN_ENDPOINT = 'https://cdn.kamino.finance/kamino_lend_config_v2.json';
+export const CDN_ENDPOINT = 'https://cdn.kamino.finance/kamino_lend_config_v3.json';
 
 export const ONE_HUNDRED_PCT_IN_BPS = 10_000;
 

@@ -10,6 +10,7 @@ export type MarketConfigType = {
   description: string;
   lendingMarket: string;
   lookupTable: string;
+  isCurated: boolean;
 };
 
 export type ReserveConfigResponse = {
