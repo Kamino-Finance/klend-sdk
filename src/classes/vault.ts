@@ -2507,6 +2507,7 @@ export class KaminoVaultClient {
     const slotForOverview = slot ? slot : await this.getConnection().getSlot();
 
     const vaultTheoreticalAPYPromise = await this.getVaultTheoreticalAPY(vault, slotForOverview, vaultReservesState);
+    const vaultActualAPYPromise = await this.getVaultActualAPY(vault, slotForOverview, vaultReservesState);
     const totalInvestedAndBorrowedPromise = await this.getTotalBorrowedAndInvested(
       vault,
       slotForOverview,
@@ -2524,12 +2525,14 @@ export class KaminoVaultClient {
     const [
       vaultHoldingsWithUSDValue,
       vaultTheoreticalAPYs,
+      vaultActualAPYs,
       totalInvestedAndBorrowed,
       vaultCollaterals,
       reservesOverview,
     ] = await Promise.all([
       vaultHoldingsWithUSDValuePromise,
       vaultTheoreticalAPYPromise,
+      vaultActualAPYPromise,
       totalInvestedAndBorrowedPromise,
       vaultCollateralsPromise,
       reservesOverviewPromise,
@@ -2539,6 +2542,7 @@ export class KaminoVaultClient {
       holdingsUSD: vaultHoldingsWithUSDValue,
       reservesOverview: reservesOverview,
       vaultCollaterals: vaultCollaterals,
+      actualSupplyAPY: vaultActualAPYs,
       theoreticalSupplyAPY: vaultTheoreticalAPYs,
       totalBorrowed: totalInvestedAndBorrowed.totalBorrowed,
       totalBorrowedUSD: totalInvestedAndBorrowed.totalBorrowed.mul(price),
@@ -2687,6 +2691,57 @@ export class KaminoVaultClient {
     }
 
     const grossAPY = totalAPY.div(totalWeights);
+    const netAPY = grossAPY
+      .mul(new Decimal(1).sub(new Decimal(vault.performanceFeeBps.toString()).div(FullBPSDecimal)))
+      .mul(new Decimal(1).sub(new Decimal(vault.managementFeeBps.toString()).div(FullBPSDecimal)));
+    return {
+      grossAPY,
+      netAPY,
+    };
+  }
+
+  /**
+   * This will return the APY of the vault based on the current invested amounts; for percentage it needs multiplication by 100
+   * @param vault - the kamino vault to get APY for
+   * @param slot - current slot
+   * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @returns a struct containing estimated gross APY and net APY (gross - vault fees) for the vault
+   */
+  async getVaultActualAPY(
+    vault: VaultState,
+    slot: number,
+    vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<APYs> {
+    const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vault);
+
+    let totalAUM = new Decimal(vault.tokenAvailable.toString());
+    let totalAPY = new Decimal(0);
+    vault.vaultAllocationStrategy.forEach((allocationStrategy) => {
+      if (allocationStrategy.reserve.equals(PublicKey.default)) {
+        return;
+      }
+
+      const reserve = vaultReservesState.get(allocationStrategy.reserve);
+      if (reserve === undefined) {
+        throw new Error(`Reserve ${allocationStrategy.reserve.toBase58()} not found`);
+      }
+
+      const reserveAPY = new Decimal(reserve.totalSupplyAPY(slot));
+      const exchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, 0);
+      const investedInReserve = exchangeRate.mul(new Decimal(allocationStrategy.ctokenAllocation.toString()));
+
+      const weightedAPY = reserveAPY.mul(investedInReserve);
+      totalAPY = totalAPY.add(weightedAPY);
+      totalAUM = totalAUM.add(investedInReserve);
+    });
+    if (totalAUM.isZero()) {
+      return {
+        grossAPY: new Decimal(0),
+        netAPY: new Decimal(0),
+      };
+    }
+
+    const grossAPY = totalAPY.div(totalAUM);
     const netAPY = grossAPY
       .mul(new Decimal(1).sub(new Decimal(vault.performanceFeeBps.toString()).div(FullBPSDecimal)))
       .mul(new Decimal(1).sub(new Decimal(vault.managementFeeBps.toString()).div(FullBPSDecimal)));
@@ -2984,6 +3039,7 @@ export type VaultOverview = {
   reservesOverview: PubkeyHashMap<PublicKey, ReserveOverview>;
   vaultCollaterals: PubkeyHashMap<PublicKey, MarketOverview>;
   theoreticalSupplyAPY: APYs;
+  actualSupplyAPY: APYs;
   totalBorrowed: Decimal;
   totalBorrowedUSD: Decimal;
   totalSupplied: Decimal;

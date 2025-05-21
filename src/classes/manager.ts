@@ -873,7 +873,7 @@ export class KaminoManager {
   }
 
   /**
-   * This will return an VaultOverview object that encapsulates all the information about the vault, including the holdings, reserves details, theoretical APY, utilization ratio and total borrowed amount
+   * This will return an VaultOverview object that encapsulates all the information about the vault, including the holdings, reserves details, theoretical APY, actual APY, utilization ratio and total borrowed amount
    * @param vault - the kamino vault to get available liquidity to withdraw for
    * @param price - the price of the token in the vault (e.g. USDC)
    * @param [slot] - the slot for which to retrieve the vault overview for. Optional. If not provided the function will fetch the current slot
@@ -941,6 +941,21 @@ export class KaminoManager {
    * @returns a struct containing estimated gross APY and net APY (gross - vault fees) for the vault
    */
   async getVaultTheoreticalAPY(
+    vault: VaultState,
+    slot: number,
+    vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
+  ): Promise<APYs> {
+    return this._vaultClient.getVaultTheoreticalAPY(vault, slot, vaultReserves);
+  }
+
+  /**
+   * This will return the APY of the vault based on the current invested amounts; for percentage it needs multiplication by 100
+   * @param vault - the kamino vault to get APY for
+   * @param slot - current slot
+   * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @returns a struct containing estimated gross APY and net APY (gross - vault fees) for the vault
+   */
+  async getVaultActualAPY(
     vault: VaultState,
     slot: number,
     vaultReserves?: PubkeyHashMap<PublicKey, KaminoReserve>
