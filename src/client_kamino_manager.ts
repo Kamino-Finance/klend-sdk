@@ -321,7 +321,11 @@ async function main() {
     .requiredOption('--vault <string>', 'Vault address')
     .requiredOption('--symbol <string>', 'The symbol of the kVault token')
     .requiredOption('--extraName <string>', 'The name of the kVault token, appended to the symbol')
-    .action(async ({ vault, symbol, extraName }) => {
+    .requiredOption(
+      `--mode <string>`,
+      'simulate - to print txn simulation, inspect - to get txn simulation in explorer, execute - execute txn, multisig - to get bs58 txn for multisig usage'
+    )
+    .action(async ({ vault, symbol, extraName, mode }) => {
       const env = initializeClient(false, false);
       const kVault = new KaminoVault(new PublicKey(vault));
 
@@ -333,7 +337,7 @@ async function main() {
       );
       const ix = await kaminoManager.getSetSharesMetadataIx(kVault, symbol, extraName);
 
-      await processTxn(env.client, env.payer, [ix], 'execute', 2500, []);
+      await processTxn(env.client, env.payer, [ix], mode, 2500, []);
     });
 
   commands
