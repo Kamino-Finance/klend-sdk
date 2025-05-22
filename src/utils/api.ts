@@ -6,7 +6,7 @@ import { IBackOffOptions, backOff } from 'exponential-backoff';
 import { PROGRAM_ID } from '../lib';
 
 export type ApiFilterOptions = {
-  includeCurated?: boolean;
+  isCurated?: boolean;
 };
 
 /**
@@ -20,15 +20,13 @@ export type ApiFilterOptions = {
 export async function getMarketsFromApi(
   programId: PublicKey = PROGRAM_ID,
   source: 'API' | 'CDN' = 'CDN',
-  filterOptions: ApiFilterOptions = {},
+  filterOptions: ApiFilterOptions = {}
 ): Promise<ConfigType> {
-  const defaultedFilterOptions: Required<ApiFilterOptions> = {
-    includeCurated: filterOptions.includeCurated || true
-  };
-
   let unfilteredConfigs: ConfigType = {} as ConfigType;
   if (source === 'CDN') {
-    unfilteredConfigs = (await backOff(() => axios.get(CDN_ENDPOINT), KAMINO_CDN_RETRY)).data[programId.toString()] as ConfigType;
+    unfilteredConfigs = (await backOff(() => axios.get(CDN_ENDPOINT), KAMINO_CDN_RETRY)).data[
+      programId.toString()
+    ] as ConfigType;
   }
 
   if (!unfilteredConfigs || isEmptyObject(unfilteredConfigs)) {
@@ -37,8 +35,8 @@ export async function getMarketsFromApi(
   }
 
   return unfilteredConfigs.filter((c) => {
-    if (!defaultedFilterOptions.includeCurated) {
-      return !c.isCurated;
+    if (filterOptions.isCurated !== undefined) {
+      return c.isCurated === filterOptions.isCurated;
     }
     return true;
   });
