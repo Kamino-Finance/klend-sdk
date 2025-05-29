@@ -334,7 +334,9 @@ function buildReserveConfig(fields: {
     borrowRateCurve: fields.configParams.borrowRateCurve,
     depositWithdrawalCap: new WithdrawalCaps({
       configCapacity: new BN(
-        numberToLamportsDecimal(fields.configParams.depositLimit ?? new Decimal(0), fields.mintDecimals).floor().toString()
+        numberToLamportsDecimal(fields.configParams.depositLimit ?? new Decimal(0), fields.mintDecimals)
+          .floor()
+          .toString()
       ),
       currentTotal: new BN(0),
       lastIntervalStartTimestamp: new BN(0),
@@ -342,7 +344,9 @@ function buildReserveConfig(fields: {
     }),
     debtWithdrawalCap: new WithdrawalCaps({
       configCapacity: new BN(
-        numberToLamportsDecimal(fields.debtWithdrawalCapConfigCapacity ?? new Decimal(0), fields.mintDecimals).floor().toString()
+        numberToLamportsDecimal(fields.debtWithdrawalCapConfigCapacity ?? new Decimal(0), fields.mintDecimals)
+          .floor()
+          .toString()
       ),
       currentTotal: new BN(0),
       lastIntervalStartTimestamp: new BN(0),
@@ -357,7 +361,9 @@ function buildReserveConfig(fields: {
     hostFixedInterestRateBps: 0,
     autodeleverageEnabled: 0,
     borrowLimitOutsideElevationGroup: new BN(
-      numberToLamportsDecimal(fields.borrowLimitOutsideElevationGroup ?? new Decimal(0), fields.mintDecimals).floor().toString()
+      numberToLamportsDecimal(fields.borrowLimitOutsideElevationGroup ?? new Decimal(0), fields.mintDecimals)
+        .floor()
+        .toString()
     ),
     borrowLimitAgainstThisCollateralInElevationGroup: Array(32).fill(new BN(0)),
     deleveragingBonusIncreaseBpsPerDay: new BN(100),

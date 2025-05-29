@@ -13,17 +13,18 @@ export type SwapIxsProvider<QuoteResponse> = (
   inputs: SwapInputs,
   klendAccounts: Array<PublicKey>,
   quote: SwapQuote<QuoteResponse>
-) => Promise<SwapIxs>;
+) => Promise<Array<SwapIxs<QuoteResponse>>>;
 
 export type SwapQuote<QuoteResponse> = {
   priceAInB: Decimal;
   quoteResponse?: QuoteResponse;
 };
 
-export type SwapIxs = {
+export type SwapIxs<QuoteResponse> = {
   preActionIxs: TransactionInstruction[];
   swapIxs: TransactionInstruction[];
   lookupTables: AddressLookupTableAccount[];
+  quote: SwapQuote<QuoteResponse>;
 };
 
 export type PriceAinBProvider = (mintA: PublicKey, mintB: PublicKey) => Promise<Decimal>;
@@ -48,11 +49,12 @@ export type SwapInputs = {
   amountDebtAtaBalance: Decimal | undefined;
 };
 
-export type BaseLeverageIxsResponse = {
+export type BaseLeverageIxsResponse<QuoteResponse> = {
   ixs: TransactionInstruction[];
   lookupTables: AddressLookupTableAccount[];
   swapInputs: SwapInputs;
   flashLoanInfo: FlashLoanInfo;
+  quote?: QuoteResponse;
 };
 
 export type LeverageInitialInputs<LeverageCalcsResult, QuoteResponse> = {
@@ -82,7 +84,7 @@ export interface BaseLeverageSwapInputsProps<QuoteResponse> {
   useV2Ixs: boolean;
 }
 
-export type DepositLeverageIxsResponse<QuoteResponse> = BaseLeverageIxsResponse & {
+export type DepositLeverageIxsResponse<QuoteResponse> = BaseLeverageIxsResponse<QuoteResponse> & {
   initialInputs: LeverageInitialInputs<DepositLeverageCalcsResult, QuoteResponse>;
 };
 
@@ -125,7 +127,7 @@ export type DepositLeverageCalcsResult = {
   requiredCollateralKtokenOnly: Decimal;
 };
 
-export type WithdrawLeverageIxsResponse<QuoteResponse> = BaseLeverageIxsResponse & {
+export type WithdrawLeverageIxsResponse<QuoteResponse> = BaseLeverageIxsResponse<QuoteResponse> & {
   initialInputs: LeverageInitialInputs<WithdrawLeverageCalcsResult, QuoteResponse>;
 };
 
@@ -161,7 +163,7 @@ export type WithdrawLeverageCalcsResult = {
   debtTokenExpectedSwapOut: Decimal;
 };
 
-export type AdjustLeverageIxsResponse<QuoteResponse> = BaseLeverageIxsResponse & {
+export type AdjustLeverageIxsResponse<QuoteResponse> = BaseLeverageIxsResponse<QuoteResponse> & {
   initialInputs: LeverageInitialInputs<AdjustLeverageCalcsResult, QuoteResponse> & {
     isDeposit: boolean;
   };

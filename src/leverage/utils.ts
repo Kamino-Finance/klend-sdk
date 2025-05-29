@@ -38,7 +38,7 @@ export async function getTokenToKtokenSwapper<QuoteResponse>(
     inputs: SwapInputs,
     klendAccounts: Array<PublicKey>,
     quote: SwapQuote<QuoteResponse>
-  ): Promise<SwapIxs> => {
+  ): Promise<Array<SwapIxs<QuoteResponse>>> => {
     const slippageBps = new Decimal(slippagePct).mul('100');
     const mintInDecimals = kaminoMarket.getExistingReserveByMint(inputs.inputMint).getMintDecimals();
     const amountIn = lamportsToNumberDecimal(inputs.inputAmountLamports, mintInDecimals);
@@ -65,11 +65,18 @@ export async function getTokenToKtokenSwapper<QuoteResponse>(
 
     const luts = await getLookupTableAccounts(kaminoMarket.getConnection(), ixWithLookup.lookupTablesAddresses);
 
-    return {
-      preActionIxs: [],
-      swapIxs: ixWithLookup.instructions,
-      lookupTables: luts,
-    };
+    return [
+      {
+        preActionIxs: [],
+        swapIxs: ixWithLookup.instructions,
+        lookupTables: luts,
+        // TODO: Ktoken only supports one swap at a time for now (to be updated if we enable ktokens)
+        quote: {
+          priceAInB: new Decimal(0),
+          quoteResponse: undefined,
+        },
+      },
+    ];
   };
 }
 
@@ -149,7 +156,7 @@ export async function getKtokenToTokenSwapper<QuoteResponse>(
     );
 
     if (inputs.outputMint.equals(kaminoStrategy!.strategy.tokenAMint!)) {
-      const { swapIxs, lookupTables } = await swapper(
+      const swapArray = await swapper(
         {
           inputAmountLamports: estimatedBOut,
           inputMint: kaminoStrategy!.strategy.tokenBMint!,
@@ -159,14 +166,19 @@ export async function getKtokenToTokenSwapper<QuoteResponse>(
         klendAccounts,
         quote
       );
+      // TODO: Ktoken only supports one swap at a time for now (to be updated if we enable ktokens)
+      const swap = swapArray[0];
 
-      return {
-        preActionIxs: [],
-        swapIxs: [...ixWithdraw.prerequisiteIxs, ixWithdraw.withdrawIx, ...swapIxs],
-        lookupTables,
-      };
+      return [
+        {
+          preActionIxs: [],
+          swapIxs: [...ixWithdraw.prerequisiteIxs, ixWithdraw.withdrawIx, ...swap.swapIxs],
+          lookupTables: swap.lookupTables,
+          quote: swap.quote,
+        },
+      ];
     } else if (inputs.outputMint.equals(kaminoStrategy!.strategy.tokenBMint!)) {
-      const { swapIxs, lookupTables } = await swapper(
+      const swapArray = await swapper(
         {
           inputAmountLamports: estimatedAOut,
           inputMint: kaminoStrategy!.strategy.tokenAMint!,
@@ -176,12 +188,17 @@ export async function getKtokenToTokenSwapper<QuoteResponse>(
         klendAccounts,
         quote
       );
+      // TODO: Ktoken only supports one swap at a time for now (to be updated if we enable ktokens)
+      const swap = swapArray[0];
 
-      return {
-        preActionIxs: [],
-        swapIxs: [...ixWithdraw.prerequisiteIxs, ixWithdraw.withdrawIx, ...swapIxs],
-        lookupTables,
-      };
+      return [
+        {
+          preActionIxs: [],
+          swapIxs: [...ixWithdraw.prerequisiteIxs, ixWithdraw.withdrawIx, ...swap.swapIxs],
+          lookupTables: swap.lookupTables,
+          quote: swap.quote,
+        },
+      ];
     } else {
       throw Error('Deposit token is neither A nor B in the strategy');
     }
@@ -264,7 +281,7 @@ export function swapProviderToKaminoSwapProvider<QuoteResponse>(
     _allKeys: PublicKey[]
   ): Promise<[TransactionInstruction[], PublicKey[]]> => {
     if (input.tokenBToSwapAmount.lt(0)) {
-      const swapperIxs = await swapper(
+      const swapperIxsArray = await swapper(
         {
           inputAmountLamports: input.tokenBToSwapAmount.abs(),
           inputMint: tokenBMint,
@@ -274,9 +291,11 @@ export function swapProviderToKaminoSwapProvider<QuoteResponse>(
         klendAccounts,
         swapQuote
       );
+      // TODO: Ktoken only supports one swap at a time for now (to be updated if we enable ktokens)
+      const swapperIxs = swapperIxsArray[0];
       return [swapperIxs.swapIxs, swapperIxs.lookupTables.map((lt) => lt.key)];
     } else if (input.tokenAToSwapAmount.lt(0)) {
-      const swapperIxs = await swapper(
+      const swapperIxsArray = await swapper(
         {
           inputAmountLamports: input.tokenAToSwapAmount.abs(),
           inputMint: tokenAMint,
@@ -286,6 +305,8 @@ export function swapProviderToKaminoSwapProvider<QuoteResponse>(
         klendAccounts,
         swapQuote
       );
+      // TODO: Ktoken only supports one swap at a time for now (to be updated if we enable ktokens)
+      const swapperIxs = swapperIxsArray[0];
       return [swapperIxs.swapIxs, swapperIxs.lookupTables.map((lt) => lt.key)];
     } else {
       throw Error('Nothing to swap');

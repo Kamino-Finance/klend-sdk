@@ -88,32 +88,34 @@ import { Scope } from '@kamino-finance/scope-sdk/';
 
   const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
 
-  const { ixs, lookupTables, swapInputs } = await getAdjustLeverageIxs<QuoteResponse>({
-    owner: wallet.publicKey,
-    kaminoMarket: market,
-    debtTokenMint: debtTokenMint,
-    collTokenMint: collTokenMint,
-    obligation: obligation!, // obligation does not exist as we are creating it with this deposit
-    depositedLamports,
-    borrowedLamports,
-    referrer: PublicKey.default,
-    currentSlot,
-    targetLeverage: targetLeverage,
-    priceCollToDebt,
-    priceDebtToColl,
-    slippagePct: new Decimal(slippagePct),
-    budgetAndPriorityFeeIxs: computeIxs,
-    kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
-    scopeRefreshConfig: { scope, scopeFeed: 'hubble' },
-    quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
-    priceAinB: getPriceAinB,
-    isKtoken: async (token: PublicKey | string): Promise<boolean> => {
-      return false;
-    }, // should return true if the token is a ktoken which is currently not supported
-    quoter: getJupiterQuoter(slippagePct * 100, collTokenReserve!, debtTokenReserve!), // IMPORTANT!: For adjust DOWN the input mint is the coll token and the output mint is the debt token
-    swapper: getJupiterSwapper(connection, wallet.publicKey),
-    useV2Ixs: true,
-  });
+  const { ixs, lookupTables, swapInputs } = (
+    await getAdjustLeverageIxs<QuoteResponse>({
+      owner: wallet.publicKey,
+      kaminoMarket: market,
+      debtTokenMint: debtTokenMint,
+      collTokenMint: collTokenMint,
+      obligation: obligation!, // obligation does not exist as we are creating it with this deposit
+      depositedLamports,
+      borrowedLamports,
+      referrer: PublicKey.default,
+      currentSlot,
+      targetLeverage: targetLeverage,
+      priceCollToDebt,
+      priceDebtToColl,
+      slippagePct: new Decimal(slippagePct),
+      budgetAndPriorityFeeIxs: computeIxs,
+      kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
+      scopeRefreshConfig: { scope, scopeFeed: 'hubble' },
+      quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
+      priceAinB: getPriceAinB,
+      isKtoken: async (token: PublicKey | string): Promise<boolean> => {
+        return false;
+      }, // should return true if the token is a ktoken which is currently not supported
+      quoter: getJupiterQuoter(slippagePct * 100, collTokenReserve!, debtTokenReserve!), // IMPORTANT!: For adjust DOWN the input mint is the coll token and the output mint is the debt token
+      swapper: getJupiterSwapper(connection, wallet.publicKey),
+      useV2Ixs: true,
+    })
+  )[0];
 
   const lookupTableKeys = lookupTables.map((lut) => lut.key);
   lookupTableKeys.push(userLookupTable);
@@ -129,32 +131,34 @@ import { Scope } from '@kamino-finance/scope-sdk/';
   {
     const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
 
-    const { ixs, lookupTables, swapInputs } = await getAdjustLeverageIxs<QuoteResponse>({
-      owner: wallet.publicKey,
-      kaminoMarket: market,
-      debtTokenMint: debtTokenMint,
-      collTokenMint: collTokenMint,
-      obligation: obligation!, // obligation does not exist as we are creating it with this deposit
-      depositedLamports,
-      borrowedLamports,
-      referrer: PublicKey.default,
-      currentSlot,
-      targetLeverage: ogLeverage,
-      priceCollToDebt,
-      priceDebtToColl,
-      slippagePct: new Decimal(slippagePct),
-      budgetAndPriorityFeeIxs: computeIxs,
-      kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
-      scopeRefreshConfig: { scope, scopeFeed: 'hubble' },
-      quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
-      priceAinB: getPriceAinB,
-      isKtoken: async (token: PublicKey | string): Promise<boolean> => {
-        return false;
-      }, // should return true if the token is a ktoken which is currently not supported
-      quoter: getJupiterQuoter(slippagePct * 100, debtTokenReserve!, collTokenReserve!), // IMPORTANT!: For adjust UP the input mint is the debt token and the output mint is the coll token
-      swapper: getJupiterSwapper(connection, wallet.publicKey),
-      useV2Ixs: true,
-    });
+    const { ixs, lookupTables, swapInputs } = (
+      await getAdjustLeverageIxs<QuoteResponse>({
+        owner: wallet.publicKey,
+        kaminoMarket: market,
+        debtTokenMint: debtTokenMint,
+        collTokenMint: collTokenMint,
+        obligation: obligation!, // obligation does not exist as we are creating it with this deposit
+        depositedLamports,
+        borrowedLamports,
+        referrer: PublicKey.default,
+        currentSlot,
+        targetLeverage: ogLeverage,
+        priceCollToDebt,
+        priceDebtToColl,
+        slippagePct: new Decimal(slippagePct),
+        budgetAndPriorityFeeIxs: computeIxs,
+        kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
+        scopeRefreshConfig: { scope, scopeFeed: 'hubble' },
+        quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
+        priceAinB: getPriceAinB,
+        isKtoken: async (token: PublicKey | string): Promise<boolean> => {
+          return false;
+        }, // should return true if the token is a ktoken which is currently not supported
+        quoter: getJupiterQuoter(slippagePct * 100, debtTokenReserve!, collTokenReserve!), // IMPORTANT!: For adjust UP the input mint is the debt token and the output mint is the coll token
+        swapper: getJupiterSwapper(connection, wallet.publicKey),
+        useV2Ixs: true,
+      })
+    )[0];
 
     const lookupTableKeys = lookupTables.map((lut) => lut.key);
     lookupTableKeys.push(userLookupTable);

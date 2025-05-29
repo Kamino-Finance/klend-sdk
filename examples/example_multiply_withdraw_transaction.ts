@@ -92,32 +92,34 @@ import { Scope } from '@kamino-finance/scope-sdk/';
 
   const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
 
-  const { ixs, lookupTables, swapInputs } = await getWithdrawWithLeverageIxs<QuoteResponse>({
-    owner: wallet.publicKey,
-    kaminoMarket: market,
-    debtTokenMint: debtTokenMint,
-    collTokenMint: collTokenMint,
-    obligation: obligation!, // obligation does not exist as we are creating it with this deposit
-    deposited: deposited,
-    borrowed: borrowed,
-    referrer: PublicKey.default,
-    currentSlot,
-    withdrawAmount,
-    priceCollToDebt,
-    slippagePct: new Decimal(slippagePct),
-    isClosingPosition: true, // if true, withdraws all the collateral and closes the position
-    selectedTokenMint: debtTokenMint, // the token we are withdrawing into
-    budgetAndPriorityFeeIxs: computeIxs,
-    kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
-    scopeRefreshConfig: { scope, scopeFeed: 'hubble' },
-    quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
-    isKtoken: async (token: PublicKey | string): Promise<boolean> => {
-      return false;
-    }, // should return true if the token is a ktoken which is currently not supported
-    quoter: getJupiterQuoter(slippagePct * 100, collTokenReserve!, debtTokenReserve!), // IMPORTANT!: For withdraw the input mint is the coll token mint and the output mint is the debt token
-    swapper: getJupiterSwapper(connection, wallet.publicKey),
-    useV2Ixs: true,
-  });
+  const { ixs, lookupTables, swapInputs } = (
+    await getWithdrawWithLeverageIxs<QuoteResponse>({
+      owner: wallet.publicKey,
+      kaminoMarket: market,
+      debtTokenMint: debtTokenMint,
+      collTokenMint: collTokenMint,
+      obligation: obligation!, // obligation does not exist as we are creating it with this deposit
+      deposited: deposited,
+      borrowed: borrowed,
+      referrer: PublicKey.default,
+      currentSlot,
+      withdrawAmount,
+      priceCollToDebt,
+      slippagePct: new Decimal(slippagePct),
+      isClosingPosition: true, // if true, withdraws all the collateral and closes the position
+      selectedTokenMint: debtTokenMint, // the token we are withdrawing into
+      budgetAndPriorityFeeIxs: computeIxs,
+      kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
+      scopeRefreshConfig: { scope, scopeFeed: 'hubble' },
+      quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
+      isKtoken: async (token: PublicKey | string): Promise<boolean> => {
+        return false;
+      }, // should return true if the token is a ktoken which is currently not supported
+      quoter: getJupiterQuoter(slippagePct * 100, collTokenReserve!, debtTokenReserve!), // IMPORTANT!: For withdraw the input mint is the coll token mint and the output mint is the debt token
+      swapper: getJupiterSwapper(connection, wallet.publicKey),
+      useV2Ixs: true,
+    })
+  )[0];
 
   const lookupTableKeys = lookupTables.map((lut) => lut.key);
   lookupTableKeys.push(userLookupTable);

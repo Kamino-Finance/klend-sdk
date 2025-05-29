@@ -28,6 +28,7 @@ export type RepayWithCollIxsResponse<QuoteResponse> = {
   flashLoanInfo: FlashLoanInfo;
   swapInputs: SwapInputs;
   initialInputs: RepayWithCollInitialInputs<QuoteResponse>;
+  quote?: QuoteResponse;
 };
 
 export type RepayWithCollInitialInputs<QuoteResponse> = {
@@ -129,6 +130,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
       preActionIxs: [],
       swapIxs: [],
       lookupTables: [],
+      quote: {} as SwapQuote<QuoteResponse>,
     },
     isClosingPosition,
     repayAmountLamports,
@@ -193,7 +195,7 @@ export async function getRepayWithCollIxs<QuoteResponse>({
   scopeRefreshConfig,
   useV2Ixs,
   logger = console.log,
-}: RepayWithCollIxsProps<QuoteResponse>): Promise<RepayWithCollIxsResponse<QuoteResponse>> {
+}: RepayWithCollIxsProps<QuoteResponse>): Promise<Array<RepayWithCollIxsResponse<QuoteResponse>>> {
   const { swapInputs, initialInputs } = await getRepayWithCollSwapInputs({
     collTokenMint,
     currentSlot,
@@ -234,33 +236,39 @@ export async function getRepayWithCollIxs<QuoteResponse>({
       .div(actualSwapInLamports.div(collReserve.getMintFactor()))} ${debtReserve.symbol}/${collReserve.symbol}`
   );
 
-  const swapResponse = await swapper(swapInputs, initialInputs.klendAccounts, swapQuote);
-  const ixs: LeverageIxsOutput = await buildRepayWithCollateralIxs(
-    kaminoMarket,
-    debtReserve,
-    collReserve,
-    obligation,
-    referrer,
-    currentSlot,
-    budgetAndPriorityFeeIxs,
-    scopeRefreshConfig,
-    swapResponse,
-    isClosingPosition,
-    debtRepayAmountLamports,
-    swapInputs.inputAmountLamports,
-    useV2Ixs
-  );
+  const swapResponses = await swapper(swapInputs, initialInputs.klendAccounts, swapQuote);
 
-  return {
-    ixs: ixs.instructions,
-    lookupTables: swapResponse.lookupTables,
-    swapInputs,
-    flashLoanInfo: ixs.flashLoanInfo,
-    initialInputs,
-  };
+  return Promise.all(
+    swapResponses.map(async (swapResponse) => {
+      const ixs: LeverageIxsOutput = await buildRepayWithCollateralIxs(
+        kaminoMarket,
+        debtReserve,
+        collReserve,
+        obligation,
+        referrer,
+        currentSlot,
+        budgetAndPriorityFeeIxs,
+        scopeRefreshConfig,
+        swapResponse,
+        isClosingPosition,
+        debtRepayAmountLamports,
+        swapInputs.inputAmountLamports,
+        useV2Ixs
+      );
+
+      return {
+        ixs: ixs.instructions,
+        lookupTables: swapResponse.lookupTables,
+        swapInputs,
+        flashLoanInfo: ixs.flashLoanInfo,
+        initialInputs,
+        quote: swapResponse.quote.quoteResponse,
+      };
+    })
+  );
 }
 
-async function buildRepayWithCollateralIxs(
+async function buildRepayWithCollateralIxs<QuoteResponse>(
   market: KaminoMarket,
   debtReserve: KaminoReserve,
   collReserve: KaminoReserve,
@@ -269,7 +277,7 @@ async function buildRepayWithCollateralIxs(
   currentSlot: number,
   budgetAndPriorityFeeIxs: TransactionInstruction[] | undefined,
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-  swapQuoteIxs: SwapIxs,
+  swapQuoteIxs: SwapIxs<QuoteResponse>,
   isClosingPosition: boolean,
   debtRepayAmountLamports: Decimal,
   collWithdrawLamports: Decimal,

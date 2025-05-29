@@ -145,17 +145,23 @@ export function getJupiterSwapper(connection: Connection, payer: PublicKey): Swa
     inputs: SwapInputs,
     klendAccounts: Array<PublicKey>,
     quote: SwapQuote<QuoteResponse>
-  ): Promise<SwapIxs> => {
+  ): Promise<Array<SwapIxs<QuoteResponse>>> => {
     const scaledQuoteResponse = scaleJupQuoteResponse(quote.quoteResponse!, new Decimal(inputs.inputAmountLamports));
     const { swapTxs, swapLookupTableAccounts } = await swapTxFromQuote(connection, payer, scaledQuoteResponse, {
       slippageBps: 100,
       wrapAndUnwrapSol: false,
     });
-    return {
-      preActionIxs: [],
-      swapIxs: [...swapTxs.setupIxs, ...swapTxs.swapIxs, ...swapTxs.cleanupIxs],
-      lookupTables: swapLookupTableAccounts,
-    };
+    return [
+      {
+        preActionIxs: [],
+        swapIxs: [...swapTxs.setupIxs, ...swapTxs.swapIxs, ...swapTxs.cleanupIxs],
+        lookupTables: swapLookupTableAccounts,
+        quote: {
+          priceAInB: new Decimal(quote.priceAInB),
+          quoteResponse: scaledQuoteResponse,
+        },
+      },
+    ];
   };
 
   return swapper;
@@ -180,7 +186,6 @@ async function swapTxFromQuote(
             .toNumber() ?? 1,
         wrapAndUnwrapSol: swapConfig?.wrapAndUnwrapSol ?? false,
         destinationTokenAccount: swapConfig?.destinationTokenAccount?.toBase58() ?? undefined,
-        useTokenLedger: swapConfig.useTokenLedger,
       },
     };
     swap = await swapApiClient.swapInstructionsPost(swapParameters);

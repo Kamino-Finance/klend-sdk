@@ -145,7 +145,7 @@ export interface SwapCollIxsOutputs<QuoteResponse> {
  */
 export async function getSwapCollIxs<QuoteResponse>(
   inputs: SwapCollIxsInputs<QuoteResponse>
-): Promise<SwapCollIxsOutputs<QuoteResponse>> {
+): Promise<Array<SwapCollIxsOutputs<QuoteResponse>>> {
   const [args, context] = extractArgsAndContext(inputs);
 
   // Conceptually, we need to construct the following ixs:
@@ -165,33 +165,37 @@ export async function getSwapCollIxs<QuoteResponse>(
   const klendAccounts = uniqueAccountsWithProgramIds(listIxs(fakeKlendIxs));
 
   // Construct the external swap ixs (and learn the actual swap-out amount):
-  const externalSwapIxs = await getExternalSwapIxs(args, klendAccounts, context);
+  const externalSwapIxsArray = await getExternalSwapIxs(args, klendAccounts, context);
 
-  // We now have the full information needed to simulate the end-state, so let's check that the operation is legal:
-  context.logger(
-    `Expected to swap ${args.sourceCollSwapAmount} ${context.sourceCollReserve.symbol} collateral into ${externalSwapIxs.swapOutAmount} ${context.targetCollReserve.symbol} collateral`
+  return Promise.all(
+    externalSwapIxsArray.map(async (externalSwapIxs) => {
+      // We now have the full information needed to simulate the end-state, so let's check that the operation is legal:
+      context.logger(
+        `Expected to swap ${args.sourceCollSwapAmount} ${context.sourceCollReserve.symbol} collateral into ${externalSwapIxs.swapOutAmount} ${context.targetCollReserve.symbol} collateral`
+      );
+      checkResultingObligationValid(args, externalSwapIxs.swapOutAmount, context);
+
+      // Construct the Klend's own ixs with an actual swap-out amount:
+      const klendIxs = await getKlendIxs(args, externalSwapIxs.swapOutAmount, context);
+
+      return {
+        ixs: listIxs(klendIxs, externalSwapIxs.ixs),
+        lookupTables: externalSwapIxs.luts,
+        useV2Ixs: context.useV2Ixs,
+        simulationDetails: {
+          flashLoan: {
+            targetCollFlashBorrowedAmount: klendIxs.simulationDetails.targetCollFlashBorrowedAmount,
+            targetCollFlashRepaidAmount: externalSwapIxs.swapOutAmount,
+          },
+          externalSwap: {
+            sourceCollSwapInAmount: args.sourceCollSwapAmount, // repeated `/inputs.sourceCollSwapAmount`, only for clarity
+            targetCollSwapOutAmount: externalSwapIxs.swapOutAmount, // repeated `../flashLoan.targetCollFlashRepaidAmount`, only for clarity
+            quoteResponse: externalSwapIxs.simulationDetails.quoteResponse,
+          },
+        },
+      };
+    })
   );
-  checkResultingObligationValid(args, externalSwapIxs.swapOutAmount, context);
-
-  // Construct the Klend's own ixs with an actual swap-out amount:
-  const klendIxs = await getKlendIxs(args, externalSwapIxs.swapOutAmount, context);
-
-  return {
-    ixs: listIxs(klendIxs, externalSwapIxs.ixs),
-    lookupTables: externalSwapIxs.luts,
-    useV2Ixs: context.useV2Ixs,
-    simulationDetails: {
-      flashLoan: {
-        targetCollFlashBorrowedAmount: klendIxs.simulationDetails.targetCollFlashBorrowedAmount,
-        targetCollFlashRepaidAmount: externalSwapIxs.swapOutAmount,
-      },
-      externalSwap: {
-        sourceCollSwapInAmount: args.sourceCollSwapAmount, // repeated `/inputs.sourceCollSwapAmount`, only for clarity
-        targetCollSwapOutAmount: externalSwapIxs.swapOutAmount, // repeated `../flashLoan.targetCollFlashRepaidAmount`, only for clarity
-        quoteResponse: externalSwapIxs.simulationDetails.quoteResponse,
-      },
-    },
-  };
 }
 
 type SwapCollArgs = {
@@ -508,7 +512,7 @@ async function getExternalSwapIxs<QuoteResponse>(
   args: SwapCollArgs,
   klendAccounts: PublicKey[],
   context: SwapCollContext<QuoteResponse>
-): Promise<ExternalSwapIxs<QuoteResponse>> {
+): Promise<Array<ExternalSwapIxs<QuoteResponse>>> {
   const externalSwapInputs = {
     inputAmountLamports: args.sourceCollSwapAmount.mul(context.sourceCollReserve.getMintFactor()),
     inputMint: context.sourceCollReserve.getLiquidityMint(),
@@ -516,17 +520,20 @@ async function getExternalSwapIxs<QuoteResponse>(
     amountDebtAtaBalance: undefined, // only used for kTokens
   };
   const externalSwapQuote = await context.quoter(externalSwapInputs, klendAccounts);
-  const swapOutAmount = externalSwapQuote.priceAInB.mul(args.sourceCollSwapAmount);
   const externalSwapIxsAndLuts = await context.swapper(externalSwapInputs, klendAccounts, externalSwapQuote);
+
   // Note: we can ignore the returned `preActionIxs` field - we do not request any of them from the swapper.
-  return {
-    swapOutAmount,
-    ixs: externalSwapIxsAndLuts.swapIxs,
-    luts: externalSwapIxsAndLuts.lookupTables,
-    simulationDetails: {
-      quoteResponse: externalSwapQuote.quoteResponse,
-    },
-  };
+  return externalSwapIxsAndLuts.map((externalSwapIxsAndLuts) => {
+    const swapOutAmount = externalSwapIxsAndLuts.quote.priceAInB.mul(args.sourceCollSwapAmount);
+    return {
+      swapOutAmount,
+      ixs: externalSwapIxsAndLuts.swapIxs,
+      luts: externalSwapIxsAndLuts.lookupTables,
+      simulationDetails: {
+        quoteResponse: externalSwapIxsAndLuts.quote.quoteResponse,
+      },
+    };
+  });
 }
 
 function checkResultingObligationValid(

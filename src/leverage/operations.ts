@@ -147,6 +147,10 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
       preActionIxs: [],
       swapIxs: [],
       lookupTables: [],
+      quote: {
+        priceAInB: new Decimal(0), // not used
+        quoteResponse: undefined,
+      },
     },
     strategy,
     collIsKtoken,
@@ -317,7 +321,7 @@ export async function getDepositWithLeverageIxs<QuoteResponse>({
   swapper,
   elevationGroupOverride,
   useV2Ixs,
-}: DepositWithLeverageProps<QuoteResponse>): Promise<DepositLeverageIxsResponse<QuoteResponse>> {
+}: DepositWithLeverageProps<QuoteResponse>): Promise<Array<DepositLeverageIxsResponse<QuoteResponse>>> {
   const { swapInputs, initialInputs } = await getDepositWithLeverageSwapInputs({
     owner,
     kaminoMarket,
@@ -353,11 +357,7 @@ export async function getDepositWithLeverageIxs<QuoteResponse>({
     depositSwapper = await getTokenToKtokenSwapper(kaminoMarket, kamino, owner, slippagePct, swapper, priceAinB, false);
   }
 
-  const { swapIxs, lookupTables } = await depositSwapper(
-    swapInputs,
-    initialInputs.klendAccounts,
-    initialInputs.swapQuote
-  );
+  const swapsArray = await depositSwapper(swapInputs, initialInputs.klendAccounts, initialInputs.swapQuote);
 
   if (initialInputs.collIsKtoken) {
     if (initialInputs.strategy!.strategy.strategyLookupTable) {
@@ -365,7 +365,9 @@ export async function getDepositWithLeverageIxs<QuoteResponse>({
         kaminoMarket.getConnection(),
         initialInputs.strategy!.strategy.strategyLookupTable!
       );
-      lookupTables.push(strategyLut!);
+      swapsArray.forEach((swap) => {
+        swap.lookupTables.push(strategyLut!);
+      });
     } else {
       console.log('Strategy lookup table not found');
     }
@@ -376,39 +378,45 @@ export async function getDepositWithLeverageIxs<QuoteResponse>({
   const solTokenReserve = kaminoMarket.getReserveByMint(NATIVE_MINT);
   const depositTokenIsSol = !solTokenReserve ? false : selectedTokenMint.equals(solTokenReserve!.getLiquidityMint());
 
-  const ixs: LeverageIxsOutput = await buildDepositWithLeverageIxs(
-    kaminoMarket,
-    debtReserve!,
-    collReserve!,
-    owner,
-    initialInputs.obligation,
-    referrer,
-    currentSlot,
-    depositTokenIsSol,
-    scopeRefreshConfig,
-    initialInputs.calcs,
-    budgetAndPriorityFeeIxs,
-    {
-      preActionIxs: [],
-      swapIxs: swapIxs,
-      lookupTables: lookupTables,
-    },
-    initialInputs.strategy,
-    initialInputs.collIsKtoken,
-    useV2Ixs,
-    elevationGroupOverride
-  );
+  return Promise.all(
+    swapsArray.map(async (swap) => {
+      const ixs: LeverageIxsOutput = await buildDepositWithLeverageIxs(
+        kaminoMarket,
+        debtReserve!,
+        collReserve!,
+        owner,
+        initialInputs.obligation,
+        referrer,
+        currentSlot,
+        depositTokenIsSol,
+        scopeRefreshConfig,
+        initialInputs.calcs,
+        budgetAndPriorityFeeIxs,
+        {
+          preActionIxs: [],
+          swapIxs: swap.swapIxs,
+          lookupTables: swap.lookupTables,
+          quote: swap.quote,
+        },
+        initialInputs.strategy,
+        initialInputs.collIsKtoken,
+        useV2Ixs,
+        elevationGroupOverride
+      );
 
-  return {
-    ixs: ixs.instructions,
-    flashLoanInfo: ixs.flashLoanInfo,
-    lookupTables,
-    swapInputs,
-    initialInputs,
-  };
+      return {
+        ixs: ixs.instructions,
+        flashLoanInfo: ixs.flashLoanInfo,
+        lookupTables: swap.lookupTables,
+        swapInputs,
+        initialInputs,
+        quote: swap.quote.quoteResponse,
+      };
+    })
+  );
 }
 
-async function buildDepositWithLeverageIxs(
+async function buildDepositWithLeverageIxs<QuoteResponse>(
   market: KaminoMarket,
   debtReserve: KaminoReserve,
   collReserve: KaminoReserve,
@@ -420,7 +428,7 @@ async function buildDepositWithLeverageIxs(
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
   calcs: DepositLeverageCalcsResult,
   budgetAndPriorityFeeIxs: TransactionInstruction[] | undefined,
-  swapQuoteIxs: SwapIxs,
+  swapQuoteIxs: SwapIxs<QuoteResponse>,
   strategy: StrategyWithAddress | undefined,
   collIsKtoken: boolean,
   useV2Ixs: boolean,
@@ -606,6 +614,10 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
       preActionIxs: [],
       swapIxs: [],
       lookupTables: [],
+      quote: {
+        priceAInB: new Decimal(0), // not used
+        quoteResponse: undefined,
+      },
     },
     strategy,
     collIsKtoken,
@@ -688,7 +700,7 @@ export async function getWithdrawWithLeverageIxs<QuoteResponse>({
   quoter,
   swapper,
   useV2Ixs,
-}: WithdrawWithLeverageProps<QuoteResponse>): Promise<WithdrawLeverageIxsResponse<QuoteResponse>> {
+}: WithdrawWithLeverageProps<QuoteResponse>): Promise<Array<WithdrawLeverageIxsResponse<QuoteResponse>>> {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
 
@@ -728,11 +740,7 @@ export async function getWithdrawWithLeverageIxs<QuoteResponse>({
     withdrawSwapper = swapper;
   }
 
-  const { swapIxs, lookupTables } = await withdrawSwapper(
-    swapInputs,
-    initialInputs.klendAccounts,
-    initialInputs.swapQuote
-  );
+  const swapsArray = await withdrawSwapper(swapInputs, initialInputs.klendAccounts, initialInputs.swapQuote);
 
   if (initialInputs.collIsKtoken) {
     if (initialInputs.strategy!.strategy.strategyLookupTable) {
@@ -740,46 +748,54 @@ export async function getWithdrawWithLeverageIxs<QuoteResponse>({
         kaminoMarket.getConnection(),
         initialInputs.strategy!.strategy.strategyLookupTable!
       );
-      lookupTables.push(strategyLut!);
+      swapsArray.forEach((swap) => {
+        swap.lookupTables.push(strategyLut!);
+      });
     } else {
       console.log('Strategy lookup table not found');
     }
   }
 
-  const ixs: LeverageIxsOutput = await buildWithdrawWithLeverageIxs(
-    kaminoMarket,
-    debtReserve!,
-    collReserve!,
-    owner,
-    obligation,
-    referrer,
-    currentSlot,
-    isClosingPosition,
-    inputTokenIsSol,
-    scopeRefreshConfig,
-    initialInputs.calcs,
-    budgetAndPriorityFeeIxs,
-    {
-      preActionIxs: [],
-      swapIxs,
-      lookupTables,
-    },
-    initialInputs.strategy,
-    initialInputs.collIsKtoken,
-    useV2Ixs
-  );
+  return Promise.all(
+    swapsArray.map(async (swap) => {
+      const ixs: LeverageIxsOutput = await buildWithdrawWithLeverageIxs<QuoteResponse>(
+        kaminoMarket,
+        debtReserve!,
+        collReserve!,
+        owner,
+        obligation,
+        referrer,
+        currentSlot,
+        isClosingPosition,
+        inputTokenIsSol,
+        scopeRefreshConfig,
+        initialInputs.calcs,
+        budgetAndPriorityFeeIxs,
+        {
+          preActionIxs: [],
+          swapIxs: swap.swapIxs,
+          lookupTables: swap.lookupTables,
+          quote: swap.quote,
+        },
+        initialInputs.strategy,
+        initialInputs.collIsKtoken,
+        useV2Ixs
+      );
 
-  // Send ixs and lookup tables
-  return {
-    ixs: ixs.instructions,
-    flashLoanInfo: ixs.flashLoanInfo,
-    lookupTables,
-    swapInputs,
-    initialInputs: initialInputs,
-  };
+      // Send ixs and lookup tables
+      return {
+        ixs: ixs.instructions,
+        flashLoanInfo: ixs.flashLoanInfo,
+        lookupTables: swap.lookupTables,
+        swapInputs,
+        initialInputs: initialInputs,
+        quote: swap.quote.quoteResponse,
+      };
+    })
+  );
 }
 
-export async function buildWithdrawWithLeverageIxs(
+export async function buildWithdrawWithLeverageIxs<QuoteResponse>(
   market: KaminoMarket,
   debtReserve: KaminoReserve,
   collReserve: KaminoReserve,
@@ -792,7 +808,7 @@ export async function buildWithdrawWithLeverageIxs(
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
   calcs: WithdrawLeverageCalcsResult,
   budgetAndPriorityFeeIxs: TransactionInstruction[] | undefined,
-  swapQuoteIxs: SwapIxs,
+  swapQuoteIxs: SwapIxs<QuoteResponse>,
   strategy: StrategyWithAddress | undefined,
   collIsKtoken: boolean,
   useV2Ixs: boolean
@@ -988,6 +1004,10 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         preActionIxs: [],
         swapIxs: [],
         lookupTables: [],
+        quote: {
+          priceAInB: new Decimal(0), // not used
+          quoteResponse: undefined,
+        },
       },
       budgetAndPriorityFeeIxs,
       useV2Ixs
@@ -1093,6 +1113,10 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         preActionIxs: [],
         swapIxs: [],
         lookupTables: [],
+        quote: {
+          priceAInB: new Decimal(0), // not used
+          quoteResponse: undefined,
+        },
       },
       budgetAndPriorityFeeIxs,
       useV2Ixs
@@ -1183,7 +1207,7 @@ export async function getAdjustLeverageIxs<QuoteResponse>({
   quoter,
   swapper,
   useV2Ixs,
-}: AdjustLeverageProps<QuoteResponse>): Promise<AdjustLeverageIxsResponse<QuoteResponse>> {
+}: AdjustLeverageProps<QuoteResponse>): Promise<Array<AdjustLeverageIxsResponse<QuoteResponse>>> {
   const { swapInputs, initialInputs } = await getAdjustLeverageSwapInputs({
     owner,
     kaminoMarket,
@@ -1229,39 +1253,41 @@ export async function getAdjustLeverageIxs<QuoteResponse>({
       depositSwapper = swapper;
     }
 
-    const { swapIxs, lookupTables } = await depositSwapper(
-      swapInputs,
-      initialInputs.klendAccounts,
-      initialInputs.swapQuote
-    );
+    const swapsArray = await depositSwapper(swapInputs, initialInputs.klendAccounts, initialInputs.swapQuote);
 
-    const ixs: LeverageIxsOutput = await buildIncreaseLeverageIxs(
-      owner,
-      kaminoMarket,
-      collTokenMint,
-      debtTokenMint,
-      obligation,
-      referrer,
-      currentSlot,
-      initialInputs.calcs,
-      initialInputs.strategy,
-      scopeRefreshConfig,
-      initialInputs.collIsKtoken,
-      {
-        preActionIxs: [],
-        swapIxs,
-        lookupTables,
-      },
-      budgetAndPriorityFeeIxs,
-      useV2Ixs
+    return Promise.all(
+      swapsArray.map(async (swap) => {
+        const ixs: LeverageIxsOutput = await buildIncreaseLeverageIxs(
+          owner,
+          kaminoMarket,
+          collTokenMint,
+          debtTokenMint,
+          obligation,
+          referrer,
+          currentSlot,
+          initialInputs.calcs,
+          initialInputs.strategy,
+          scopeRefreshConfig,
+          initialInputs.collIsKtoken,
+          {
+            preActionIxs: [],
+            swapIxs: swap.swapIxs,
+            lookupTables: swap.lookupTables,
+            quote: swap.quote,
+          },
+          budgetAndPriorityFeeIxs,
+          useV2Ixs
+        );
+        return {
+          ixs: ixs.instructions,
+          flashLoanInfo: ixs.flashLoanInfo,
+          lookupTables: swap.lookupTables,
+          swapInputs,
+          initialInputs,
+          quote: swap.quote.quoteResponse,
+        };
+      })
     );
-    return {
-      ixs: ixs.instructions,
-      flashLoanInfo: ixs.flashLoanInfo,
-      lookupTables,
-      swapInputs,
-      initialInputs,
-    };
   } else {
     console.log('Decreasing leverage');
 
@@ -1277,47 +1303,49 @@ export async function getAdjustLeverageIxs<QuoteResponse>({
     }
 
     // 5. Get swap ixs
-    const { swapIxs, lookupTables } = await withdrawSwapper(
-      swapInputs,
-      initialInputs.klendAccounts,
-      initialInputs.swapQuote
-    );
+    const swapsArray = await withdrawSwapper(swapInputs, initialInputs.klendAccounts, initialInputs.swapQuote);
 
-    const ixs: LeverageIxsOutput = await buildDecreaseLeverageIxs(
-      owner,
-      kaminoMarket,
-      collTokenMint,
-      debtTokenMint,
-      obligation,
-      referrer,
-      currentSlot,
-      initialInputs.calcs,
-      initialInputs.strategy,
-      scopeRefreshConfig,
-      initialInputs.collIsKtoken,
-      {
-        preActionIxs: [],
-        swapIxs,
-        lookupTables,
-      },
-      budgetAndPriorityFeeIxs,
-      useV2Ixs
-    );
+    return Promise.all(
+      swapsArray.map(async (swap) => {
+        const ixs: LeverageIxsOutput = await buildDecreaseLeverageIxs(
+          owner,
+          kaminoMarket,
+          collTokenMint,
+          debtTokenMint,
+          obligation,
+          referrer,
+          currentSlot,
+          initialInputs.calcs,
+          initialInputs.strategy,
+          scopeRefreshConfig,
+          initialInputs.collIsKtoken,
+          {
+            preActionIxs: [],
+            swapIxs: swap.swapIxs,
+            lookupTables: swap.lookupTables,
+            quote: swap.quote,
+          },
+          budgetAndPriorityFeeIxs,
+          useV2Ixs
+        );
 
-    return {
-      ixs: ixs.instructions,
-      flashLoanInfo: ixs.flashLoanInfo,
-      lookupTables,
-      swapInputs,
-      initialInputs,
-    };
+        return {
+          ixs: ixs.instructions,
+          flashLoanInfo: ixs.flashLoanInfo,
+          lookupTables: swap.lookupTables,
+          swapInputs,
+          initialInputs,
+          quote: swap.quote.quoteResponse,
+        };
+      })
+    );
   }
 }
 
 /**
  * Deposit and borrow tokens if leverage increased
  */
-async function buildIncreaseLeverageIxs(
+async function buildIncreaseLeverageIxs<QuoteResponse>(
   owner: PublicKey,
   kaminoMarket: KaminoMarket,
   collTokenMint: PublicKey,
@@ -1329,7 +1357,7 @@ async function buildIncreaseLeverageIxs(
   strategy: StrategyWithAddress | undefined,
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
   collIsKtoken: boolean,
-  swapQuoteIxs: SwapIxs,
+  swapQuoteIxs: SwapIxs<QuoteResponse>,
   budgetAndPriorityFeeIxs: TransactionInstruction[] | undefined,
   useV2Ixs: boolean
 ): Promise<LeverageIxsOutput> {
@@ -1443,7 +1471,7 @@ async function buildIncreaseLeverageIxs(
 /**
  * Withdraw and repay tokens if leverage decreased
  */
-async function buildDecreaseLeverageIxs(
+async function buildDecreaseLeverageIxs<QuoteResponse>(
   owner: PublicKey,
   kaminoMarket: KaminoMarket,
   collTokenMint: PublicKey,
@@ -1455,7 +1483,7 @@ async function buildDecreaseLeverageIxs(
   strategy: StrategyWithAddress | undefined,
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
   collIsKtoken: boolean,
-  swapQuoteIxs: SwapIxs,
+  swapQuoteIxs: SwapIxs<QuoteResponse>,
   budgetAndPriorityFeeIxs: TransactionInstruction[] | undefined,
   useV2Ixs: boolean
 ): Promise<LeverageIxsOutput> {

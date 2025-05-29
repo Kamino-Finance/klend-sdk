@@ -2,6 +2,7 @@ import Decimal from 'decimal.js';
 
 import {
   AddressLookupTableAccount,
+  Blockhash,
   Commitment,
   ComputeBudgetProgram,
   Connection,
@@ -208,6 +209,33 @@ export const buildVersionedTransaction = async (
 
   return new VersionedTransaction(messageV0);
 };
+
+export async function getLookupTableAccountsFromAddresses(
+  connection: Connection,
+  addresses: PublicKey[]
+): Promise<AddressLookupTableAccount[]> {
+  const lookupTablesAccounts = await Promise.all(
+    addresses.map((address) => {
+      return getLookupTableAccount(connection, address);
+    })
+  );
+  return lookupTablesAccounts.filter((account) => account !== null) as AddressLookupTableAccount[];
+}
+
+export const buildVersionedTransactionSync = (
+  payer: PublicKey,
+  instructions: TransactionInstruction[],
+  blockhash: Blockhash,
+  lookupTables: AddressLookupTableAccount[] = [],
+): VersionedTransaction => {
+  const messageV0 = new TransactionMessage({
+    payerKey: payer,
+    recentBlockhash: blockhash,
+    instructions,
+  }).compileToV0Message(lookupTables.filter(notEmpty));
+
+  return new VersionedTransaction(messageV0);
+}
 
 export const getLookupTableAccount = async (connection: Connection, address: PublicKey) => {
   return connection.getAddressLookupTable(address).then((res) => res.value);

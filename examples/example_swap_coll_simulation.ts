@@ -27,20 +27,22 @@ import { getKeypair } from './utils/keypair';
 
   const currentSlot = await market.getConnection().getSlot();
 
-  const swapCollIxsOutputs = await getSwapCollIxs({
-    market,
-    obligation,
-    sourceCollSwapAmount,
-    sourceCollTokenMint,
-    isClosingSourceColl: false,
-    targetCollTokenMint,
-    newElevationGroup: 0,
-    referrer: PublicKey.default,
-    currentSlot,
-    quoter: getJupiterQuoter(slippagePct * 100, sourceCollTokenReserve, targetCollTokenReserve),
-    swapper: getJupiterSwapper(connection, wallet.publicKey),
-    useV2Ixs: true,
-  });
+  const swapCollIxsOutputs = (
+    await getSwapCollIxs({
+      market,
+      obligation,
+      sourceCollSwapAmount,
+      sourceCollTokenMint,
+      isClosingSourceColl: false,
+      targetCollTokenMint,
+      newElevationGroup: 0,
+      referrer: PublicKey.default,
+      currentSlot,
+      quoter: getJupiterQuoter(slippagePct * 100, sourceCollTokenReserve, targetCollTokenReserve),
+      swapper: getJupiterSwapper(connection, wallet.publicKey),
+      useV2Ixs: true,
+    })
+  )[0];
 
   console.log('simulationDetails', swapCollIxsOutputs.simulationDetails);
 })().catch(async (e) => {

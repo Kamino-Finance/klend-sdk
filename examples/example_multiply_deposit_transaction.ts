@@ -77,36 +77,38 @@ import { Scope } from '@kamino-finance/scope-sdk/';
 
   const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
 
-  const { ixs, lookupTables, swapInputs } = await getDepositWithLeverageIxs({
-    owner: wallet.publicKey,
-    kaminoMarket: market,
-    debtTokenMint: debtTokenMint,
-    collTokenMint: collTokenMint,
-    depositAmount: amountToDeposit,
-    priceDebtToColl: priceDebtToColl,
-    slippagePct: new Decimal(slippagePct),
-    obligation: null, // obligation does not exist as we are creating it with this deposit
-    referrer: PublicKey.default,
-    currentSlot,
-    targetLeverage: new Decimal(leverage),
-    selectedTokenMint: debtTokenMint, // the token we are using to deposit
-    kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
-    obligationTypeTagOverride: ObligationTypeTag.Multiply, // or leverage
-    scopeRefreshConfig: { scope, scopeFeed: 'hubble' },
-    budgetAndPriorityFeeIxs: computeIxs,
-    quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
-    priceAinB: getPriceAinB,
-    isKtoken: async (token: PublicKey | string): Promise<boolean> => {
-      return false;
-    }, // should return true if the token is a ktoken which is currently not supported
-    quoter: getJupiterQuoter(
-      slippagePct * 100,
-      market.getReserveByMint(debtTokenMint)!,
-      market.getReserveByMint(collTokenMint)!
-    ), // IMPORTANT!: For deposit the input mint is the debt token mint and the output mint is the collateral token
-    swapper: getJupiterSwapper(connection, wallet.publicKey),
-    useV2Ixs: true,
-  });
+  const { ixs, lookupTables, swapInputs } = (
+    await getDepositWithLeverageIxs({
+      owner: wallet.publicKey,
+      kaminoMarket: market,
+      debtTokenMint: debtTokenMint,
+      collTokenMint: collTokenMint,
+      depositAmount: amountToDeposit,
+      priceDebtToColl: priceDebtToColl,
+      slippagePct: new Decimal(slippagePct),
+      obligation: null, // obligation does not exist as we are creating it with this deposit
+      referrer: PublicKey.default,
+      currentSlot,
+      targetLeverage: new Decimal(leverage),
+      selectedTokenMint: debtTokenMint, // the token we are using to deposit
+      kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
+      obligationTypeTagOverride: ObligationTypeTag.Multiply, // or leverage
+      scopeRefreshConfig: { scope, scopeFeed: 'hubble' },
+      budgetAndPriorityFeeIxs: computeIxs,
+      quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
+      priceAinB: getPriceAinB,
+      isKtoken: async (token: PublicKey | string): Promise<boolean> => {
+        return false;
+      }, // should return true if the token is a ktoken which is currently not supported
+      quoter: getJupiterQuoter(
+        slippagePct * 100,
+        market.getReserveByMint(debtTokenMint)!,
+        market.getReserveByMint(collTokenMint)!
+      ), // IMPORTANT!: For deposit the input mint is the debt token mint and the output mint is the collateral token
+      swapper: getJupiterSwapper(connection, wallet.publicKey),
+      useV2Ixs: true,
+    })
+  )[0];
 
   const lookupTableKeys = lookupTables.map((lut) => lut.key);
   lookupTableKeys.push(userLookupTable);
