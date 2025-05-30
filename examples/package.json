@@ -34,8 +34,10 @@
     "multiply-adjust-kswap": "tsx example_multiply_adjust_transaction_kswap.ts",
     "multiply-loan-info-and-pnl": "yarn tsx example_multiply_loan_info_and_pnl.ts",
     "multiply-manage-position-transaction": "yarn tsx example_multiply_manage_position_transaction.ts",
+    "supplied-and-borrowed-token-and-pending-rewards-for-user": "yarn tsx example_read_supplied_and_borrowed_token_and_pending_rewards_for_user.ts",
     "get-obligations-on-reserve-filter": "yarn tsx example_get_obligations_based_on_reserve_filter.ts",
     "change-market-admin": "yarn tsx example_change_market_admin.ts",
+    "kvault:read-vault-holding-and-pending-rewards": "yarn tsx kvault/example_read_vault_holding_and_pending_rewards.ts",
     "build": "rm -rf dist/; tsc"
   },
   "dependencies": {
