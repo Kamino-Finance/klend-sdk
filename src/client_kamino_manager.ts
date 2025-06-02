@@ -895,7 +895,7 @@ async function main() {
       const withdrawSig = await processTxn(
         env.client,
         env.payer,
-        [...withdrawIxs.unstakeFromFarmIfNeededIxs, ...withdrawIxs.withdrawIxs],
+        [...withdrawIxs.unstakeFromFarmIfNeededIxs, ...withdrawIxs.withdrawIxs, ...withdrawIxs.postWithdrawIxs],
         mode,
         2500,
         [],
@@ -1156,6 +1156,10 @@ async function main() {
       printHoldings(holdings);
       console.log(`Tokens per share for vault ${vaultAddress.toBase58()}: ${tokensPerShare}`);
       console.log('vaultOverview', vaultOverview);
+
+      for (const [reserveAddress, reserveOverview] of vaultOverview.reservesOverview) {
+        console.log(`reserve ${reserveAddress.toBase58()} supplyAPY ${reserveOverview.supplyAPY}`);
+      }
     });
 
   commands.command('get-oracle-mappings').action(async () => {

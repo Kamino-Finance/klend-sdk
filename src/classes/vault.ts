@@ -11,7 +11,13 @@ import {
   SYSVAR_RENT_PUBKEY,
   TransactionInstruction,
 } from '@solana/web3.js';
-import { getAssociatedTokenAddressSync, NATIVE_MINT, TOKEN_PROGRAM_ID, unpackAccount } from '@solana/spl-token';
+import {
+  createCloseAccountInstruction,
+  getAssociatedTokenAddressSync,
+  NATIVE_MINT,
+  TOKEN_PROGRAM_ID,
+  unpackAccount,
+} from '@solana/spl-token';
 import {
   getAssociatedTokenAddress,
   getTransferWsolIxs,
@@ -1064,6 +1070,7 @@ export class KaminoVaultClient {
     const withdrawIxs: WithdrawIxs = {
       unstakeFromFarmIfNeededIxs: [],
       withdrawIxs: [],
+      postWithdrawIxs: [],
     };
 
     const shareLamportsToWithdraw = collToLamportsDecimal(shareAmount, vaultState.sharesMintDecimals.toNumber());
@@ -1097,6 +1104,13 @@ export class KaminoVaultClient {
     } else {
       const withdrawFromVaultIxs = await this.withdrawFromAvailableIxs(user, kaminoVault, shareAmount);
       withdrawIxs.withdrawIxs = withdrawFromVaultIxs;
+    }
+
+    // if the vault is for SOL return the ix to unwrap the SOL
+    if (vaultState.tokenMint.equals(NATIVE_MINT)) {
+      const userWsolAta = getAssociatedTokenAddress(NATIVE_MINT, user);
+      const unwrapIx = createCloseAccountInstruction(userWsolAta, user, user, [], TOKEN_PROGRAM_ID);
+      withdrawIxs.postWithdrawIxs.push(unwrapIx);
     }
 
     return withdrawIxs;

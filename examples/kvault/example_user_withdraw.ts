@@ -33,7 +33,7 @@ import {
   await buildAndSendTxn(
     connection,
     user,
-    [...withdrawIx.unstakeFromFarmIfNeededIxs, ...withdrawIx.withdrawIxs],
+    [...withdrawIx.unstakeFromFarmIfNeededIxs, ...withdrawIx.withdrawIxs, ...withdrawIx.postWithdrawIxs],
     [],
     [vaultState.vaultLookupTable],
     'WithdrawFromVault'
