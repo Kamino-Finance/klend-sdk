@@ -23,22 +23,9 @@ import {
 } from '../utils';
 import { FeeCalculation, Fees, ReserveDataType, ReserveFarmInfo, ReserveRewardYield, ReserveStatus } from './shared';
 import { Reserve, ReserveFields } from '../idl_codegen/accounts';
-import {
-  BorrowRateCurve,
-  CurvePointFields,
-  ReserveConfig,
-  UpdateConfigMode,
-  UpdateConfigModeKind,
-} from '../idl_codegen/types';
-import {
-  assertNever,
-  calculateAPYFromAPR,
-  getBorrowRate,
-  lamportsToNumberDecimal,
-  parseTokenSymbol,
-  positiveOrZero,
-  sameLengthArrayEquals,
-} from './utils';
+import { CurvePointFields, ReserveConfig, UpdateConfigMode, UpdateConfigModeKind } from '../idl_codegen/types';
+import { calculateAPYFromAPR, getBorrowRate, lamportsToNumberDecimal, parseTokenSymbol, positiveOrZero } from './utils';
+import { CompositeConfigItem, encodeUsingLayout, ConfigUpdater } from './configItems';
 import { bfToDecimal, Fraction } from './fraction';
 import { ActionType } from './action';
 import { BorrowCapsAndCounters, ElevationGroupDescription, KaminoMarket } from './market';
@@ -49,10 +36,10 @@ import {
   UpdateReserveConfigAccounts,
   UpdateReserveConfigArgs,
 } from '../lib';
-import * as anchor from '@coral-xyz/anchor';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { aprToApy, KaminoPrices } from '@kamino-finance/kliquidity-sdk';
 import { FarmState, RewardInfo } from '@kamino-finance/farms-sdk';
+import BN from 'bn.js';
 
 export const DEFAULT_RECENT_SLOT_DURATION_MS = 450;
 
@@ -1187,618 +1174,105 @@ export async function createReserveIxs(
 }
 
 export function updateReserveConfigIx(
-  marketWithAddress: MarketWithAddress,
+  signer: PublicKey,
+  marketAddress: PublicKey,
   reserveAddress: PublicKey,
-  modeDiscriminator: number,
+  mode: UpdateConfigModeKind,
   value: Uint8Array,
   programId: PublicKey,
   skipValidation: boolean = false
 ): TransactionInstruction {
-  value;
   const args: UpdateReserveConfigArgs = {
-    mode: new anchor.BN(modeDiscriminator),
-    value: value,
+    mode: new BN(mode.discriminator + 1),
+    value,
     skipValidation,
   };
 
   const accounts: UpdateReserveConfigAccounts = {
-    lendingMarketOwner: marketWithAddress.state.lendingMarketOwner,
-    lendingMarket: marketWithAddress.address,
+    lendingMarketOwner: signer,
+    lendingMarket: marketAddress,
     reserve: reserveAddress,
   };
 
-  const ix = updateReserveConfig(args, accounts, programId);
-
-  return ix;
+  return updateReserveConfig(args, accounts, programId);
 }
 
-type BaseReserveConfigKey = keyof ReturnType<typeof ReserveConfig.toEncodable>;
-
-// Type that excludes reserved and padding fields
-type ReserveConfigKey = Exclude<BaseReserveConfigKey, ExcludedReserveConfigKey>;
-
-const EXCLUDED_RESERVE_CONFIG_KEYS = ['reserved1', 'reserved2'] as const;
-
-export type ExcludedReserveConfigKey = (typeof EXCLUDED_RESERVE_CONFIG_KEYS)[number];
-
-function isExcludedReserveConfigKey(value: unknown): value is ExcludedReserveConfigKey {
-  return EXCLUDED_RESERVE_CONFIG_KEYS.includes(value as ExcludedReserveConfigKey);
-}
-
-function handleConfigUpdate(
-  key: ReserveConfigKey,
-  reserve: Reserve | undefined,
-  reserveConfig: ReserveConfig,
-  updateReserveIxsArgs: UpdateReserveIxsArg[]
-): void {
-  switch (key) {
-    case 'status':
-      if (reserve === undefined || reserve.config.status !== reserveConfig.status) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(UpdateConfigMode.UpdateReserveStatus.discriminator, reserveConfig.status)
-        );
-      }
-      break;
-    case 'assetTier':
-      if (reserve === undefined || reserve.config.assetTier !== reserveConfig.assetTier) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(UpdateConfigMode.UpdateAssetTier.discriminator, reserveConfig.assetTier)
-        );
-      }
-      break;
-    case 'hostFixedInterestRateBps':
-      if (reserve === undefined || reserve.config.hostFixedInterestRateBps !== reserveConfig.hostFixedInterestRateBps) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateHostFixedInterestRateBps.discriminator,
-            reserveConfig.hostFixedInterestRateBps
-          )
-        );
-      }
-      break;
-    case 'protocolTakeRatePct':
-      if (reserve === undefined || reserve.config.protocolTakeRatePct !== reserveConfig.protocolTakeRatePct) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateProtocolTakeRate.discriminator,
-            reserveConfig.protocolTakeRatePct
-          )
-        );
-      }
-      break;
-    case 'protocolLiquidationFeePct':
-      if (
-        reserve === undefined ||
-        reserve.config.protocolLiquidationFeePct !== reserveConfig.protocolLiquidationFeePct
-      ) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateProtocolLiquidationFee.discriminator,
-            reserveConfig.protocolLiquidationFeePct
-          )
-        );
-      }
-      break;
-    case 'protocolOrderExecutionFeePct':
-      if (
-        reserve === undefined ||
-        reserve.config.protocolOrderExecutionFeePct !== reserveConfig.protocolOrderExecutionFeePct
-      ) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateProtocolOrderExecutionFee.discriminator,
-            reserveConfig.protocolOrderExecutionFeePct
-          )
-        );
-      }
-      break;
-    case 'loanToValuePct':
-      if (reserve === undefined || reserve.config.loanToValuePct !== reserveConfig.loanToValuePct) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(UpdateConfigMode.UpdateLoanToValuePct.discriminator, reserveConfig.loanToValuePct)
-        );
-      }
-      break;
-    case 'liquidationThresholdPct':
-      if (reserve === undefined || reserve.config.liquidationThresholdPct !== reserveConfig.liquidationThresholdPct) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateLiquidationThresholdPct.discriminator,
-            reserveConfig.liquidationThresholdPct
-          )
-        );
-      }
-      break;
-    case 'minLiquidationBonusBps':
-      if (reserve === undefined || reserve.config.minLiquidationBonusBps !== reserveConfig.minLiquidationBonusBps) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateMinLiquidationBonusBps.discriminator,
-            reserveConfig.minLiquidationBonusBps
-          )
-        );
-      }
-      break;
-    case 'maxLiquidationBonusBps':
-      if (reserve === undefined || reserve.config.maxLiquidationBonusBps !== reserveConfig.maxLiquidationBonusBps) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator,
-            reserveConfig.maxLiquidationBonusBps
-          )
-        );
-      }
-      break;
-    case 'badDebtLiquidationBonusBps':
-      if (
-        reserve === undefined ||
-        reserve.config.badDebtLiquidationBonusBps !== reserveConfig.badDebtLiquidationBonusBps
-      ) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateBadDebtLiquidationBonusBps.discriminator,
-            reserveConfig.badDebtLiquidationBonusBps
-          )
-        );
-      }
-      break;
-    case 'deleveragingMarginCallPeriodSecs':
-      if (
-        reserve === undefined ||
-        !reserve.config.deleveragingMarginCallPeriodSecs.eq(reserveConfig.deleveragingMarginCallPeriodSecs)
-      ) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator,
-            reserveConfig.deleveragingMarginCallPeriodSecs.toNumber()
-          )
-        );
-      }
-      break;
-    case 'deleveragingThresholdDecreaseBpsPerDay':
-      if (
-        reserve === undefined ||
-        !reserve.config.deleveragingThresholdDecreaseBpsPerDay.eq(reserveConfig.deleveragingThresholdDecreaseBpsPerDay)
-      ) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator,
-            reserveConfig.deleveragingThresholdDecreaseBpsPerDay.toNumber()
-          )
-        );
-      }
-      break;
-    case 'fees':
-      if (reserve === undefined || !reserve.config.fees.borrowFeeSf.eq(reserveConfig.fees.borrowFeeSf)) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateFeesBorrowFee.discriminator,
-            reserveConfig.fees.borrowFeeSf.toNumber()
-          )
-        );
-      }
-      if (reserve === undefined || !reserve.config.fees.flashLoanFeeSf.eq(reserveConfig.fees.flashLoanFeeSf)) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateFeesFlashLoanFee.discriminator,
-            reserveConfig.fees.flashLoanFeeSf.toNumber()
-          )
-        );
-      }
-      break;
-    case 'borrowRateCurve':
-      if (reserve === undefined) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(UpdateConfigMode.UpdateBorrowRateCurve.discriminator, reserveConfig.borrowRateCurve)
-        );
-      } else {
-        let shouldBorrowCurveBeUpdated = false;
-        for (let i = 0; i < reserveConfig.borrowRateCurve.points.length; i++) {
-          if (
-            reserve.config.borrowRateCurve.points[i].utilizationRateBps !==
-              reserveConfig.borrowRateCurve.points[i].utilizationRateBps ||
-            reserve.config.borrowRateCurve.points[i].borrowRateBps !==
-              reserveConfig.borrowRateCurve.points[i].borrowRateBps
-          ) {
-            shouldBorrowCurveBeUpdated = true;
-            break;
-          }
-        }
-
-        if (shouldBorrowCurveBeUpdated) {
-          updateReserveIxsArgs.push(
-            createUpdateReserveIxsArg(
-              UpdateConfigMode.UpdateBorrowRateCurve.discriminator,
-              reserveConfig.borrowRateCurve
-            )
-          );
-          break;
-        }
-      }
-      break;
-    case 'borrowFactorPct':
-      if (reserve === undefined || !reserve.config.borrowFactorPct.eq(reserveConfig.borrowFactorPct)) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateBorrowFactor.discriminator,
-            reserveConfig.borrowFactorPct.toNumber()
-          )
-        );
-      }
-      break;
-    case 'depositLimit':
-      if (reserve === undefined || !reserve.config.depositLimit.eq(reserveConfig.depositLimit)) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateDepositLimit.discriminator,
-            BigInt(reserveConfig.depositLimit.toString())
-          )
-        );
-      }
-      break;
-    case 'borrowLimit':
-      if (reserve === undefined || !reserve.config.borrowLimit.eq(reserveConfig.borrowLimit)) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateBorrowLimit.discriminator,
-            BigInt(reserveConfig.borrowLimit.toString())
-          )
-        );
-      }
-      break;
-    case 'tokenInfo':
-      const tokenInfo = reserveConfig.tokenInfo;
-      if (reserve === undefined) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(UpdateConfigMode.UpdateTokenInfoName.discriminator, tokenInfo.name)
-        );
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateTokenInfoLowerHeuristic.discriminator,
-            tokenInfo.heuristic.lower.toNumber()
-          )
-        );
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateTokenInfoUpperHeuristic.discriminator,
-            tokenInfo.heuristic.upper.toNumber()
-          )
-        );
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator,
-            tokenInfo.heuristic.exp.toNumber()
-          )
-        );
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateTokenInfoTwapDivergence.discriminator,
-            tokenInfo.maxTwapDivergenceBps.toNumber()
-          )
-        );
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateTokenInfoPriceMaxAge.discriminator,
-            tokenInfo.maxAgePriceSeconds.toNumber()
-          )
-        );
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator,
-            tokenInfo.maxAgeTwapSeconds.toNumber()
-          )
-        );
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator,
-            tokenInfo.scopeConfiguration.priceChain
-          )
-        );
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator,
-            tokenInfo.scopeConfiguration.twapChain
-          )
-        );
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateSwitchboardFeed.discriminator,
-            tokenInfo.switchboardConfiguration.priceAggregator
-          )
-        );
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateSwitchboardTwapFeed.discriminator,
-            tokenInfo.switchboardConfiguration.twapAggregator
-          )
-        );
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(UpdateConfigMode.UpdatePythPrice.discriminator, tokenInfo.pythConfiguration.price)
-        );
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(UpdateConfigMode.UpdateBlockPriceUsage.discriminator, tokenInfo.blockPriceUsage)
-        );
-      } else {
-        if (!sameLengthArrayEquals(reserve.config.tokenInfo.name, tokenInfo.name)) {
-          updateReserveIxsArgs.push(
-            createUpdateReserveIxsArg(UpdateConfigMode.UpdateTokenInfoName.discriminator, tokenInfo.name)
-          );
-        }
-        if (!reserve.config.tokenInfo.heuristic.lower.eq(tokenInfo.heuristic.lower)) {
-          updateReserveIxsArgs.push(
-            createUpdateReserveIxsArg(
-              UpdateConfigMode.UpdateTokenInfoLowerHeuristic.discriminator,
-              tokenInfo.heuristic.lower.toNumber()
-            )
-          );
-        }
-        if (!reserve.config.tokenInfo.heuristic.upper.eq(tokenInfo.heuristic.upper)) {
-          updateReserveIxsArgs.push(
-            createUpdateReserveIxsArg(
-              UpdateConfigMode.UpdateTokenInfoUpperHeuristic.discriminator,
-              tokenInfo.heuristic.upper.toNumber()
-            )
-          );
-        }
-        if (!reserve.config.tokenInfo.heuristic.exp.eq(tokenInfo.heuristic.exp)) {
-          updateReserveIxsArgs.push(
-            createUpdateReserveIxsArg(
-              UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator,
-              tokenInfo.heuristic.exp.toNumber()
-            )
-          );
-        }
-        if (!reserve.config.tokenInfo.maxTwapDivergenceBps.eq(tokenInfo.maxTwapDivergenceBps)) {
-          updateReserveIxsArgs.push(
-            createUpdateReserveIxsArg(
-              UpdateConfigMode.UpdateTokenInfoTwapDivergence.discriminator,
-              tokenInfo.maxTwapDivergenceBps.toNumber()
-            )
-          );
-        }
-        if (!reserve.config.tokenInfo.maxAgePriceSeconds.eq(tokenInfo.maxAgePriceSeconds)) {
-          updateReserveIxsArgs.push(
-            createUpdateReserveIxsArg(
-              UpdateConfigMode.UpdateTokenInfoPriceMaxAge.discriminator,
-              tokenInfo.maxAgePriceSeconds.toNumber()
-            )
-          );
-        }
-        if (!reserve.config.tokenInfo.maxAgeTwapSeconds.eq(tokenInfo.maxAgeTwapSeconds)) {
-          updateReserveIxsArgs.push(
-            createUpdateReserveIxsArg(
-              UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator,
-              tokenInfo.maxAgeTwapSeconds.toNumber()
-            )
-          );
-        }
-        if (
-          !sameLengthArrayEquals(
-            reserve.config.tokenInfo.scopeConfiguration.priceChain,
-            tokenInfo.scopeConfiguration.priceChain
-          )
-        ) {
-          updateReserveIxsArgs.push(
-            createUpdateReserveIxsArg(
-              UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator,
-              tokenInfo.scopeConfiguration.priceChain
-            )
-          );
-        }
-        if (
-          !sameLengthArrayEquals(
-            reserve.config.tokenInfo.scopeConfiguration.twapChain,
-            tokenInfo.scopeConfiguration.twapChain
-          )
-        ) {
-          updateReserveIxsArgs.push(
-            createUpdateReserveIxsArg(
-              UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator,
-              tokenInfo.scopeConfiguration.twapChain
-            )
-          );
-        }
-        if (
-          !reserve.config.tokenInfo.switchboardConfiguration.priceAggregator.equals(
-            tokenInfo.switchboardConfiguration.priceAggregator
-          )
-        ) {
-          updateReserveIxsArgs.push(
-            createUpdateReserveIxsArg(
-              UpdateConfigMode.UpdateSwitchboardFeed.discriminator,
-              tokenInfo.switchboardConfiguration.priceAggregator
-            )
-          );
-        }
-        if (
-          !reserve.config.tokenInfo.switchboardConfiguration.twapAggregator.equals(
-            tokenInfo.switchboardConfiguration.twapAggregator
-          )
-        ) {
-          updateReserveIxsArgs.push(
-            createUpdateReserveIxsArg(
-              UpdateConfigMode.UpdateSwitchboardTwapFeed.discriminator,
-              tokenInfo.switchboardConfiguration.twapAggregator
-            )
-          );
-        }
-        if (!reserve.config.tokenInfo.pythConfiguration.price.equals(tokenInfo.pythConfiguration.price)) {
-          updateReserveIxsArgs.push(
-            createUpdateReserveIxsArg(UpdateConfigMode.UpdatePythPrice.discriminator, tokenInfo.pythConfiguration.price)
-          );
-        }
-        if (reserve.config.tokenInfo.blockPriceUsage !== tokenInfo.blockPriceUsage) {
-          updateReserveIxsArgs.push(
-            createUpdateReserveIxsArg(UpdateConfigMode.UpdateBlockPriceUsage.discriminator, tokenInfo.blockPriceUsage)
-          );
-        }
-        if (!reserve.config.tokenInfo.scopeConfiguration.priceFeed.equals(tokenInfo.scopeConfiguration.priceFeed)) {
-          updateReserveIxsArgs.push(
-            createUpdateReserveIxsArg(
-              UpdateConfigMode.UpdateScopePriceFeed.discriminator,
-              tokenInfo.scopeConfiguration.priceFeed
-            )
-          );
-        }
-      }
-      break;
-    case 'depositWithdrawalCap':
-      if (
-        reserve === undefined ||
-        !reserve.config.depositWithdrawalCap.configCapacity.eq(reserveConfig.depositWithdrawalCap.configCapacity) ||
-        !reserve.config.depositWithdrawalCap.configIntervalLengthSeconds.eq(
-          reserveConfig.depositWithdrawalCap.configIntervalLengthSeconds
-        )
-      ) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator, [
-            reserveConfig.depositWithdrawalCap.configCapacity.toNumber(),
-            reserveConfig.depositWithdrawalCap.configIntervalLengthSeconds.toNumber(),
-          ])
-        );
-      }
-      break;
-    case 'debtWithdrawalCap':
-      if (
-        reserve === undefined ||
-        !reserve.config.debtWithdrawalCap.configCapacity.eq(reserveConfig.debtWithdrawalCap.configCapacity) ||
-        !reserve.config.debtWithdrawalCap.configIntervalLengthSeconds.eq(
-          reserveConfig.debtWithdrawalCap.configIntervalLengthSeconds
-        )
-      ) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator, [
-            reserveConfig.debtWithdrawalCap.configCapacity.toNumber(),
-            reserveConfig.debtWithdrawalCap.configIntervalLengthSeconds.toNumber(),
-          ])
-        );
-      }
-      break;
-    case 'elevationGroups':
-      if (
-        reserve === undefined ||
-        !sameLengthArrayEquals(reserve.config.elevationGroups, reserveConfig.elevationGroups)
-      ) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(UpdateConfigMode.UpdateElevationGroup.discriminator, reserveConfig.elevationGroups)
-        );
-      }
-      break;
-    case 'disableUsageAsCollOutsideEmode':
-      if (
-        reserve === undefined ||
-        reserve.config.disableUsageAsCollOutsideEmode !== reserveConfig.disableUsageAsCollOutsideEmode
-      ) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator,
-            reserveConfig.disableUsageAsCollOutsideEmode
-          )
-        );
-      }
-      break;
-    case 'utilizationLimitBlockBorrowingAbovePct':
-      if (
-        reserve === undefined ||
-        reserve.config.utilizationLimitBlockBorrowingAbovePct !== reserveConfig.utilizationLimitBlockBorrowingAbovePct
-      ) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator,
-            reserveConfig.utilizationLimitBlockBorrowingAbovePct
-          )
-        );
-      }
-      break;
-    case 'autodeleverageEnabled':
-      if (reserve === undefined || reserve.config.autodeleverageEnabled !== reserveConfig.autodeleverageEnabled) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator,
-            reserveConfig.autodeleverageEnabled
-          )
-        );
-      }
-      break;
-    case 'borrowLimitOutsideElevationGroup':
-      if (
-        reserve === undefined ||
-        !reserve.config.borrowLimitOutsideElevationGroup.eq(reserveConfig.borrowLimitOutsideElevationGroup)
-      ) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator,
-            BigInt(reserveConfig.borrowLimitOutsideElevationGroup.toString())
-          )
-        );
-      }
-      break;
-    case 'borrowLimitAgainstThisCollateralInElevationGroup':
-      if (
-        reserve === undefined ||
-        !sameLengthArrayEquals(
-          reserve.config.borrowLimitAgainstThisCollateralInElevationGroup,
-          reserveConfig.borrowLimitAgainstThisCollateralInElevationGroup
-        )
-      ) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.discriminator,
-            reserveConfig.borrowLimitAgainstThisCollateralInElevationGroup.map((borrowLimit) => borrowLimit.toNumber())
-          )
-        );
-      }
-      break;
-    case 'deleveragingBonusIncreaseBpsPerDay':
-      if (
-        reserve === undefined ||
-        !reserve.config.deleveragingBonusIncreaseBpsPerDay.eq(reserveConfig.deleveragingBonusIncreaseBpsPerDay)
-      ) {
-        updateReserveIxsArgs.push(
-          createUpdateReserveIxsArg(
-            UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator,
-            reserveConfig.deleveragingBonusIncreaseBpsPerDay.toNumber()
-          )
-        );
-      }
-      break;
-    default:
-      assertNever(key); // Will cause compile error if any case is missing
-  }
-}
-
-function createUpdateReserveIxsArg(
-  discriminator: UpdateConfigModeKind['discriminator'],
-  value: number | number[] | bigint | BorrowRateCurve | PublicKey
-): UpdateReserveIxsArg {
-  return {
-    // Note: below we add 1 to the discriminator, because UpdateConfigMode in SC starts from 1, while the idl-codegen
-    // creates the TS counterparts starting from 0:
-    mode: discriminator + 1,
-    value: updateReserveConfigEncodedValue(discriminator, value),
-  };
-}
+export const RESERVE_CONFIG_UPDATER = new ConfigUpdater(UpdateConfigMode.fromDecoded, ReserveConfig, (config) => ({
+  [UpdateConfigMode.UpdateLoanToValuePct.kind]: config.loanToValuePct,
+  [UpdateConfigMode.UpdateMaxLiquidationBonusBps.kind]: config.maxLiquidationBonusBps,
+  [UpdateConfigMode.UpdateLiquidationThresholdPct.kind]: config.liquidationThresholdPct,
+  [UpdateConfigMode.UpdateProtocolLiquidationFee.kind]: config.protocolLiquidationFeePct,
+  [UpdateConfigMode.UpdateProtocolTakeRate.kind]: config.protocolTakeRatePct,
+  [UpdateConfigMode.UpdateFeesBorrowFee.kind]: config.fees.borrowFeeSf,
+  [UpdateConfigMode.UpdateFeesFlashLoanFee.kind]: config.fees.flashLoanFeeSf,
+  [UpdateConfigMode.DeprecatedUpdateFeesReferralFeeBps.kind]: [], // deprecated
+  [UpdateConfigMode.UpdateDepositLimit.kind]: config.depositLimit,
+  [UpdateConfigMode.UpdateBorrowLimit.kind]: config.borrowLimit,
+  [UpdateConfigMode.UpdateTokenInfoLowerHeuristic.kind]: config.tokenInfo.heuristic.lower,
+  [UpdateConfigMode.UpdateTokenInfoUpperHeuristic.kind]: config.tokenInfo.heuristic.upper,
+  [UpdateConfigMode.UpdateTokenInfoExpHeuristic.kind]: config.tokenInfo.heuristic.exp,
+  [UpdateConfigMode.UpdateTokenInfoTwapDivergence.kind]: config.tokenInfo.maxTwapDivergenceBps,
+  [UpdateConfigMode.UpdateTokenInfoScopeTwap.kind]: config.tokenInfo.scopeConfiguration.twapChain,
+  [UpdateConfigMode.UpdateTokenInfoScopeChain.kind]: config.tokenInfo.scopeConfiguration.priceChain,
+  [UpdateConfigMode.UpdateTokenInfoName.kind]: config.tokenInfo.name,
+  [UpdateConfigMode.UpdateTokenInfoPriceMaxAge.kind]: config.tokenInfo.maxAgePriceSeconds,
+  [UpdateConfigMode.UpdateTokenInfoTwapMaxAge.kind]: config.tokenInfo.maxAgeTwapSeconds,
+  [UpdateConfigMode.UpdateScopePriceFeed.kind]: config.tokenInfo.scopeConfiguration.priceFeed,
+  [UpdateConfigMode.UpdatePythPrice.kind]: config.tokenInfo.pythConfiguration.price,
+  [UpdateConfigMode.UpdateSwitchboardFeed.kind]: config.tokenInfo.switchboardConfiguration.priceAggregator,
+  [UpdateConfigMode.UpdateSwitchboardTwapFeed.kind]: config.tokenInfo.switchboardConfiguration.twapAggregator,
+  [UpdateConfigMode.UpdateBorrowRateCurve.kind]: config.borrowRateCurve,
+  [UpdateConfigMode.UpdateEntireReserveConfig.kind]: [], // technically `config` would be a valid thing here, but we actually do NOT want entire config update among ixs produced for field-by-field updates
+  [UpdateConfigMode.UpdateDebtWithdrawalCap.kind]: new CompositeConfigItem(
+    config.debtWithdrawalCap.configCapacity,
+    config.debtWithdrawalCap.configIntervalLengthSeconds
+  ),
+  [UpdateConfigMode.UpdateDepositWithdrawalCap.kind]: new CompositeConfigItem(
+    config.depositWithdrawalCap.configCapacity,
+    config.depositWithdrawalCap.configIntervalLengthSeconds
+  ),
+  [UpdateConfigMode.DeprecatedUpdateDebtWithdrawalCapCurrentTotal.kind]: [], // deprecated
+  [UpdateConfigMode.DeprecatedUpdateDepositWithdrawalCapCurrentTotal.kind]: [], // deprecated
+  [UpdateConfigMode.UpdateBadDebtLiquidationBonusBps.kind]: config.badDebtLiquidationBonusBps,
+  [UpdateConfigMode.UpdateMinLiquidationBonusBps.kind]: config.minLiquidationBonusBps,
+  [UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.kind]: config.deleveragingMarginCallPeriodSecs,
+  [UpdateConfigMode.UpdateBorrowFactor.kind]: config.borrowFactorPct,
+  [UpdateConfigMode.UpdateAssetTier.kind]: config.assetTier,
+  [UpdateConfigMode.UpdateElevationGroup.kind]: config.elevationGroups,
+  [UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.kind]: config.deleveragingThresholdDecreaseBpsPerDay,
+  [UpdateConfigMode.DeprecatedUpdateMultiplierSideBoost.kind]: [], // deprecated
+  [UpdateConfigMode.DeprecatedUpdateMultiplierTagBoost.kind]: [], // deprecated
+  [UpdateConfigMode.UpdateReserveStatus.kind]: config.status,
+  [UpdateConfigMode.UpdateFarmCollateral.kind]: [], // the farm fields live on the `Reserve` level...
+  [UpdateConfigMode.UpdateFarmDebt.kind]: [], // ...so we are not concerned with them in the `ReserveConfig`'s field-by-field update tx
+  [UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.kind]: config.disableUsageAsCollOutsideEmode,
+  [UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.kind]: config.utilizationLimitBlockBorrowingAbovePct,
+  [UpdateConfigMode.UpdateBlockPriceUsage.kind]: config.tokenInfo.blockPriceUsage,
+  [UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.kind]: config.borrowLimitOutsideElevationGroup,
+  [UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.kind]:
+    config.borrowLimitAgainstThisCollateralInElevationGroup,
+  [UpdateConfigMode.UpdateHostFixedInterestRateBps.kind]: config.hostFixedInterestRateBps,
+  [UpdateConfigMode.UpdateAutodeleverageEnabled.kind]: config.autodeleverageEnabled,
+  [UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.kind]: config.deleveragingBonusIncreaseBpsPerDay,
+  [UpdateConfigMode.UpdateProtocolOrderExecutionFee.kind]: config.protocolOrderExecutionFeePct,
+}));
 
 export function updateEntireReserveConfigIx(
-  marketWithAddress: MarketWithAddress,
+  signer: PublicKey,
+  marketAddress: PublicKey,
   reserveAddress: PublicKey,
   reserveConfig: ReserveConfig,
   programId: PublicKey
 ): TransactionInstruction {
-  const layout = ReserveConfig.layout();
-  const data = Buffer.alloc(1000);
-  const len = layout.encode(reserveConfig.toEncodable(), data);
-  const value = Uint8Array.from([...data.subarray(0, len)]);
-
   const args: UpdateReserveConfigArgs = {
-    mode: new anchor.BN(25),
-    value: value,
+    mode: new BN(UpdateConfigMode.UpdateEntireReserveConfig.discriminator + 1),
+    value: encodeUsingLayout(ReserveConfig.layout(), reserveConfig),
     skipValidation: false,
   };
 
   const accounts: UpdateReserveConfigAccounts = {
-    lendingMarketOwner: marketWithAddress.state.lendingMarketOwner,
-    lendingMarket: marketWithAddress.address,
+    lendingMarketOwner: signer,
+    lendingMarket: marketAddress,
     reserve: reserveAddress,
   };
 
@@ -1814,155 +1288,19 @@ export function parseForChangesReserveConfigAndGetIxs(
   reserveConfig: ReserveConfig,
   programId: PublicKey
 ) {
-  let updateReserveIxsArgs: UpdateReserveIxsArg[] = [];
-  for (const key in reserveConfig.toEncodable()) {
-    if (isExcludedReserveConfigKey(key)) {
-      continue;
-    }
-    handleConfigUpdate(key as ReserveConfigKey, reserve, reserveConfig, updateReserveIxsArgs);
-  }
-
-  const ixs: TransactionInstruction[] = [];
-
-  updateReserveIxsArgs = sortIxsByPriority(updateReserveIxsArgs);
-
-  updateReserveIxsArgs.forEach((updateReserveConfigArgs) => {
-    let skipValidation = false;
-    if (modeMatches(updateReserveConfigArgs.mode) && !reserve?.liquidity.availableAmount.gten(MIN_INITIAL_DEPOSIT)) {
-      skipValidation = true;
-    }
-    ixs.push(
-      updateReserveConfigIx(
-        marketWithAddress,
-        reserveAddress,
-        updateReserveConfigArgs.mode,
-        updateReserveConfigArgs.value,
-        programId,
-        skipValidation
-      )
-    );
-  });
-
-  return ixs;
-}
-
-export function updateReserveConfigEncodedValue(
-  discriminator: UpdateConfigModeKind['discriminator'],
-  value: number | number[] | bigint | BorrowRateCurve | PublicKey
-): Uint8Array {
-  let buffer: Buffer;
-  let valueArray: number[] = [];
-
-  switch (discriminator) {
-    case UpdateConfigMode.UpdateLoanToValuePct.discriminator:
-    case UpdateConfigMode.UpdateLiquidationThresholdPct.discriminator:
-    case UpdateConfigMode.UpdateProtocolLiquidationFee.discriminator:
-    case UpdateConfigMode.UpdateProtocolTakeRate.discriminator:
-    case UpdateConfigMode.UpdateAssetTier.discriminator:
-    case UpdateConfigMode.UpdateReserveStatus.discriminator:
-    case UpdateConfigMode.UpdateDisableUsageAsCollateralOutsideEmode.discriminator:
-    case UpdateConfigMode.UpdateBlockBorrowingAboveUtilizationPct.discriminator:
-    case UpdateConfigMode.UpdateBlockPriceUsage.discriminator:
-    case UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator:
-      buffer = Buffer.alloc(1);
-      buffer.writeUIntLE(value as number, 0, 1);
-      break;
-    case UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator:
-    case UpdateConfigMode.UpdateBadDebtLiquidationBonusBps.discriminator:
-    case UpdateConfigMode.UpdateMinLiquidationBonusBps.discriminator:
-      buffer = Buffer.alloc(2);
-      buffer.writeUInt16LE(value as number, 0);
-      break;
-    case UpdateConfigMode.UpdateFeesBorrowFee.discriminator:
-    case UpdateConfigMode.UpdateFeesFlashLoanFee.discriminator:
-    case UpdateConfigMode.UpdateTokenInfoLowerHeuristic.discriminator:
-    case UpdateConfigMode.UpdateTokenInfoUpperHeuristic.discriminator:
-    case UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator:
-    case UpdateConfigMode.UpdateTokenInfoTwapDivergence.discriminator:
-    case UpdateConfigMode.UpdateTokenInfoPriceMaxAge.discriminator:
-    case UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator:
-    case UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator:
-    case UpdateConfigMode.UpdateBorrowFactor.discriminator:
-    case UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator:
-    case UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator:
-      value = value as number;
-      buffer = Buffer.alloc(8);
-      buffer.writeBigUint64LE(BigInt(value), 0);
-      break;
-    case UpdateConfigMode.UpdateDepositLimit.discriminator:
-    case UpdateConfigMode.UpdateBorrowLimit.discriminator:
-    case UpdateConfigMode.UpdateBorrowLimitOutsideElevationGroup.discriminator:
-      buffer = Buffer.alloc(8);
-      // Convert value to BigInt if it's not already
-      const bigIntValue = typeof value === 'bigint' ? value : BigInt(value.toString());
-      // Split into two 32-bit values
-      const low = Number(bigIntValue & BigInt(0xffffffff));
-      const high = Number(bigIntValue >> BigInt(32));
-      buffer.writeUInt32LE(low, 0);
-      buffer.writeUInt32LE(high, 4);
-      break;
-    case UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator:
-    case UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator:
-      valueArray = value as number[];
-      buffer = Buffer.alloc(8);
-      for (let i = 0; i < valueArray.length; i++) {
-        buffer.writeUInt16LE(valueArray[i], 2 * i);
-      }
-      break;
-    case UpdateConfigMode.UpdateTokenInfoName.discriminator:
-      valueArray = value as number[];
-      buffer = Buffer.alloc(32);
-      for (let i = 0; i < valueArray.length; i++) {
-        buffer.writeUIntLE(valueArray[i], i, 1);
-      }
-      break;
-    case UpdateConfigMode.UpdateScopePriceFeed.discriminator:
-    case UpdateConfigMode.UpdatePythPrice.discriminator:
-    case UpdateConfigMode.UpdateSwitchboardFeed.discriminator:
-    case UpdateConfigMode.UpdateSwitchboardTwapFeed.discriminator:
-    case UpdateConfigMode.UpdateFarmCollateral.discriminator:
-    case UpdateConfigMode.UpdateFarmDebt.discriminator:
-      buffer = (value as PublicKey).toBuffer();
-      break;
-    case UpdateConfigMode.UpdateBorrowRateCurve.discriminator:
-      buffer = serializeBorrowRateCurve(value as BorrowRateCurve);
-      break;
-    case UpdateConfigMode.UpdateDebtWithdrawalCap.discriminator:
-    case UpdateConfigMode.UpdateDepositWithdrawalCap.discriminator:
-      valueArray = value as number[];
-      buffer = Buffer.alloc(16);
-      buffer.writeBigUint64LE(BigInt(valueArray[0]), 0);
-      buffer.writeBigUInt64LE(BigInt(valueArray[1]), 8);
-      break;
-    case UpdateConfigMode.UpdateElevationGroup.discriminator:
-      valueArray = value as number[];
-      buffer = Buffer.alloc(20);
-      for (let i = 0; i < valueArray.length; i++) {
-        buffer.writeUIntLE(valueArray[i], i, 1);
-      }
-      break;
-    case UpdateConfigMode.UpdateBorrowLimitsInElevationGroupAgainstThisReserve.discriminator:
-      valueArray = value as number[];
-      buffer = Buffer.alloc(32 * 8);
-      for (let i = 0; i < valueArray.length; i++) {
-        buffer.writeBigUint64LE(BigInt(valueArray[i]), i * 8);
-      }
-      break;
-    default:
-      buffer = Buffer.alloc(0);
-  }
-
-  return Uint8Array.from([...buffer]);
-}
-
-export function serializeBorrowRateCurve(curve: BorrowRateCurve): Buffer {
-  const buffer = Buffer.alloc(8 * curve.points.length);
-  buffer.writeUInt32LE(curve.points.length, 0);
-  for (let i = 0; i < curve.points.length; i++) {
-    buffer.writeUInt32LE(curve.points[i].utilizationRateBps, 8 * i);
-    buffer.writeUInt32LE(curve.points[i].borrowRateBps, 4 + 8 * i);
-  }
-  return buffer;
+  const encodedConfigUpdates = RESERVE_CONFIG_UPDATER.encodeAllUpdates(reserve?.config, reserveConfig);
+  encodedConfigUpdates.sort((left, right) => priorityOf(left.mode) - priorityOf(right.mode));
+  return encodedConfigUpdates.map((encodedConfigUpdate) =>
+    updateReserveConfigIx(
+      marketWithAddress.state.lendingMarketOwner,
+      marketWithAddress.address,
+      reserveAddress,
+      encodedConfigUpdate.mode,
+      encodedConfigUpdate.value,
+      programId,
+      shouldSkipValidation(encodedConfigUpdate.mode, reserve)
+    )
+  );
 }
 
 export type ReserveWithAddress = {
@@ -1970,36 +1308,30 @@ export type ReserveWithAddress = {
   state: Reserve;
 };
 
-export type UpdateReserveIxsArg = {
-  mode: number;
-  value: Uint8Array;
-};
+const NON_VALIDATED_DISCRIMINATORS = [
+  UpdateConfigMode.UpdateScopePriceFeed.discriminator,
+  UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator,
+  UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator,
+  UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator,
+  UpdateConfigMode.UpdateTokenInfoTwapDivergence.discriminator,
+  UpdateConfigMode.UpdateTokenInfoPriceMaxAge.discriminator,
+  UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator,
+];
 
-export const modeMatches = (mode: number): boolean => {
-  const validModes = [
-    UpdateConfigMode.UpdateScopePriceFeed.discriminator + 1,
-    UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator + 1,
-    UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator + 1,
-    UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator + 1,
-    UpdateConfigMode.UpdateTokenInfoTwapDivergence.discriminator + 1,
-    UpdateConfigMode.UpdateTokenInfoPriceMaxAge.discriminator + 1,
-    UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator + 1,
-  ];
-  return validModes.includes(mode);
-};
+function shouldSkipValidation(mode: UpdateConfigModeKind, reserve: Reserve | undefined): boolean {
+  return (
+    NON_VALIDATED_DISCRIMINATORS.includes(mode.discriminator) &&
+    !reserve?.liquidity.availableAmount.gten(MIN_INITIAL_DEPOSIT)
+  );
+}
 
-// Sort update reserve ixs, to first have the oracle config updates first
-// In order to skip the validation for the scope config updates
-export const sortIxsByPriority = (updateReserveIxsArgs: UpdateReserveIxsArg[]) => {
-  return updateReserveIxsArgs.sort((a, b) => {
-    const isPriorityA = a.mode === 20 || a.mode === 16;
-    const isPriorityB = b.mode === 20 || b.mode === 16;
-    if (isPriorityA && !isPriorityB) {
-      return -1;
-    }
-    if (isPriorityB && !isPriorityA) {
+function priorityOf(mode: UpdateConfigModeKind): number {
+  switch (mode.discriminator) {
+    case UpdateConfigMode.UpdateScopePriceFeed.discriminator:
+      return 0;
+    case UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator:
+      return 0;
+    default:
       return 1;
-    }
-    return 0;
-  });
-};
+  }
+}

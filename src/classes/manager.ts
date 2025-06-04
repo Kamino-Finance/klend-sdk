@@ -28,7 +28,6 @@ import {
 } from './vault';
 import {
   AddAssetToMarketParams,
-  assertNever,
   CreateKaminoMarketParams,
   createReserveIxs,
   ENV,
@@ -45,7 +44,6 @@ import {
   KaminoReserve,
   LendingMarket,
   lendingMarketAuthPda,
-  LendingMarketFields,
   MarketWithAddress,
   parseForChangesReserveConfigAndGetIxs,
   parseOracleType,
@@ -53,7 +51,6 @@ import {
   PubkeyHashMap,
   Reserve,
   ReserveWithAddress,
-  sameLengthArrayEquals,
   ScopeOracleConfig,
   updateEntireReserveConfigIx,
   updateLendingMarket,
@@ -65,12 +62,7 @@ import {
 import { PROGRAM_ID } from '../idl_codegen/programId';
 import { Scope, TokenMetadatas, U16_MAX } from '@kamino-finance/scope-sdk';
 import BN from 'bn.js';
-import {
-  ElevationGroup,
-  ReserveConfig,
-  UpdateLendingMarketMode,
-  UpdateLendingMarketModeKind,
-} from '../idl_codegen/types';
+import { ReserveConfig, UpdateLendingMarketMode, UpdateLendingMarketModeKind } from '../idl_codegen/types';
 import Decimal from 'decimal.js';
 import * as anchor from '@coral-xyz/anchor';
 import { VaultState } from '../idl_codegen_kamino_vault/accounts';
@@ -96,6 +88,7 @@ import { FarmState } from '@kamino-finance/farms-sdk/dist';
 import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
 import { getSquadsMultisigAdminsAndThreshold, walletIsSquadsMultisig, WalletType } from '../utils/multisig';
 import { decodeVaultState } from '../utils/vault';
+import { arrayElementConfigItems, ConfigUpdater } from './configItems';
 
 /**
  * KaminoManager is a class that provides a high-level interface to interact with the Kamino Lend and Kamino Vault programs, in order to create and manage a market, as well as vaults
@@ -391,7 +384,15 @@ export class KaminoManager {
     const ixs: TransactionInstruction[] = [];
 
     if (!reserveState || updateEntireConfig) {
-      ixs.push(updateEntireReserveConfigIx(marketWithAddress, reserve, config, this._kaminoLendProgramId));
+      ixs.push(
+        updateEntireReserveConfigIx(
+          marketWithAddress.state.lendingMarketOwner,
+          marketWithAddress.address,
+          reserve,
+          config,
+          this._kaminoLendProgramId
+        )
+      );
     } else {
       ixs.push(
         ...parseForChangesReserveConfigAndGetIxs(
@@ -1269,383 +1270,49 @@ export class KaminoManager {
     };
   }
 } // KaminoManager
-export type BaseLendingMarketKey = keyof LendingMarketFields;
-const EXCLUDED_LENDING_MARKET_KEYS = [
-  'version',
-  'bumpSeed',
-  'reserved0',
-  'reserved1',
-  'padding1',
-  'padding2',
-  'elevationGroupPadding',
-  'quoteCurrency',
-] as const;
-export type ExcludedLendingMarketKey = (typeof EXCLUDED_LENDING_MARKET_KEYS)[number];
 
-function isExcludedLendingMarketKey(value: unknown): value is ExcludedLendingMarketKey {
-  return EXCLUDED_LENDING_MARKET_KEYS.includes(value as ExcludedLendingMarketKey);
-}
-
-export type LendingMarketKey = Exclude<BaseLendingMarketKey, ExcludedLendingMarketKey>;
-
-const updateLendingMarketConfig = (
-  key: LendingMarketKey,
-  market: LendingMarket,
-  newMarket: LendingMarket
-): { mode: number; value: Buffer }[] => {
-  const updateLendingMarketIxsArgs: { mode: number; value: Buffer }[] = [];
-  switch (key) {
-    case 'lendingMarketOwner': {
-      if (!market.lendingMarketOwner.equals(newMarket.lendingMarketOwner)) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateOwner.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateOwner.discriminator,
-            newMarket.lendingMarketOwner
-          ),
-        });
-      }
-      break;
-    }
-    case 'lendingMarketOwnerCached':
-      if (!market.lendingMarketOwnerCached.equals(newMarket.lendingMarketOwnerCached)) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateOwner.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateOwner.discriminator,
-            newMarket.lendingMarketOwnerCached
-          ),
-        });
-      }
-      break;
-    case 'referralFeeBps':
-      if (market.referralFeeBps !== newMarket.referralFeeBps) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateReferralFeeBps.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateReferralFeeBps.discriminator,
-            newMarket.referralFeeBps
-          ),
-        });
-      }
-      break;
-    case 'emergencyMode':
-      if (market.emergencyMode !== newMarket.emergencyMode) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateEmergencyMode.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateEmergencyMode.discriminator,
-            newMarket.emergencyMode
-          ),
-        });
-      }
-      break;
-    case 'autodeleverageEnabled':
-      if (market.autodeleverageEnabled !== newMarket.autodeleverageEnabled) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateAutodeleverageEnabled.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateAutodeleverageEnabled.discriminator,
-            newMarket.autodeleverageEnabled
-          ),
-        });
-      }
-      break;
-    case 'borrowDisabled':
-      if (market.borrowDisabled !== newMarket.borrowDisabled) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateBorrowingDisabled.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateBorrowingDisabled.discriminator,
-            newMarket.borrowDisabled
-          ),
-        });
-      }
-      break;
-    case 'priceRefreshTriggerToMaxAgePct':
-      if (market.priceRefreshTriggerToMaxAgePct !== newMarket.priceRefreshTriggerToMaxAgePct) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdatePriceRefreshTriggerToMaxAgePct.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdatePriceRefreshTriggerToMaxAgePct.discriminator,
-            newMarket.priceRefreshTriggerToMaxAgePct
-          ),
-        });
-      }
-      break;
-    case 'liquidationMaxDebtCloseFactorPct':
-      if (market.liquidationMaxDebtCloseFactorPct !== newMarket.liquidationMaxDebtCloseFactorPct) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateLiquidationCloseFactor.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateLiquidationCloseFactor.discriminator,
-            newMarket.liquidationMaxDebtCloseFactorPct
-          ),
-        });
-      }
-      break;
-    case 'insolvencyRiskUnhealthyLtvPct':
-      if (market.insolvencyRiskUnhealthyLtvPct !== newMarket.insolvencyRiskUnhealthyLtvPct) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateInsolvencyRiskLtv.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateInsolvencyRiskLtv.discriminator,
-            newMarket.insolvencyRiskUnhealthyLtvPct
-          ),
-        });
-      }
-      break;
-    case 'minFullLiquidationValueThreshold':
-      if (!market.minFullLiquidationValueThreshold.eq(newMarket.minFullLiquidationValueThreshold)) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateMinFullLiquidationThreshold.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateMinFullLiquidationThreshold.discriminator,
-            newMarket.minFullLiquidationValueThreshold.toNumber()
-          ),
-        });
-      }
-      break;
-    case 'maxLiquidatableDebtMarketValueAtOnce':
-      if (!market.maxLiquidatableDebtMarketValueAtOnce.eq(newMarket.maxLiquidatableDebtMarketValueAtOnce)) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateLiquidationMaxValue.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateLiquidationMaxValue.discriminator,
-            newMarket.maxLiquidatableDebtMarketValueAtOnce.toNumber()
-          ),
-        });
-      }
-      break;
-    case 'globalAllowedBorrowValue':
-      if (!market.globalAllowedBorrowValue.eq(newMarket.globalAllowedBorrowValue)) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateGlobalAllowedBorrow.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateGlobalAllowedBorrow.discriminator,
-            newMarket.globalAllowedBorrowValue.toNumber()
-          ),
-        });
-      }
-      break;
-    case 'riskCouncil':
-      if (!market.riskCouncil.equals(newMarket.riskCouncil)) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateRiskCouncil.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateRiskCouncil.discriminator,
-            newMarket.riskCouncil
-          ),
-        });
-      }
-      break;
-    case 'elevationGroups':
-      let elevationGroupsDiffs = 0;
-      for (let i = 0; i < market.elevationGroups.length; i++) {
-        if (
-          market.elevationGroups[i].id !== newMarket.elevationGroups[i].id ||
-          market.elevationGroups[i].maxLiquidationBonusBps !== newMarket.elevationGroups[i].maxLiquidationBonusBps ||
-          market.elevationGroups[i].ltvPct !== newMarket.elevationGroups[i].ltvPct ||
-          market.elevationGroups[i].liquidationThresholdPct !== newMarket.elevationGroups[i].liquidationThresholdPct ||
-          market.elevationGroups[i].allowNewLoans !== newMarket.elevationGroups[i].allowNewLoans ||
-          market.elevationGroups[i].maxReservesAsCollateral !== newMarket.elevationGroups[i].maxReservesAsCollateral ||
-          !market.elevationGroups[i].debtReserve.equals(newMarket.elevationGroups[i].debtReserve)
-        ) {
-          updateLendingMarketIxsArgs.push({
-            mode: UpdateLendingMarketMode.UpdateElevationGroup.discriminator,
-            value: updateMarketConfigEncodedValue(
-              UpdateLendingMarketMode.UpdateElevationGroup.discriminator,
-              newMarket.elevationGroups[i]
-            ),
-          });
-          elevationGroupsDiffs++;
-        }
-      }
-      if (elevationGroupsDiffs > 1) {
-        throw new Error('Can only update 1 elevation group at a time');
-      }
-      break;
-    case 'minNetValueInObligationSf':
-      if (!market.minNetValueInObligationSf.eq(newMarket.minNetValueInObligationSf)) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateMinNetValueObligationPostAction.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateMinNetValueObligationPostAction.discriminator,
-            newMarket.minNetValueInObligationSf.toString()
-          ),
-        });
-      }
-      break;
-    case 'minValueSkipLiquidationBfChecks':
-      if (!market.minValueSkipLiquidationBfChecks.eq(newMarket.minValueSkipLiquidationBfChecks)) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheck.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheck.discriminator,
-            newMarket.minValueSkipLiquidationBfChecks.toNumber()
-          ),
-        });
-      }
-      break;
-    case 'minValueSkipLiquidationLtvChecks':
-      if (!market.minValueSkipLiquidationLtvChecks.eq(newMarket.minValueSkipLiquidationLtvChecks)) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheck.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheck.discriminator,
-            newMarket.minValueSkipLiquidationLtvChecks.toNumber()
-          ),
-        });
-      }
-      break;
-    case 'individualAutodeleverageMarginCallPeriodSecs':
-      if (
-        market.individualAutodeleverageMarginCallPeriodSecs !== newMarket.individualAutodeleverageMarginCallPeriodSecs
-      ) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs.discriminator,
-            newMarket.individualAutodeleverageMarginCallPeriodSecs.toNumber()
-          ),
-        });
-      }
-      break;
-    case 'name':
-      if (!sameLengthArrayEquals(market.name, newMarket.name)) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateName.discriminator,
-          value: updateMarketConfigEncodedValue(UpdateLendingMarketMode.UpdateName.discriminator, newMarket.name),
-        });
-      }
-      break;
-    case 'minInitialDepositAmount':
-      if (!market.minInitialDepositAmount.eq(newMarket.minInitialDepositAmount)) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateInitialDepositAmount.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateInitialDepositAmount.discriminator,
-            newMarket.minInitialDepositAmount.toNumber()
-          ),
-        });
-      }
-      break;
-    case 'obligationOrdersEnabled':
-      if (market.obligationOrdersEnabled !== newMarket.obligationOrdersEnabled) {
-        updateLendingMarketIxsArgs.push({
-          mode: UpdateLendingMarketMode.UpdateObligationOrdersEnabled.discriminator,
-          value: updateMarketConfigEncodedValue(
-            UpdateLendingMarketMode.UpdateObligationOrdersEnabled.discriminator,
-            newMarket.obligationOrdersEnabled
-          ),
-        });
-      }
-      break;
-    default:
-      assertNever(key);
-  }
-  return updateLendingMarketIxsArgs;
-};
+export const MARKET_UPDATER = new ConfigUpdater(UpdateLendingMarketMode.fromDecoded, LendingMarket, (config) => ({
+  [UpdateLendingMarketMode.UpdateOwner.kind]: config.lendingMarketOwnerCached,
+  [UpdateLendingMarketMode.UpdateEmergencyMode.kind]: config.emergencyMode,
+  [UpdateLendingMarketMode.UpdateLiquidationCloseFactor.kind]: config.liquidationMaxDebtCloseFactorPct,
+  [UpdateLendingMarketMode.UpdateLiquidationMaxValue.kind]: config.maxLiquidatableDebtMarketValueAtOnce,
+  [UpdateLendingMarketMode.DeprecatedUpdateGlobalUnhealthyBorrow.kind]: [], // deprecated
+  [UpdateLendingMarketMode.UpdateGlobalAllowedBorrow.kind]: config.globalAllowedBorrowValue,
+  [UpdateLendingMarketMode.UpdateRiskCouncil.kind]: config.riskCouncil,
+  [UpdateLendingMarketMode.UpdateMinFullLiquidationThreshold.kind]: config.minFullLiquidationValueThreshold,
+  [UpdateLendingMarketMode.UpdateInsolvencyRiskLtv.kind]: config.insolvencyRiskUnhealthyLtvPct,
+  [UpdateLendingMarketMode.UpdateElevationGroup.kind]: arrayElementConfigItems(config.elevationGroups),
+  [UpdateLendingMarketMode.UpdateReferralFeeBps.kind]: config.referralFeeBps,
+  [UpdateLendingMarketMode.DeprecatedUpdateMultiplierPoints.kind]: [], // deprecated
+  [UpdateLendingMarketMode.UpdatePriceRefreshTriggerToMaxAgePct.kind]: config.priceRefreshTriggerToMaxAgePct,
+  [UpdateLendingMarketMode.UpdateAutodeleverageEnabled.kind]: config.autodeleverageEnabled,
+  [UpdateLendingMarketMode.UpdateBorrowingDisabled.kind]: config.borrowDisabled,
+  [UpdateLendingMarketMode.UpdateMinNetValueObligationPostAction.kind]: config.minNetValueInObligationSf,
+  [UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheck.kind]: config.minValueSkipLiquidationLtvChecks,
+  [UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheck.kind]: config.minValueSkipLiquidationBfChecks,
+  [UpdateLendingMarketMode.UpdatePaddingFields.kind]: [], // we do not update padding this way
+  [UpdateLendingMarketMode.UpdateName.kind]: config.name,
+  [UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs.kind]:
+    config.individualAutodeleverageMarginCallPeriodSecs,
+  [UpdateLendingMarketMode.UpdateInitialDepositAmount.kind]: config.minInitialDepositAmount,
+  [UpdateLendingMarketMode.UpdateObligationOrdersEnabled.kind]: config.obligationOrdersEnabled,
+}));
 
 function parseForChangesMarketConfigAndGetIxs(
   marketWithAddress: MarketWithAddress,
   newMarket: LendingMarket,
   programId: PublicKey
 ): TransactionInstruction[] {
-  const market = marketWithAddress.state;
-  const updateLendingMarketIxsArgs: { mode: number; value: Buffer }[] = [];
-
-  for (const key in market.toJSON()) {
-    if (isExcludedLendingMarketKey(key)) {
-      continue;
-    }
-    updateLendingMarketIxsArgs.push(...updateLendingMarketConfig(key as LendingMarketKey, market, newMarket));
-  }
-
-  const ixs: TransactionInstruction[] = [];
-
-  updateLendingMarketIxsArgs.forEach((updateLendingMarketConfigArgs) => {
-    ixs.push(
-      updateMarketConfigIx(
-        marketWithAddress,
-        updateLendingMarketConfigArgs.mode,
-        updateLendingMarketConfigArgs.value,
-        programId
-      )
-    );
-  });
-
-  return ixs;
-}
-
-function updateMarketConfigEncodedValue(
-  discriminator: UpdateLendingMarketModeKind['discriminator'],
-  value: number | number[] | PublicKey | ElevationGroup | string
-): Buffer {
-  let buffer: Buffer = Buffer.alloc(72);
-  let pkBuffer: Buffer;
-  let valueBigInt: bigint;
-  let valueArray: number[];
-
-  switch (discriminator) {
-    case UpdateLendingMarketMode.UpdateEmergencyMode.discriminator:
-    case UpdateLendingMarketMode.UpdateLiquidationCloseFactor.discriminator:
-    case UpdateLendingMarketMode.UpdateInsolvencyRiskLtv.discriminator:
-    case UpdateLendingMarketMode.UpdatePriceRefreshTriggerToMaxAgePct.discriminator:
-    case UpdateLendingMarketMode.UpdateAutodeleverageEnabled.discriminator:
-    case UpdateLendingMarketMode.UpdateObligationOrdersEnabled.discriminator:
-    case UpdateLendingMarketMode.UpdateBorrowingDisabled.discriminator:
-      buffer.writeUIntLE(value as number, 0, 1);
-      break;
-    case UpdateLendingMarketMode.UpdateReferralFeeBps.discriminator:
-      buffer.writeUInt16LE(value as number, 0);
-      break;
-    case UpdateLendingMarketMode.UpdateLiquidationMaxValue.discriminator:
-    case UpdateLendingMarketMode.UpdateGlobalAllowedBorrow.discriminator:
-    case UpdateLendingMarketMode.UpdateMinFullLiquidationThreshold.discriminator:
-    case UpdateLendingMarketMode.UpdateMinValueBfSkipPriorityLiqCheck.discriminator:
-    case UpdateLendingMarketMode.UpdateMinValueLtvSkipPriorityLiqCheck.discriminator:
-    case UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs.discriminator:
-    case UpdateLendingMarketMode.UpdateInitialDepositAmount.discriminator:
-      value = value as number;
-      buffer.writeBigUint64LE(BigInt(value), 0);
-      break;
-    case UpdateLendingMarketMode.UpdateOwner.discriminator:
-    case UpdateLendingMarketMode.UpdateRiskCouncil.discriminator:
-      pkBuffer = (value as PublicKey).toBuffer();
-      pkBuffer.copy(buffer, 0);
-      break;
-    case UpdateLendingMarketMode.UpdateElevationGroup.discriminator:
-      buffer = serializeElevationGroup(value as ElevationGroup);
-      break;
-    case UpdateLendingMarketMode.UpdateMinNetValueObligationPostAction.discriminator:
-      valueBigInt = BigInt(value as string);
-      for (let i = 0; i < 16; i++) {
-        buffer[15 - i] = Number((valueBigInt >> BigInt(i * 8)) & BigInt(0xff));
-      }
-      break;
-    case UpdateLendingMarketMode.UpdateName.discriminator:
-      valueArray = value as number[];
-      for (let i = 0; i < valueArray.length; i++) {
-        buffer.writeUIntLE(valueArray[i], i, 1);
-      }
-      break;
-    case UpdateLendingMarketMode.UpdatePaddingFields.discriminator:
-    case UpdateLendingMarketMode.DeprecatedUpdateGlobalUnhealthyBorrow.discriminator:
-    case UpdateLendingMarketMode.DeprecatedUpdateMultiplierPoints.discriminator:
-      // Deliberately skipped - we are not updating padding or deprecated fields using this method
-      break;
-    default:
-      assertNever(discriminator);
-  }
-
-  return buffer;
+  const encodedMarketUpdates = MARKET_UPDATER.encodeAllUpdates(marketWithAddress.state, newMarket);
+  return encodedMarketUpdates.map((encodedMarketUpdate) =>
+    updateMarketConfigIx(marketWithAddress, encodedMarketUpdate.mode, encodedMarketUpdate.value, programId)
+  );
 }
 
 function updateMarketConfigIx(
   marketWithAddress: MarketWithAddress,
-  modeDiscriminator: number,
-  value: Buffer,
+  mode: UpdateLendingMarketModeKind,
+  value: Uint8Array,
   programId: PublicKey
 ): TransactionInstruction {
   const accounts: UpdateLendingMarketAccounts = {
@@ -1654,25 +1321,13 @@ function updateMarketConfigIx(
   };
 
   const args: UpdateLendingMarketArgs = {
-    mode: new anchor.BN(modeDiscriminator),
-    value: [...value],
+    mode: new anchor.BN(mode.discriminator),
+    // NOTE: the Market's update handler expects a `[u8; 72]` (contrary to e.g. the Reserve's update handler accepting
+    // `Vec<u8>`). Hence, we need to add explicit padding here:
+    value: [...value, ...Array(72 - value.length).fill(0)],
   };
 
   const ix = updateLendingMarket(args, accounts, programId);
 
   return ix;
-}
-
-function serializeElevationGroup(elevationGroup: ElevationGroup): Buffer {
-  const buffer = Buffer.alloc(72);
-  buffer.writeUInt16LE(elevationGroup.maxLiquidationBonusBps, 0);
-  buffer.writeUIntLE(elevationGroup.id, 2, 1);
-  buffer.writeUIntLE(elevationGroup.ltvPct, 3, 1);
-  buffer.writeUIntLE(elevationGroup.liquidationThresholdPct, 4, 1);
-  buffer.writeUIntLE(elevationGroup.allowNewLoans, 5, 1);
-  buffer.writeUIntLE(elevationGroup.maxReservesAsCollateral, 6, 1);
-  buffer.writeUIntLE(elevationGroup.padding0, 7, 1);
-  const debtReserveBuffer = elevationGroup.debtReserve.toBuffer();
-  debtReserveBuffer.copy(buffer, 8);
-  return buffer;
 }

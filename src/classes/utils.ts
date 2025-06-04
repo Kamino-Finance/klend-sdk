@@ -287,6 +287,18 @@ export function orThrow(message: string): never {
   throw new Error(message);
 }
 
+export function blobEquals(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let i = 0; i < left.length; ++i) {
+    if (left[i] !== right[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
  * Returns an integer {@link Decimal} nearest to the given one.
  *
