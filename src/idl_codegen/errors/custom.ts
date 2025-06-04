@@ -92,14 +92,14 @@ export type CustomError =
   | DepositLimitExceeded
   | BorrowingDisabledOutsideElevationGroup
   | NetValueRemainingTooSmall
-  | WorseLTVBlocked
+  | WorseLtvBlocked
   | LiabilitiesBiggerThanAssets
   | ReserveTokenBalanceMismatch
   | ReserveVaultBalanceMismatch
   | ReserveAccountingMismatch
   | BorrowingAboveUtilizationRateDisabled
   | LiquidationBorrowFactorPriority
-  | LiquidationLowestLTVPriority
+  | LiquidationLowestLiquidationLtvPriority
   | ElevationGroupBorrowLimitExceeded
   | ElevationGroupWithoutDebtReserve
   | ElevationGroupMaxCollateralReserveZero
@@ -117,8 +117,8 @@ export type CustomError =
   | ObligationCurrentlyMarkedForDeleveraging
   | MaximumWithdrawValueZero
   | ZeroMaxLtvAssetsInDeposits
-  | MinLtvAssetsPriority
-  | WorseLTVThanUnhealthyLTV
+  | LowestLtvAssetsPriority
+  | WorseLtvThanUnhealthyLtv
   | FarmAccountsMissing
   | RepayTooSmallForFullLiquidation
   | InsufficientRepayAmount
@@ -126,6 +126,9 @@ export type CustomError =
   | InvalidOrderConfiguration
   | OrderConfigurationNotSupportedByObligation
   | OperationNotPermittedWithCurrentObligationOrders
+  | OperationNotPermittedMarketImmutable
+  | OrderCreationDisabled
+  | NoUpgradeAuthority
 
 export class InvalidMarketAuthority extends Error {
   static readonly code = 6000
@@ -1186,10 +1189,10 @@ export class NetValueRemainingTooSmall extends Error {
   }
 }
 
-export class WorseLTVBlocked extends Error {
+export class WorseLtvBlocked extends Error {
   static readonly code = 6093
   readonly code = 6093
-  readonly name = "WorseLTVBlocked"
+  readonly name = "WorseLtvBlocked"
   readonly msg = "Cannot get the obligation in a worse position"
 
   constructor(readonly logs?: string[]) {
@@ -1269,16 +1272,16 @@ export class LiquidationBorrowFactorPriority extends Error {
   }
 }
 
-export class LiquidationLowestLTVPriority extends Error {
+export class LiquidationLowestLiquidationLtvPriority extends Error {
   static readonly code = 6100
   readonly code = 6100
-  readonly name = "LiquidationLowestLTVPriority"
+  readonly name = "LiquidationLowestLiquidationLtvPriority"
   readonly msg =
-    "Liquidation must prioritize the collateral with the lowest LTV"
+    "Liquidation must prioritize the collateral with the lowest liquidation LTV"
 
   constructor(readonly logs?: string[]) {
     super(
-      "6100: Liquidation must prioritize the collateral with the lowest LTV"
+      "6100: Liquidation must prioritize the collateral with the lowest liquidation LTV"
     )
   }
 }
@@ -1488,24 +1491,24 @@ export class ZeroMaxLtvAssetsInDeposits extends Error {
   }
 }
 
-export class MinLtvAssetsPriority extends Error {
+export class LowestLtvAssetsPriority extends Error {
   static readonly code = 6118
   readonly code = 6118
-  readonly name = "MinLtvAssetsPriority"
+  readonly name = "LowestLtvAssetsPriority"
   readonly msg =
-    "The operation must prioritize the collateral with the lowest LTV"
+    "Withdrawing must prioritize the collateral with the lowest reserve max-LTV"
 
   constructor(readonly logs?: string[]) {
     super(
-      "6118: The operation must prioritize the collateral with the lowest LTV"
+      "6118: Withdrawing must prioritize the collateral with the lowest reserve max-LTV"
     )
   }
 }
 
-export class WorseLTVThanUnhealthyLTV extends Error {
+export class WorseLtvThanUnhealthyLtv extends Error {
   static readonly code = 6119
   readonly code = 6119
-  readonly name = "WorseLTVThanUnhealthyLTV"
+  readonly name = "WorseLtvThanUnhealthyLtv"
   readonly msg = "Cannot get the obligation liquidatable"
 
   constructor(readonly logs?: string[]) {
@@ -1598,6 +1601,42 @@ export class OperationNotPermittedWithCurrentObligationOrders extends Error {
   constructor(readonly logs?: string[]) {
     super(
       "6126: Single debt, single collateral obligation orders have to be cancelled before changing the deposit/borrow count"
+    )
+  }
+}
+
+export class OperationNotPermittedMarketImmutable extends Error {
+  static readonly code = 6127
+  readonly code = 6127
+  readonly name = "OperationNotPermittedMarketImmutable"
+  readonly msg = "Cannot update lending market because it is set as immutable"
+
+  constructor(readonly logs?: string[]) {
+    super("6127: Cannot update lending market because it is set as immutable")
+  }
+}
+
+export class OrderCreationDisabled extends Error {
+  static readonly code = 6128
+  readonly code = 6128
+  readonly name = "OrderCreationDisabled"
+  readonly msg = "Creation of new orders is disabled"
+
+  constructor(readonly logs?: string[]) {
+    super("6128: Creation of new orders is disabled")
+  }
+}
+
+export class NoUpgradeAuthority extends Error {
+  static readonly code = 6129
+  readonly code = 6129
+  readonly name = "NoUpgradeAuthority"
+  readonly msg =
+    "Cannot initialize global config because there is no upgrade authority to the program"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6129: Cannot initialize global config because there is no upgrade authority to the program"
     )
   }
 }
@@ -1791,7 +1830,7 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
     case 6092:
       return new NetValueRemainingTooSmall(logs)
     case 6093:
-      return new WorseLTVBlocked(logs)
+      return new WorseLtvBlocked(logs)
     case 6094:
       return new LiabilitiesBiggerThanAssets(logs)
     case 6095:
@@ -1805,7 +1844,7 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
     case 6099:
       return new LiquidationBorrowFactorPriority(logs)
     case 6100:
-      return new LiquidationLowestLTVPriority(logs)
+      return new LiquidationLowestLiquidationLtvPriority(logs)
     case 6101:
       return new ElevationGroupBorrowLimitExceeded(logs)
     case 6102:
@@ -1841,9 +1880,9 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
     case 6117:
       return new ZeroMaxLtvAssetsInDeposits(logs)
     case 6118:
-      return new MinLtvAssetsPriority(logs)
+      return new LowestLtvAssetsPriority(logs)
     case 6119:
-      return new WorseLTVThanUnhealthyLTV(logs)
+      return new WorseLtvThanUnhealthyLtv(logs)
     case 6120:
       return new FarmAccountsMissing(logs)
     case 6121:
@@ -1858,6 +1897,12 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new OrderConfigurationNotSupportedByObligation(logs)
     case 6126:
       return new OperationNotPermittedWithCurrentObligationOrders(logs)
+    case 6127:
+      return new OperationNotPermittedMarketImmutable(logs)
+    case 6128:
+      return new OrderCreationDisabled(logs)
+    case 6129:
+      return new NoUpgradeAuthority(logs)
   }
 
   return null

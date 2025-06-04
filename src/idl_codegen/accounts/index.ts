@@ -1,5 +1,7 @@
 export { UserState } from "./UserState"
 export type { UserStateFields, UserStateJSON } from "./UserState"
+export { GlobalConfig } from "./GlobalConfig"
+export type { GlobalConfigFields, GlobalConfigJSON } from "./GlobalConfig"
 export { LendingMarket } from "./LendingMarket"
 export type { LendingMarketFields, LendingMarketJSON } from "./LendingMarket"
 export { Obligation } from "./Obligation"

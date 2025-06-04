@@ -1,6 +1,7 @@
 import * as UpdateConfigMode from "./UpdateConfigMode"
 import * as UpdateLendingMarketConfigValue from "./UpdateLendingMarketConfigValue"
 import * as UpdateLendingMarketMode from "./UpdateLendingMarketMode"
+import * as UpdateGlobalConfigMode from "./UpdateGlobalConfigMode"
 import * as AssetTier from "./AssetTier"
 import * as FeeCalculation from "./FeeCalculation"
 import * as ReserveFarmKind from "./ReserveFarmKind"
@@ -159,7 +160,9 @@ export type UpdateLendingMarketModeKind =
   | UpdateLendingMarketMode.UpdateName
   | UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs
   | UpdateLendingMarketMode.UpdateInitialDepositAmount
-  | UpdateLendingMarketMode.UpdateObligationOrdersEnabled
+  | UpdateLendingMarketMode.UpdateObligationOrderExecutionEnabled
+  | UpdateLendingMarketMode.UpdateImmutableFlag
+  | UpdateLendingMarketMode.UpdateObligationOrderCreationEnabled
 export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateOwnerJSON
   | UpdateLendingMarketMode.UpdateEmergencyModeJSON
@@ -183,7 +186,18 @@ export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateNameJSON
   | UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecsJSON
   | UpdateLendingMarketMode.UpdateInitialDepositAmountJSON
-  | UpdateLendingMarketMode.UpdateObligationOrdersEnabledJSON
+  | UpdateLendingMarketMode.UpdateObligationOrderExecutionEnabledJSON
+  | UpdateLendingMarketMode.UpdateImmutableFlagJSON
+  | UpdateLendingMarketMode.UpdateObligationOrderCreationEnabledJSON
+
+export { UpdateGlobalConfigMode }
+
+export type UpdateGlobalConfigModeKind =
+  | UpdateGlobalConfigMode.PendingAdmin
+  | UpdateGlobalConfigMode.FeeCollector
+export type UpdateGlobalConfigModeJSON =
+  | UpdateGlobalConfigMode.PendingAdminJSON
+  | UpdateGlobalConfigMode.FeeCollectorJSON
 
 export { LastUpdate } from "./LastUpdate"
 export type { LastUpdateFields, LastUpdateJSON } from "./LastUpdate"

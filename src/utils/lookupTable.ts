@@ -15,13 +15,7 @@ export async function createLookupTableIx(
   connection: Connection,
   wallet: PublicKey
 ): Promise<[TransactionInstruction, PublicKey]> {
-  const [createLookupTableIxs, lookupTableAddress] = AddressLookupTableProgram.createLookupTable({
-    authority: wallet,
-    payer: wallet,
-    recentSlot: await connection.getSlot('confirmed'),
-  });
-
-  return [createLookupTableIxs, lookupTableAddress];
+  return initLookupTableIx(wallet, await connection.getSlot('confirmed'));
 }
 
 export function extendLookupTableChunkIx(

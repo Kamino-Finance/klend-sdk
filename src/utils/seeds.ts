@@ -40,6 +40,10 @@ export const BASE_SEED_REFERRER_STATE = 'ref_state';
  */
 export const BASE_SEED_SHORT_URL = 'short_url';
 /**
+ * Short url seed
+ */
+export const BASE_SEED_GLOBAL_CONFIG_STATE = 'global_config';
+/**
  * Farm user state seed
  */
 export const BASE_SEED_USER_STATE = 'user';
@@ -191,6 +195,27 @@ export function referrerStatePda(referrer: PublicKey, programId: PublicKey = PRO
  */
 export function shortUrlPda(shortUrl: string, programId: PublicKey = PROGRAM_ID) {
   return PublicKey.findProgramAddressSync([Buffer.from(BASE_SEED_SHORT_URL), Buffer.from(shortUrl)], programId);
+}
+
+/**
+ * Returns the PDA and bump for the global config state.
+ * @param programId
+ * @returns [pda, bump]
+ */
+export function globalConfigPda(programId: PublicKey = PROGRAM_ID) {
+  return PublicKey.findProgramAddressSync([Buffer.from(BASE_SEED_GLOBAL_CONFIG_STATE)], programId);
+}
+
+/**
+ * Returns the PDA and bump for the program data.
+ * @param programId
+ * @returns [pda, bump]
+ */
+export function programDataPda(programId: PublicKey = PROGRAM_ID) {
+  return PublicKey.findProgramAddressSync(
+    [programId.toBuffer()],
+    new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111')
+  );
 }
 
 /**

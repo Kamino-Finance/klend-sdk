@@ -4,37 +4,31 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
 
-export interface UpdateReserveConfigArgs {
-  mode: types.UpdateConfigModeKind
+export interface UpdateGlobalConfigArgs {
+  mode: types.UpdateGlobalConfigModeKind
   value: Uint8Array
-  skipConfigIntegrityValidation: boolean
 }
 
-export interface UpdateReserveConfigAccounts {
-  signer: PublicKey
+export interface UpdateGlobalConfigAccounts {
+  globalAdmin: PublicKey
   globalConfig: PublicKey
-  lendingMarket: PublicKey
-  reserve: PublicKey
 }
 
 export const layout = borsh.struct([
-  types.UpdateConfigMode.layout("mode"),
+  types.UpdateGlobalConfigMode.layout("mode"),
   borsh.vecU8("value"),
-  borsh.bool("skipConfigIntegrityValidation"),
 ])
 
-export function updateReserveConfig(
-  args: UpdateReserveConfigArgs,
-  accounts: UpdateReserveConfigAccounts,
+export function updateGlobalConfig(
+  args: UpdateGlobalConfigArgs,
+  accounts: UpdateGlobalConfigAccounts,
   programId: PublicKey = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta> = [
-    { pubkey: accounts.signer, isSigner: true, isWritable: false },
-    { pubkey: accounts.globalConfig, isSigner: false, isWritable: false },
-    { pubkey: accounts.lendingMarket, isSigner: false, isWritable: false },
-    { pubkey: accounts.reserve, isSigner: false, isWritable: true },
+    { pubkey: accounts.globalAdmin, isSigner: true, isWritable: false },
+    { pubkey: accounts.globalConfig, isSigner: false, isWritable: true },
   ]
-  const identifier = Buffer.from([61, 148, 100, 70, 143, 107, 17, 13])
+  const identifier = Buffer.from([164, 84, 130, 189, 111, 58, 250, 200])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -44,7 +38,6 @@ export function updateReserveConfig(
         args.value.byteOffset,
         args.value.length
       ),
-      skipConfigIntegrityValidation: args.skipConfigIntegrityValidation,
     },
     buffer
   )

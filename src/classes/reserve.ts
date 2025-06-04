@@ -9,6 +9,7 @@ import {
 } from '@solana/web3.js';
 import Decimal from 'decimal.js';
 import {
+  globalConfigPda,
   INITIAL_COLLATERAL_RATE,
   lendingMarketAuthPda,
   MarketWithAddress,
@@ -39,7 +40,6 @@ import {
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { aprToApy, KaminoPrices } from '@kamino-finance/kliquidity-sdk';
 import { FarmState, RewardInfo } from '@kamino-finance/farms-sdk';
-import BN from 'bn.js';
 
 export const DEFAULT_RECENT_SLOT_DURATION_MS = 450;
 
@@ -1180,18 +1180,20 @@ export function updateReserveConfigIx(
   mode: UpdateConfigModeKind,
   value: Uint8Array,
   programId: PublicKey,
-  skipValidation: boolean = false
+  skipConfigIntegrityValidation: boolean = false
 ): TransactionInstruction {
   const args: UpdateReserveConfigArgs = {
-    mode: new BN(mode.discriminator + 1),
+    mode,
     value,
-    skipValidation,
+    skipConfigIntegrityValidation,
   };
 
+  const [globalConfig] = globalConfigPda(programId);
   const accounts: UpdateReserveConfigAccounts = {
-    lendingMarketOwner: signer,
+    signer,
     lendingMarket: marketAddress,
     reserve: reserveAddress,
+    globalConfig,
   };
 
   return updateReserveConfig(args, accounts, programId);
@@ -1265,15 +1267,17 @@ export function updateEntireReserveConfigIx(
   programId: PublicKey
 ): TransactionInstruction {
   const args: UpdateReserveConfigArgs = {
-    mode: new BN(UpdateConfigMode.UpdateEntireReserveConfig.discriminator + 1),
+    mode: new UpdateConfigMode.UpdateEntireReserveConfig(),
     value: encodeUsingLayout(ReserveConfig.layout(), reserveConfig),
-    skipValidation: false,
+    skipConfigIntegrityValidation: false,
   };
 
+  const [globalConfig] = globalConfigPda(programId);
   const accounts: UpdateReserveConfigAccounts = {
-    lendingMarketOwner: signer,
+    signer,
     lendingMarket: marketAddress,
     reserve: reserveAddress,
+    globalConfig,
   };
 
   const ix = updateReserveConfig(args, accounts, programId);

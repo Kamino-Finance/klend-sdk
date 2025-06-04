@@ -524,13 +524,9 @@ export class KaminoMarket {
         getRewardPrice
       );
     }
-    
+
     if (isNotNullPubkey(debtFarmAddress)) {
-      result.borrowingRewards = await this.getRewardInfoForFarm(
-        debtFarmAddress, 
-        totalBorrowAmount, 
-        getRewardPrice
-      );
+      result.borrowingRewards = await this.getRewardInfoForFarm(debtFarmAddress, totalBorrowAmount, getRewardPrice);
     }
 
     return result;

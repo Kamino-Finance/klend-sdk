@@ -509,25 +509,71 @@ export class UpdateInitialDepositAmount {
   }
 }
 
-export interface UpdateObligationOrdersEnabledJSON {
-  kind: "UpdateObligationOrdersEnabled"
+export interface UpdateObligationOrderExecutionEnabledJSON {
+  kind: "UpdateObligationOrderExecutionEnabled"
 }
 
-export class UpdateObligationOrdersEnabled {
+export class UpdateObligationOrderExecutionEnabled {
   static readonly discriminator = 22
-  static readonly kind = "UpdateObligationOrdersEnabled"
+  static readonly kind = "UpdateObligationOrderExecutionEnabled"
   readonly discriminator = 22
-  readonly kind = "UpdateObligationOrdersEnabled"
+  readonly kind = "UpdateObligationOrderExecutionEnabled"
 
-  toJSON(): UpdateObligationOrdersEnabledJSON {
+  toJSON(): UpdateObligationOrderExecutionEnabledJSON {
     return {
-      kind: "UpdateObligationOrdersEnabled",
+      kind: "UpdateObligationOrderExecutionEnabled",
     }
   }
 
   toEncodable() {
     return {
-      UpdateObligationOrdersEnabled: {},
+      UpdateObligationOrderExecutionEnabled: {},
+    }
+  }
+}
+
+export interface UpdateImmutableFlagJSON {
+  kind: "UpdateImmutableFlag"
+}
+
+export class UpdateImmutableFlag {
+  static readonly discriminator = 23
+  static readonly kind = "UpdateImmutableFlag"
+  readonly discriminator = 23
+  readonly kind = "UpdateImmutableFlag"
+
+  toJSON(): UpdateImmutableFlagJSON {
+    return {
+      kind: "UpdateImmutableFlag",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateImmutableFlag: {},
+    }
+  }
+}
+
+export interface UpdateObligationOrderCreationEnabledJSON {
+  kind: "UpdateObligationOrderCreationEnabled"
+}
+
+export class UpdateObligationOrderCreationEnabled {
+  static readonly discriminator = 24
+  static readonly kind = "UpdateObligationOrderCreationEnabled"
+  readonly discriminator = 24
+  readonly kind = "UpdateObligationOrderCreationEnabled"
+
+  toJSON(): UpdateObligationOrderCreationEnabledJSON {
+    return {
+      kind: "UpdateObligationOrderCreationEnabled",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateObligationOrderCreationEnabled: {},
     }
   }
 }
@@ -604,8 +650,14 @@ export function fromDecoded(obj: any): types.UpdateLendingMarketModeKind {
   if ("UpdateInitialDepositAmount" in obj) {
     return new UpdateInitialDepositAmount()
   }
-  if ("UpdateObligationOrdersEnabled" in obj) {
-    return new UpdateObligationOrdersEnabled()
+  if ("UpdateObligationOrderExecutionEnabled" in obj) {
+    return new UpdateObligationOrderExecutionEnabled()
+  }
+  if ("UpdateImmutableFlag" in obj) {
+    return new UpdateImmutableFlag()
+  }
+  if ("UpdateObligationOrderCreationEnabled" in obj) {
+    return new UpdateObligationOrderCreationEnabled()
   }
 
   throw new Error("Invalid enum object")
@@ -681,8 +733,14 @@ export function fromJSON(
     case "UpdateInitialDepositAmount": {
       return new UpdateInitialDepositAmount()
     }
-    case "UpdateObligationOrdersEnabled": {
-      return new UpdateObligationOrdersEnabled()
+    case "UpdateObligationOrderExecutionEnabled": {
+      return new UpdateObligationOrderExecutionEnabled()
+    }
+    case "UpdateImmutableFlag": {
+      return new UpdateImmutableFlag()
+    }
+    case "UpdateObligationOrderCreationEnabled": {
+      return new UpdateObligationOrderCreationEnabled()
     }
   }
 }
@@ -711,7 +769,9 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateName"),
     borsh.struct([], "UpdateIndividualAutodeleverageMarginCallPeriodSecs"),
     borsh.struct([], "UpdateInitialDepositAmount"),
-    borsh.struct([], "UpdateObligationOrdersEnabled"),
+    borsh.struct([], "UpdateObligationOrderExecutionEnabled"),
+    borsh.struct([], "UpdateImmutableFlag"),
+    borsh.struct([], "UpdateObligationOrderCreationEnabled"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

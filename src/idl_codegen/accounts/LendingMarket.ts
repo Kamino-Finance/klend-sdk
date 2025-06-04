@@ -73,7 +73,14 @@ export interface LendingMarketFields {
    */
   minInitialDepositAmount: BN
   /** Whether the obligation orders should be evaluated during liquidations. */
-  obligationOrdersEnabled: number
+  obligationOrderExecutionEnabled: number
+  /** Whether the lending market is set as immutable. */
+  immutable: number
+  /**
+   * Whether new obligation orders can be created.
+   * Note: updating or cancelling existing orders is *not* affected by this flag.
+   */
+  obligationOrderCreationEnabled: number
   padding2: Array<number>
   padding1: Array<BN>
 }
@@ -147,7 +154,14 @@ export interface LendingMarketJSON {
    */
   minInitialDepositAmount: string
   /** Whether the obligation orders should be evaluated during liquidations. */
-  obligationOrdersEnabled: number
+  obligationOrderExecutionEnabled: number
+  /** Whether the lending market is set as immutable. */
+  immutable: number
+  /**
+   * Whether new obligation orders can be created.
+   * Note: updating or cancelling existing orders is *not* affected by this flag.
+   */
+  obligationOrderCreationEnabled: number
   padding2: Array<number>
   padding1: Array<string>
 }
@@ -221,7 +235,14 @@ export class LendingMarket {
    */
   readonly minInitialDepositAmount: BN
   /** Whether the obligation orders should be evaluated during liquidations. */
-  readonly obligationOrdersEnabled: number
+  readonly obligationOrderExecutionEnabled: number
+  /** Whether the lending market is set as immutable. */
+  readonly immutable: number
+  /**
+   * Whether new obligation orders can be created.
+   * Note: updating or cancelling existing orders is *not* affected by this flag.
+   */
+  readonly obligationOrderCreationEnabled: number
   readonly padding2: Array<number>
   readonly padding1: Array<BN>
 
@@ -256,8 +277,10 @@ export class LendingMarket {
     borsh.u64("minValueSkipLiquidationBfChecks"),
     borsh.u64("individualAutodeleverageMarginCallPeriodSecs"),
     borsh.u64("minInitialDepositAmount"),
-    borsh.u8("obligationOrdersEnabled"),
-    borsh.array(borsh.u8(), 7, "padding2"),
+    borsh.u8("obligationOrderExecutionEnabled"),
+    borsh.u8("immutable"),
+    borsh.u8("obligationOrderCreationEnabled"),
+    borsh.array(borsh.u8(), 5, "padding2"),
     borsh.array(borsh.u64(), 169, "padding1"),
   ])
 
@@ -296,7 +319,10 @@ export class LendingMarket {
     this.individualAutodeleverageMarginCallPeriodSecs =
       fields.individualAutodeleverageMarginCallPeriodSecs
     this.minInitialDepositAmount = fields.minInitialDepositAmount
-    this.obligationOrdersEnabled = fields.obligationOrdersEnabled
+    this.obligationOrderExecutionEnabled =
+      fields.obligationOrderExecutionEnabled
+    this.immutable = fields.immutable
+    this.obligationOrderCreationEnabled = fields.obligationOrderCreationEnabled
     this.padding2 = fields.padding2
     this.padding1 = fields.padding1
   }
@@ -377,7 +403,9 @@ export class LendingMarket {
       individualAutodeleverageMarginCallPeriodSecs:
         dec.individualAutodeleverageMarginCallPeriodSecs,
       minInitialDepositAmount: dec.minInitialDepositAmount,
-      obligationOrdersEnabled: dec.obligationOrdersEnabled,
+      obligationOrderExecutionEnabled: dec.obligationOrderExecutionEnabled,
+      immutable: dec.immutable,
+      obligationOrderCreationEnabled: dec.obligationOrderCreationEnabled,
       padding2: dec.padding2,
       padding1: dec.padding1,
     })
@@ -418,7 +446,9 @@ export class LendingMarket {
       individualAutodeleverageMarginCallPeriodSecs:
         this.individualAutodeleverageMarginCallPeriodSecs.toString(),
       minInitialDepositAmount: this.minInitialDepositAmount.toString(),
-      obligationOrdersEnabled: this.obligationOrdersEnabled,
+      obligationOrderExecutionEnabled: this.obligationOrderExecutionEnabled,
+      immutable: this.immutable,
+      obligationOrderCreationEnabled: this.obligationOrderCreationEnabled,
       padding2: this.padding2,
       padding1: this.padding1.map((item) => item.toString()),
     }
@@ -466,7 +496,9 @@ export class LendingMarket {
         obj.individualAutodeleverageMarginCallPeriodSecs
       ),
       minInitialDepositAmount: new BN(obj.minInitialDepositAmount),
-      obligationOrdersEnabled: obj.obligationOrdersEnabled,
+      obligationOrderExecutionEnabled: obj.obligationOrderExecutionEnabled,
+      immutable: obj.immutable,
+      obligationOrderCreationEnabled: obj.obligationOrderCreationEnabled,
       padding2: obj.padding2,
       padding1: obj.padding1.map((item) => new BN(item)),
     })

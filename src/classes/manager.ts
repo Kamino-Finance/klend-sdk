@@ -1273,6 +1273,7 @@ export class KaminoManager {
 
 export const MARKET_UPDATER = new ConfigUpdater(UpdateLendingMarketMode.fromDecoded, LendingMarket, (config) => ({
   [UpdateLendingMarketMode.UpdateOwner.kind]: config.lendingMarketOwnerCached,
+  [UpdateLendingMarketMode.UpdateImmutableFlag.kind]: config.immutable,
   [UpdateLendingMarketMode.UpdateEmergencyMode.kind]: config.emergencyMode,
   [UpdateLendingMarketMode.UpdateLiquidationCloseFactor.kind]: config.liquidationMaxDebtCloseFactorPct,
   [UpdateLendingMarketMode.UpdateLiquidationMaxValue.kind]: config.maxLiquidatableDebtMarketValueAtOnce,
@@ -1295,7 +1296,8 @@ export const MARKET_UPDATER = new ConfigUpdater(UpdateLendingMarketMode.fromDeco
   [UpdateLendingMarketMode.UpdateIndividualAutodeleverageMarginCallPeriodSecs.kind]:
     config.individualAutodeleverageMarginCallPeriodSecs,
   [UpdateLendingMarketMode.UpdateInitialDepositAmount.kind]: config.minInitialDepositAmount,
-  [UpdateLendingMarketMode.UpdateObligationOrdersEnabled.kind]: config.obligationOrdersEnabled,
+  [UpdateLendingMarketMode.UpdateObligationOrderCreationEnabled.kind]: config.obligationOrderCreationEnabled,
+  [UpdateLendingMarketMode.UpdateObligationOrderExecutionEnabled.kind]: config.obligationOrderExecutionEnabled,
 }));
 
 function parseForChangesMarketConfigAndGetIxs(

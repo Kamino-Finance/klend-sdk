@@ -15,7 +15,8 @@ export interface IdlMissingTypesArgs {
 }
 
 export interface IdlMissingTypesAccounts {
-  lendingMarketOwner: PublicKey
+  signer: PublicKey
+  globalConfig: PublicKey
   lendingMarket: PublicKey
   reserve: PublicKey
 }
@@ -36,7 +37,8 @@ export function idlMissingTypes(
   programId: PublicKey = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta> = [
-    { pubkey: accounts.lendingMarketOwner, isSigner: true, isWritable: false },
+    { pubkey: accounts.signer, isSigner: true, isWritable: false },
+    { pubkey: accounts.globalConfig, isSigner: false, isWritable: false },
     { pubkey: accounts.lendingMarket, isSigner: false, isWritable: false },
     { pubkey: accounts.reserve, isSigner: false, isWritable: true },
   ]

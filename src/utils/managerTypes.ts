@@ -262,7 +262,7 @@ export const DefaultConfigParams: AssetReserveConfigParams = {
   borrowFeeSf: ZERO_FRACTION,
   flashLoanFeeSf: ZERO_FRACTION,
   protocolTakeRate: 0,
-  elevationGroups: [0, 0, 0, 0, 0],
+  elevationGroups: new Array(20).fill(0),
   priceFeed: null,
   borrowLimit: new Decimal(1000.0),
   depositLimit: new Decimal(1000.0),

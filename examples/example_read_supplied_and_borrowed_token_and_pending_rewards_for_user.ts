@@ -110,7 +110,10 @@ export const getKaminoAllPricesAPI = 'https://api.hubbleprotocol.io/prices?env=m
     const tokenPrice = pricesMap.get(tokenMint);
     console.log(`Pending reward ${tokenMint.toString()} in USD: ${pendingReward.mul(tokenPrice!).toString()}`);
     console.log(
-      `Pending debt farm reward ${tokenMint.toString()} in SOL: ${pendingReward.mul(tokenPrice!).div(SOL_PRICE!).toString()}`
+      `Pending debt farm reward ${tokenMint.toString()} in SOL: ${pendingReward
+        .mul(tokenPrice!)
+        .div(SOL_PRICE!)
+        .toString()}`
     );
   }
 })().catch(async (e) => {

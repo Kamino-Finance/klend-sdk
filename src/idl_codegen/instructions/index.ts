@@ -188,6 +188,15 @@ export type {
   SetObligationOrderArgs,
   SetObligationOrderAccounts,
 } from "./setObligationOrder"
+export { initGlobalConfig } from "./initGlobalConfig"
+export type { InitGlobalConfigAccounts } from "./initGlobalConfig"
+export { updateGlobalConfig } from "./updateGlobalConfig"
+export type {
+  UpdateGlobalConfigArgs,
+  UpdateGlobalConfigAccounts,
+} from "./updateGlobalConfig"
+export { updateGlobalConfigAdmin } from "./updateGlobalConfigAdmin"
+export type { UpdateGlobalConfigAdminAccounts } from "./updateGlobalConfigAdmin"
 export { idlMissingTypes } from "./idlMissingTypes"
 export type {
   IdlMissingTypesArgs,

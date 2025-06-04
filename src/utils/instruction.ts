@@ -226,7 +226,7 @@ export const buildVersionedTransactionSync = (
   payer: PublicKey,
   instructions: TransactionInstruction[],
   blockhash: Blockhash,
-  lookupTables: AddressLookupTableAccount[] = [],
+  lookupTables: AddressLookupTableAccount[] = []
 ): VersionedTransaction => {
   const messageV0 = new TransactionMessage({
     payerKey: payer,
@@ -235,7 +235,7 @@ export const buildVersionedTransactionSync = (
   }).compileToV0Message(lookupTables.filter(notEmpty));
 
   return new VersionedTransaction(messageV0);
-}
+};
 
 export const getLookupTableAccount = async (connection: Connection, address: PublicKey) => {
   return connection.getAddressLookupTable(address).then((res) => res.value);

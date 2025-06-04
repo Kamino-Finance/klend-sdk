@@ -8,15 +8,20 @@ import {
   Signer,
   Transaction,
   TransactionInstruction,
+  TransactionMessage,
   TransactionSignature,
   VersionedTransaction,
 } from '@solana/web3.js';
 import {
   AssetReserveConfigCli,
   Chain,
+  createLookupTableIx,
   DEFAULT_RECENT_SLOT_DURATION_MS,
   encodeTokenName,
+  extendLookupTableIxs,
+  getLookupTableAccounts,
   getMedianSlotDurationInMsFromLastEpochs,
+  globalConfigPda,
   initLookupTableIx,
   KaminoManager,
   KaminoMarket,
@@ -27,6 +32,7 @@ import {
   MAINNET_BETA_CHAIN_ID,
   parseZeroPaddedUtf8,
   printHoldings,
+  PROGRAM_ID,
   Reserve,
   ReserveAllocationConfig,
   ReserveWithAddress,
@@ -153,7 +159,10 @@ async function main() {
 
       const _createReserveSig = await processTxn(env.client, env.payer, txnIxs[0], mode, 2500, [reserve]);
 
-      const _updateReserveSig = await processTxn(env.client, env.payer, txnIxs[1], mode, 2500, [], 400_000);
+      const [lut, createLutIxs] = await createUpdateReserveConfigLutIxs(env, marketAddress, reserve.publicKey);
+      await processTxn(env.client, env.payer, createLutIxs, mode, 2500, []);
+
+      const _updateSig = await processTxn(env.client, env.payer, txnIxs[1], mode, 2500, [], 400_000, 1000, [lut]);
 
       mode === 'execute' &&
         console.log(
@@ -1612,7 +1621,8 @@ async function processTxn(
   priorityFeeMultiplier: number = 2500,
   extraSigners: Signer[],
   computeUnits: number = 200_000,
-  priorityFeeLamports: number = 1000
+  priorityFeeLamports: number = 1000,
+  luts: PublicKey[] = []
 ): Promise<TransactionSignature> {
   if (mode !== 'inspect' && mode !== 'simulate' && mode !== 'execute' && mode !== 'multisig') {
     throw new Error('Invalid mode: ' + mode + '. Must be one of: inspect/simulate/execute/multisig');
@@ -1632,25 +1642,27 @@ async function processTxn(
   } else {
     const microLamport = priorityFeeLamports * 10 ** 6; // 1000 lamports
     const microLamportsPrioritizationFee = microLamport / computeUnits;
-
-    const tx = new Transaction();
     const { blockhash } = await web3Client.connection.getLatestBlockhash();
+
     if (priorityFeeMultiplier) {
       const priorityFeeIxn = createAddExtraComputeUnitFeeTransaction(
         computeUnits,
         microLamportsPrioritizationFee * priorityFeeMultiplier
       );
-      tx.add(...priorityFeeIxn);
+      ixs.push(...priorityFeeIxn);
     }
-    tx.recentBlockhash = blockhash;
-    tx.feePayer = admin.publicKey;
-    tx.add(...ixs);
+
+    const tx = new TransactionMessage({
+      payerKey: admin.publicKey,
+      recentBlockhash: blockhash,
+      instructions: ixs,
+    }).compileToV0Message(await getLookupTableAccounts(web3Client.connection, luts));
 
     if (mode === 'execute') {
       return await signSendAndConfirmRawTransactionWithRetry({
         mainConnection: web3Client.sendConnection,
         extraConnections: [],
-        tx: new VersionedTransaction(tx.compileMessage()),
+        tx: new VersionedTransaction(tx),
         signers: [admin, ...extraSigners],
         commitment: 'confirmed',
         sendTransactionOptions: {
@@ -1659,9 +1671,7 @@ async function processTxn(
         },
       });
     } else if (mode === 'simulate') {
-      const simulation = await web3Client.sendConnection.simulateTransaction(
-        new VersionedTransaction(tx.compileMessage())
-      );
+      const simulation = await web3Client.sendConnection.simulateTransaction(new VersionedTransaction(tx));
       if (simulation.value.logs && simulation.value.logs.length > 0) {
         console.log('Simulation: \n' + simulation.value.logs);
       } else {
@@ -1671,7 +1681,7 @@ async function processTxn(
       console.log(
         'Tx in B64',
         `https://explorer.solana.com/tx/inspector?message=${encodeURIComponent(
-          tx.serializeMessage().toString('base64')
+          Buffer.from(tx.serialize()).toString('base64')
         )}`
       );
     }
@@ -1868,4 +1878,16 @@ function parseReserveConfigToFile(reserveConfig: ReserveConfig) {
     reserved1: Array(2).fill(0),
     reserved2: Array(9).fill(0),
   };
+}
+
+async function createUpdateReserveConfigLutIxs(
+  env: Env,
+  lendingMarketAddress: PublicKey,
+  reserveAddress: PublicKey
+): Promise<[PublicKey, TransactionInstruction[]]> {
+  const [globalConfigAddress] = globalConfigPda(PROGRAM_ID);
+  const contents = [globalConfigAddress, lendingMarketAddress, reserveAddress];
+  const [createIx, lut] = await createLookupTableIx(env.connection, env.payer.publicKey);
+  const extendIxs = extendLookupTableIxs(env.payer.publicKey, lut, contents);
+  return [lut, [createIx, ...extendIxs]];
 }

@@ -230,9 +230,14 @@
       "name": "updateReserveConfig",
       "accounts": [
         {
-          "name": "lendingMarketOwner",
+          "name": "signer",
           "isMut": false,
           "isSigner": true
+        },
+        {
+          "name": "globalConfig",
+          "isMut": false,
+          "isSigner": false
         },
         {
           "name": "lendingMarket",
@@ -248,14 +253,16 @@
       "args": [
         {
           "name": "mode",
-          "type": "u64"
+          "type": {
+            "defined": "UpdateConfigMode"
+          }
         },
         {
           "name": "value",
           "type": "bytes"
         },
         {
-          "name": "skipValidation",
+          "name": "skipConfigIntegrityValidation",
           "type": "bool"
         }
       ]
@@ -305,9 +312,9 @@
       "name": "withdrawProtocolFee",
       "accounts": [
         {
-          "name": "lendingMarketOwner",
+          "name": "globalConfig",
           "isMut": false,
-          "isSigner": true
+          "isSigner": false
         },
         {
           "name": "lendingMarket",
@@ -335,7 +342,7 @@
           "isSigner": false
         },
         {
-          "name": "lendingMarketOwnerAta",
+          "name": "feeCollectorAta",
           "isMut": true,
           "isSigner": false
         },
@@ -2933,12 +2940,91 @@
       ]
     },
     {
+      "name": "initGlobalConfig",
+      "accounts": [
+        {
+          "name": "payer",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "globalConfig",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "programData",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "rent",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "updateGlobalConfig",
+      "accounts": [
+        {
+          "name": "globalAdmin",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "globalConfig",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "mode",
+          "type": {
+            "defined": "UpdateGlobalConfigMode"
+          }
+        },
+        {
+          "name": "value",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "updateGlobalConfigAdmin",
+      "accounts": [
+        {
+          "name": "pendingAdmin",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "globalConfig",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "idlMissingTypes",
       "accounts": [
         {
-          "name": "lendingMarketOwner",
+          "name": "signer",
           "isMut": false,
           "isSigner": true
+        },
+        {
+          "name": "globalConfig",
+          "isMut": false,
+          "isSigner": false
         },
         {
           "name": "lendingMarket",
@@ -3128,6 +3214,47 @@
               "array": [
                 "u64",
                 50
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "GlobalConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "globalAdmin",
+            "docs": [
+              "Global admin of the program"
+            ],
+            "type": "publicKey"
+          },
+          {
+            "name": "pendingAdmin",
+            "docs": [
+              "Pending admin must sign a specific transaction to become the global admin"
+            ],
+            "type": "publicKey"
+          },
+          {
+            "name": "feeCollector",
+            "docs": [
+              "Fee collector is the only allowed owner of token accounts receiving protocol fees"
+            ],
+            "type": "publicKey"
+          },
+          {
+            "name": "padding",
+            "docs": [
+              "Padding to make the struct size 1024 bytes"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                928
               ]
             }
           }
@@ -3353,9 +3480,24 @@
             "type": "u64"
           },
           {
-            "name": "obligationOrdersEnabled",
+            "name": "obligationOrderExecutionEnabled",
             "docs": [
               "Whether the obligation orders should be evaluated during liquidations."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "immutable",
+            "docs": [
+              "Whether the lending market is set as immutable."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "obligationOrderCreationEnabled",
+            "docs": [
+              "Whether new obligation orders can be created.",
+              "Note: updating or cancelling existing orders is *not* affected by this flag."
             ],
             "type": "u8"
           },
@@ -3364,7 +3506,7 @@
             "type": {
               "array": [
                 "u8",
-                7
+                5
               ]
             }
           },
@@ -4186,7 +4328,27 @@
             "name": "UpdateInitialDepositAmount"
           },
           {
-            "name": "UpdateObligationOrdersEnabled"
+            "name": "UpdateObligationOrderExecutionEnabled"
+          },
+          {
+            "name": "UpdateImmutableFlag"
+          },
+          {
+            "name": "UpdateObligationOrderCreationEnabled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateGlobalConfigMode",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "PendingAdmin"
+          },
+          {
+            "name": "FeeCollector"
           }
         ]
       }
@@ -5865,7 +6027,7 @@
     },
     {
       "code": 6093,
-      "name": "WorseLTVBlocked",
+      "name": "WorseLtvBlocked",
       "msg": "Cannot get the obligation in a worse position"
     },
     {
@@ -5900,8 +6062,8 @@
     },
     {
       "code": 6100,
-      "name": "LiquidationLowestLTVPriority",
-      "msg": "Liquidation must prioritize the collateral with the lowest LTV"
+      "name": "LiquidationLowestLiquidationLtvPriority",
+      "msg": "Liquidation must prioritize the collateral with the lowest liquidation LTV"
     },
     {
       "code": 6101,
@@ -5990,12 +6152,12 @@
     },
     {
       "code": 6118,
-      "name": "MinLtvAssetsPriority",
-      "msg": "The operation must prioritize the collateral with the lowest LTV"
+      "name": "LowestLtvAssetsPriority",
+      "msg": "Withdrawing must prioritize the collateral with the lowest reserve max-LTV"
     },
     {
       "code": 6119,
-      "name": "WorseLTVThanUnhealthyLTV",
+      "name": "WorseLtvThanUnhealthyLtv",
       "msg": "Cannot get the obligation liquidatable"
     },
     {
@@ -6032,6 +6194,21 @@
       "code": 6126,
       "name": "OperationNotPermittedWithCurrentObligationOrders",
       "msg": "Single debt, single collateral obligation orders have to be cancelled before changing the deposit/borrow count"
+    },
+    {
+      "code": 6127,
+      "name": "OperationNotPermittedMarketImmutable",
+      "msg": "Cannot update lending market because it is set as immutable"
+    },
+    {
+      "code": 6128,
+      "name": "OrderCreationDisabled",
+      "msg": "Creation of new orders is disabled"
+    },
+    {
+      "code": 6129,
+      "name": "NoUpgradeAuthority",
+      "msg": "Cannot initialize global config because there is no upgrade authority to the program"
     }
   ]
 }

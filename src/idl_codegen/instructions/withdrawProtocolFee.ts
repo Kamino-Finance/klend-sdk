@@ -9,13 +9,13 @@ export interface WithdrawProtocolFeeArgs {
 }
 
 export interface WithdrawProtocolFeeAccounts {
-  lendingMarketOwner: PublicKey
+  globalConfig: PublicKey
   lendingMarket: PublicKey
   reserve: PublicKey
   reserveLiquidityMint: PublicKey
   lendingMarketAuthority: PublicKey
   feeVault: PublicKey
-  lendingMarketOwnerAta: PublicKey
+  feeCollectorAta: PublicKey
   tokenProgram: PublicKey
 }
 
@@ -27,7 +27,7 @@ export function withdrawProtocolFee(
   programId: PublicKey = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta> = [
-    { pubkey: accounts.lendingMarketOwner, isSigner: true, isWritable: false },
+    { pubkey: accounts.globalConfig, isSigner: false, isWritable: false },
     { pubkey: accounts.lendingMarket, isSigner: false, isWritable: false },
     { pubkey: accounts.reserve, isSigner: false, isWritable: false },
     {
@@ -41,11 +41,7 @@ export function withdrawProtocolFee(
       isWritable: false,
     },
     { pubkey: accounts.feeVault, isSigner: false, isWritable: true },
-    {
-      pubkey: accounts.lendingMarketOwnerAta,
-      isSigner: false,
-      isWritable: true,
-    },
+    { pubkey: accounts.feeCollectorAta, isSigner: false, isWritable: true },
     { pubkey: accounts.tokenProgram, isSigner: false, isWritable: false },
   ]
   const identifier = Buffer.from([158, 201, 158, 189, 33, 93, 162, 103])
