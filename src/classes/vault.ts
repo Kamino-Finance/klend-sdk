@@ -2307,7 +2307,38 @@ export class KaminoVaultClient {
     kaminoMarkets?: KaminoMarket[]
   ): Promise<PubkeyHashMap<PublicKey, MarketOverview>> {
     const vaultReservesStateMap = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
-    const vaultReservesState = Array.from(vaultReservesStateMap.values());
+    const vaultReservesState: KaminoReserve[] = [];
+
+    const missingReserves = new PublicKeySet<PublicKey>([]);
+    // filter the reserves that are not part of the vault allocation strategy
+    vaultState.vaultAllocationStrategy.forEach(async (allocation) => {
+      if (allocation.reserve.equals(PublicKey.default)) {
+        return;
+      }
+      const reserve = vaultReservesStateMap.get(allocation.reserve);
+      if (!reserve) {
+        missingReserves.add(allocation.reserve);
+        return;
+      }
+
+      vaultReservesState.push(reserve);
+    });
+
+    // read missing reserves
+    const missingReservesStates = (await Reserve.fetchMultiple(this.getConnection(), missingReserves.toArray())).filter(
+      (reserve) => reserve !== null
+    );
+    const missingReservesAndOracles = await getTokenOracleData(this.getConnection(), missingReservesStates);
+    missingReservesAndOracles.forEach(([reserve, oracle], index) => {
+      const fetchedReserve = new KaminoReserve(
+        reserve,
+        missingReserves.toArray()[index]!,
+        oracle!,
+        this.getConnection(),
+        this.recentSlotDurationMs
+      );
+      vaultReservesState.push(fetchedReserve);
+    });
 
     const vaultCollateralsPerReserve: PubkeyHashMap<PublicKey, MarketOverview> = new PubkeyHashMap();
 
