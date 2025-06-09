@@ -1059,13 +1059,14 @@ export class KaminoVaultClient {
   async withdrawIxs(
     user: PublicKey,
     vault: KaminoVault,
-    shareAmount: Decimal,
+    shareAmountToWithdraw: Decimal,
     slot: number,
     vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>,
     farmState?: FarmState
   ): Promise<WithdrawIxs> {
     const vaultState = await vault.getState(this.getConnection());
     const kaminoVault = new KaminoVault(vault.address, vaultState, vault.programId);
+    const hasFarm = await vault.hasFarm(this.getConnection());
 
     const withdrawIxs: WithdrawIxs = {
       unstakeFromFarmIfNeededIxs: [],
@@ -1073,9 +1074,56 @@ export class KaminoVaultClient {
       postWithdrawIxs: [],
     };
 
-    const shareLamportsToWithdraw = collToLamportsDecimal(shareAmount, vaultState.sharesMintDecimals.toNumber());
-    const hasFarm = await vault.hasFarm(this.getConnection());
+    // compute the total shares the user has (in ATA + in farm) and check if they want to withdraw everything or just a part
+    let userSharesAtaBalance = new Decimal(0);
+    const userSharesAta = getAssociatedTokenAddress(vaultState.sharesMint, user);
+    const userSharesAtaState = await this.getConnection().getAccountInfo(userSharesAta);
+    if (userSharesAtaState) {
+      const userSharesAtaBalanceInLamports = getTokenBalanceFromAccountInfoLamports(userSharesAtaState);
+      userSharesAtaBalance = userSharesAtaBalanceInLamports.div(
+        new Decimal(10).pow(vaultState.sharesMintDecimals.toString())
+      );
+    }
+
+    let userSharesInFarm = new Decimal(0);
     if (hasFarm) {
+      userSharesInFarm = await getUserSharesInFarm(
+        this.getConnection(),
+        user,
+        vaultState.vaultFarm,
+        vaultState.sharesMintDecimals.toNumber()
+      );
+    }
+
+    let sharesToWithdraw = shareAmountToWithdraw;
+    const totalUserShares = userSharesAtaBalance.add(userSharesInFarm);
+    let withdrawAllShares = false;
+    if (sharesToWithdraw.gt(totalUserShares)) {
+      sharesToWithdraw = new Decimal(U64_MAX.toString()).div(
+        new Decimal(10).pow(vaultState.sharesMintDecimals.toString())
+      );
+      withdrawAllShares = true;
+    }
+
+    // if not enough shares in ATA unstake from farm
+    const sharesInAtaAreEnoughForWithdraw = sharesToWithdraw.lte(userSharesAtaBalance);
+    if (hasFarm && !sharesInAtaAreEnoughForWithdraw) {
+      // if we need to unstake we need to make sure share ata is created
+      const [{ createAtaIx }] = createAtasIdempotent(user, [
+        {
+          mint: vaultState.sharesMint,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        },
+      ]);
+      withdrawIxs.unstakeFromFarmIfNeededIxs.push(createAtaIx);
+      let shareLamportsToWithdraw = new Decimal(U64_MAX.toString());
+      if (!withdrawAllShares) {
+        const sharesToWithdrawFromFarm = sharesToWithdraw.sub(userSharesAtaBalance);
+        shareLamportsToWithdraw = collToLamportsDecimal(
+          sharesToWithdrawFromFarm,
+          vaultState.sharesMintDecimals.toNumber()
+        );
+      }
       const unstakeAndWithdrawFromFarmIxs = await getFarmUnstakeAndWithdrawIxs(
         this.getConnection(),
         user,
@@ -1096,13 +1144,14 @@ export class KaminoVaultClient {
       const withdrawFromVaultIxs = await this.withdrawWithReserveIxs(
         user,
         kaminoVault,
-        shareAmount,
+        sharesToWithdraw,
+        totalUserShares,
         slot,
         vaultReservesMap
       );
       withdrawIxs.withdrawIxs = withdrawFromVaultIxs;
     } else {
-      const withdrawFromVaultIxs = await this.withdrawFromAvailableIxs(user, kaminoVault, shareAmount);
+      const withdrawFromVaultIxs = await this.withdrawFromAvailableIxs(user, kaminoVault, sharesToWithdraw);
       withdrawIxs.withdrawIxs = withdrawFromVaultIxs;
     }
 
@@ -1111,6 +1160,13 @@ export class KaminoVaultClient {
       const userWsolAta = getAssociatedTokenAddress(NATIVE_MINT, user);
       const unwrapIx = createCloseAccountInstruction(userWsolAta, user, user, [], TOKEN_PROGRAM_ID);
       withdrawIxs.postWithdrawIxs.push(unwrapIx);
+    }
+
+    // if we burn all of user's shares close its shares ATA
+    const burnAllUserShares = sharesToWithdraw.gt(userSharesAtaBalance);
+    if (burnAllUserShares) {
+      const closeAtaIx = createCloseAccountInstruction(userSharesAta, user, user, [], TOKEN_PROGRAM_ID);
+      withdrawIxs.postWithdrawIxs.push(closeAtaIx);
     }
 
     return withdrawIxs;
@@ -1149,6 +1205,7 @@ export class KaminoVaultClient {
     user: PublicKey,
     vault: KaminoVault,
     shareAmount: Decimal,
+    allUserShares: Decimal,
     slot: number,
     vaultReservesMap?: PubkeyHashMap<PublicKey, KaminoReserve>
   ): Promise<TransactionInstruction[]> {
@@ -1163,7 +1220,12 @@ export class KaminoVaultClient {
       },
     ]);
 
-    const shareLamportsToWithdraw = collToLamportsDecimal(shareAmount, vaultState.sharesMintDecimals.toNumber());
+    const withdrawAllShares = shareAmount.gte(allUserShares);
+    const actualSharesToWithdraw = shareAmount.lte(allUserShares) ? shareAmount : allUserShares;
+    const shareLamportsToWithdraw = collToLamportsDecimal(
+      actualSharesToWithdraw,
+      vaultState.sharesMintDecimals.toNumber()
+    );
     const tokensPerShare = await this.getTokensPerShareSingleVault(vault, slot);
     const sharesPerToken = new Decimal(1).div(tokensPerShare);
     const tokensToWithdraw = shareLamportsToWithdraw.mul(tokensPerShare);
@@ -1181,10 +1243,17 @@ export class KaminoVaultClient {
       const firstReserve = vaultState.vaultAllocationStrategy.find(
         (reserve) => !reserve.reserve.equals(PublicKey.default)
       );
-      reserveWithSharesAmountToWithdraw.push({
-        reserve: firstReserve!.reserve,
-        shares: shareLamportsToWithdraw,
-      });
+      if (withdrawAllShares) {
+        reserveWithSharesAmountToWithdraw.push({
+          reserve: firstReserve!.reserve,
+          shares: new Decimal(U64_MAX.toString()),
+        });
+      } else {
+        reserveWithSharesAmountToWithdraw.push({
+          reserve: firstReserve!.reserve,
+          shares: shareLamportsToWithdraw,
+        });
+      }
     } else {
       // Get decreasing order sorted available liquidity to withdraw from each reserve allocated to
       const reserveAllocationAvailableLiquidityToWithdraw = await this.getReserveAllocationAvailableLiquidityToWithdraw(
@@ -1204,9 +1273,13 @@ export class KaminoVaultClient {
             tokensToWithdrawFromReserve = tokensToWithdrawFromReserve.add(availableTokens);
             isFirstWithdraw = false;
           }
-          // round up to the nearest integer the shares to withdraw
-          const sharesToWithdrawFromReserve = tokensToWithdrawFromReserve.mul(sharesPerToken).ceil();
-          reserveWithSharesAmountToWithdraw.push({ reserve: key, shares: sharesToWithdrawFromReserve });
+          if (withdrawAllShares) {
+            reserveWithSharesAmountToWithdraw.push({ reserve: key, shares: new Decimal(U64_MAX.toString()) });
+          } else {
+            // round up to the nearest integer the shares to withdraw
+            const sharesToWithdrawFromReserve = tokensToWithdrawFromReserve.mul(sharesPerToken).ceil();
+            reserveWithSharesAmountToWithdraw.push({ reserve: key, shares: sharesToWithdrawFromReserve });
+          }
 
           tokenLeftToWithdraw = tokenLeftToWithdraw.sub(tokensToWithdrawFromReserve);
         }

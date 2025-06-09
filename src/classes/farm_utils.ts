@@ -120,6 +120,7 @@ export async function getSetupFarmIxsWithFarm(
   return { farm, setupFarmIxs: ixs };
 }
 
+// returns tokens, not lamports
 export async function getUserSharesInFarm(
   connection: Connection,
   user: PublicKey,

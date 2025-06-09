@@ -48,7 +48,7 @@ export type DepositIxs = {
 export type WithdrawIxs = {
   unstakeFromFarmIfNeededIxs: TransactionInstruction[];
   withdrawIxs: TransactionInstruction[];
-  postWithdrawIxs: TransactionInstruction[]; // wSOL ATA close ix
+  postWithdrawIxs: TransactionInstruction[]; // if needed: wSOL ATA close ix + share ATA close ix
 };
 
 /** The shares an user has in a vault (staked and unstaked), in tokens */
