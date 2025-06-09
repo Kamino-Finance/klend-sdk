@@ -19,11 +19,11 @@ export function isENV(value: any): value is ENV {
   return value === 'mainnet-beta' || value === 'devnet' || value === 'localnet';
 }
 
-export function getApiEndpoint(programId: PublicKey) {
+export function getApiEndpoint(programId: PublicKey, apiBaseUrl: string = 'https://api.kamino.finance') {
   if (programId.equals(PROGRAM_ID)) {
-    return 'https://api.hubbleprotocol.io/v2/kamino-market';
+    return `${apiBaseUrl}/v2/kamino-market`;
   } else {
-    return `https://api.hubbleprotocol.io/v2/kamino-market/?programId=${programId.toString()}`;
+    return `${apiBaseUrl}/v2/kamino-market/?programId=${programId.toString()}`;
   }
 }
 

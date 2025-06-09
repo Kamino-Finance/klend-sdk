@@ -5,6 +5,12 @@ import { CDN_ENDPOINT, getApiEndpoint } from '../utils';
 import { IBackOffOptions, backOff } from 'exponential-backoff';
 import { PROGRAM_ID } from '../lib';
 
+export type ApiRequestOptions = {
+  programId?: PublicKey;
+  source?: 'API' | 'CDN';
+  apiBaseUrl?: string;
+};
+
 export type ApiFilterOptions = {
   isCurated?: boolean;
 };
@@ -15,11 +21,11 @@ export type ApiFilterOptions = {
  *
  * @param programId - The program id to retrieve config for
  * @param source - CDN is a json file hosted in the cloud, API is a webserver
+ * @param apiBaseUrl - Optional base URL for the API, if not provided, defaults to the standard API endpoint, not used for CDN
  * @param filterOptions - Config options to filter markets by
  */
 export async function getMarketsFromApi(
-  programId: PublicKey = PROGRAM_ID,
-  source: 'API' | 'CDN' = 'CDN',
+  { programId = PROGRAM_ID, source = 'CDN', apiBaseUrl }: ApiRequestOptions = {},
   filterOptions: ApiFilterOptions = {}
 ): Promise<ConfigType> {
   let unfilteredConfigs: ConfigType = {} as ConfigType;
@@ -30,7 +36,7 @@ export async function getMarketsFromApi(
   }
 
   if (!unfilteredConfigs || isEmptyObject(unfilteredConfigs)) {
-    const API_ENDPOINT = getApiEndpoint(programId);
+    const API_ENDPOINT = getApiEndpoint(programId, apiBaseUrl);
     unfilteredConfigs = (await backOff(() => axios.get(API_ENDPOINT), KAMINO_API_RETRY)).data as ConfigType;
   }
 
