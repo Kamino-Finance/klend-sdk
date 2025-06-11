@@ -120,8 +120,15 @@ export async function getSetupFarmIxsWithFarm(
   return { farm, setupFarmIxs: ixs };
 }
 
-// returns tokens, not lamports
-export async function getUserSharesInFarm(
+/**
+ * Returns the number of tokens the user has staked in the farm
+ * @param connection - the connection to the cluster
+ * @param user - the user's public key
+ * @param farm - the farm's public key
+ * @param farmTokenDecimals - the decimals of the farm token
+ * @returns the number of tokens the user has staked in the farm
+ */
+export async function getUserSharesInTokensStakedInFarm(
   connection: Connection,
   user: PublicKey,
   farm: PublicKey,

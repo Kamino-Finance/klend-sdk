@@ -106,7 +106,7 @@ import {
   getFarmStakeIxs,
   getFarmUnstakeAndWithdrawIxs,
   getSharesInFarmUserPosition,
-  getUserSharesInFarm,
+  getUserSharesInTokensStakedInFarm,
 } from './farm_utils';
 import { getInitializeKVaultSharesMetadataIx, getUpdateSharesMetadataIx, resolveMetadata } from '../utils/metadata';
 import { decodeVaultState } from '../utils/vault';
@@ -1087,7 +1087,7 @@ export class KaminoVaultClient {
 
     let userSharesInFarm = new Decimal(0);
     if (hasFarm) {
-      userSharesInFarm = await getUserSharesInFarm(
+      userSharesInFarm = await getUserSharesInTokensStakedInFarm(
         this.getConnection(),
         user,
         vaultState.vaultFarm,
@@ -1918,7 +1918,7 @@ export class KaminoVaultClient {
     }
 
     if (await vault.hasFarm(this.getConnection())) {
-      const userSharesInFarm = await getUserSharesInFarm(
+      const userSharesInFarm = await getUserSharesInTokensStakedInFarm(
         this.getConnection(),
         user,
         vaultState.vaultFarm,
