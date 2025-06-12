@@ -630,6 +630,8 @@ async function main() {
 
       mode === 'execute' && console.log('Vault ownership accepted:', acceptVaultOwnershipSig);
 
+      await processTxn(env.client, env.payer, [instructions.initNewLUTIx], mode, 2500, []);
+
       // send the LUT mgmt ixs one by one
       const lutIxs = [...instructions.updateLUTIxs];
       for (let i = 0; i < lutIxs.length; i++) {
