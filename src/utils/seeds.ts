@@ -1,7 +1,8 @@
-import { PublicKey } from '@solana/web3.js';
-import { PROGRAM_ID } from '../idl_codegen/programId';
-import { farmsId } from '@kamino-finance/farms-sdk';
+import { Address, address, getAddressEncoder, getProgramDerivedAddress, ProgramDerivedAddress } from '@solana/kit';
+import { PROGRAM_ID } from '../@codegen/klend/programId';
+import { PROGRAM_ID as FARMS_PROGRAM_ID } from '@kamino-finance/farms-sdk/dist/@codegen/farms/programId';
 import { METADATA_PROGRAM_ID, METADATA_SEED } from '../classes/vault';
+import { Buffer } from 'buffer';
 
 /**
  * Lending market authority seed
@@ -53,14 +54,16 @@ export const BASE_SEED_USER_STATE = 'user';
  */
 export const BASE_SEED_FARM_USER_STATE = Buffer.from('user');
 
+const addressEncoder = getAddressEncoder();
+
 /**
  * Encapsulates all the PDAs for a given reserve
  */
 export interface ReservePdas {
-  liquiditySupplyVault: PublicKey;
-  collateralMint: PublicKey;
-  collateralSupplyVault: PublicKey;
-  feeVault: PublicKey;
+  liquiditySupplyVault: Address;
+  collateralMint: Address;
+  collateralSupplyVault: Address;
+  feeVault: Address;
 }
 
 /**
@@ -70,12 +73,18 @@ export interface ReservePdas {
  * @param mint
  * @returns ReservePdas
  */
-export function reservePdas(programId: PublicKey, market: PublicKey, mint: PublicKey): ReservePdas {
+export async function reservePdas(programId: Address, market: Address, mint: Address): Promise<ReservePdas> {
+  const [[liquiditySupplyVault], [collateralMint], [collateralSupplyVault], [feeVault]] = await Promise.all([
+    reserveLiqSupplyPda(market, mint, programId),
+    reserveCollateralMintPda(market, mint, programId),
+    reserveCollateralSupplyPda(market, mint, programId),
+    reserveFeeVaultPda(market, mint, programId),
+  ]);
   return {
-    liquiditySupplyVault: reserveLiqSupplyPda(market, mint, programId)[0],
-    collateralMint: reserveCollateralMintPda(market, mint, programId)[0],
-    collateralSupplyVault: reserveCollateralSupplyPda(market, mint, programId)[0],
-    feeVault: reserveFeeVaultPda(market, mint, programId)[0],
+    liquiditySupplyVault,
+    collateralMint,
+    collateralSupplyVault,
+    feeVault,
   };
 }
 
@@ -85,8 +94,14 @@ export function reservePdas(programId: PublicKey, market: PublicKey, mint: Publi
  * @param programId
  * @returns [authority, bump]
  */
-export function lendingMarketAuthPda(lendingMarket: PublicKey, programId: PublicKey = PROGRAM_ID) {
-  return PublicKey.findProgramAddressSync([Buffer.from(LENDING_MARKET_AUTH_SEED), lendingMarket.toBuffer()], programId);
+export function lendingMarketAuthPda(
+  lendingMarket: Address,
+  programId: Address = PROGRAM_ID
+): Promise<ProgramDerivedAddress> {
+  return getProgramDerivedAddress({
+    seeds: [Buffer.from(LENDING_MARKET_AUTH_SEED), addressEncoder.encode(lendingMarket)],
+    programAddress: programId,
+  });
 }
 
 /**
@@ -96,11 +111,15 @@ export function lendingMarketAuthPda(lendingMarket: PublicKey, programId: Public
  * @param programId
  * @returns [pda, bump]
  */
-export function reserveLiqSupplyPda(lendingMarket: PublicKey, mint: PublicKey, programId: PublicKey = PROGRAM_ID) {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(RESERVE_LIQ_SUPPLY_SEED), lendingMarket.toBuffer(), mint.toBuffer()],
-    programId
-  );
+export async function reserveLiqSupplyPda(
+  lendingMarket: Address,
+  mint: Address,
+  programId: Address = PROGRAM_ID
+): Promise<ProgramDerivedAddress> {
+  return getProgramDerivedAddress({
+    seeds: [Buffer.from(RESERVE_LIQ_SUPPLY_SEED), addressEncoder.encode(lendingMarket), addressEncoder.encode(mint)],
+    programAddress: programId,
+  });
 }
 
 /**
@@ -110,11 +129,15 @@ export function reserveLiqSupplyPda(lendingMarket: PublicKey, mint: PublicKey, p
  * @param programId
  * @returns [vaultPda, bump]
  */
-export function reserveFeeVaultPda(lendingMarket: PublicKey, mint: PublicKey, programId: PublicKey = PROGRAM_ID) {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(FEE_RECEIVER_SEED), lendingMarket.toBuffer(), mint.toBuffer()],
-    programId
-  );
+export async function reserveFeeVaultPda(
+  lendingMarket: Address,
+  mint: Address,
+  programId: Address = PROGRAM_ID
+): Promise<ProgramDerivedAddress> {
+  return getProgramDerivedAddress({
+    seeds: [Buffer.from(FEE_RECEIVER_SEED), addressEncoder.encode(lendingMarket), addressEncoder.encode(mint)],
+    programAddress: programId,
+  });
 }
 
 /**
@@ -124,11 +147,15 @@ export function reserveFeeVaultPda(lendingMarket: PublicKey, mint: PublicKey, pr
  * @param programId
  * @returns [mintPda, bump]
  */
-export function reserveCollateralMintPda(lendingMarket: PublicKey, mint: PublicKey, programId: PublicKey = PROGRAM_ID) {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(RESERVE_COLL_MINT_SEED), lendingMarket.toBuffer(), mint.toBuffer()],
-    programId
-  );
+export async function reserveCollateralMintPda(
+  lendingMarket: Address,
+  mint: Address,
+  programId: Address = PROGRAM_ID
+): Promise<ProgramDerivedAddress> {
+  return getProgramDerivedAddress({
+    seeds: [Buffer.from(RESERVE_COLL_MINT_SEED), addressEncoder.encode(lendingMarket), addressEncoder.encode(mint)],
+    programAddress: programId,
+  });
 }
 
 /**
@@ -139,14 +166,14 @@ export function reserveCollateralMintPda(lendingMarket: PublicKey, mint: PublicK
  * @returns [pda, bump]
  */
 export function reserveCollateralSupplyPda(
-  lendingMarket: PublicKey,
-  mint: PublicKey,
-  programId: PublicKey = PROGRAM_ID
-) {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(RESERVE_COLL_SUPPLY_SEED), lendingMarket.toBuffer(), mint.toBuffer()],
-    programId
-  );
+  lendingMarket: Address,
+  mint: Address,
+  programId: Address = PROGRAM_ID
+): Promise<ProgramDerivedAddress> {
+  return getProgramDerivedAddress({
+    seeds: [Buffer.from(RESERVE_COLL_SUPPLY_SEED), addressEncoder.encode(lendingMarket), addressEncoder.encode(mint)],
+    programAddress: programId,
+  });
 }
 
 /**
@@ -155,8 +182,11 @@ export function reserveCollateralSupplyPda(
  * @param programId
  * @returns [pda, bump]
  */
-export function userMetadataPda(user: PublicKey, programId: PublicKey = PROGRAM_ID) {
-  return PublicKey.findProgramAddressSync([Buffer.from(BASE_SEED_USER_METADATA), user.toBuffer()], programId);
+export function userMetadataPda(user: Address, programId: Address = PROGRAM_ID): Promise<ProgramDerivedAddress> {
+  return getProgramDerivedAddress({
+    seeds: [Buffer.from(BASE_SEED_USER_METADATA), addressEncoder.encode(user)],
+    programAddress: programId,
+  });
 }
 
 /**
@@ -164,17 +194,22 @@ export function userMetadataPda(user: PublicKey, programId: PublicKey = PROGRAM_
  * @param referrer
  * @param reserve
  * @param programId
- * @returns [pda, bump]
+ * @returns pda
  */
-export function referrerTokenStatePda(referrer: PublicKey, reserve: PublicKey, programId: PublicKey = PROGRAM_ID) {
-  if (referrer.equals(PublicKey.default)) {
-    return [programId];
-  }
-
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(BASE_SEED_REFERRER_TOKEN_STATE), referrer.toBuffer(), reserve.toBuffer()],
-    programId
-  );
+export async function referrerTokenStatePda(
+  referrer: Address,
+  reserve: Address,
+  programId: Address = PROGRAM_ID
+): Promise<Address> {
+  const [address] = await getProgramDerivedAddress({
+    seeds: [
+      Buffer.from(BASE_SEED_REFERRER_TOKEN_STATE),
+      addressEncoder.encode(referrer),
+      addressEncoder.encode(reserve),
+    ],
+    programAddress: programId,
+  });
+  return address;
 }
 
 /**
@@ -183,39 +218,51 @@ export function referrerTokenStatePda(referrer: PublicKey, reserve: PublicKey, p
  * @param programId
  * @returns [pda, bump]
  */
-export function referrerStatePda(referrer: PublicKey, programId: PublicKey = PROGRAM_ID) {
-  return PublicKey.findProgramAddressSync([Buffer.from(BASE_SEED_REFERRER_STATE), referrer.toBuffer()], programId);
+export function referrerStatePda(referrer: Address, programId: Address = PROGRAM_ID): Promise<ProgramDerivedAddress> {
+  return getProgramDerivedAddress({
+    seeds: [Buffer.from(BASE_SEED_REFERRER_STATE), addressEncoder.encode(referrer)],
+    programAddress: programId,
+  });
 }
 
 /**
  * Returns the PDA and bump for the short url
  * @param shortUrl
  * @param programId
- * @returns [pda, bump]
+ * @returns pda
  */
-export function shortUrlPda(shortUrl: string, programId: PublicKey = PROGRAM_ID) {
-  return PublicKey.findProgramAddressSync([Buffer.from(BASE_SEED_SHORT_URL), Buffer.from(shortUrl)], programId);
+export async function shortUrlPda(shortUrl: string, programId: Address = PROGRAM_ID): Promise<Address> {
+  const [address] = await getProgramDerivedAddress({
+    seeds: [Buffer.from(BASE_SEED_SHORT_URL), Buffer.from(shortUrl)],
+    programAddress: programId,
+  });
+  return address;
 }
 
 /**
  * Returns the PDA and bump for the global config state.
  * @param programId
- * @returns [pda, bump]
+ * @returns pda
  */
-export function globalConfigPda(programId: PublicKey = PROGRAM_ID) {
-  return PublicKey.findProgramAddressSync([Buffer.from(BASE_SEED_GLOBAL_CONFIG_STATE)], programId);
+export async function globalConfigPda(programId: Address = PROGRAM_ID): Promise<Address> {
+  const [address] = await getProgramDerivedAddress({
+    seeds: [Buffer.from(BASE_SEED_GLOBAL_CONFIG_STATE)],
+    programAddress: programId,
+  });
+  return address;
 }
 
 /**
  * Returns the PDA and bump for the program data.
  * @param programId
- * @returns [pda, bump]
+ * @returns pda
  */
-export function programDataPda(programId: PublicKey = PROGRAM_ID) {
-  return PublicKey.findProgramAddressSync(
-    [programId.toBuffer()],
-    new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111')
-  );
+export async function programDataPda(programId: Address = PROGRAM_ID): Promise<Address> {
+  const [pda] = await getProgramDerivedAddress({
+    seeds: [addressEncoder.encode(programId)],
+    programAddress: address('BPFLoaderUpgradeab1e11111111111111111111111'),
+  });
+  return pda;
 }
 
 /**
@@ -224,11 +271,12 @@ export function programDataPda(programId: PublicKey = PROGRAM_ID) {
  * @param obligation
  * @returns pda
  */
-export function obligationFarmStatePda(farm: PublicKey, obligation: PublicKey) {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(BASE_SEED_USER_STATE), farm.toBytes(), obligation.toBytes()],
-    farmsId
-  )[0];
+export async function obligationFarmStatePda(farm: Address, obligation: Address): Promise<Address> {
+  const [address] = await getProgramDerivedAddress({
+    seeds: [Buffer.from(BASE_SEED_USER_STATE), addressEncoder.encode(farm), addressEncoder.encode(obligation)],
+    programAddress: FARMS_PROGRAM_ID,
+  });
+  return address;
 }
 
 /**
@@ -236,9 +284,9 @@ export function obligationFarmStatePda(farm: PublicKey, obligation: PublicKey) {
  * @param mint
  * @returns [pda, bump]
  */
-export function getKVaultSharesMetadataPda(mint: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(METADATA_SEED), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
-    METADATA_PROGRAM_ID
-  );
+export async function getKVaultSharesMetadataPda(mint: Address): Promise<ProgramDerivedAddress> {
+  return getProgramDerivedAddress({
+    seeds: [Buffer.from(METADATA_SEED), addressEncoder.encode(METADATA_PROGRAM_ID), addressEncoder.encode(mint)],
+    programAddress: METADATA_PROGRAM_ID,
+  });
 }

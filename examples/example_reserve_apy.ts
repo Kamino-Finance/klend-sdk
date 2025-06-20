@@ -1,5 +1,5 @@
 import { ReserveArgs } from './utils/models';
-import { getConnection } from './utils/connection';
+import { getConnectionPool } from './utils/connection';
 import { MAIN_MARKET, PYUSD_MINT } from './utils/constants';
 import { getReserveRewardsApy, loadReserveData } from './utils/helpers';
 
@@ -15,10 +15,10 @@ export async function getReserveApy(args: ReserveArgs) {
 }
 
 (async () => {
-  const connection = getConnection();
+  const c = getConnectionPool();
   console.log(`fetching data for market ${MAIN_MARKET.toString()} reserve for ${PYUSD_MINT.toString()}`);
   const { borrowApy, rewardApys, supplyApy } = await getReserveApy({
-    connection,
+    rpc: c.rpc,
     marketPubkey: MAIN_MARKET,
     mintPubkey: PYUSD_MINT,
   });

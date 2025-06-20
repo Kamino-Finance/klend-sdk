@@ -1,27 +1,23 @@
-import { getConnection } from '../utils/connection';
+import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
 import Decimal from 'decimal.js/decimal';
-import {
-  buildAndSendTxn,
-  getMedianSlotDurationInMsFromLastEpochs,
-  KaminoManager,
-  KaminoVault,
-} from '@kamino-finance/klend-sdk';
+import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } from '@kamino-finance/klend-sdk';
 import {
   PerformanceFeeBps,
   ManagementFeeBps,
-} from '@kamino-finance/klend-sdk/dist/idl_codegen_kamino_vault/types/VaultConfigField';
+} from '@kamino-finance/klend-sdk/dist/@codegen/kvault/types/VaultConfigField';
+import { sendAndConfirmTx } from '../utils/tx';
 
 (async () => {
-  const connection = getConnection();
-  const user = getKeypair();
+  const c = getConnectionPool();
+  const user = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
-  const kaminoManager = new KaminoManager(connection, slotDuration);
+  const kaminoManager = new KaminoManager(c.rpc, slotDuration);
   const kaminoVault = new KaminoVault(EXAMPLE_USDC_VAULT);
 
   // read the vault state so we can use the LUT in the tx
-  const vaultState = await kaminoVault.getState(connection);
+  const vaultState = await kaminoVault.getState(c.rpc);
 
   // update the performance fee of the vault
   const perfFeeBps = new Decimal(1000);
@@ -31,8 +27,8 @@ import {
     perfFeeBps.toString()
   );
 
-  await buildAndSendTxn(
-    connection,
+  await sendAndConfirmTx(
+    c,
     user,
     [updatePerfFeeIxs.updateVaultConfigIx, ...updatePerfFeeIxs.updateLUTIxs],
     [],
@@ -48,8 +44,8 @@ import {
     mgmtFeeBps.toString()
   );
 
-  await buildAndSendTxn(
-    connection,
+  await sendAndConfirmTx(
+    c,
     user,
     [updateMgmtFeeIxs.updateVaultConfigIx, ...updateMgmtFeeIxs.updateLUTIxs],
     [],

@@ -1,6 +1,6 @@
 /* eslint-disable max-classes-per-file */
 import { Fraction } from './fraction';
-import { ObligationOrder } from '../idl_codegen/types';
+import { ObligationOrder } from '../@codegen/klend/types';
 import { orThrow, roundNearest } from './utils';
 import Decimal from 'decimal.js';
 import BN from 'bn.js';
@@ -342,7 +342,7 @@ export class KaminoObligationOrder {
           return valueComparison;
         }
         // Just for deterministic selection in case of multiple equally-good deposits: pick the one with lower mint pubkey (mostly for test stability purposes)
-        return leftDeposit.mintAddress.toBase58().localeCompare(rightDeposit.mintAddress.toBase58());
+        return leftDeposit.mintAddress.localeCompare(rightDeposit.mintAddress);
       })
       .at(-1)!;
     const actualRepayValue = actualWithdrawValue.div(executionBonusFactor);
@@ -505,7 +505,7 @@ export type AvailableOrderExecution = {
 // Internal calculation functions:
 
 function tokenAmountToValue(tokenAmount: TokenAmount, position: Position): Decimal {
-  if (!tokenAmount.mint.equals(position.mintAddress)) {
+  if (tokenAmount.mint !== position.mintAddress) {
     throw new Error(`Value of token amount ${tokenAmount} cannot be computed using data from ${position}`);
   }
   return tokenAmount.amount.mul(position.marketValueRefreshed).div(position.amount);

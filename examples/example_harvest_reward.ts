@@ -1,34 +1,26 @@
-import { buildVersionedTransaction, sendAndConfirmVersionedTransaction } from '@kamino-finance/klend-sdk';
-import { getConnection } from './utils/connection';
+import { getConnectionPool } from './utils/connection';
 import { getKeypair } from './utils/keypair';
 import { MAIN_MARKET, PYUSD_MINT } from './utils/constants';
 import { loadReserveData } from './utils/helpers';
 import { Farms } from '@kamino-finance/farms-sdk';
+import { sendAndConfirmTx } from './utils/tx';
 
 (async () => {
-  const connection = getConnection();
-  const wallet = getKeypair();
+  const c = getConnectionPool();
+  const wallet = await getKeypair();
 
-  const farm = new Farms(connection);
+  const farm = new Farms(c.rpc);
 
-  const { market, reserve: pyusdReserve } = await loadReserveData({
-    connection,
+  const { reserve: pyusdReserve } = await loadReserveData({
+    rpc: c.rpc,
     marketPubkey: MAIN_MARKET,
     mintPubkey: PYUSD_MINT,
   });
 
   // Get all farms that the user is eligible to harvest rewards from
-  let txInstructions = await farm.claimForUserForFarmAllRewardsIx(
-    wallet.publicKey,
-    pyusdReserve.state.farmCollateral,
-    true
-  );
+  let txInstructions = await farm.claimForUserForFarmAllRewardsIx(wallet, pyusdReserve.state.farmCollateral, true);
 
-  const tx = await buildVersionedTransaction(connection, wallet.publicKey, [...txInstructions]);
-
-  tx.sign([wallet]);
-
-  const txHash = await sendAndConfirmVersionedTransaction(connection, tx, 'processed', { skipPreflight: true });
+  const txHash = await sendAndConfirmTx(c, wallet, txInstructions, [], [], 'harvestReward');
   console.log('txHash', txHash);
 })().catch(async (e) => {
   console.error(e);

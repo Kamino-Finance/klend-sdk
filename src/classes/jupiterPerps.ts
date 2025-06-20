@@ -1,7 +1,7 @@
-import { Connection, PublicKey } from '@solana/web3.js';
-import { Pool } from '../idl_codegen_jupiter_perps/accounts/Pool';
+import { Rpc, Address, GetAccountInfoApi } from '@solana/kit';
+import { Pool } from '../@codegen/jupiter_perps/accounts/Pool';
 
-export async function getJLPApr(connection: Connection, poolAddress: PublicKey): Promise<number> {
+export async function getJLPApr(connection: Rpc<GetAccountInfoApi>, poolAddress: Address): Promise<number> {
   const jlpPool = await Pool.fetch(connection, poolAddress);
 
   if (!jlpPool) {

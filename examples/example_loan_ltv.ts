@@ -1,13 +1,13 @@
-import { getConnection } from './utils/connection';
+import { getConnectionPool } from './utils/connection';
 import { ObligationTypeTag } from '@kamino-finance/klend-sdk';
 import { EXAMPLE_OBLIGATION, MAIN_MARKET } from './utils/constants';
 import { getLoan } from './utils/helpers';
 
 (async () => {
-  const connection = getConnection();
+  const c = getConnectionPool();
   console.log('fetching loan:', EXAMPLE_OBLIGATION.toString(), 'in market:', MAIN_MARKET.toString());
   const loan = await getLoan({
-    connection,
+    rpc: c.rpc,
     obligationPubkey: EXAMPLE_OBLIGATION,
     marketPubkey: MAIN_MARKET,
   });

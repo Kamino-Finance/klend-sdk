@@ -1,15 +1,17 @@
-import { AccountInfo, Connection, PublicKey } from '@solana/web3.js';
+import { Account, address, Address, Base64EncodedDataResponse, GetMultipleAccountsApi, Rpc } from '@solana/kit';
 import Decimal from 'decimal.js';
-import { OraclePrices, Scope } from '@kamino-finance/scope-sdk';
-import { isNotNullPubkey, PubkeyHashMap, PublicKeySet } from './pubkey';
+import { Scope } from '@kamino-finance/scope-sdk';
+import { OraclePrices } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts/OraclePrices';
+import { isNotNullPubkey } from './pubkey';
 import { parseTokenSymbol } from '../classes';
-import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
 import { Reserve } from '../lib';
 import { batchFetch } from '@kamino-finance/kliquidity-sdk';
 import BN from 'bn.js';
-import { PriceUpdateV2 } from '../pyth/accounts';
-
-const SWITCHBOARD_V2_PROGRAM_ID = new PublicKey('SW1TCH7qEPTdLsDHRgPuMQjbQxKdH2aBStViMFnt64f');
+import { priceUpdateV2 } from '../@codegen/pyth_rec/accounts/priceUpdateV2';
+import { AggregatorAccountData } from '../@codegen/switchboard_v2/accounts/AggregatorAccountData';
+import { Buffer } from 'buffer';
+import { getLatestAggregatorValue } from './switchboard';
+import { PROGRAM_ID as SWITCHBOARD_V2_PROGRAM_ID } from '../@codegen/switchboard_v2/programId';
 
 // validate price confidence - confidence/price ratio should be less than 2%
 export const MAX_CONFIDENCE_PERCENTAGE: Decimal = new Decimal('2');
@@ -18,11 +20,11 @@ export const MAX_CONFIDENCE_PERCENTAGE: Decimal = new Decimal('2');
 export const CONFIDENCE_FACTOR: Decimal = new Decimal('100').div(MAX_CONFIDENCE_PERCENTAGE);
 
 const getScopeAddress = () => {
-  return 'HFn8GnPADiny6XqUoWE8uRPPxb29ikn4yTuPa9MF2fWJ';
+  return address('HFn8GnPADiny6XqUoWE8uRPPxb29ikn4yTuPa9MF2fWJ');
 };
 
 export type TokenOracleData = {
-  mintAddress: PublicKey;
+  mintAddress: Address;
   decimals: Decimal;
   price: Decimal;
   timestamp: bigint;
@@ -40,15 +42,11 @@ export type ScopePriceRefreshConfig = {
   scopeFeed: string;
 };
 
-export function getTokenOracleDataSync(
-  allOracleAccounts: AllOracleAccounts,
-  switchboardV2: SwitchboardProgram,
-  reserves: Reserve[]
-) {
+export function getTokenOracleDataSync(allOracleAccounts: AllOracleAccounts, reserves: Reserve[]) {
   const tokenOracleDataForReserves: Array<[Reserve, TokenOracleData | undefined]> = [];
-  const pythCache = new PubkeyHashMap<PublicKey, PythPrices>();
-  const switchboardCache = new PubkeyHashMap<PublicKey, CandidatePrice>();
-  const scopeCache = new PubkeyHashMap<PublicKey, OraclePrices>();
+  const pythCache = new Map<Address, PythPrices>();
+  const switchboardCache = new Map<Address, CandidatePrice>();
+  const scopeCache = new Map<Address, OraclePrices>();
   for (const reserve of reserves) {
     let currentBest: CandidatePrice | undefined = undefined;
     const oracle = {
@@ -67,8 +65,7 @@ export function getTokenOracleDataSync(
       const switchboardPrice = cacheOrGetSwitchboardPrice(
         oracle.switchboardFeedAddress,
         switchboardCache,
-        allOracleAccounts,
-        switchboardV2
+        allOracleAccounts
       );
       if (switchboardPrice) {
         currentBest = getBestPrice(currentBest, switchboardPrice);
@@ -106,18 +103,20 @@ export function getTokenOracleDataSync(
 
 // TODO: Add freshness of the latest price to match sc logic
 export async function getTokenOracleData(
-  connection: Connection,
+  rpc: Rpc<GetMultipleAccountsApi>,
   reserves: Reserve[]
 ): Promise<Array<[Reserve, TokenOracleData | undefined]>> {
-  const allOracleAccounts = await getAllOracleAccounts(connection, reserves);
-  const switchboardV2 = await SwitchboardProgram.loadMainnet(connection);
-  return getTokenOracleDataSync(allOracleAccounts, switchboardV2, reserves);
+  const allOracleAccounts = await getAllOracleAccounts(rpc, reserves);
+  return getTokenOracleDataSync(allOracleAccounts, reserves);
 }
 
-export type AllOracleAccounts = PubkeyHashMap<PublicKey, AccountInfo<Buffer>>;
+export type AllOracleAccounts = Map<Address, Account<Base64EncodedDataResponse>>;
 
-export async function getAllOracleAccounts(connection: Connection, reserves: Reserve[]): Promise<AllOracleAccounts> {
-  const allAccounts: PublicKey[] = [];
+export async function getAllOracleAccounts(
+  rpc: Rpc<GetMultipleAccountsApi>,
+  reserves: Reserve[]
+): Promise<AllOracleAccounts> {
+  const allAccounts: Address[] = [];
   reserves.forEach((reserve) => {
     if (isNotNullPubkey(reserve.config.tokenInfo.pythConfiguration.price)) {
       allAccounts.push(reserve.config.tokenInfo.pythConfiguration.price);
@@ -133,18 +132,21 @@ export async function getAllOracleAccounts(connection: Connection, reserves: Res
     }
   });
   const allAccountsDeduped = dedupKeys(allAccounts);
-  const allAccs = await batchFetch(allAccountsDeduped, (chunk) => connection.getMultipleAccountsInfo(chunk));
-  const allAccsMap = new PubkeyHashMap<PublicKey, AccountInfo<Buffer>>();
+  const allAccs = await batchFetch(
+    allAccountsDeduped,
+    async (chunk) => (await rpc.getMultipleAccounts(chunk).send()).value
+  );
+  const allAccsMap = new Map<Address, Account<Base64EncodedDataResponse>>();
   allAccs.forEach((acc, i) => {
-    if (acc) {
-      allAccsMap.set(allAccountsDeduped[i], acc);
+    if (acc !== null) {
+      allAccsMap.set(allAccountsDeduped[i], { ...acc, programAddress: acc.owner, address: allAccountsDeduped[i] });
     }
   });
   return allAccsMap;
 }
 
-function dedupKeys(keys: PublicKey[]): PublicKey[] {
-  return new PublicKeySet(keys).toArray();
+function dedupKeys(keys: Address[]): Address[] {
+  return [...new Set<Address>(keys)];
 }
 
 export type PythPrices = {
@@ -159,8 +161,8 @@ export type PythPrices = {
  * @param oracleAccounts all oracle accounts
  */
 export function cacheOrGetPythPrices(
-  oracle: PublicKey,
-  cache: Map<PublicKey, PythPrices>,
+  oracle: Address,
+  cache: Map<Address, PythPrices>,
   oracleAccounts: AllOracleAccounts
 ): PythPrices | null {
   const prices: PythPrices = {};
@@ -171,7 +173,7 @@ export function cacheOrGetPythPrices(
     const result = oracleAccounts.get(oracle);
     if (result) {
       try {
-        const { priceMessage } = PriceUpdateV2.decode(result.data);
+        const { priceMessage } = priceUpdateV2.decode(Buffer.from(result.data[0], 'base64'));
         const { price, exponent, conf: confidence, publishTime: timestamp, emaPrice } = priceMessage;
         if (price) {
           const px = new Decimal(price.toString()).div(10 ** Math.abs(exponent));
@@ -209,13 +211,11 @@ export function cacheOrGetPythPrices(
  * @param oracle oracle address
  * @param switchboardCache cache for oracle prices
  * @param oracleAccounts all oracle accounts
- * @param switchboardV2 loaded switchboard program
  */
 export function cacheOrGetSwitchboardPrice(
-  oracle: PublicKey,
-  switchboardCache: Map<PublicKey, CandidatePrice>,
-  oracleAccounts: AllOracleAccounts,
-  switchboardV2: SwitchboardProgram
+  oracle: Address,
+  switchboardCache: Map<Address, CandidatePrice>,
+  oracleAccounts: AllOracleAccounts
 ): CandidatePrice | null {
   const cached = switchboardCache.get(oracle);
   if (cached) {
@@ -223,10 +223,9 @@ export function cacheOrGetSwitchboardPrice(
   } else {
     const info = oracleAccounts.get(oracle);
     if (info) {
-      if (info.owner.equals(SWITCHBOARD_V2_PROGRAM_ID)) {
-        const agg = switchboardV2.decodeAggregator(info!);
-        // @ts-ignore
-        const result: Big.Big | null = switchboardV2.getLatestAggregatorValue(agg);
+      if (info.programAddress === SWITCHBOARD_V2_PROGRAM_ID) {
+        const agg = AggregatorAccountData.decode(Buffer.from(info.data[0], 'base64'));
+        const result = getLatestAggregatorValue(agg);
         if (result !== undefined && result !== null) {
           const switchboardPx = new Decimal(result.toString());
           const latestRoundTimestamp: BN = agg.latestConfirmedRound.roundOpenTimestamp;
@@ -239,7 +238,7 @@ export function cacheOrGetSwitchboardPrice(
           };
         }
       } else {
-        console.error('Unrecognized switchboard owner address: ', info.owner.toString());
+        console.error('Unrecognized switchboard owner address: ', info.programAddress);
         return null;
       }
     }
@@ -255,8 +254,8 @@ export function cacheOrGetSwitchboardPrice(
  * @param chain scope chain
  */
 export function cacheOrGetScopePrice(
-  oracle: PublicKey,
-  scopeCache: Map<PublicKey, OraclePrices>,
+  oracle: Address,
+  scopeCache: Map<Address, OraclePrices>,
   allOracleAccounts: AllOracleAccounts,
   chain: number[]
 ): CandidatePrice | null {
@@ -270,9 +269,9 @@ export function cacheOrGetScopePrice(
   }
   const info = allOracleAccounts.get(oracle);
   if (info) {
-    const owner = info.owner.toString();
+    const owner = info.programAddress;
     if (owner === getScopeAddress()) {
-      const prices = OraclePrices.decode(info.data);
+      const prices = OraclePrices.decode(Buffer.from(info.data[0], 'base64'));
       scopeCache.set(oracle, prices);
       return scopeChainToCandidatePrice(chain, prices);
     } else {
@@ -308,7 +307,7 @@ function validatePythPx(price: Decimal, confidence: Decimal): boolean {
   return !price.isZero() && price.gt(conf50x);
 }
 
-function validateSwitchboardV2Px(agg: any): boolean {
+function validateSwitchboardV2Px(agg: AggregatorAccountData): boolean {
   const pxMantissa = new Decimal(agg.latestConfirmedRound.result.mantissa.toString());
   const pxScale = new Decimal(agg.latestConfirmedRound.result.scale.toString());
   const stDevMantissa = new Decimal(agg.latestConfirmedRound.stdDeviation.mantissa.toString());

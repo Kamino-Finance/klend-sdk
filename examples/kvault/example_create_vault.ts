@@ -1,28 +1,24 @@
-import { getConnection } from '../utils/connection';
+import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { KaminoVaultConfig } from '../../src/classes/vault';
 import { USDC_MINT } from '../utils/constants';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import Decimal from 'decimal.js/decimal';
-import {
-  buildAndSendTxn,
-  getMedianSlotDurationInMsFromLastEpochs,
-  KaminoManager,
-  sleep,
-} from '@kamino-finance/klend-sdk';
+import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, sleep } from '@kamino-finance/klend-sdk';
+import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
+import { sendAndConfirmTx } from '../utils/tx';
 
 (async () => {
-  const connection = getConnection();
-  const wallet = getKeypair();
+  const c = getConnectionPool();
+  const wallet = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-  const kaminoManager = new KaminoManager(connection, slotDuration);
+  const kaminoManager = new KaminoManager(c.rpc, slotDuration);
 
   // Initial vault configuration
   const kaminoVaultConfig = new KaminoVaultConfig({
-    admin: wallet.publicKey,
+    admin: wallet,
     tokenMint: USDC_MINT,
-    tokenMintProgramId: TOKEN_PROGRAM_ID, // the token program for the token mint above
+    tokenMintProgramId: TOKEN_PROGRAM_ADDRESS, // the token program for the token mint above
     performanceFeeRatePercentage: new Decimal(1.0),
     managementFeeRatePercentage: new Decimal(2.0),
     name: 'example',
@@ -30,14 +26,14 @@ import {
     vaultTokenName: 'Example',
   });
 
-  const { vault: vaultKp, initVaultIxs: instructions } = await kaminoManager.createVaultIxs(kaminoVaultConfig);
+  const { initVaultIxs: instructions } = await kaminoManager.createVaultIxs(kaminoVaultConfig);
 
   // initialize vault, lookup table for the vault and shares metadata
-  await buildAndSendTxn(
-    connection,
+  await sendAndConfirmTx(
+    c,
     wallet,
     [...instructions.initVaultIxs, instructions.createLUTIx, instructions.initSharesMetadataIx],
-    [vaultKp],
+    [],
     [],
     'InitVault'
   );
@@ -45,7 +41,7 @@ import {
   await sleep(2000);
 
   // populate the LUT
-  await buildAndSendTxn(connection, wallet, instructions.populateLUTIxs, [], [], 'PopulateLUT');
+  await sendAndConfirmTx(c, wallet, instructions.populateLUTIxs, [], [], 'PopulateLUT');
 })().catch(async (e) => {
   console.error(e);
 });

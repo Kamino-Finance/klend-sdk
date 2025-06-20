@@ -1,4 +1,3 @@
-import { Connection, PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY, TransactionInstruction } from '@solana/web3.js';
 import {
   getKVaultSharesMetadataPda,
   initializeSharesMetadata,
@@ -9,9 +8,12 @@ import {
   UpdateSharesMetadataAccounts,
   UpdateSharesMetadataArgs,
 } from '../lib';
+import { Address, IInstruction, TransactionSigner } from '@solana/kit';
+import { SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
+import { SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 
 export function resolveMetadata(
-  kTokenMint: PublicKey,
+  kTokenMint: Address,
   extra: string,
   inputToken?: string,
   inputName?: string,
@@ -47,21 +49,20 @@ export function resolveMetadataFromToken(token: string, extra: string): { name: 
   return { name, symbol };
 }
 
-export function resolveMetadataUriFromMint(mint: PublicKey): string {
-  return `https://api.kamino.finance/kvault-tokens/${mint.toBase58()}/metadata`;
+export function resolveMetadataUriFromMint(mint: Address): string {
+  return `https://api.kamino.finance/kvault-tokens/${mint}/metadata`;
 }
 
 export async function getInitializeKVaultSharesMetadataIx(
-  connection: Connection,
-  vaultAdmin: PublicKey,
-  vault: PublicKey,
-  sharesMint: PublicKey,
-  baseVaultAuthority: PublicKey,
+  vaultAdmin: TransactionSigner,
+  vault: Address,
+  sharesMint: Address,
+  baseVaultAuthority: Address,
   name: string,
   symbol: string,
   uri: string
-): Promise<TransactionInstruction> {
-  const [sharesMintMetadata] = getKVaultSharesMetadataPda(sharesMint);
+): Promise<IInstruction> {
+  const [sharesMintMetadata] = await getKVaultSharesMetadataPda(sharesMint);
 
   const args: InitializeSharesMetadataArgs = {
     name,
@@ -75,8 +76,8 @@ export async function getInitializeKVaultSharesMetadataIx(
     sharesMint,
     baseVaultAuthority,
     sharesMetadata: sharesMintMetadata,
-    systemProgram: SystemProgram.programId,
-    rent: SYSVAR_RENT_PUBKEY,
+    systemProgram: SYSTEM_PROGRAM_ADDRESS,
+    rent: SYSVAR_RENT_ADDRESS,
     metadataProgram: METADATA_PROGRAM_ID,
   };
 
@@ -85,16 +86,15 @@ export async function getInitializeKVaultSharesMetadataIx(
 }
 
 export async function getUpdateSharesMetadataIx(
-  connection: Connection,
-  vaultAdmin: PublicKey,
-  vault: PublicKey,
-  sharesMint: PublicKey,
-  baseVaultAuthority: PublicKey,
+  vaultAdmin: TransactionSigner,
+  vault: Address,
+  sharesMint: Address,
+  baseVaultAuthority: Address,
   name: string,
   symbol: string,
   uri: string
-): Promise<TransactionInstruction> {
-  const [sharesMintMetadata] = getKVaultSharesMetadataPda(sharesMint);
+): Promise<IInstruction> {
+  const [sharesMintMetadata] = await getKVaultSharesMetadataPda(sharesMint);
 
   const args: UpdateSharesMetadataArgs = {
     name,

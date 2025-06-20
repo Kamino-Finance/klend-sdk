@@ -1,111 +1,116 @@
-import { AddressLookupTableProgram, Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { Address, GetAccountInfoApi, GetSlotApi, IInstruction, Rpc, Slot, TransactionSigner } from '@solana/kit';
+import {
+  fetchAddressLookupTable,
+  findAddressLookupTablePda,
+  getCloseLookupTableInstruction,
+  getCreateLookupTableInstruction,
+  getDeactivateLookupTableInstruction,
+  getExtendLookupTableInstruction,
+} from '@solana-program/address-lookup-table';
 
-export async function printAddressLookupTable(connection: Connection, lookupTablePk: PublicKey) {
-  const lookupTableAccount = (await connection.getAddressLookupTable(lookupTablePk)).value;
+export async function printAddressLookupTable(rpc: Rpc<GetAccountInfoApi>, lookupTablePk: Address): Promise<void> {
+  const lookupTableAccount = (await fetchAddressLookupTable(rpc, lookupTablePk)).data;
   if (!lookupTableAccount) {
     console.error('Lookup table is not found');
   }
   console.log(`Lookup table account, ${lookupTablePk.toString()}`);
-  lookupTableAccount?.state.addresses.forEach((address: PublicKey, index: number) => {
+  lookupTableAccount.addresses.forEach((address: Address, index: number) => {
     console.log(`Address: ${address.toString()} at index ${index}`);
   });
 }
 
 export async function createLookupTableIx(
-  connection: Connection,
-  wallet: PublicKey
-): Promise<[TransactionInstruction, PublicKey]> {
-  return initLookupTableIx(wallet, await connection.getSlot('confirmed'));
+  connection: Rpc<GetSlotApi>,
+  authority: TransactionSigner
+): Promise<[IInstruction, Address]> {
+  const recentSlot = await connection.getSlot({ commitment: 'finalized' }).send();
+  return initLookupTableIx(authority, recentSlot);
 }
 
 export function extendLookupTableChunkIx(
-  wallet: PublicKey,
-  lookupTablePk: PublicKey,
-  keys: PublicKey[],
-  payer: PublicKey = PublicKey.default
-): TransactionInstruction {
-  return AddressLookupTableProgram.extendLookupTable({
-    authority: wallet,
-    payer: payer.equals(PublicKey.default) ? wallet : payer,
-    lookupTable: lookupTablePk,
+  authority: TransactionSigner,
+  lookupTablePk: Address,
+  keys: Address[],
+  payer: TransactionSigner = authority
+): IInstruction {
+  return getExtendLookupTableInstruction({
+    authority,
+    payer,
+    address: lookupTablePk,
     addresses: keys,
   });
 }
 
 export const extendLookupTableIxs = (
-  wallet: PublicKey,
-  table: PublicKey,
-  keys: PublicKey[],
-  payer: PublicKey = PublicKey.default
-): TransactionInstruction[] => {
+  authority: TransactionSigner,
+  table: Address,
+  keys: Address[],
+  payer: TransactionSigner = authority
+): IInstruction[] => {
   const chunkSize = 25;
-  const extendLookupIxs: TransactionInstruction[] = [];
+  const extendLookupIxs: IInstruction[] = [];
   for (let i = 0; i < keys.length; i += chunkSize) {
     const chunk = keys.slice(i, i + chunkSize);
-    extendLookupIxs.push(extendLookupTableChunkIx(wallet, table, chunk, payer));
+    extendLookupIxs.push(extendLookupTableChunkIx(authority, table, chunk, payer));
   }
-
   return extendLookupIxs;
 };
 
 /**
- * This method retuns an instruction that creates a lookup table, alongside the pubkey of the lookup table
- * @param payer - the owner of the lookup table
- * @param slot - the current slot
+ * This method returns an instruction that creates a lookup table, alongside the pubkey of the lookup table
+ * @param authority - the owner of the lookup table
+ * @param recentSlot - the current slot
  * @returns - the instruction to create the lookup table and its address
  */
-export function initLookupTableIx(payer: PublicKey, slot: number): [TransactionInstruction, PublicKey] {
-  const [ix, address] = AddressLookupTableProgram.createLookupTable({
-    authority: payer,
-    payer,
-    recentSlot: slot,
+export async function initLookupTableIx(
+  authority: TransactionSigner,
+  recentSlot: Slot
+): Promise<[IInstruction, Address]> {
+  const address = await findAddressLookupTablePda({ authority: authority.address, recentSlot });
+  const createLookupTableIx = getCreateLookupTableInstruction({
+    authority,
+    payer: authority,
+    recentSlot,
+    address,
   });
-
-  return [ix, address];
+  return [createLookupTableIx, address[0]];
 }
 
 /**
  * This method retuns an instruction that deactivates a lookup table, which is needed to close it
- * @param payer - the owner of the lookup table
+ * @param authority - the owner of the lookup table
  * @param lookupTable - the lookup table to deactivate
  * @returns - the instruction to deactivate the lookup table
  */
-export function deactivateLookupTableIx(payer: PublicKey, lookupTable: PublicKey): TransactionInstruction {
-  const ix = AddressLookupTableProgram.deactivateLookupTable({
-    authority: payer,
-    lookupTable: lookupTable,
+export function deactivateLookupTableIx(authority: TransactionSigner, lookupTable: Address): IInstruction {
+  return getDeactivateLookupTableInstruction({
+    authority,
+    address: lookupTable,
   });
-
-  return ix;
 }
 
 /**
  * This method returns an instruction that closes a lookup table. That lookup table needs to be disabled at least 500 blocks before closing it.
- * @param payer - the owner of the lookup table
+ * @param authority - the owner of the lookup table
  * @param lookupTable - the lookup table to close
  * @returns - the instruction to close the lookup table
  */
 /// this require the LUT to be deactivated at least 500 blocks before
-export function closeLookupTableIx(payer: PublicKey, lookupTable: PublicKey): TransactionInstruction {
-  const ix = AddressLookupTableProgram.closeLookupTable({
-    authority: payer,
-    recipient: payer,
-    lookupTable: lookupTable,
+export function closeLookupTableIx(authority: TransactionSigner, lookupTable: Address): IInstruction {
+  return getCloseLookupTableInstruction({
+    authority,
+    address: lookupTable,
+    recipient: authority.address,
   });
-
-  return ix;
 }
 
 /**
  * Returns the accounts in a lookup table
+ * @param rpc
  * @param lookupTable - lookup table to get the accounts from
  * @returns - an array of accounts in the lookup table
  */
-export async function getAccountsInLUT(connection: Connection, lookupTable: PublicKey): Promise<PublicKey[]> {
-  const lutState = await connection.getAddressLookupTable(lookupTable);
-  if (!lutState || !lutState.value) {
-    throw new Error(`Lookup table ${lookupTable} not found`);
-  }
-
-  return lutState.value.state.addresses;
+export async function getAccountsInLut(rpc: Rpc<GetAccountInfoApi>, lookupTable: Address): Promise<Address[]> {
+  const lutState = await fetchAddressLookupTable(rpc, lookupTable);
+  return lutState.data.addresses;
 }

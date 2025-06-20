@@ -18,14 +18,16 @@ import {
   DEFAULT_MAX_COMPUTE_UNITS,
   getAssociatedTokenAddress,
   getComputeBudgetAndPriorityFeeIxs,
-  PublicKeySet,
   ScopePriceRefreshConfig,
   U64_MAX,
   uniqueAccountsWithProgramIds,
+  WRAPPED_SOL_MINT,
 } from '../utils';
-import { AddressLookupTableAccount, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { Account, Address, IInstruction, isSome, none, Option, Slot, TransactionSigner } from '@solana/kit';
 import Decimal from 'decimal.js';
-import { createCloseAccountInstruction, NATIVE_MINT, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
+import { AddressLookupTable } from '@solana-program/address-lookup-table';
+import { getCloseAccountInstruction } from '@solana-program/token-2022';
 
 /**
  * Inputs to the `getSwapCollIxs()` operation.
@@ -47,12 +49,12 @@ export interface SwapCollIxsInputs<QuoteResponse> {
   /**
    * The mint of the source collateral token (i.e. the current one).
    */
-  sourceCollTokenMint: PublicKey;
+  sourceCollTokenMint: Address;
 
   /**
    * The mint of the target collateral token (i.e. the new one).
    */
-  targetCollTokenMint: PublicKey;
+  targetCollTokenMint: Address;
 
   /**
    * An elevation group ID that the obligation should end up with after the collateral swap - it will be requested by
@@ -63,10 +65,11 @@ export interface SwapCollIxsInputs<QuoteResponse> {
   // Note: the undocumented inputs below all have their most usual meaning used across the SDK.
 
   market: KaminoMarket;
+  owner: TransactionSigner;
   obligation: KaminoObligation;
-  referrer: PublicKey;
-  currentSlot: number;
-  budgetAndPriorityFeeIxs?: TransactionInstruction[];
+  referrer: Option<Address>;
+  currentSlot: Slot;
+  budgetAndPriorityFeeIxs?: IInstruction[];
   scopeRefreshConfig?: ScopePriceRefreshConfig;
   useV2Ixs: boolean;
   quoter: SwapQuoteProvider<QuoteResponse>;
@@ -81,12 +84,12 @@ export interface SwapCollIxsOutputs<QuoteResponse> {
   /**
    * Instructions for on-chain execution.
    */
-  ixs: TransactionInstruction[];
+  ixs: IInstruction[];
 
   /**
    * Required LUTs.
    */
-  lookupTables: AddressLookupTableAccount[];
+  lookupTables: Account<AddressLookupTable>[];
 
   /**
    * Whether the swap is using V2 instructions.
@@ -205,15 +208,16 @@ type SwapCollArgs = {
 };
 
 type SwapCollContext<QuoteResponse> = {
-  budgetAndPriorityFeeIxs: TransactionInstruction[];
+  budgetAndPriorityFeeIxs: IInstruction[];
   market: KaminoMarket;
   sourceCollReserve: KaminoReserve;
   targetCollReserve: KaminoReserve;
+  owner: TransactionSigner;
   obligation: KaminoObligation;
   quoter: SwapQuoteProvider<QuoteResponse>;
   swapper: SwapIxsProvider<QuoteResponse>;
-  referrer: PublicKey;
-  currentSlot: number;
+  referrer: Option<Address>;
+  currentSlot: Slot;
   useV2Ixs: boolean;
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined;
   logger: (msg: string, ...extra: any[]) => void;
@@ -222,7 +226,7 @@ type SwapCollContext<QuoteResponse> = {
 function extractArgsAndContext<QuoteResponse>(
   inputs: SwapCollIxsInputs<QuoteResponse>
 ): [SwapCollArgs, SwapCollContext<QuoteResponse>] {
-  if (inputs.sourceCollTokenMint.equals(inputs.targetCollTokenMint)) {
+  if (inputs.sourceCollTokenMint === inputs.targetCollTokenMint) {
     throw new Error(`Cannot swap from/to the same collateral`);
   }
   if (inputs.sourceCollSwapAmount.lte(0)) {
@@ -242,6 +246,7 @@ function extractArgsAndContext<QuoteResponse>(
       logger: console.log,
       market: inputs.market,
       obligation: inputs.obligation,
+      owner: inputs.owner,
       quoter: inputs.quoter,
       swapper: inputs.swapper,
       referrer: inputs.referrer,
@@ -255,12 +260,12 @@ function extractArgsAndContext<QuoteResponse>(
 const FAKE_TARGET_COLL_SWAP_OUT_AMOUNT = new Decimal(1); // see the lengthy `getSwapCollIxs()` impl comment
 
 type SwapCollKlendIxs = {
-  setupIxs: TransactionInstruction[];
-  targetCollFlashBorrowIx: TransactionInstruction;
-  depositTargetCollIxs: TransactionInstruction[];
-  withdrawSourceCollIxs: TransactionInstruction[];
-  targetCollFlashRepayIx: TransactionInstruction;
-  cleanupIxs: TransactionInstruction[];
+  setupIxs: IInstruction[];
+  targetCollFlashBorrowIx: IInstruction;
+  depositTargetCollIxs: IInstruction[];
+  withdrawSourceCollIxs: IInstruction[];
+  targetCollFlashRepayIx: IInstruction;
+  cleanupIxs: IInstruction[];
   flashLoanInfo: FlashLoanInfo;
   simulationDetails: {
     targetCollFlashBorrowedAmount: Decimal;
@@ -272,7 +277,7 @@ async function getKlendIxs(
   targetCollSwapOutAmount: Decimal,
   context: SwapCollContext<any>
 ): Promise<SwapCollKlendIxs> {
-  const { ataCreationIxs, targetCollAta } = getAtaCreationIxs(context);
+  const { ataCreationIxs, targetCollAta } = await getAtaCreationIxs(context);
   const setupIxs = [...context.budgetAndPriorityFeeIxs, ...ataCreationIxs];
 
   const scopeRefreshIxn = await getScopeRefreshIx(
@@ -288,7 +293,7 @@ async function getKlendIxs(
   }
 
   const targetCollFlashBorrowedAmount = calculateTargetCollFlashBorrowedAmount(targetCollSwapOutAmount, context);
-  const { targetCollFlashBorrowIx, targetCollFlashRepayIx } = getTargetCollFlashLoanIxs(
+  const { targetCollFlashBorrowIx, targetCollFlashRepayIx } = await getTargetCollFlashLoanIxs(
     targetCollFlashBorrowedAmount,
     setupIxs.length,
     targetCollAta,
@@ -302,7 +307,7 @@ async function getKlendIxs(
     context
   );
 
-  const cleanupIxs = getAtaCloseIxs(context);
+  const cleanupIxs = await getAtaCloseIxs(context);
 
   return {
     setupIxs,
@@ -330,14 +335,14 @@ function calculateTargetCollFlashBorrowedAmount(
     context.targetCollReserve.getFlashLoanFee(),
     FeeCalculation.Inclusive, // denotes that the amount parameter above means "to be repaid" (not "borrowed")
     context.market.state.referralFeeBps,
-    !context.referrer.equals(PublicKey.default)
+    isSome(context.referrer)
   );
   const targetCollFlashLoanFee = protocolFees.add(referrerFees).div(context.targetCollReserve.getMintFactor());
   return targetCollFlashRepaidAmount.sub(targetCollFlashLoanFee);
 }
 
-function getAtaCreationIxs(context: SwapCollContext<any>) {
-  const atasAndAtaCreationIxs = createAtasIdempotent(context.obligation.state.owner, [
+async function getAtaCreationIxs(context: SwapCollContext<any>) {
+  const atasAndAtaCreationIxs = await createAtasIdempotent(context.owner, [
     {
       mint: context.sourceCollReserve.getLiquidityMint(),
       tokenProgram: context.sourceCollReserve.getLiquidityTokenProgram(),
@@ -353,36 +358,41 @@ function getAtaCreationIxs(context: SwapCollContext<any>) {
   };
 }
 
-function getAtaCloseIxs(context: SwapCollContext<any>) {
-  const ataCloseIxs: TransactionInstruction[] = [];
+async function getAtaCloseIxs(context: SwapCollContext<any>) {
+  const ataCloseIxs: IInstruction[] = [];
   if (
-    context.sourceCollReserve.getLiquidityMint().equals(NATIVE_MINT) ||
-    context.targetCollReserve.getLiquidityMint().equals(NATIVE_MINT)
+    context.sourceCollReserve.getLiquidityMint() === WRAPPED_SOL_MINT ||
+    context.targetCollReserve.getLiquidityMint() === WRAPPED_SOL_MINT
   ) {
-    const owner = context.obligation.state.owner;
-    const wsolAta = getAssociatedTokenAddress(NATIVE_MINT, owner, false);
-    ataCloseIxs.push(createCloseAccountInstruction(wsolAta, owner, owner, [], TOKEN_PROGRAM_ID));
+    const owner = context.owner;
+    const wsolAta = await getAssociatedTokenAddress(WRAPPED_SOL_MINT, owner.address);
+    ataCloseIxs.push(
+      getCloseAccountInstruction(
+        { account: wsolAta, owner, destination: owner.address },
+        { programAddress: TOKEN_PROGRAM_ADDRESS }
+      )
+    );
   }
   return ataCloseIxs;
 }
 
-function getTargetCollFlashLoanIxs(
+async function getTargetCollFlashLoanIxs(
   targetCollAmount: Decimal,
   flashBorrowIxIndex: number,
-  destinationAta: PublicKey,
+  destinationAta: Address,
   context: SwapCollContext<any>
 ) {
   const { flashBorrowIx: targetCollFlashBorrowIx, flashRepayIx: targetCollFlashRepayIx } = getFlashLoanInstructions({
     borrowIxIndex: flashBorrowIxIndex,
-    walletPublicKey: context.obligation.state.owner,
-    lendingMarketAuthority: context.market.getLendingMarketAuthority(),
+    userTransferAuthority: context.owner,
+    lendingMarketAuthority: await context.market.getLendingMarketAuthority(),
     lendingMarketAddress: context.market.getAddress(),
     reserve: context.targetCollReserve,
     amountLamports: targetCollAmount.mul(context.targetCollReserve.getMintFactor()),
     destinationAta,
     // TODO(referrals): once we support referrals, we will have to replace the placeholder args below:
-    referrerAccount: context.market.programId,
-    referrerTokenState: context.market.programId,
+    referrerAccount: none(),
+    referrerTokenState: none(),
     programId: context.market.programId,
   });
   return { targetCollFlashBorrowIx, targetCollFlashRepayIx };
@@ -390,7 +400,7 @@ function getTargetCollFlashLoanIxs(
 
 type DepositTargetCollIxs = {
   removesElevationGroup: boolean;
-  ixs: TransactionInstruction[];
+  ixs: IInstruction[];
 };
 
 async function getDepositTargetCollIxs(
@@ -402,7 +412,7 @@ async function getDepositTargetCollIxs(
     context.market,
     targetCollAmount.mul(context.targetCollReserve.getMintFactor()).toString(), // in lamports
     context.targetCollReserve.getLiquidityMint(),
-    context.obligation.state.owner,
+    context.owner,
     context.obligation,
     context.useV2Ixs,
     undefined, // we create the scope refresh ix outside of KaminoAction
@@ -442,7 +452,7 @@ async function getWithdrawSourceCollIxs(
   args: SwapCollArgs,
   depositRemovedElevationGroup: boolean,
   context: SwapCollContext<any>
-): Promise<TransactionInstruction[]> {
+): Promise<IInstruction[]> {
   const withdrawnSourceCollLamports = args.isClosingSourceColl
     ? U64_MAX
     : args.sourceCollSwapAmount.mul(context.sourceCollReserve.getMintFactor()).toString();
@@ -451,7 +461,7 @@ async function getWithdrawSourceCollIxs(
     context.market,
     withdrawnSourceCollLamports,
     context.sourceCollReserve.getLiquidityMint(),
-    context.obligation.state.owner,
+    context.owner,
     context.obligation,
     context.useV2Ixs,
     undefined, // we create the scope refresh ix outside of KaminoAction
@@ -501,8 +511,8 @@ function elevationGroupIdToRequestAfterWithdraw(
 
 type ExternalSwapIxs<QuoteResponse> = {
   swapOutAmount: Decimal;
-  ixs: TransactionInstruction[];
-  luts: AddressLookupTableAccount[];
+  ixs: IInstruction[];
+  luts: Account<AddressLookupTable>[];
   simulationDetails: {
     quoteResponse?: QuoteResponse;
   };
@@ -510,7 +520,7 @@ type ExternalSwapIxs<QuoteResponse> = {
 
 async function getExternalSwapIxs<QuoteResponse>(
   args: SwapCollArgs,
-  klendAccounts: PublicKey[],
+  klendAccounts: Address[],
   context: SwapCollContext<QuoteResponse>
 ): Promise<Array<ExternalSwapIxs<QuoteResponse>>> {
   const externalSwapInputs = {
@@ -555,36 +565,30 @@ function checkResultingObligationValid(
     }
     if (debtReserveAddresses.length == 1) {
       const debtReserveAddress = debtReserveAddresses[0];
-      if (!args.newElevationGroup.debtReserve.equals(debtReserveAddress)) {
+      if (args.newElevationGroup.debtReserve !== debtReserveAddress) {
         throw new Error(
-          `The obligation with debt reserve ${debtReserveAddress.toBase58()} cannot request elevation group ${
-            args.newElevationGroup.elevationGroup
-          }`
+          `The obligation with debt reserve ${debtReserveAddress} cannot request elevation group ${args.newElevationGroup.elevationGroup}`
         );
       }
     }
 
     // Now the coll reserves: this requires first finding out the resulting set of deposits:
-    const collReserveAddresses = new PublicKeySet([
+    const collReserveAddresses = new Set<Address>([
       ...context.obligation.deposits.keys(),
       context.targetCollReserve.address,
     ]);
     if (args.isClosingSourceColl) {
-      collReserveAddresses.remove(context.sourceCollReserve.address);
+      collReserveAddresses.delete(context.sourceCollReserve.address);
     }
-    if (collReserveAddresses.size() > args.newElevationGroup.maxReservesAsCollateral) {
+    if (collReserveAddresses.size > args.newElevationGroup.maxReservesAsCollateral) {
       throw new Error(
-        `The obligation with ${collReserveAddresses.size()} collateral reserves cannot request elevation group ${
-          args.newElevationGroup.elevationGroup
-        }`
+        `The obligation with ${collReserveAddresses.size} collateral reserves cannot request elevation group ${args.newElevationGroup.elevationGroup}`
       );
     }
-    for (const collReserveAddress of collReserveAddresses.toArray()) {
-      if (!args.newElevationGroup.collateralReserves.contains(collReserveAddress)) {
+    for (const collReserveAddress of [...collReserveAddresses]) {
+      if (!args.newElevationGroup.collateralReserves.has(collReserveAddress)) {
         throw new Error(
-          `The obligation with collateral reserve ${collReserveAddress.toBase58()} cannot request elevation group ${
-            args.newElevationGroup.elevationGroup
-          }`
+          `The obligation with collateral reserve ${collReserveAddress} cannot request elevation group ${args.newElevationGroup.elevationGroup}`
         );
       }
     }
@@ -611,7 +615,7 @@ function checkResultingObligationValid(
   }
 }
 
-function listIxs(klendIxs: SwapCollKlendIxs, externalSwapIxs?: TransactionInstruction[]): TransactionInstruction[] {
+function listIxs(klendIxs: SwapCollKlendIxs, externalSwapIxs?: IInstruction[]): IInstruction[] {
   return [
     ...klendIxs.setupIxs,
     klendIxs.targetCollFlashBorrowIx,

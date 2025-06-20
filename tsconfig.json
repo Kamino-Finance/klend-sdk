@@ -5,7 +5,7 @@
     "lib": ["es2022"],
     "rootDir": "src",
     "outDir": "dist",
-    "typeRoots": ["mocha", "node", "node_modules/@types", "@types"],
+    "typeRoots": ["mocha", "node", "node_modules/@types", "@types", "node_modules/@coral-xyz/anchor/types"],
     "skipLibCheck": true,
     "declaration": true,
     "declarationMap": true,
@@ -20,12 +20,9 @@
     "noUnusedParameters": false,
     "useUnknownInCatchVariables": false,
     "resolveJsonModule": true,
-    "strict": true,
-    "paths": {
-      "*": ["./node_modules/*"]
-    }
+    "strict": true
   },
   "compileOnSave": true,
   "include": ["src/**/*"],
-  "exclude": ["tests", "src/client.ts", "dist", "node_modules", "examples"]
+  "exclude": ["tests", "src/client/client.ts", "dist", "node_modules", "examples"]
 }

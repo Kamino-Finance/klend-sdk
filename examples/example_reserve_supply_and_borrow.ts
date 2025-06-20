@@ -1,8 +1,7 @@
 import { ReserveArgs } from './utils/models';
 import { loadReserveData } from './utils/helpers';
-import { getConnection } from './utils/connection';
+import { getConnectionPool } from './utils/connection';
 import { MAIN_MARKET, PYUSD_MINT } from './utils/constants';
-import { getReserveCaps } from './example_reserve_caps';
 
 /**
  * Get reserve total supply/borrow
@@ -14,10 +13,10 @@ export async function getReserveTotalSupplyAndBorrow(args: ReserveArgs) {
 }
 
 (async () => {
-  const connection = getConnection();
+  const c = getConnectionPool();
   console.log(`fetching data for market ${MAIN_MARKET.toString()} token ${PYUSD_MINT.toString()}`);
   const { totalSupply, totalBorrow } = await getReserveTotalSupplyAndBorrow({
-    connection,
+    rpc: c.rpc,
     marketPubkey: MAIN_MARKET,
     mintPubkey: PYUSD_MINT,
   });

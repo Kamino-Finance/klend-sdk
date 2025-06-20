@@ -1,24 +1,24 @@
-import { getConnection } from '../utils/connection';
+import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
 import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } from '@kamino-finance/klend-sdk';
 
 (async () => {
-  const connection = getConnection();
-  const user = getKeypair();
+  const c = getConnectionPool();
+  const user = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-  const kaminoManager = new KaminoManager(connection, slotDuration);
+  const kaminoManager = new KaminoManager(c.rpc, slotDuration);
 
   const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
-  const vaultState = await vault.getState(connection);
+  const vaultState = await vault.getState(c.rpc);
 
   // read how many shares an user has in a specific vault
-  const userShares = await kaminoManager.getUserSharesBalanceSingleVault(user.publicKey, vault);
+  const userShares = await kaminoManager.getUserSharesBalanceSingleVault(user.address, vault);
   console.log('User shares:', userShares);
 
   // read how many shares an user has in all vaults
-  const userSharesAllVaults = await kaminoManager.getUserSharesBalanceAllVaults(user.publicKey);
+  const userSharesAllVaults = await kaminoManager.getUserSharesBalanceAllVaults(user.address);
   userSharesAllVaults.forEach((shares, vault) => {
     console.log(`User shares in ${vault}:`, shares);
   });

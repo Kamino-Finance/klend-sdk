@@ -1,6 +1,6 @@
-import { PublicKey, SYSVAR_RENT_PUBKEY, SystemProgram, TransactionInstruction, Connection } from '@solana/web3.js';
+import { Address, IInstruction, Rpc, SolanaRpcApi, TransactionSigner } from '@solana/kit';
 import { KaminoMarket } from '../classes';
-import { PublicKeySet, referrerStatePda, referrerTokenStatePda, shortUrlPda, userMetadataPda } from '../utils';
+import { DEFAULT_PUBLIC_KEY, referrerStatePda, referrerTokenStatePda, shortUrlPda, userMetadataPda } from '../utils';
 import {
   PROGRAM_ID,
   ReferrerState,
@@ -8,33 +8,37 @@ import {
   initReferrerStateAndShortUrl,
   initReferrerTokenState,
 } from '../lib';
+import { SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
+import { SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
 
 export const getInitAllReferrerTokenStateIxs = async ({
-  referrer,
+  payer,
   kaminoMarket,
-  payer = referrer,
+  referrer = payer.address,
 }: {
-  referrer: PublicKey;
+  payer: TransactionSigner;
   kaminoMarket: KaminoMarket;
-  payer?: PublicKey;
+  referrer?: Address;
 }) => {
-  if (referrer.equals(PublicKey.default)) {
+  if (referrer === DEFAULT_PUBLIC_KEY) {
     throw new Error('Referrer not set');
   }
 
   await kaminoMarket.loadReserves();
 
-  const initReferrerTokenStateIxs: TransactionInstruction[] = [];
+  const initReferrerTokenStateIxs: IInstruction[] = [];
 
-  const tokenStatesToCreate: [PublicKey, PublicKey][] = [];
+  const tokenStatesToCreate: [Address, Address][] = [];
   const reserves = kaminoMarket.getReserves();
-  const referrerTokenStates = reserves.map((reserve) => {
-    return referrerTokenStatePda(referrer, reserve.address, kaminoMarket.programId)[0];
-  });
-  const uniqueReferrerTokenStates = new PublicKeySet<PublicKey>(referrerTokenStates).toArray();
-  const accounts = await kaminoMarket.getConnection().getMultipleAccountsInfo(uniqueReferrerTokenStates);
+  const referrerTokenStates = await Promise.all(
+    reserves.map(async (reserve) => {
+      return await referrerTokenStatePda(referrer, reserve.address, kaminoMarket.programId);
+    })
+  );
+  const uniqueReferrerTokenStates = [...new Set<Address>(referrerTokenStates)];
+  const accounts = await kaminoMarket.getRpc().getMultipleAccounts(uniqueReferrerTokenStates).send();
   for (let i = 0; i < uniqueReferrerTokenStates.length; i++) {
-    if (!accounts[i]) {
+    if (accounts.value[i] !== null) {
       tokenStatesToCreate.push([uniqueReferrerTokenStates[i], reserves[i].address]);
     }
   }
@@ -47,8 +51,8 @@ export const getInitAllReferrerTokenStateIxs = async ({
         reserve: reserveAddress,
         referrer,
         referrerTokenState: referrerTokenStateAddress,
-        rent: SYSVAR_RENT_PUBKEY,
-        systemProgram: SystemProgram.programId,
+        rent: SYSVAR_RENT_ADDRESS,
+        systemProgram: SYSTEM_PROGRAM_ADDRESS,
       },
       kaminoMarket.programId
     );
@@ -59,19 +63,20 @@ export const getInitAllReferrerTokenStateIxs = async ({
   return initReferrerTokenStateIxs;
 };
 
-export const getInitReferrerStateAndShortUrlIxs = ({
+export const getInitReferrerStateAndShortUrlIxs = async ({
   referrer,
   shortUrl,
   programId = PROGRAM_ID,
 }: {
-  referrer: PublicKey;
+  referrer: TransactionSigner;
   shortUrl: string;
-  programId: PublicKey;
+  programId: Address;
 }) => {
-  const [referrerStateAddress] = referrerStatePda(referrer, programId);
-  const [shortUrlAddress] = shortUrlPda(shortUrl, programId);
-
-  const referrerUserMetadataAddress = userMetadataPda(referrer, programId)[0];
+  const [[referrerState], referrerShortUrl, [referrerUserMetadata]] = await Promise.all([
+    referrerStatePda(referrer.address, programId),
+    shortUrlPda(shortUrl, programId),
+    userMetadataPda(referrer.address, programId),
+  ]);
 
   const initReferrerStateAndShortUrlIx = initReferrerStateAndShortUrl(
     {
@@ -79,11 +84,11 @@ export const getInitReferrerStateAndShortUrlIxs = ({
     },
     {
       referrer: referrer,
-      referrerState: referrerStateAddress,
-      referrerShortUrl: shortUrlAddress,
-      referrerUserMetadata: referrerUserMetadataAddress,
-      rent: SYSVAR_RENT_PUBKEY,
-      systemProgram: SystemProgram.programId,
+      referrerState,
+      referrerShortUrl,
+      referrerUserMetadata,
+      rent: SYSVAR_RENT_ADDRESS,
+      systemProgram: SYSTEM_PROGRAM_ADDRESS,
     },
     programId
   );
@@ -94,26 +99,24 @@ export const getInitReferrerStateAndShortUrlIxs = ({
 // TODO: 1 thing left before adding program id
 export const getDeleteReferrerStateAndShortUrlIxs = async ({
   referrer,
-  connection,
+  rpc,
   programId = PROGRAM_ID,
 }: {
-  referrer: PublicKey;
-  connection: Connection;
-  programId: PublicKey;
-}) => {
-  const [referrerStateAddress] = referrerStatePda(referrer, programId);
-  const referrerState = await ReferrerState.fetch(connection, referrerStateAddress, programId);
+  referrer: TransactionSigner;
+  rpc: Rpc<SolanaRpcApi>;
+  programId: Address;
+}): Promise<IInstruction> => {
+  const [referrerStateAddress] = await referrerStatePda(referrer.address, programId);
+  const referrerState = await ReferrerState.fetch(rpc, referrerStateAddress, programId);
 
-  const initReferrerStateAndShortUrlIx = deleteReferrerStateAndShortUrl(
+  return deleteReferrerStateAndShortUrl(
     {
       referrer: referrer,
       referrerState: referrerStateAddress,
       shortUrl: referrerState!.shortUrl,
-      rent: SYSVAR_RENT_PUBKEY,
-      systemProgram: SystemProgram.programId,
+      rent: SYSVAR_RENT_ADDRESS,
+      systemProgram: SYSTEM_PROGRAM_ADDRESS,
     },
     programId
   );
-
-  return initReferrerStateAndShortUrlIx;
 };

@@ -1,15 +1,29 @@
 import {
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  NATIVE_MINT,
-  TOKEN_PROGRAM_ID,
-  createAssociatedTokenAccountInstruction,
-  createAssociatedTokenAccountIdempotentInstruction as createAtaIx,
-  createCloseAccountInstruction,
-  getAssociatedTokenAddressSync,
-} from '@solana/spl-token';
-import { AccountInfo, Connection, PublicKey, SystemProgram, TransactionInstruction } from '@solana/web3.js';
+  Address,
+  fetchEncodedAccount,
+  GetAccountInfoApi,
+  GetMultipleAccountsApi,
+  GetTokenAccountBalanceApi,
+  IInstruction,
+  Lamports,
+  MaybeAccount,
+  Rpc,
+  TransactionSigner,
+} from '@solana/kit';
 import Decimal from 'decimal.js';
 import { collToLamportsDecimal, DECIMALS_SOL } from '@kamino-finance/kliquidity-sdk/dist';
+import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+  findAssociatedTokenPda,
+  getSyncNativeInstruction,
+  getCreateAssociatedTokenIdempotentInstruction,
+  fetchMaybeToken,
+  Token,
+  getCloseAccountInstruction,
+} from '@solana-program/token-2022';
+import { WRAPPED_SOL_MINT } from './pubkey';
+import { getTransferSolInstruction } from '@solana-program/system';
 
 /**
  * Create an idempotent create ATA instruction
@@ -21,57 +35,68 @@ import { collToLamportsDecimal, DECIMALS_SOL } from '@kamino-finance/kliquidity-
  * @param ata - optional ata address - derived if not provided
  * @returns The ATA address public key and the transaction instruction
  */
-export function createAssociatedTokenAccountIdempotentInstruction(
-  owner: PublicKey,
-  mint: PublicKey,
-  payer: PublicKey = owner,
-  tokenProgram: PublicKey = TOKEN_PROGRAM_ID,
-  ata?: PublicKey
-): [PublicKey, TransactionInstruction] {
+export async function createAssociatedTokenAccountIdempotentInstruction(
+  payer: TransactionSigner,
+  mint: Address,
+  owner: Address = payer.address,
+  tokenProgram: Address = TOKEN_PROGRAM_ADDRESS,
+  ata?: Address
+): Promise<[Address, IInstruction]> {
   let ataAddress = ata;
   if (!ataAddress) {
-    ataAddress = getAssociatedTokenAddress(mint, owner, true, tokenProgram, ASSOCIATED_TOKEN_PROGRAM_ID);
+    ataAddress = await getAssociatedTokenAddress(mint, owner, tokenProgram, ASSOCIATED_TOKEN_PROGRAM_ADDRESS);
   }
-  const createUserTokenAccountIx = createAtaIx(
-    payer,
-    ataAddress,
-    owner,
-    mint,
-    tokenProgram,
-    ASSOCIATED_TOKEN_PROGRAM_ID
+  const createUserTokenAccountIx = getCreateAssociatedTokenIdempotentInstruction(
+    {
+      owner,
+      mint,
+      tokenProgram,
+      ata: ataAddress,
+      payer,
+    },
+    {
+      programAddress: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+    }
   );
   return [ataAddress, createUserTokenAccountIx];
 }
 
-export function getAssociatedTokenAddress(
-  mint: PublicKey,
-  owner: PublicKey,
-  allowOwnerOffCurve = true,
-  programId = TOKEN_PROGRAM_ID,
-  associatedTokenProgramId = ASSOCIATED_TOKEN_PROGRAM_ID
-): PublicKey {
-  if (!allowOwnerOffCurve && !PublicKey.isOnCurve(owner.toBuffer())) throw new Error('Token owner off curve');
-
-  const [address] = PublicKey.findProgramAddressSync(
-    [owner.toBuffer(), programId.toBuffer(), mint.toBuffer()],
-    associatedTokenProgramId
+export async function getAssociatedTokenAddress(
+  mint: Address,
+  owner: Address,
+  tokenProgram: Address = TOKEN_PROGRAM_ADDRESS,
+  associatedTokenProgramId: Address = ASSOCIATED_TOKEN_PROGRAM_ADDRESS
+): Promise<Address> {
+  const [ata] = await findAssociatedTokenPda(
+    {
+      mint,
+      owner,
+      tokenProgram,
+    },
+    { programAddress: associatedTokenProgramId }
   );
-
-  return address;
+  return ata;
 }
 
 export const getAtasWithCreateIxsIfMissing = async (
-  connection: Connection,
-  user: PublicKey,
-  mints: Array<{ mint: PublicKey; tokenProgram: PublicKey }>
-): Promise<{ atas: PublicKey[]; createAtaIxs: TransactionInstruction[] }> => {
-  const atas: Array<PublicKey> = mints.map((x) => getAssociatedTokenAddress(x.mint, user, true, x.tokenProgram));
-  const accountInfos = await connection.getMultipleAccountsInfo(atas);
-  const createAtaIxs: TransactionInstruction[] = [];
+  rpc: Rpc<GetMultipleAccountsApi>,
+  user: TransactionSigner,
+  mints: Array<{ mint: Address; tokenProgram: Address }>
+): Promise<{ atas: Address[]; createAtaIxs: IInstruction[] }> => {
+  const atas: Array<Address> = await Promise.all(
+    mints.map(async (x) => getAssociatedTokenAddress(x.mint, user.address, x.tokenProgram))
+  );
+  const accountInfos = await rpc.getMultipleAccounts(atas).send();
+  const createAtaIxs: IInstruction[] = [];
   for (let i = 0; i < atas.length; i++) {
-    if (!accountInfos[i]) {
+    if (accountInfos.value[i] === null) {
       const { mint, tokenProgram } = mints[i];
-      const [ata, createIxn] = createAssociatedTokenAccountIdempotentInstruction(user, mint, user, tokenProgram);
+      const [ata, createIxn] = await createAssociatedTokenAccountIdempotentInstruction(
+        user,
+        mint,
+        user.address,
+        tokenProgram
+      );
       atas[i] = ata;
       createAtaIxs.push(createIxn);
     }
@@ -82,16 +107,16 @@ export const getAtasWithCreateIxsIfMissing = async (
   };
 };
 
-export function createAtasIdempotent(
-  user: PublicKey,
-  mints: Array<{ mint: PublicKey; tokenProgram: PublicKey }>
-): Array<{ ata: PublicKey; createAtaIx: TransactionInstruction }> {
-  const res: Array<{ ata: PublicKey; createAtaIx: TransactionInstruction }> = [];
+export async function createAtasIdempotent(
+  user: TransactionSigner,
+  mints: Array<{ mint: Address; tokenProgram: Address }>
+): Promise<Array<{ ata: Address; createAtaIx: IInstruction }>> {
+  const res: Array<{ ata: Address; createAtaIx: IInstruction }> = [];
   for (const mint of mints) {
-    const [ata, createAtaIx] = createAssociatedTokenAccountIdempotentInstruction(
+    const [ata, createAtaIx] = await createAssociatedTokenAccountIdempotentInstruction(
       user,
       mint.mint,
-      user,
+      user.address,
       mint.tokenProgram
     );
     res.push({
@@ -102,91 +127,96 @@ export function createAtasIdempotent(
   return res;
 }
 
-export function getTransferWsolIxs(owner: PublicKey, ata: PublicKey, amountLamports: Decimal) {
-  const ixs: TransactionInstruction[] = [];
+export function getTransferWsolIxs(owner: TransactionSigner, ata: Address, amountLamports: Lamports) {
+  const ixs: IInstruction[] = [];
 
   ixs.push(
-    SystemProgram.transfer({
-      fromPubkey: owner,
-      toPubkey: ata,
-      lamports: amountLamports.toNumber(),
+    getTransferSolInstruction({
+      source: owner,
+      amount: amountLamports,
+      destination: ata,
     })
   );
 
   ixs.push(
-    new TransactionInstruction({
-      keys: [
-        {
-          pubkey: ata,
-          isSigner: false,
-          isWritable: true,
-        },
-      ],
-      data: Buffer.from(new Uint8Array([17])),
-      programId: TOKEN_PROGRAM_ID,
-    })
+    getSyncNativeInstruction(
+      {
+        account: ata,
+      },
+      { programAddress: TOKEN_PROGRAM_ADDRESS }
+    )
   );
 
   return ixs;
 }
 
-export async function getTokenAccountBalance(connection: Connection, tokenAccount: PublicKey): Promise<number> {
-  const tokenAccountBalance = await connection.getTokenAccountBalance(tokenAccount);
+export async function getTokenAccountBalance(
+  connection: Rpc<GetTokenAccountBalanceApi>,
+  tokenAccount: Address
+): Promise<number> {
+  const tokenAccountBalance = await connection.getTokenAccountBalance(tokenAccount).send();
 
   return Number(tokenAccountBalance.value.amount).valueOf();
 }
 
 /// Get the balance of a token account in decimal format (tokens, not lamports)
 export async function getTokenAccountBalanceDecimal(
-  connection: Connection,
-  mint: PublicKey,
-  owner: PublicKey,
-  tokenProgram: PublicKey = TOKEN_PROGRAM_ID
+  rpc: Rpc<GetAccountInfoApi & GetTokenAccountBalanceApi>,
+  mint: Address,
+  owner: Address,
+  tokenProgram: Address = TOKEN_PROGRAM_ADDRESS
 ): Promise<Decimal> {
-  const ata = getAssociatedTokenAddress(mint, owner, true, tokenProgram);
-  const accInfo = await connection.getAccountInfo(ata);
-  if (accInfo === null) {
+  const ata = await getAssociatedTokenAddress(mint, owner, tokenProgram);
+  const accInfo = await fetchEncodedAccount(rpc, ata);
+  if (!accInfo.exists) {
     return new Decimal('0');
   }
-  const { value } = await connection.getTokenAccountBalance(ata);
+  const { value } = await rpc.getTokenAccountBalance(ata).send();
   return new Decimal(value.uiAmountString!);
 }
 
 export type CreateWsolAtaIxs = {
-  wsolAta: PublicKey;
-  createAtaIxs: TransactionInstruction[];
-  closeAtaIxs: TransactionInstruction[];
+  wsolAta: Address;
+  createAtaIxs: IInstruction[];
+  closeAtaIxs: IInstruction[];
 };
 
 /**
  * Creates a wSOL ata if missing and syncs the balance. If the ata exists and it has more or equal no wrapping happens
- * @param connection - Solana RPC connection (read)
+ * @param rpc - Solana RPC rpc (read)
  * @param amount min amount to have in the wSOL ata. If the ata exists and it has more or equal no wrapping happens
  * @param owner - owner of the ata
  * @returns wsolAta: the keypair of the ata, used to sign the initialization transaction; createAtaIxs: a list with ixs to initialize the ata and wrap SOL if needed; closeAtaIxs: a list with ixs to close the ata
  */
 export const createWsolAtaIfMissing = async (
-  connection: Connection,
+  rpc: Rpc<GetAccountInfoApi & GetTokenAccountBalanceApi>,
   amount: Decimal,
-  owner: PublicKey
+  owner: TransactionSigner
 ): Promise<CreateWsolAtaIxs> => {
-  const createIxs: TransactionInstruction[] = [];
-  const closeIxs: TransactionInstruction[] = [];
+  const createIxs: IInstruction[] = [];
+  const closeIxs: IInstruction[] = [];
 
-  const wsolAta: PublicKey = getAssociatedTokenAddressSync(NATIVE_MINT, owner, true, TOKEN_PROGRAM_ID);
+  const wsolAta: Address = await getAssociatedTokenAddress(WRAPPED_SOL_MINT, owner.address, TOKEN_PROGRAM_ADDRESS);
 
   const solDeposit = amount;
-  const wsolAtaAccountInfo: AccountInfo<Buffer> | null = await connection.getAccountInfo(wsolAta);
-
+  const wsolAtaAccountInfo: MaybeAccount<Token> = await fetchMaybeToken(rpc, wsolAta);
   // This checks if we need to create it
-  if (isWsolInfoInvalid(wsolAtaAccountInfo)) {
-    createIxs.push(createAssociatedTokenAccountInstruction(owner, wsolAta, owner, NATIVE_MINT, TOKEN_PROGRAM_ID));
+  if (wsolAtaAccountInfo.exists) {
+    createIxs.push(
+      getCreateAssociatedTokenIdempotentInstruction({
+        owner: owner.address,
+        payer: owner,
+        ata: wsolAta,
+        mint: WRAPPED_SOL_MINT,
+        tokenProgram: TOKEN_PROGRAM_ADDRESS,
+      })
+    );
   }
 
   let wsolExistingBalanceLamports = new Decimal(0);
   try {
-    if (wsolAtaAccountInfo != null) {
-      const uiAmount = (await getTokenAccountBalanceDecimal(connection, NATIVE_MINT, owner)).toNumber();
+    if (wsolAtaAccountInfo.exists) {
+      const uiAmount = (await getTokenAccountBalanceDecimal(rpc, WRAPPED_SOL_MINT, owner.address)).toNumber();
       wsolExistingBalanceLamports = collToLamportsDecimal(new Decimal(uiAmount), DECIMALS_SOL);
     }
   } catch (err) {
@@ -195,10 +225,10 @@ export const createWsolAtaIfMissing = async (
 
   if (solDeposit !== null && solDeposit.gt(wsolExistingBalanceLamports)) {
     createIxs.push(
-      SystemProgram.transfer({
-        fromPubkey: owner,
-        toPubkey: wsolAta,
-        lamports: BigInt(solDeposit.sub(wsolExistingBalanceLamports).floor().toString()),
+      getTransferSolInstruction({
+        source: owner,
+        destination: wsolAta,
+        amount: BigInt(solDeposit.sub(wsolExistingBalanceLamports).floor().toString()),
       })
     );
   }
@@ -206,35 +236,29 @@ export const createWsolAtaIfMissing = async (
   if (createIxs.length > 0) {
     // Primitive way of wrapping SOL
     createIxs.push(
-      new TransactionInstruction({
-        keys: [
-          {
-            pubkey: wsolAta,
-            isSigner: false,
-            isWritable: true,
-          },
-        ],
-        data: Buffer.from(new Uint8Array([17])),
-        programId: TOKEN_PROGRAM_ID,
-      })
+      getSyncNativeInstruction(
+        {
+          account: wsolAta,
+        },
+        { programAddress: TOKEN_PROGRAM_ADDRESS }
+      )
     );
   }
 
-  closeIxs.push(createCloseAccountInstruction(wsolAta, owner, owner, [], TOKEN_PROGRAM_ID));
+  closeIxs.push(
+    getCloseAccountInstruction(
+      {
+        owner,
+        account: wsolAta,
+        destination: owner.address,
+      },
+      { programAddress: TOKEN_PROGRAM_ADDRESS }
+    )
+  );
 
   return {
     wsolAta,
     createAtaIxs: createIxs,
     closeAtaIxs: closeIxs,
   };
-};
-
-export const isWsolInfoInvalid = (wsolAtaAccountInfo: any): boolean => {
-  const res =
-    wsolAtaAccountInfo === null ||
-    (wsolAtaAccountInfo !== null &&
-      wsolAtaAccountInfo.data.length === 0 &&
-      wsolAtaAccountInfo.owner.eq(PublicKey.default));
-
-  return res;
 };

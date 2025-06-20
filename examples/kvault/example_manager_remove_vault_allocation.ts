@@ -1,9 +1,8 @@
-import { getConnection } from '../utils/connection';
+import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT, USDC_RESERVE_JLP_MARKET } from '../utils/constants';
 import Decimal from 'decimal.js/decimal';
 import {
-  buildAndSendTxn,
   KaminoManager,
   ReserveWithAddress,
   Reserve,
@@ -11,17 +10,18 @@ import {
   KaminoVault,
   getMedianSlotDurationInMsFromLastEpochs,
 } from '@kamino-finance/klend-sdk';
+import { sendAndConfirmTx } from '../utils/tx';
 
 // to remove a reserve from the allocation, set the weight to 0
 (async () => {
-  const connection = getConnection();
-  const wallet = getKeypair();
+  const c = getConnectionPool();
+  const wallet = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
-  const kaminoManager = new KaminoManager(connection, slotDuration);
+  const kaminoManager = new KaminoManager(c.rpc, slotDuration);
   const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
 
   // Update reserve allocation (add new reserve into the allocation)
-  const usdcJlpMarketReserveState = await Reserve.fetch(connection, USDC_RESERVE_JLP_MARKET);
+  const usdcJlpMarketReserveState = await Reserve.fetch(c.rpc, USDC_RESERVE_JLP_MARKET);
   if (!usdcJlpMarketReserveState) {
     throw new Error(`USDC Reserve ${USDC_RESERVE_JLP_MARKET} not found`);
   }
@@ -39,8 +39,8 @@ import {
   );
 
   // send the transaction to remove the vault allocation
-  const _updateTxSignature = await buildAndSendTxn(
-    connection,
+  const _updateTxSignature = await sendAndConfirmTx(
+    c,
     wallet,
     [setReserveAllocationIxs.updateReserveAllocationIx, ...setReserveAllocationIxs.updateLUTIxs],
     [],

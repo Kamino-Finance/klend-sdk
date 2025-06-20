@@ -1,4 +1,4 @@
-import { getConnection } from '../utils/connection';
+import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT, USDC_RESERVE_JLP_MARKET } from '../utils/constants';
 import {
@@ -6,20 +6,20 @@ import {
   ReserveWithAddress,
   Reserve,
   KaminoVault,
-  buildAndSendTxn,
   getMedianSlotDurationInMsFromLastEpochs,
 } from '@kamino-finance/klend-sdk';
+import { sendAndConfirmTx } from '../utils/tx';
 
 // Note: if the reserve allocation require funds to be invested that need to be disinvested from anoter result you will need to disinvest that one first or use `investAllReservesIxs`
 (async () => {
-  const connection = getConnection();
-  const wallet = getKeypair();
+  const c = getConnectionPool();
+  const wallet = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
-  const kaminoManager = new KaminoManager(connection, slotDuration);
+  const kaminoManager = new KaminoManager(c.rpc, slotDuration);
 
   const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
 
-  const usdcJlpMarketReserveState = await Reserve.fetch(connection, USDC_RESERVE_JLP_MARKET);
+  const usdcJlpMarketReserveState = await Reserve.fetch(c.rpc, USDC_RESERVE_JLP_MARKET);
   if (!usdcJlpMarketReserveState) {
     throw new Error(`USDC Reserve ${USDC_RESERVE_JLP_MARKET} not found`);
   }
@@ -28,23 +28,12 @@ import {
     state: usdcJlpMarketReserveState,
   };
 
-  const investInReserveIxs = await kaminoManager.investSingleReserveIxs(
-    wallet.publicKey,
-    vault,
-    usdcReserveToInvestWithAddress
-  );
+  const investInReserveIxs = await kaminoManager.investSingleReserveIxs(wallet, vault, usdcReserveToInvestWithAddress);
 
   // read the vault state so we can use the LUT in the tx
-  const vaultState = await vault.getState(connection);
+  const vaultState = await vault.getState(c.rpc);
 
-  await buildAndSendTxn(
-    connection,
-    wallet,
-    investInReserveIxs,
-    [],
-    [vaultState.vaultLookupTable],
-    'Invest Single Reserve'
-  );
+  await sendAndConfirmTx(c, wallet, investInReserveIxs, [], [vaultState.vaultLookupTable], 'Invest Single Reserve');
 })().catch(async (e) => {
   console.error(e);
 });

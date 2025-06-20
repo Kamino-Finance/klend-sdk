@@ -1,5 +1,5 @@
-import { VaultState } from '../idl_codegen_kamino_vault/accounts/VaultState';
-import { VaultAllocation } from '../idl_codegen_kamino_vault/types/VaultAllocation';
+import { VaultState } from '../@codegen/kvault/accounts/VaultState';
+import { VaultAllocation } from '../@codegen/kvault/types/VaultAllocation';
 
 export function decodeVaultState(data: Buffer): VaultState {
   if (!VaultState.discriminator.equals(data.slice(0, 8))) {

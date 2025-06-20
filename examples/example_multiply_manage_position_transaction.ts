@@ -2,44 +2,48 @@ import {
   KaminoAction,
   MultiplyObligation,
   PROGRAM_ID,
-  buildAndSendTxn,
   getComputeBudgetAndPriorityFeeIxs,
 } from '@kamino-finance/klend-sdk';
-import { getConnection } from './utils/connection';
+import { getConnectionPool } from './utils/connection';
 import { getKeypair } from './utils/keypair';
 import { JLP_MARKET, JLP_MINT, USDC_MINT } from './utils/constants';
 import { getMarket } from './utils/helpers';
-import { PublicKey } from '@solana/web3.js';
 import Decimal from 'decimal.js';
+import { sendAndConfirmTx } from './utils/tx';
 
 // For this example we are only using JLP/USDC multiply
 // This can be also used for leverage by using the correct type when creating the obligation
 // This only works for an existing obligation
 (async () => {
-  const connection = getConnection();
-  const wallet = getKeypair();
+  const c = getConnectionPool();
+  const wallet = await getKeypair();
 
-  const market = await getMarket({ connection, marketPubkey: JLP_MARKET });
+  const market = await getMarket({ rpc: c.rpc, marketPubkey: JLP_MARKET });
 
   const collTokenMint = JLP_MINT;
   const debtTokenMint = USDC_MINT;
 
   const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, PROGRAM_ID); // new LeverageObligation(collTokenMint, debtTokenMint, PROGRAM_ID); for leverage
-  const obligationAddress = obligationType.toPda(market.getAddress(), wallet.publicKey);
+  const obligationAddress = await obligationType.toPda(market.getAddress(), wallet.address);
   const obligation = await market.getObligationByAddress(obligationAddress);
-  const currentSlot = await connection.getSlot();
+  const currentSlot = await c.rpc.getSlot().send();
 
-  const collTokenMintFactor = market.getReserveByMint(new PublicKey(collTokenMint))?.getMintFactor() || 0;
-  const debtTokenMintFactor = market.getReserveByMint(new PublicKey(debtTokenMint))?.getMintFactor() || 0;
+  const collTokenMintFactor = market.getReserveByMint(collTokenMint)?.getMintFactor() || 0;
+  const debtTokenMintFactor = market.getReserveByMint(debtTokenMint)?.getMintFactor() || 0;
 
   // Deposit some JLP
   const depositAction = await KaminoAction.buildDepositTxns(
     market,
     new Decimal(1).mul(collTokenMintFactor).toString(),
-    new PublicKey(collTokenMint),
-    wallet.publicKey,
+    collTokenMint,
+    wallet,
     obligation!,
     true,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
     undefined,
     currentSlot
   );
@@ -52,7 +56,7 @@ import Decimal from 'decimal.js';
     ...depositAction.cleanupIxs,
   ];
 
-  const depositTxHash = await buildAndSendTxn(connection, wallet, depositIxs, []);
+  const depositTxHash = await sendAndConfirmTx(c, wallet, depositIxs, [], [], 'deposit');
 
   console.log('txHash depositColl', depositTxHash);
 
@@ -60,17 +64,22 @@ import Decimal from 'decimal.js';
   const borrowAction = await KaminoAction.buildBorrowTxns(
     market,
     new Decimal(1).mul(debtTokenMintFactor).toString(),
-    new PublicKey(debtTokenMint),
-    wallet.publicKey,
+    debtTokenMint,
+    wallet,
     obligation!,
     true,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
     undefined,
     currentSlot
   );
 
   const borrowIxs = [...computeIxs, ...borrowAction.setupIxs, ...borrowAction.lendingIxs, ...borrowAction.cleanupIxs];
 
-  const borrowTxHash = await buildAndSendTxn(connection, wallet, borrowIxs, []);
+  const borrowTxHash = await sendAndConfirmTx(c, wallet, borrowIxs, [], [], 'borrow');
 
   console.log('txHash borrowDebt', borrowTxHash);
 
@@ -78,8 +87,8 @@ import Decimal from 'decimal.js';
   const repayAction = await KaminoAction.buildRepayTxns(
     market,
     new Decimal(1).mul(debtTokenMintFactor).toString(), // U64_MAX for full repay
-    new PublicKey(debtTokenMint),
-    wallet.publicKey,
+    debtTokenMint,
+    wallet,
     obligation!,
     true,
     undefined,
@@ -88,7 +97,7 @@ import Decimal from 'decimal.js';
 
   const repayIxs = [...computeIxs, ...repayAction.setupIxs, ...repayAction.lendingIxs, ...repayAction.cleanupIxs];
 
-  const repayTxHash = await buildAndSendTxn(connection, wallet, repayIxs, []);
+  const repayTxHash = await sendAndConfirmTx(c, wallet, repayIxs, [], [], 'repay');
 
   console.log('txHash repayDebt', repayTxHash);
 
@@ -96,10 +105,15 @@ import Decimal from 'decimal.js';
   const withdrawAction = await KaminoAction.buildWithdrawTxns(
     market,
     new Decimal(1).mul(collTokenMintFactor).toString(), // U64_MAX for full withdraw
-    new PublicKey(collTokenMint),
-    wallet.publicKey,
+    collTokenMint,
+    wallet,
     obligation!,
     true,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
     undefined,
     currentSlot
   );
@@ -111,7 +125,7 @@ import Decimal from 'decimal.js';
     ...withdrawAction.cleanupIxs,
   ];
 
-  const withdrawTxHash = await buildAndSendTxn(connection, wallet, withdrawIxs, []);
+  const withdrawTxHash = await sendAndConfirmTx(c, wallet, withdrawIxs, [], [], 'withdraw');
 
   console.log('txHash withdrawColl', withdrawTxHash);
 })().catch(async (e) => {

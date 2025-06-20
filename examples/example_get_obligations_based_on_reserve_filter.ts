@@ -1,16 +1,14 @@
-import { UserLoansArgs } from './utils/models';
 import { getMarket } from './utils/helpers';
-import { PublicKey } from '@solana/web3.js';
-import { getConnection } from './utils/connection';
-import { ObligationTypeTag } from '@kamino-finance/klend-sdk';
+import { address } from '@solana/kit';
+import { getConnectionPool } from './utils/connection';
 import { MAIN_MARKET } from './utils/constants';
 import Decimal from 'decimal.js';
 
 (async () => {
-  const connection = getConnection();
-  const reserveAddress = new PublicKey('BHUi32TrEsfN2U821G4FprKrR4hTeK4LCWtA3BFetuqA');
+  const c = getConnectionPool();
+  const reserveAddress = address('BHUi32TrEsfN2U821G4FprKrR4hTeK4LCWtA3BFetuqA');
   console.log(`fetching all loans for reserve ${reserveAddress.toString()}`);
-  const market = await getMarket({ connection, marketPubkey: MAIN_MARKET });
+  const market = await getMarket({ rpc: c.rpc, marketPubkey: MAIN_MARKET });
   const reserve = market.getReserveByAddress(reserveAddress);
   const mintFactor = reserve?.getMintFactor()!;
   const loans = await market.getAllObligationsByDepositedReserve(reserveAddress);

@@ -1,18 +1,18 @@
 import { getComputeBudgetAndPriorityFeeIxs, getRepayWithCollSwapInputs } from '@kamino-finance/klend-sdk';
-import { getConnection } from './utils/connection';
-import { getKeypair } from './utils/keypair';
+import { getConnectionPool } from './utils/connection';
 import { MAIN_MARKET, PYUSD_MINT, USDC_MINT } from './utils/constants';
 import { getMarket } from './utils/helpers';
-import { PublicKey } from '@solana/web3.js';
+import { address, none } from '@solana/kit';
 import Decimal from 'decimal.js';
 import { getJupiterQuoter } from './utils/jup_utils';
+import { noopSigner } from '@kamino-finance/klend-sdk/dist/utils/signer';
 
 // For this example we are only using JLP/USDC multiply
 // This can be also used for leverage by using the correct type when creating the obligation
 (async () => {
-  const connection = getConnection();
+  const c = getConnectionPool();
 
-  const market = await getMarket({ connection, marketPubkey: MAIN_MARKET });
+  const market = await getMarket({ rpc: c.rpc, marketPubkey: MAIN_MARKET });
 
   const collTokenMint = USDC_MINT;
   const debtTokenMint = PYUSD_MINT;
@@ -20,18 +20,19 @@ import { getJupiterQuoter } from './utils/jup_utils';
   const collTokenReserve = market.getReserveByMint(collTokenMint);
   const slippagePct = 0.01;
 
-  const obligation = await market.getObligationByAddress(new PublicKey('5LvkLen8kPwJvaUBaHbfmNNxFCdxYxVsPPjY6VQQQoMK'));
+  const obligation = await market.getObligationByAddress(address('5LvkLen8kPwJvaUBaHbfmNNxFCdxYxVsPPjY6VQQQoMK'));
 
-  const currentSlot = await market.getConnection().getSlot();
+  const currentSlot = await c.rpc.getSlot().send();
 
   const repayAmount = obligation?.borrows.get(debtTokenReserve!.address!)?.amount || new Decimal(0);
 
   const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
 
   const estimatedStats = await getRepayWithCollSwapInputs({
+    owner: noopSigner(obligation!.state.owner),
     repayAmount,
     budgetAndPriorityFeeIxs: computeIxs,
-    referrer: PublicKey.default,
+    referrer: none(),
     isClosingPosition: false,
     kaminoMarket: market,
     debtTokenMint: debtTokenMint,

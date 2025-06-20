@@ -1,17 +1,18 @@
-import { AddressLookupTableAccount, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { Account, Address, IInstruction, Option, Slot, TransactionSigner } from '@solana/kit';
 import Decimal from 'decimal.js';
 import { KaminoMarket, KaminoObligation } from '../classes';
 import { Kamino, StrategyWithAddress } from '@kamino-finance/kliquidity-sdk';
 import { ObligationType, ObligationTypeTag, ScopePriceRefreshConfig } from '../utils';
+import { AddressLookupTable } from '@solana-program/address-lookup-table';
 
 export type SwapQuoteProvider<QuoteResponse> = (
   inputs: SwapInputs,
-  klendAccounts: Array<PublicKey>
+  klendAccounts: Array<Address>
 ) => Promise<SwapQuote<QuoteResponse>>;
 
 export type SwapIxsProvider<QuoteResponse> = (
   inputs: SwapInputs,
-  klendAccounts: Array<PublicKey>,
+  klendAccounts: Array<Address>,
   quote: SwapQuote<QuoteResponse>
 ) => Promise<Array<SwapIxs<QuoteResponse>>>;
 
@@ -21,37 +22,37 @@ export type SwapQuote<QuoteResponse> = {
 };
 
 export type SwapIxs<QuoteResponse> = {
-  preActionIxs: TransactionInstruction[];
-  swapIxs: TransactionInstruction[];
-  lookupTables: AddressLookupTableAccount[];
+  preActionIxs: IInstruction[];
+  swapIxs: IInstruction[];
+  lookupTables: Account<AddressLookupTable>[];
   quote: SwapQuote<QuoteResponse>;
 };
 
-export type PriceAinBProvider = (mintA: PublicKey, mintB: PublicKey) => Promise<Decimal>;
+export type PriceAinBProvider = (mintA: Address, mintB: Address) => Promise<Decimal>;
 
-export type IsKtokenProvider = (token: PublicKey | string) => Promise<boolean>;
+export type IsKtokenProvider = (token: Address) => Promise<boolean>;
 
 export type FlashLoanInfo = {
-  flashBorrowReserve: PublicKey;
+  flashBorrowReserve: Address;
   flashLoanFee: Decimal;
 };
 
 export type LeverageIxsOutput = {
-  instructions: TransactionInstruction[];
+  instructions: IInstruction[];
   flashLoanInfo: FlashLoanInfo;
 };
 
 export type SwapInputs = {
   inputAmountLamports: Decimal;
   minOutAmountLamports?: Decimal;
-  inputMint: PublicKey;
-  outputMint: PublicKey;
+  inputMint: Address;
+  outputMint: Address;
   amountDebtAtaBalance: Decimal | undefined;
 };
 
 export type BaseLeverageIxsResponse<QuoteResponse> = {
-  ixs: TransactionInstruction[];
-  lookupTables: AddressLookupTableAccount[];
+  ixs: IInstruction[];
+  lookupTables: Account<AddressLookupTable>[];
   swapInputs: SwapInputs;
   flashLoanInfo: FlashLoanInfo;
   quote?: QuoteResponse;
@@ -60,22 +61,22 @@ export type BaseLeverageIxsResponse<QuoteResponse> = {
 export type LeverageInitialInputs<LeverageCalcsResult, QuoteResponse> = {
   calcs: LeverageCalcsResult;
   swapQuote: SwapQuote<QuoteResponse>;
-  currentSlot: number;
-  klendAccounts: Array<PublicKey>;
+  currentSlot: Slot;
+  klendAccounts: Array<Address>;
   collIsKtoken: boolean;
   obligation: KaminoObligation | ObligationType | undefined;
   strategy: StrategyWithAddress | undefined;
 };
 
 export interface BaseLeverageSwapInputsProps<QuoteResponse> {
-  owner: PublicKey;
+  owner: TransactionSigner;
   kaminoMarket: KaminoMarket;
-  debtTokenMint: PublicKey;
-  collTokenMint: PublicKey;
-  referrer: PublicKey;
-  currentSlot: number;
+  debtTokenMint: Address;
+  collTokenMint: Address;
+  referrer: Option<Address>;
+  currentSlot: Slot;
   slippagePct: Decimal;
-  budgetAndPriorityFeeIxs?: TransactionInstruction[];
+  budgetAndPriorityFeeIxs?: IInstruction[];
   kamino: Kamino | undefined;
   scopeRefreshConfig?: ScopePriceRefreshConfig;
   quoteBufferBps: Decimal;
@@ -91,8 +92,8 @@ export type DepositLeverageIxsResponse<QuoteResponse> = BaseLeverageIxsResponse<
 export type DepositLeverageInitialInputs<QuoteResponse> = {
   calcs: DepositLeverageCalcsResult;
   swapQuote: SwapQuote<QuoteResponse>;
-  currentSlot: number;
-  klendAccounts: Array<PublicKey>;
+  currentSlot: Slot;
+  klendAccounts: Array<Address>;
   collIsKtoken: boolean;
   obligation: KaminoObligation | ObligationType | undefined;
   strategy: StrategyWithAddress | undefined;
@@ -104,7 +105,7 @@ export interface DepositWithLeverageSwapInputsProps<QuoteResponse> extends BaseL
   depositAmount: Decimal;
   priceDebtToColl: Decimal;
   targetLeverage: Decimal;
-  selectedTokenMint: PublicKey;
+  selectedTokenMint: Address;
   priceAinB: PriceAinBProvider;
   // currently only used to disable requesting elevation group when this value is 0
   // to be implemented properly in the future
@@ -134,8 +135,8 @@ export type WithdrawLeverageIxsResponse<QuoteResponse> = BaseLeverageIxsResponse
 export type WithdrawLeverageInitialInputs<QuoteResponse> = {
   calcs: WithdrawLeverageCalcsResult;
   swapQuote: SwapQuote<QuoteResponse>;
-  currentSlot: number;
-  klendAccounts: Array<PublicKey>;
+  currentSlot: Slot;
+  klendAccounts: Array<Address>;
   collIsKtoken: boolean;
   obligation: KaminoObligation | ObligationType | undefined;
   strategy: StrategyWithAddress | undefined;
@@ -148,7 +149,7 @@ export interface WithdrawWithLeverageSwapInputsProps<QuoteResponse> extends Base
   withdrawAmount: Decimal;
   priceCollToDebt: Decimal;
   isClosingPosition: boolean;
-  selectedTokenMint: PublicKey;
+  selectedTokenMint: Address;
 }
 
 export interface WithdrawWithLeverageProps<QuoteResponse> extends WithdrawWithLeverageSwapInputsProps<QuoteResponse> {
@@ -172,8 +173,8 @@ export type AdjustLeverageIxsResponse<QuoteResponse> = BaseLeverageIxsResponse<Q
 export type AdjustLeverageInitialInputs<QuoteResponse> = {
   calcs: AdjustLeverageCalcsResult;
   swapQuote: SwapQuote<QuoteResponse>;
-  currentSlot: number;
-  klendAccounts: Array<PublicKey>;
+  currentSlot: Slot;
+  klendAccounts: Array<Address>;
   isDeposit: boolean;
   collIsKtoken: boolean;
   obligation: KaminoObligation | ObligationType | undefined;

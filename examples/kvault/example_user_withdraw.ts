@@ -1,37 +1,33 @@
-import { getConnection } from '../utils/connection';
+import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
 import Decimal from 'decimal.js/decimal';
-import {
-  buildAndSendTxn,
-  getMedianSlotDurationInMsFromLastEpochs,
-  KaminoManager,
-  KaminoVault,
-} from '@kamino-finance/klend-sdk';
+import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } from '@kamino-finance/klend-sdk';
+import { sendAndConfirmTx } from '../utils/tx';
 
 (async () => {
-  const connection = getConnection();
-  const user = getKeypair();
+  const c = getConnectionPool();
+  const user = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-  const kaminoManager = new KaminoManager(connection, slotDuration);
+  const kaminoManager = new KaminoManager(c.rpc, slotDuration);
   const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
 
   // read the vault state so we can use the LUT in the tx
-  const vaultState = await vault.getState(connection);
+  const vaultState = await vault.getState(c.rpc);
 
   // withdraw 100 shares from the vault
   const sharesToWithdraw = new Decimal(100.0);
   const withdrawIx = await kaminoManager.withdrawFromVaultIxs(
-    user.publicKey,
+    user,
     vault,
     sharesToWithdraw,
-    await connection.getSlot('confirmed')
+    await c.rpc.getSlot({ commitment: 'confirmed' }).send()
   );
 
   // send in the tx the instruction to withdraw + the instruction to unstake the shares from the vault farm if the vault has any farm; the unstake instruction has to be before the withdraw instruction as the shares need to be unstaked before they can be withdrawn
-  await buildAndSendTxn(
-    connection,
+  await sendAndConfirmTx(
+    c,
     user,
     [...withdrawIx.unstakeFromFarmIfNeededIxs, ...withdrawIx.withdrawIxs, ...withdrawIx.postWithdrawIxs],
     [],

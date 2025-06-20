@@ -1,4 +1,4 @@
-import { PublicKey } from '@solana/web3.js';
+import { Address, TransactionSigner } from '@solana/kit';
 import {
   BorrowRateCurve,
   BorrowRateCurveFields,
@@ -11,42 +11,43 @@ import {
   SwitchboardConfiguration,
   TokenInfo,
   WithdrawalCaps,
-} from '../idl_codegen/types';
+} from '../@codegen/klend/types';
 import Decimal from 'decimal.js';
 import { Fraction, ZERO_FRACTION } from '../classes/fraction';
 import BN from 'bn.js';
 import { numberToLamportsDecimal } from '../classes';
 import { NULL_PUBKEY } from './pubkey';
-import { OracleType, U16_MAX } from '@kamino-finance/scope-sdk';
+import { U16_MAX } from '@kamino-finance/scope-sdk';
+import { OracleType } from '@kamino-finance/scope-sdk/dist/@codegen/scope/types';
 import { LendingMarket } from '../lib';
 
 export type ScopeOracleConfig = {
-  scopePriceConfigAddress: PublicKey;
+  scopePriceConfigAddress: Address;
   name: string;
   oracleType: string;
   oracleId: number;
-  oracleAccount: PublicKey;
+  oracleAccount: Address;
   twapEnabled: boolean;
   twapSourceId: number;
   max_age: number;
 };
 
 export type CreateKaminoMarketParams = {
-  admin: PublicKey;
+  admin: TransactionSigner;
 };
 
 export type AddAssetToMarketParams = {
-  admin: PublicKey;
-  adminLiquiditySource: PublicKey;
-  marketAddress: PublicKey;
+  admin: TransactionSigner;
+  adminLiquiditySource: Address;
+  marketAddress: Address;
   assetConfig: AssetConfig;
 };
 
 export interface AssetConfig {
-  readonly mint: PublicKey;
+  readonly mint: Address;
   readonly tokenName: string;
   readonly mintDecimals: number;
-  readonly mintTokenProgram: PublicKey;
+  readonly mintTokenProgram: Address;
   assetReserveConfigParams: AssetReserveConfigParams;
 
   setAssetConfigParams(assetReserveConfigParams: AssetReserveConfigParams): void;
@@ -55,15 +56,15 @@ export interface AssetConfig {
 }
 
 export class AssetReserveConfig implements AssetConfig {
-  readonly mint: PublicKey;
+  readonly mint: Address;
   readonly tokenName: string;
   readonly mintDecimals: number;
-  readonly mintTokenProgram: PublicKey;
+  readonly mintTokenProgram: Address;
   assetReserveConfigParams: AssetReserveConfigParams;
 
   constructor(fields: {
-    mint: PublicKey;
-    mintTokenProgram: PublicKey;
+    mint: Address;
+    mintTokenProgram: Address;
     tokenName: string;
     mintDecimals: number;
     priceFeed: PriceFeed;
@@ -102,14 +103,14 @@ export class AssetReserveConfig implements AssetConfig {
 }
 
 export class AssetReserveConfigCli implements AssetConfig {
-  readonly mint: PublicKey;
+  readonly mint: Address;
   readonly tokenName: string;
   readonly mintDecimals: number;
-  readonly mintTokenProgram: PublicKey;
+  readonly mintTokenProgram: Address;
   private reserveConfig: ReserveConfig | undefined;
   assetReserveConfigParams: AssetReserveConfigParams;
 
-  constructor(mint: PublicKey, mintTokenProgram: PublicKey, reserveConfig: ReserveConfig) {
+  constructor(mint: Address, mintTokenProgram: Address, reserveConfig: ReserveConfig) {
     this.reserveConfig = reserveConfig;
     this.tokenName = '';
     this.mintDecimals = 0;
@@ -138,15 +139,15 @@ export class AssetReserveConfigCli implements AssetConfig {
 }
 
 export class CollateralConfig implements AssetConfig {
-  readonly mint: PublicKey;
+  readonly mint: Address;
   readonly tokenName: string;
   readonly mintDecimals: number;
-  readonly mintTokenProgram: PublicKey;
+  readonly mintTokenProgram: Address;
   assetReserveConfigParams: AssetReserveConfigParams;
 
   constructor(fields: {
-    mint: PublicKey;
-    mintTokenProgram: PublicKey;
+    mint: Address;
+    mintTokenProgram: Address;
     tokenName: string;
     mintDecimals: number;
     priceFeed: PriceFeed;
@@ -180,17 +181,17 @@ export class CollateralConfig implements AssetConfig {
 }
 
 export class DebtConfig implements AssetConfig {
-  readonly mint: PublicKey;
+  readonly mint: Address;
   readonly tokenName: string;
   readonly mintDecimals: number;
-  readonly mintTokenProgram: PublicKey;
+  readonly mintTokenProgram: Address;
   assetReserveConfigParams: AssetReserveConfigParams;
   borrowLimitOutsideElevationGroup?: Decimal;
   debtWithdrawalCapConfigCapacity?: Decimal;
 
   constructor(fields: {
-    mint: PublicKey;
-    mintTokenProgram: PublicKey;
+    mint: Address;
+    mintTokenProgram: Address;
     tokenName: string;
     mintDecimals: number;
     priceFeed: PriceFeed;
@@ -227,12 +228,12 @@ export class DebtConfig implements AssetConfig {
 }
 
 export type PriceFeed = {
-  scopePriceConfigAddress?: PublicKey;
+  scopePriceConfigAddress?: Address;
   scopeChain?: number[];
   scopeTwapChain?: number[];
-  pythPrice?: PublicKey;
-  switchboardPrice?: PublicKey;
-  switchboardTwapPrice?: PublicKey;
+  pythPrice?: Address;
+  switchboardPrice?: Address;
+  switchboardTwapPrice?: Address;
 };
 
 export type AssetReserveConfigParams = {
@@ -433,6 +434,6 @@ export function parseOracleType(type: number): string {
 }
 
 export type MarketWithAddress = {
-  address: PublicKey;
+  address: Address;
   state: LendingMarket;
 };

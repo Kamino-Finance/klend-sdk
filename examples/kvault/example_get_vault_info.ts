@@ -1,4 +1,4 @@
-import { getConnection } from '../utils/connection';
+import { getConnectionPool } from '../utils/connection';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
 import Decimal from 'decimal.js/decimal';
 import {
@@ -17,14 +17,14 @@ import {
 } from '../utils/helpers';
 
 (async () => {
-  const connection = getConnection();
+  const c = getConnectionPool();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-  const kaminoManager = new KaminoManager(connection, slotDuration);
+  const kaminoManager = new KaminoManager(c.rpc, slotDuration);
 
   // print vault state as it is on chain
   const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
-  const vaultState = await vault.getState(connection);
+  const vaultState = await vault.getState(c.rpc);
 
   // read how many tokens represents 1 share
   const tokensPerShare = await kaminoManager.getTokensPerShareSingleVault(vault);
@@ -55,19 +55,22 @@ import {
   // read the total supplied tokens from the vault into reserves, the total borrowed against these tokens and the utilization ratio
   const totalBorrowedAndInvested = await kaminoManager.getTotalBorrowedAndInvested(
     vaultState,
-    await connection.getSlot('confirmed')
+    await c.rpc.getSlot({ commitment: 'confirmed' }).send()
   );
   console.log('Total borrowed and invested:', totalBorrowedAndInvested);
 
   // read the overview of the reserves in the vault allocation
   const reservesOverview = await kaminoManager.getVaultReservesDetails(
     vaultState,
-    await connection.getSlot('confirmed')
+    await c.rpc.getSlot({ commitment: 'confirmed' }).send()
   );
   printReservesOverviewMap(reservesOverview);
 
   // get the vault APY assuming all tokens are all the time invested
-  const apy = await kaminoManager.getVaultTheoreticalAPY(vaultState, await connection.getSlot('confirmed'));
+  const apy = await kaminoManager.getVaultTheoreticalAPY(
+    vaultState,
+    await c.rpc.getSlot({ commitment: 'confirmed' }).send()
+  );
   console.log('Vault APY:', apy.toString());
 
   // read the total interest earned by the vault since its inception, including the perf fees
@@ -75,7 +78,7 @@ import {
   console.log('Total interest earned:', totalInterestEarned.toString());
 
   // simulate holdings and earned interest at a given slot in the future
-  const futureSlot = (await connection.getSlot('confirmed')) + 100;
+  const futureSlot = (await c.rpc.getSlot({ commitment: 'confirmed' }).send()) + 100n;
   const holdingsWithInterest = await kaminoManager.calculateSimulatedHoldingsWithInterest(
     vaultState,
     undefined,
@@ -91,7 +94,10 @@ import {
   });
 
   // retrieve all the tokens that can be use as collateral by the users who borrow the token in the vault alongside details about the min and max loan to value ratio
-  const vaultCollaterals = await kaminoManager.getVaultCollaterals(vaultState, await connection.getSlot('confirmed'));
+  const vaultCollaterals = await kaminoManager.getVaultCollaterals(
+    vaultState,
+    await c.rpc.getSlot({ commitment: 'confirmed' }).send()
+  );
   printMarketsOverviewMap(vaultCollaterals);
 
   // read the reserve allocation weights in percentage
@@ -108,7 +114,7 @@ import {
   const kaminoReserve = (await vaultReservesMap).get(reservePubkey);
   const suppliedInReserve = kaminoManager.getSuppliedInReserve(
     vaultState,
-    await connection.getSlot('confirmed'),
+    await c.rpc.getSlot({ commitment: 'confirmed' }).send(),
     kaminoReserve!
   );
   console.log('Vault tokens supplied in reserve:', suppliedInReserve.toString());

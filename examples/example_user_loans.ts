@@ -1,7 +1,7 @@
 import { UserLoansArgs } from './utils/models';
 import { getMarket } from './utils/helpers';
-import { PublicKey } from '@solana/web3.js';
-import { getConnection } from './utils/connection';
+import { address } from '@solana/kit';
+import { getConnectionPool } from './utils/connection';
 import { ObligationTypeTag } from '@kamino-finance/klend-sdk';
 import { MAIN_MARKET } from './utils/constants';
 
@@ -15,10 +15,10 @@ export async function getUserLoansForMarket(args: UserLoansArgs) {
 }
 
 (async () => {
-  const connection = getConnection();
-  const wallet = new PublicKey('Hs9ioQZ2pCUyvS18anwmBxjQJsZrMPShwTMLySD6Us3V');
+  const c = getConnectionPool();
+  const wallet = address('Hs9ioQZ2pCUyvS18anwmBxjQJsZrMPShwTMLySD6Us3V');
   console.log(`fetching all loans for wallet ${wallet.toString()}`);
-  const loans = await getUserLoansForMarket({ connection, marketPubkey: MAIN_MARKET, wallet });
+  const loans = await getUserLoansForMarket({ rpc: c.rpc, marketPubkey: MAIN_MARKET, wallet });
   for (const loan of loans) {
     console.log(
       'loan:',

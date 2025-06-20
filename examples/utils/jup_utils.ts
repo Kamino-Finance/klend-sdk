@@ -6,7 +6,7 @@ import {
   SwapIxsProvider,
   SwapQuoteProvider,
 } from '@kamino-finance/klend-sdk';
-import { AddressLookupTableAccount, Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { Account, address, Address, GetMultipleAccountsApi, IInstruction, Rpc, SolanaRpcApi } from '@solana/kit';
 import axios from 'axios';
 import {
   createJupiterApiClient,
@@ -20,6 +20,8 @@ import {
   SwapMode,
 } from '@jup-ag/api/dist/index.js';
 import Decimal from 'decimal.js';
+import { AddressLookupTable, fetchAllMaybeAddressLookupTable } from '@solana-program/address-lookup-table';
+import { getAccountRole } from './compat';
 
 const DEFAULT_MAX_ACCOUNTS_BUFFER = 2;
 const MAX_LOCKED_ACCOUNTS = 64;
@@ -37,7 +39,7 @@ export type ErrorBody = {
 
 export type SwapTxResponse = {
   swapTxs: SwapTxs;
-  swapLookupTableAccounts: AddressLookupTableAccount[];
+  swapLookupTableAccounts: Account<AddressLookupTable>[];
   swapResponse: SwapResponse;
 };
 
@@ -48,12 +50,12 @@ export type SwapResponse = {
 };
 
 export type SwapTxs = {
-  setupIxs: TransactionInstruction[];
-  swapIxs: TransactionInstruction[];
-  cleanupIxs: TransactionInstruction[];
+  setupIxs: IInstruction[];
+  swapIxs: IInstruction[];
+  cleanupIxs: IInstruction[];
 };
 
-export async function getJupiterPrice(inputMint: PublicKey | string, outputMint: PublicKey | string): Promise<number> {
+export async function getJupiterPrice(inputMint: Address | string, outputMint: Address | string): Promise<number> {
   const params = {
     ids: inputMint.toString(),
     vsToken: outputMint.toString(),
@@ -69,23 +71,23 @@ export type SwapConfig = {
   onlyDirectRoutes?: boolean;
   wrapAndUnwrapSol?: boolean;
   slippageBps: number;
-  destinationTokenAccount?: PublicKey;
+  destinationTokenAccount?: Address;
   feePerCULamports?: Decimal;
   swapMode?: SwapMode;
   useTokenLedger?: boolean;
 };
 
 async function quote(
-  inputMint: PublicKey,
-  outputMint: PublicKey,
+  inputMint: Address,
+  outputMint: Address,
   amountLamports: Decimal,
   { swapMode = SwapMode.ExactIn, onlyDirectRoutes = true, slippageBps }: SwapConfig,
   maxAccs?: number
 ): Promise<QuoteResponse> {
   try {
     const quoteParameters: QuoteGetRequest = {
-      inputMint: inputMint.toBase58(),
-      outputMint: outputMint.toBase58(),
+      inputMint: inputMint,
+      outputMint: outputMint,
       amount: amountLamports.floor().toNumber(),
       slippageBps: slippageBps,
       onlyDirectRoutes,
@@ -111,9 +113,9 @@ export function getJupiterQuoter(
 
   const quoter: SwapQuoteProvider<QuoteResponse> = async (
     inputs: SwapInputs,
-    klendAccounts: Array<PublicKey>
+    klendAccounts: Array<Address>
   ): Promise<SwapQuote<QuoteResponse>> => {
-    const txAccs = new Set(...klendAccounts.map((a) => a.toBase58()));
+    const txAccs = new Set(...klendAccounts);
     const maxAccounts = getMaxAccountsWithBuffer(txAccs.size, maxAccsBuffer);
     const quoteResponse = await quote(
       inputs.inputMint,
@@ -140,10 +142,10 @@ export function getJupiterQuoter(
   return quoter;
 }
 
-export function getJupiterSwapper(connection: Connection, payer: PublicKey): SwapIxsProvider<QuoteResponse> {
+export function getJupiterSwapper(connection: Rpc<SolanaRpcApi>, payer: Address): SwapIxsProvider<QuoteResponse> {
   const swapper: SwapIxsProvider<QuoteResponse> = async (
     inputs: SwapInputs,
-    klendAccounts: Array<PublicKey>,
+    klendAccounts: Array<Address>,
     quote: SwapQuote<QuoteResponse>
   ): Promise<Array<SwapIxs<QuoteResponse>>> => {
     const scaledQuoteResponse = scaleJupQuoteResponse(quote.quoteResponse!, new Decimal(inputs.inputAmountLamports));
@@ -168,8 +170,8 @@ export function getJupiterSwapper(connection: Connection, payer: PublicKey): Swa
 }
 
 async function swapTxFromQuote(
-  connection: Connection,
-  payer: PublicKey,
+  rpc: Rpc<GetMultipleAccountsApi>,
+  payer: Address,
   quote: QuoteResponse,
   swapConfig: SwapConfig
 ): Promise<SwapTxResponse> {
@@ -177,7 +179,7 @@ async function swapTxFromQuote(
   try {
     const swapParameters: SwapInstructionsPostRequest = {
       swapRequest: {
-        userPublicKey: payer.toBase58(),
+        userPublicKey: payer,
         quoteResponse: quote,
         computeUnitPriceMicroLamports:
           swapConfig.feePerCULamports
@@ -185,7 +187,7 @@ async function swapTxFromQuote(
             .ceil()
             .toNumber() ?? 1,
         wrapAndUnwrapSol: swapConfig?.wrapAndUnwrapSol ?? false,
-        destinationTokenAccount: swapConfig?.destinationTokenAccount?.toBase58() ?? undefined,
+        destinationTokenAccount: swapConfig?.destinationTokenAccount ?? undefined,
       },
     };
     swap = await swapApiClient.swapInstructionsPost(swapParameters);
@@ -197,8 +199,8 @@ async function swapTxFromQuote(
     throw e;
   }
   const swapLookupTableAccounts = await getLookupTableAccountsFromKeys(
-    connection,
-    swap.addressLookupTableAddresses.map((k) => new PublicKey(k))
+    rpc,
+    swap.addressLookupTableAddresses.map((k) => address(k))
   );
 
   const swapIxs = [transformResponseIx(swap.swapInstruction)];
@@ -296,38 +298,35 @@ export class JupSwapResponseError extends Error {
 }
 
 export const getLookupTableAccountsFromKeys = async (
-  connection: Connection,
-  keys: PublicKey[]
-): Promise<AddressLookupTableAccount[]> => {
-  const lookupTableAccounts: AddressLookupTableAccount[] = [];
+  rpc: Rpc<GetMultipleAccountsApi>,
+  keys: Address[]
+): Promise<Account<AddressLookupTable>[]> => {
+  const lookupTableAccounts: Account<AddressLookupTable>[] = [];
 
-  for (const lookupTable of keys) {
-    const lookupTableAccount = await connection
-      .getAddressLookupTable(new PublicKey(lookupTable))
-      .then((res) => res.value);
+  const luts = await fetchAllMaybeAddressLookupTable(rpc, keys);
 
-    if (!lookupTableAccount) {
-      throw new Error('lookup table is not found');
+  for (const lookupTable of luts) {
+    if (!lookupTable.exists) {
+      throw new Error(`lookup table ${lookupTable} not found`);
     }
 
-    lookupTableAccounts.push(lookupTableAccount);
+    lookupTableAccounts.push(lookupTable);
   }
 
   return lookupTableAccounts;
 };
 
-export function transformResponseIx(ix: Instruction): TransactionInstruction {
-  return new TransactionInstruction({
-    programId: new PublicKey(ix.programId),
-    keys: ix.accounts.map((k) => ({
-      pubkey: new PublicKey(k.pubkey),
-      isSigner: k.isSigner,
-      isWritable: k.isWritable,
-    })),
+export function transformResponseIx(ix: Instruction): IInstruction {
+  return {
     data: ix.data ? Buffer.from(ix.data, 'base64') : undefined,
-  });
+    programAddress: address(ix.programId),
+    accounts: ix.accounts.map((k) => ({
+      address: address(k.pubkey),
+      role: getAccountRole({ isSigner: k.isSigner, isMut: k.isWritable }),
+    })),
+  };
 }
 
-export function transformResponseIxs(ixs: Instruction[]): TransactionInstruction[] {
+export function transformResponseIxs(ixs: Instruction[]): IInstruction[] {
   return ixs.map((ix) => transformResponseIx(ix));
 }

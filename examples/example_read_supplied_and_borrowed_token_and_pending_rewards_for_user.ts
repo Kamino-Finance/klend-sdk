@@ -1,38 +1,33 @@
 import Decimal from 'decimal.js/decimal';
 import {
+  DEFAULT_PUBLIC_KEY,
   getMedianSlotDurationInMsFromLastEpochs,
   KaminoManager,
   KaminoMarket,
-  KaminoVault,
   lamportsToDecimal,
-  LendingObligation,
-  ObligationTypeTag,
-  PubkeyHashMap,
-  Reserve,
   UserState,
   VanillaObligation,
+  WRAPPED_SOL_MINT,
 } from '@kamino-finance/klend-sdk';
-import { PublicKey } from '@solana/web3.js';
 import { calculatePendingRewards, Farms, FarmState, getUserStatePDA } from '@kamino-finance/farms-sdk';
-import { WSOLMint } from '@raydium-io/raydium-sdk-v2/lib';
-import { getConnection } from './utils/connection';
-import { getMarket } from './utils/helpers';
+import { getConnectionPool } from './utils/connection';
+import { Address, address } from '@solana/kit';
 
 export const getKaminoAllPricesAPI = 'https://api.hubbleprotocol.io/prices?env=mainnet-beta&source=scope';
 
 (async () => {
-  const user = new PublicKey('<USER_WALLET>');
-  const market = new PublicKey('<MARKET_ADDRESS>');
-  const supplyReserve = new PublicKey('<SUPPLY_RESERVE_ADDRESS>');
-  const borrowReserve = new PublicKey('<BORROW_RESERVE_ADDRESS>');
+  const user = address('<USER_WALLET>');
+  const market = address('<MARKET_ADDRESS>');
+  const supplyReserve = address('<SUPPLY_RESERVE_ADDRESS>');
+  const borrowReserve = address('<BORROW_RESERVE_ADDRESS>');
 
-  const connection = getConnection();
-  const farmsClient = new Farms(connection);
+  const c = getConnectionPool();
+  const farmsClient = new Farms(c.rpc);
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
-  const kaminoManager = new KaminoManager(connection, slotDuration);
+  const kaminoManager = new KaminoManager(c.rpc, slotDuration);
 
   // read how many tokens the user has supplied in the supply reserve
-  const marketState = await KaminoMarket.load(connection, market, slotDuration);
+  const marketState = await KaminoMarket.load(c.rpc, market, slotDuration);
   if (!marketState) {
     throw Error(`Could not load market ${market.toString()}`);
   }
@@ -60,21 +55,25 @@ export const getKaminoAllPricesAPI = 'https://api.hubbleprotocol.io/prices?env=m
 
   // read userFarmState for user
   const debtFarm = borrowReserveKamino.state.farmDebt;
-  if (debtFarm.equals(PublicKey.default)) {
+  if (debtFarm === DEFAULT_PUBLIC_KEY) {
     return;
   }
 
-  const farmUserStateAddress = getUserStatePDA(farmsClient.getProgramID(), debtFarm, userObligation.obligationAddress);
-  const farmUserState = await UserState.fetch(connection, farmUserStateAddress, farmsClient.getProgramID());
+  const farmUserStateAddress = await getUserStatePDA(
+    farmsClient.getProgramID(),
+    debtFarm,
+    userObligation.obligationAddress
+  );
+  const farmUserState = await UserState.fetch(c.rpc, farmUserStateAddress, farmsClient.getProgramID());
   if (!farmUserState) {
     throw Error(`Could not load farm user state ${farmUserStateAddress.toString()}`);
   }
-  const farmState = await FarmState.fetch(connection, farmUserState.farmState);
+  const farmState = await FarmState.fetch(c.rpc, farmUserState.farmState);
   if (!farmState) {
     throw Error(`Could not load farm state ${farmUserState.farmState.toString()}`);
   }
 
-  const pendingRewardsPerToken: PubkeyHashMap<PublicKey, Decimal> = new PubkeyHashMap();
+  const pendingRewardsPerToken: Map<Address, Decimal> = new Map();
   const currentTimestamp = new Decimal(new Date().getTime() / 1000);
 
   const rewardInfos = farmState!.rewardInfos;
@@ -99,12 +98,12 @@ export const getKaminoAllPricesAPI = 'https://api.hubbleprotocol.io/prices?env=m
   // read the prices from Kamino price API
   const prices = await fetch(getKaminoAllPricesAPI);
   const pricesJson = await prices.json();
-  const pricesMap = new PubkeyHashMap<PublicKey, Decimal>();
+  const pricesMap = new Map<Address, Decimal>();
   for (const price of pricesJson) {
-    pricesMap.set(new PublicKey(price.mint), new Decimal(price.usdPrice));
+    pricesMap.set(address(price.mint), new Decimal(price.usdPrice));
   }
 
-  const SOL_PRICE = pricesMap.get(WSOLMint);
+  const SOL_PRICE = pricesMap.get(WRAPPED_SOL_MINT);
 
   for (const [tokenMint, pendingReward] of pendingRewardsPerToken.entries()) {
     const tokenPrice = pricesMap.get(tokenMint);

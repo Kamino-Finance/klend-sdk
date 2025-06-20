@@ -1,15 +1,15 @@
-import { getConnection } from './utils/connection';
-import { KaminoObligation, ObligationStats, ObligationTypeTag } from '@kamino-finance/klend-sdk';
+import { getConnectionPool } from './utils/connection';
+import { KaminoObligation, ObligationStats } from '@kamino-finance/klend-sdk';
 import { EXAMPLE_OBLIGATION, MAIN_MARKET } from './utils/constants';
 import { getLoan, getMarket } from './utils/helpers';
-import { PublicKey } from '@solana/web3.js';
+import { address } from '@solana/kit';
 
 (async () => {
-  const connection = getConnection();
+  const c = getConnectionPool();
   console.log('fetching loan:', EXAMPLE_OBLIGATION.toString(), 'in market:', MAIN_MARKET.toString());
 
   const args = {
-    connection,
+    rpc: c.rpc,
     obligationPubkey: EXAMPLE_OBLIGATION,
     marketPubkey: MAIN_MARKET,
   };
@@ -23,7 +23,7 @@ import { PublicKey } from '@solana/web3.js';
   }
 
   // General net stats
-  const currentSlot = await connection.getSlot();
+  const currentSlot = await c.rpc.getSlot().send();
   const loanStats: ObligationStats = loan.refreshedStats;
   console.log(
     `\nLoan ${loan.obligationAddress} \nhttps://app.kamino.finance/lending/obligation/${loan.obligationAddress} \n`
@@ -37,7 +37,7 @@ import { PublicKey } from '@solana/web3.js';
 
   console.log(
     `Max withdraw amount : ${loan
-      .getMaxWithdrawAmount(market, new PublicKey('2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo'), currentSlot)
+      .getMaxWithdrawAmount(market, address('2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo'), currentSlot)
       .toFixed(2)}`
   );
 

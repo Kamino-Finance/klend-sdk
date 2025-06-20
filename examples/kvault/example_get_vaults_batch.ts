@@ -1,17 +1,17 @@
-import { getConnection } from '../utils/connection';
+import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
 import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } from '@kamino-finance/klend-sdk';
 
 (async () => {
-  const connection = getConnection();
-  const user = getKeypair();
+  const c = getConnectionPool();
+  const user = await getKeypair();
 
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
-  const kaminoManager = new KaminoManager(connection, slotDuration);
+  const kaminoManager = new KaminoManager(c.rpc, slotDuration);
 
   const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
-  const vaultState = await vault.getState(connection);
+  const vaultState = await vault.getState(c.rpc);
 
   // read all vaults
   const vaults = await kaminoManager.getAllVaults();
@@ -21,7 +21,7 @@ import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } f
   });
 
   // read all vaults for a specific owner
-  const userVaults = await kaminoManager.getAllVaultsForOwner(user.publicKey);
+  const userVaults = await kaminoManager.getAllVaultsForOwner(user.address);
   userVaults.forEach((vault) => {
     console.log(`Vault pubkey:`, vault.address.toString());
     console.log(`Vault state:`, vault.state);

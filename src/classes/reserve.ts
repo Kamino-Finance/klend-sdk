@@ -1,14 +1,22 @@
 /* eslint-disable max-classes-per-file */
 import {
-  AccountInfo,
-  Connection,
-  PublicKey,
-  SystemProgram,
-  SYSVAR_RENT_PUBKEY,
-  TransactionInstruction,
-} from '@solana/web3.js';
+  Address,
+  IInstruction,
+  Slot,
+  TransactionSigner,
+  Rpc,
+  GetMinimumBalanceForRentExemptionApi,
+  Option,
+  none,
+  some,
+  isSome,
+  GetProgramAccountsApi,
+  GetAccountInfoApi,
+  GetMultipleAccountsApi,
+} from '@solana/kit';
 import Decimal from 'decimal.js';
 import {
+  DEFAULT_PUBLIC_KEY,
   globalConfigPda,
   INITIAL_COLLATERAL_RATE,
   lendingMarketAuthPda,
@@ -23,8 +31,8 @@ import {
   U64_MAX,
 } from '../utils';
 import { FeeCalculation, Fees, ReserveDataType, ReserveFarmInfo, ReserveRewardYield, ReserveStatus } from './shared';
-import { Reserve, ReserveFields } from '../idl_codegen/accounts';
-import { CurvePointFields, ReserveConfig, UpdateConfigMode, UpdateConfigModeKind } from '../idl_codegen/types';
+import { Reserve, ReserveFields } from '../@codegen/klend/accounts';
+import { CurvePointFields, ReserveConfig, UpdateConfigMode, UpdateConfigModeKind } from '../@codegen/klend/types';
 import { calculateAPYFromAPR, getBorrowRate, lamportsToNumberDecimal, parseTokenSymbol, positiveOrZero } from './utils';
 import { CompositeConfigItem, encodeUsingLayout, ConfigUpdater } from './configItems';
 import { bfToDecimal, Fraction } from './fraction';
@@ -37,52 +45,54 @@ import {
   UpdateReserveConfigAccounts,
   UpdateReserveConfigArgs,
 } from '../lib';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { aprToApy, KaminoPrices } from '@kamino-finance/kliquidity-sdk';
 import { FarmState, RewardInfo } from '@kamino-finance/farms-sdk';
+import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
+import { maxBigInt } from '../utils/bigint';
+import { getCreateAccountInstruction, SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
+import { SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
+import { noopSigner } from '../utils/signer';
+
+export type KaminoReserveRpcApi = GetProgramAccountsApi & GetAccountInfoApi & GetMultipleAccountsApi;
 
 export const DEFAULT_RECENT_SLOT_DURATION_MS = 450;
 
 export class KaminoReserve {
   state: Reserve;
-  address: PublicKey;
+  address: Address;
   symbol: string;
 
   tokenOraclePrice: TokenOracleData;
   stats: ReserveDataType;
   private farmData: ReserveFarmInfo = { fetched: false, farmStates: [] };
 
-  private buffer: AccountInfo<Buffer> | null;
-  private connection: Connection;
+  private rpc: Rpc<KaminoReserveRpcApi>;
   private readonly recentSlotDurationMs: number;
 
   constructor(
     state: Reserve,
-    address: PublicKey,
+    address: Address,
     tokenOraclePrice: TokenOracleData,
-    connection: Connection,
+    connection: Rpc<KaminoReserveRpcApi>,
     recentSlotDurationMs: number
   ) {
     this.state = state;
     this.address = address;
-    this.buffer = null;
     this.tokenOraclePrice = tokenOraclePrice;
     this.stats = {} as ReserveDataType;
-    this.connection = connection;
+    this.rpc = connection;
     this.symbol = parseTokenSymbol(state.config.tokenInfo.name);
     this.recentSlotDurationMs = recentSlotDurationMs;
   }
 
   static initialize(
-    accountData: AccountInfo<Buffer>,
-    address: PublicKey,
+    address: Address,
     state: Reserve,
     tokenOraclePrice: TokenOracleData,
-    connection: Connection,
+    rpc: Rpc<KaminoReserveRpcApi>,
     recentSlotDurationMs: number
-  ) {
-    const reserve = new KaminoReserve(state, address, tokenOraclePrice, connection, recentSlotDurationMs);
-    reserve.setBuffer(accountData);
+  ): KaminoReserve {
+    const reserve = new KaminoReserve(state, address, tokenOraclePrice, rpc, recentSlotDurationMs);
     reserve.stats = reserve.formatReserveData(state);
     return reserve;
   }
@@ -188,7 +198,7 @@ export class KaminoReserve {
   /**
    * Calculates the total liquidity supply of the reserve
    */
-  getEstimatedTotalSupply(slot: number, referralFeeBps: number): Decimal {
+  getEstimatedTotalSupply(slot: Slot, referralFeeBps: number): Decimal {
     const { totalSupply } = this.getEstimatedDebtAndSupply(slot, referralFeeBps);
     return totalSupply;
   }
@@ -204,9 +214,9 @@ export class KaminoReserve {
   /**
    * @Returns estimated cumulative borrow rate of the reserve
    */
-  getEstimatedCumulativeBorrowRate(currentSlot: number, referralFeeBps: number): Decimal {
+  getEstimatedCumulativeBorrowRate(currentSlot: Slot, referralFeeBps: number): Decimal {
     const currentBorrowRate = new Decimal(this.calculateBorrowAPR(currentSlot, referralFeeBps));
-    const slotsElapsed = Math.max(currentSlot - this.state.lastUpdate.slot.toNumber(), 0);
+    const slotsElapsed = maxBigInt(currentSlot - BigInt(this.state.lastUpdate.slot.toString()), 0n);
 
     const compoundInterest = this.approximateCompoundedInterest(currentBorrowRate, slotsElapsed);
 
@@ -233,7 +243,7 @@ export class KaminoReserve {
    *
    * @returns the estimated exchange rate between the collateral tokens and the liquidity - this is a decimal number scaled by 1e18
    */
-  getEstimatedCollateralExchangeRate(slot: number, referralFeeBps: number): Decimal {
+  getEstimatedCollateralExchangeRate(slot: Slot, referralFeeBps: number): Decimal {
     const totalSupply = this.getEstimatedTotalSupply(slot, referralFeeBps);
     const mintTotalSupply = this.state.collateral.mintTotalSupply;
     if (mintTotalSupply.isZero() || totalSupply.isZero()) {
@@ -274,6 +284,26 @@ export class KaminoReserve {
   }
 
   /**
+   * @returns the collateral farm address if it is set, otherwise none
+   */
+  getCollateralFarmAddress(): Option<Address> {
+    if (this.state.farmCollateral === DEFAULT_PUBLIC_KEY) {
+      return none();
+    }
+    return some(this.state.farmCollateral);
+  }
+
+  /**
+   * @returns the debt farm address if it is set, otherwise none
+   */
+  getDebtFarmAddress(): Option<Address> {
+    if (this.state.farmDebt === DEFAULT_PUBLIC_KEY) {
+      return none();
+    }
+    return some(this.state.farmDebt);
+  }
+
+  /**
    * @Returns true if the total liquidity supply of the reserve is greater than the deposit limit
    */
   depositLimitCrossed(): boolean {
@@ -299,8 +329,8 @@ export class KaminoReserve {
    *
    * @returns the current capacity of the daily deposit withdrawal cap
    */
-  getDepositWithdrawalCapCurrent(slot: number): Decimal {
-    const slotsElapsed = Math.max(slot - this.state.lastUpdate.slot.toNumber(), 0);
+  getDepositWithdrawalCapCurrent(slot: Slot): Decimal {
+    const slotsElapsed = maxBigInt(slot - BigInt(this.state.lastUpdate.slot.toString()), 0n);
     if (slotsElapsed > SLOTS_PER_DAY) {
       return new Decimal(0);
     } else {
@@ -354,8 +384,8 @@ export class KaminoReserve {
    *
    * @returns the current capacity of the daily debt withdrawal cap
    */
-  getDebtWithdrawalCapCurrent(slot: number): Decimal {
-    const slotsElapsed = Math.max(slot - this.state.lastUpdate.slot.toNumber(), 0);
+  getDebtWithdrawalCapCurrent(slot: Slot): Decimal {
+    const slotsElapsed = maxBigInt(slot - BigInt(this.state.lastUpdate.slot.toString()), 0n);
     if (slotsElapsed > SLOTS_PER_DAY) {
       return new Decimal(0);
     } else {
@@ -367,7 +397,7 @@ export class KaminoReserve {
     return new Decimal(this.state.config.borrowFactorPct.toString()).div(100);
   }
 
-  calculateSupplyAPR(slot: number, referralFeeBps: number) {
+  calculateSupplyAPR(slot: Slot, referralFeeBps: number) {
     const currentUtilization = this.calculateUtilizationRatio();
 
     const borrowRate = this.calculateEstimatedBorrowRate(slot, referralFeeBps);
@@ -375,11 +405,11 @@ export class KaminoReserve {
     return currentUtilization * borrowRate * protocolTakeRatePct;
   }
 
-  getEstimatedDebtAndSupply(slot: number, referralFeeBps: number): { totalBorrow: Decimal; totalSupply: Decimal } {
-    const slotsElapsed = Math.max(slot - this.state.lastUpdate.slot.toNumber(), 0);
+  getEstimatedDebtAndSupply(slot: Slot, referralFeeBps: number): { totalBorrow: Decimal; totalSupply: Decimal } {
+    const slotsElapsed = maxBigInt(slot - BigInt(this.state.lastUpdate.slot.toNumber()), 0n);
     let totalBorrow: Decimal;
     let totalSupply: Decimal;
-    if (slotsElapsed === 0) {
+    if (slotsElapsed === 0n) {
       totalBorrow = this.getBorrowedAmount();
       totalSupply = this.getTotalSupply();
     } else {
@@ -396,14 +426,14 @@ export class KaminoReserve {
   }
 
   getEstimatedAccumulatedProtocolFees(
-    slot: number,
+    slot: Slot,
     referralFeeBps: number
   ): { accumulatedProtocolFees: Decimal; compoundedVariableProtocolFee: Decimal; compoundedFixedHostFee: Decimal } {
-    const slotsElapsed = Math.max(slot - this.state.lastUpdate.slot.toNumber(), 0);
+    const slotsElapsed = maxBigInt(slot - BigInt(this.state.lastUpdate.slot.toString()), 0n);
     let accumulatedProtocolFees: Decimal;
     let compoundedVariableProtocolFee: Decimal;
     let compoundedFixedHostFee: Decimal;
-    if (slotsElapsed === 0) {
+    if (slotsElapsed === 0n) {
       accumulatedProtocolFees = this.getAccumulatedProtocolFees();
       compoundedVariableProtocolFee = new Decimal(0);
       compoundedFixedHostFee = new Decimal(0);
@@ -428,7 +458,7 @@ export class KaminoReserve {
     return totalBorrows.dividedBy(totalSupply).toNumber();
   }
 
-  getEstimatedUtilizationRatio(slot: number, referralFeeBps: number): number {
+  getEstimatedUtilizationRatio(slot: Slot, referralFeeBps: number): number {
     const { totalBorrow: estimatedTotalBorrowed, totalSupply: estimatedTotalSupply } = this.getEstimatedDebtAndSupply(
       slot,
       referralFeeBps
@@ -443,7 +473,7 @@ export class KaminoReserve {
   calcSimulatedUtilizationRatio(
     amount: Decimal,
     action: ActionType,
-    slot: number,
+    slot: Slot,
     referralFeeBps: number,
     outflowAmount?: Decimal
   ): number {
@@ -499,7 +529,7 @@ export class KaminoReserve {
     }
   }
 
-  getMaxBorrowAmountWithCollReserve(market: KaminoMarket, collReserve: KaminoReserve, slot: number): Decimal {
+  getMaxBorrowAmountWithCollReserve(market: KaminoMarket, collReserve: KaminoReserve, slot: Slot): Decimal {
     const groups = market.state.elevationGroups;
     const commonElevationGroups = market.getCommonElevationGroupsForPair(collReserve, this);
 
@@ -574,7 +604,7 @@ export class KaminoReserve {
   calcSimulatedBorrowRate(
     amount: Decimal,
     action: ActionType,
-    slot: number,
+    slot: Slot,
     referralFeeBps: number,
     outflowAmount?: Decimal
   ) {
@@ -587,7 +617,7 @@ export class KaminoReserve {
   calcSimulatedBorrowAPR(
     amount: Decimal,
     action: ActionType,
-    slot: number,
+    slot: Slot,
     referralFeeBps: number,
     outflowAmount?: Decimal
   ) {
@@ -600,7 +630,7 @@ export class KaminoReserve {
   calcSimulatedSupplyAPR(
     amount: Decimal,
     action: ActionType,
-    slot: number,
+    slot: Slot,
     referralFeeBps: number,
     outflowAmount?: Decimal
   ) {
@@ -623,14 +653,14 @@ export class KaminoReserve {
     return getBorrowRate(currentUtilization, curve) * slotAdjustmentFactor;
   }
 
-  calculateEstimatedBorrowRate(slot: number, referralFeeBps: number) {
+  calculateEstimatedBorrowRate(slot: Slot, referralFeeBps: number) {
     const slotAdjustmentFactor = this.slotAdjustmentFactor();
     const estimatedCurrentUtilization = this.getEstimatedUtilizationRatio(slot, referralFeeBps);
     const curve = truncateBorrowCurve(this.state.config.borrowRateCurve.points);
     return getBorrowRate(estimatedCurrentUtilization, curve) * slotAdjustmentFactor;
   }
 
-  calculateBorrowAPR(slot: number, referralFeeBps: number) {
+  calculateBorrowAPR(slot: Slot, referralFeeBps: number) {
     const slotAdjustmentFactor = this.slotAdjustmentFactor();
     const borrowRate = this.calculateEstimatedBorrowRate(slot, referralFeeBps);
     return borrowRate + this.getFixedHostInterestRate().toNumber() * slotAdjustmentFactor;
@@ -639,21 +669,21 @@ export class KaminoReserve {
   /**
    * @returns the mint of the reserve liquidity token
    */
-  getLiquidityMint(): PublicKey {
+  getLiquidityMint(): Address {
     return this.state.liquidity.mintPubkey;
   }
 
   /**
    * @returns the token program of the reserve liquidity mint
    */
-  getLiquidityTokenProgram(): PublicKey {
+  getLiquidityTokenProgram(): Address {
     return this.state.liquidity.tokenProgram;
   }
 
   /**
    * @returns the mint of the reserve collateral token , i.e. the cToken minted for depositing the liquidity token
    */
-  getCTokenMint(): PublicKey {
+  getCTokenMint(): Address {
     return this.state.collateral.mintPubkey;
   }
 
@@ -704,20 +734,8 @@ export class KaminoReserve {
     );
   }
 
-  setBuffer(buffer: AccountInfo<Buffer> | null) {
-    this.buffer = buffer;
-  }
-
   async load(tokenOraclePrice: TokenOracleData) {
-    if (!this.buffer) {
-      this.setBuffer(await this.connection.getAccountInfo(this.address, 'processed'));
-    }
-
-    if (!this.buffer) {
-      throw Error(`Error requesting account info for ${this.symbol}`);
-    }
-
-    const parsedData = await Reserve.fetch(this.connection, this.address);
+    const parsedData = await Reserve.fetch(this.rpc, this.address);
     if (!parsedData) {
       throw Error(`Unable to parse data of reserve ${this.symbol}`);
     }
@@ -726,7 +744,7 @@ export class KaminoReserve {
     this.stats = this.formatReserveData(parsedData);
   }
 
-  totalSupplyAPY(currentSlot: number) {
+  totalSupplyAPY(currentSlot: Slot) {
     const { stats } = this;
     if (!stats) {
       throw Error('KaminoMarket must call loadRewards.');
@@ -735,7 +753,7 @@ export class KaminoReserve {
     return calculateAPYFromAPR(this.calculateSupplyAPR(currentSlot, 0));
   }
 
-  totalBorrowAPY(currentSlot: number) {
+  totalBorrowAPY(currentSlot: Slot) {
     const { stats } = this;
     if (!stats) {
       throw Error('KaminoMarket must call loadRewards.');
@@ -747,14 +765,16 @@ export class KaminoReserve {
   async loadFarmStates() {
     if (!this.farmData.fetched) {
       const farmStates: FarmState[] = [];
-      if (!this.state.farmDebt.equals(PublicKey.default)) {
-        const farmState = await FarmState.fetch(this.connection, this.state.farmDebt);
+      const debtFarmAddress = this.getDebtFarmAddress();
+      if (isSome(debtFarmAddress)) {
+        const farmState = await FarmState.fetch(this.rpc, debtFarmAddress.value);
         if (farmState !== null) {
           farmStates.push(farmState);
         }
       }
-      if (!this.state.farmCollateral.equals(PublicKey.default)) {
-        const farmState = await FarmState.fetch(this.connection, this.state.farmCollateral);
+      const collateralFarmAddress = this.getCollateralFarmAddress();
+      if (isSome(collateralFarmAddress)) {
+        const farmState = await FarmState.fetch(this.rpc, collateralFarmAddress.value);
         if (farmState !== null) {
           farmStates.push(farmState);
         }
@@ -770,12 +790,12 @@ export class KaminoReserve {
       throw Error('KaminoMarket must call loadReserves.');
     }
 
-    const isDebtReward = this.state.farmDebt.equals(this.address);
+    const isDebtReward = this.state.farmDebt === this.address;
     await this.loadFarmStates();
     const yields: ReserveRewardYield[] = [];
     for (const farmState of this.farmData.farmStates) {
       for (const rewardInfo of farmState.rewardInfos.filter(
-        (x) => !x.token.mint.equals(PublicKey.default) && !x.rewardsAvailable.isZero()
+        (x) => x.token.mint !== DEFAULT_PUBLIC_KEY && !x.rewardsAvailable.isZero()
       )) {
         const { apy, apr } = this.calculateRewardYield(prices, rewardInfo, isDebtReward);
         if (apy.isZero() && apr.isZero()) {
@@ -892,7 +912,7 @@ export class KaminoReserve {
    * @param referralFeeBps
    */
   private compoundInterest(
-    slotsElapsed: number,
+    slotsElapsed: bigint,
     referralFeeBps: number
   ): {
     newDebt: Decimal;
@@ -951,32 +971,32 @@ export class KaminoReserve {
    * @param elapsedSlots
    * @private
    */
-  private approximateCompoundedInterest(rate: Decimal, elapsedSlots: number): Decimal {
+  private approximateCompoundedInterest(rate: Decimal, elapsedSlots: bigint): Decimal {
     const base = rate.div(SLOTS_PER_YEAR);
     switch (elapsedSlots) {
-      case 0:
+      case 0n:
         return new Decimal(1);
-      case 1:
+      case 1n:
         return base.add(1);
-      case 2:
+      case 2n:
         return base.add(1).mul(base.add(1));
-      case 3:
+      case 3n:
         return base.add(1).mul(base.add(1)).mul(base.add(1));
-      case 4:
+      case 4n:
         // eslint-disable-next-line no-case-declarations
         const pow2 = base.add(1).mul(base.add(1));
         return pow2.mul(pow2);
     }
     const exp = elapsedSlots;
-    const expMinus1 = exp - 1;
-    const expMinus2 = exp - 2;
+    const expMinus1 = exp - 1n;
+    const expMinus2 = exp - 2n;
 
     const basePow2 = base.mul(base);
     const basePow3 = basePow2.mul(base);
 
-    const firstTerm = base.mul(exp);
-    const secondTerm = basePow2.mul(exp).mul(expMinus1).div(2);
-    const thirdTerm = basePow3.mul(exp).mul(expMinus1).mul(expMinus2).div(6);
+    const firstTerm = base.mul(exp.toString());
+    const secondTerm = basePow2.mul(exp.toString()).mul(expMinus1.toString()).div(2);
+    const thirdTerm = basePow3.mul(exp.toString()).mul(expMinus1.toString()).mul(expMinus2.toString()).div(6);
 
     return new Decimal(1).add(firstTerm).add(secondTerm).add(thirdTerm);
   }
@@ -991,16 +1011,16 @@ export class KaminoReserve {
 
     // Debt against collaterals in elevation groups
     const debtAgainstCollateralReserveCaps: {
-      collateralReserve: PublicKey;
+      collateralReserve: Address;
       elevationGroup: number;
       maxDebt: Decimal;
       currentValue: Decimal;
     }[] = market
       .getMarketElevationGroupDescriptions()
-      .filter((x) => x.debtReserve.equals(this.address))
+      .filter((x) => x.debtReserve === this.address)
       .map((elevationGroupDescription: ElevationGroupDescription) =>
-        elevationGroupDescription.collateralReserves.toArray().map((collateralReserveAddress) => {
-          const collRes = market.reserves.get(new PublicKey(collateralReserveAddress))!;
+        [...elevationGroupDescription.collateralReserves].map((collateralReserveAddress) => {
+          const collRes = market.reserves.get(collateralReserveAddress)!;
 
           const debtLimitAgainstThisCollInGroup =
             collRes.state.config.borrowLimitAgainstThisCollateralInElevationGroup[
@@ -1051,7 +1071,7 @@ export class KaminoReserve {
   getLiquidityAvailableForDebtReserveGivenCaps(
     market: KaminoMarket,
     elevationGroups: number[],
-    collateralReserves: PublicKey[] = []
+    collateralReserves: Address[] = []
   ): Decimal[] {
     const caps = this.getBorrowCapForReserve(market);
 
@@ -1091,7 +1111,7 @@ export class KaminoReserve {
           remainingInsideEmodeCaps = Decimal.min(
             ...capsGivenEgroup.map((x) => {
               // check reserve is part of collReserves array
-              if (collateralReserves.find((collateralReserve) => collateralReserve.equals(x.collateralReserve))) {
+              if (collateralReserves.find((collateralReserve) => collateralReserve === x.collateralReserve)) {
                 return x.maxDebt.minus(x.currentValue);
               } else {
                 return new Decimal(U64_MAX);
@@ -1126,46 +1146,46 @@ const truncateBorrowCurve = (points: CurvePointFields[]): [number, number][] => 
 };
 
 export async function createReserveIxs(
-  connection: Connection,
-  owner: PublicKey,
-  ownerLiquiditySource: PublicKey,
-  lendingMarket: PublicKey,
-  liquidityMint: PublicKey,
-  reserveAddress: PublicKey,
-  programId: PublicKey
-): Promise<TransactionInstruction[]> {
-  const size = Reserve.layout.span + 8;
-
-  const createReserveIx = SystemProgram.createAccount({
-    fromPubkey: owner,
-    newAccountPubkey: reserveAddress,
-    lamports: await connection.getMinimumBalanceForRentExemption(size),
+  rpc: Rpc<GetMinimumBalanceForRentExemptionApi>,
+  owner: TransactionSigner,
+  ownerLiquiditySource: Address,
+  lendingMarket: Address,
+  liquidityMint: Address,
+  liquidityMintTokenProgram: Address,
+  reserveAddress: TransactionSigner,
+  programId: Address
+): Promise<IInstruction[]> {
+  const size = BigInt(Reserve.layout.span + 8);
+  const createReserveIx = getCreateAccountInstruction({
+    payer: owner,
     space: size,
-    programId: programId,
+    lamports: await rpc.getMinimumBalanceForRentExemption(size).send(),
+    programAddress: programId,
+    newAccount: reserveAddress,
   });
 
-  const { liquiditySupplyVault, collateralMint, collateralSupplyVault, feeVault } = reservePdas(
+  const { liquiditySupplyVault, collateralMint, collateralSupplyVault, feeVault } = await reservePdas(
     programId,
     lendingMarket,
     liquidityMint
   );
-  const [lendingMarketAuthority, _] = lendingMarketAuthPda(lendingMarket, programId);
+  const [lendingMarketAuthority] = await lendingMarketAuthPda(lendingMarket, programId);
 
   const accounts: InitReserveAccounts = {
     lendingMarketOwner: owner,
     lendingMarket: lendingMarket,
     lendingMarketAuthority: lendingMarketAuthority,
-    reserve: reserveAddress,
+    reserve: reserveAddress.address,
     reserveLiquidityMint: liquidityMint,
     reserveLiquiditySupply: liquiditySupplyVault,
     feeReceiver: feeVault,
     reserveCollateralMint: collateralMint,
     reserveCollateralSupply: collateralSupplyVault,
     initialLiquiditySource: ownerLiquiditySource,
-    liquidityTokenProgram: TOKEN_PROGRAM_ID,
-    collateralTokenProgram: TOKEN_PROGRAM_ID,
-    systemProgram: SystemProgram.programId,
-    rent: SYSVAR_RENT_PUBKEY,
+    liquidityTokenProgram: liquidityMintTokenProgram,
+    collateralTokenProgram: TOKEN_PROGRAM_ADDRESS,
+    systemProgram: SYSTEM_PROGRAM_ADDRESS,
+    rent: SYSVAR_RENT_ADDRESS,
   };
 
   const initReserveIx = initReserve(accounts, programId);
@@ -1173,22 +1193,22 @@ export async function createReserveIxs(
   return [createReserveIx, initReserveIx];
 }
 
-export function updateReserveConfigIx(
-  signer: PublicKey,
-  marketAddress: PublicKey,
-  reserveAddress: PublicKey,
+export async function updateReserveConfigIx(
+  signer: TransactionSigner,
+  marketAddress: Address,
+  reserveAddress: Address,
   mode: UpdateConfigModeKind,
   value: Uint8Array,
-  programId: PublicKey,
+  programId: Address,
   skipConfigIntegrityValidation: boolean = false
-): TransactionInstruction {
+): Promise<IInstruction> {
   const args: UpdateReserveConfigArgs = {
     mode,
     value,
     skipConfigIntegrityValidation,
   };
 
-  const [globalConfig] = globalConfigPda(programId);
+  const globalConfig = await globalConfigPda(programId);
   const accounts: UpdateReserveConfigAccounts = {
     signer,
     lendingMarket: marketAddress,
@@ -1259,20 +1279,20 @@ export const RESERVE_CONFIG_UPDATER = new ConfigUpdater(UpdateConfigMode.fromDec
   [UpdateConfigMode.UpdateProtocolOrderExecutionFee.kind]: config.protocolOrderExecutionFeePct,
 }));
 
-export function updateEntireReserveConfigIx(
-  signer: PublicKey,
-  marketAddress: PublicKey,
-  reserveAddress: PublicKey,
+export async function updateEntireReserveConfigIx(
+  signer: TransactionSigner,
+  marketAddress: Address,
+  reserveAddress: Address,
   reserveConfig: ReserveConfig,
-  programId: PublicKey
-): TransactionInstruction {
+  programId: Address
+): Promise<IInstruction> {
   const args: UpdateReserveConfigArgs = {
     mode: new UpdateConfigMode.UpdateEntireReserveConfig(),
     value: encodeUsingLayout(ReserveConfig.layout(), reserveConfig),
     skipConfigIntegrityValidation: false,
   };
 
-  const [globalConfig] = globalConfigPda(programId);
+  const globalConfig = await globalConfigPda(programId);
   const accounts: UpdateReserveConfigAccounts = {
     signer,
     lendingMarket: marketAddress,
@@ -1288,27 +1308,30 @@ export function updateEntireReserveConfigIx(
 export function parseForChangesReserveConfigAndGetIxs(
   marketWithAddress: MarketWithAddress,
   reserve: Reserve | undefined,
-  reserveAddress: PublicKey,
+  reserveAddress: Address,
   reserveConfig: ReserveConfig,
-  programId: PublicKey
-) {
+  programId: Address,
+  lendingMarketOwner: TransactionSigner = noopSigner(marketWithAddress.state.lendingMarketOwner)
+): Promise<IInstruction[]> {
   const encodedConfigUpdates = RESERVE_CONFIG_UPDATER.encodeAllUpdates(reserve?.config, reserveConfig);
   encodedConfigUpdates.sort((left, right) => priorityOf(left.mode) - priorityOf(right.mode));
-  return encodedConfigUpdates.map((encodedConfigUpdate) =>
-    updateReserveConfigIx(
-      marketWithAddress.state.lendingMarketOwner,
-      marketWithAddress.address,
-      reserveAddress,
-      encodedConfigUpdate.mode,
-      encodedConfigUpdate.value,
-      programId,
-      shouldSkipValidation(encodedConfigUpdate.mode, reserve)
+  return Promise.all(
+    encodedConfigUpdates.map(async (encodedConfigUpdate) =>
+      updateReserveConfigIx(
+        lendingMarketOwner,
+        marketWithAddress.address,
+        reserveAddress,
+        encodedConfigUpdate.mode,
+        encodedConfigUpdate.value,
+        programId,
+        shouldSkipValidation(encodedConfigUpdate.mode, reserve)
+      )
     )
   );
 }
 
 export type ReserveWithAddress = {
-  address: PublicKey;
+  address: Address;
   state: Reserve;
 };
 

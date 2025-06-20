@@ -1,79 +1,92 @@
-import { AccountInfo, Connection, PublicKey } from '@solana/web3.js';
-import { LendingMarket, Obligation, Reserve } from '../idl_codegen/accounts';
-import { PROGRAM_ID } from '../idl_codegen/programId';
+import { Address, Base58EncodedBytes, GetProgramAccountsApi, Rpc } from '@solana/kit';
+import { LendingMarket, Obligation, Reserve } from '../@codegen/klend/accounts';
+import { PROGRAM_ID } from '../@codegen/klend/programId';
 import bs58 from 'bs58';
 
 export async function* getAllObligationAccounts(
-  connection: Connection
-): AsyncGenerator<[PublicKey, Obligation], void, unknown> {
+  connection: Rpc<GetProgramAccountsApi>
+): AsyncGenerator<[Address, Obligation], void, unknown> {
   // Poor-man's paging...
   for (let i = 0; i < 256; i++) {
-    const obligations = await connection.getProgramAccounts(PROGRAM_ID, {
-      filters: [
-        {
-          dataSize: Obligation.layout.span + 8,
-        },
-        {
-          memcmp: {
-            offset: 0,
-            bytes: bs58.encode(Obligation.discriminator),
+    const obligations = await connection
+      .getProgramAccounts(PROGRAM_ID, {
+        filters: [
+          {
+            dataSize: BigInt(Obligation.layout.span + 8),
           },
-        },
-        {
-          memcmp: {
-            offset: 64,
-            bytes: bs58.encode([i]), // ...via sharding by userId's first byte (just as a source of randomness)
+          {
+            memcmp: {
+              offset: 0n,
+              bytes: bs58.encode(Obligation.discriminator) as Base58EncodedBytes,
+              encoding: 'base58',
+            },
           },
-        },
-      ],
-    });
+          {
+            memcmp: {
+              offset: 64n,
+              bytes: bs58.encode([i]) as Base58EncodedBytes, // ...via sharding by userId's first byte (just as a source of randomness)
+              encoding: 'base58',
+            },
+          },
+        ],
+        encoding: 'base64',
+      })
+      .send();
     for (const obligation of obligations) {
-      yield [obligation.pubkey, Obligation.decode(obligation.account.data)];
+      yield [obligation.pubkey, Obligation.decode(Buffer.from(obligation.account.data[0], 'base64'))];
     }
   }
 }
 
 export async function* getAllReserveAccounts(
-  connection: Connection
-): AsyncGenerator<[PublicKey, Reserve, AccountInfo<Buffer>], void, unknown> {
+  rpc: Rpc<GetProgramAccountsApi>
+): AsyncGenerator<[Address, Reserve], void, unknown> {
   // due to relatively low count of reserves, we technically don't really need a generator, but let's keep it consistent within this file
-  const reserves = await connection.getProgramAccounts(PROGRAM_ID, {
-    filters: [
-      {
-        dataSize: Reserve.layout.span + 8,
-      },
-      {
-        memcmp: {
-          offset: 0,
-          bytes: bs58.encode(Reserve.discriminator),
+  const reserves = await rpc
+    .getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        {
+          dataSize: BigInt(Reserve.layout.span + 8),
         },
-      },
-    ],
-  });
+        {
+          memcmp: {
+            offset: 0n,
+            bytes: bs58.encode(Reserve.discriminator) as Base58EncodedBytes,
+            encoding: 'base58',
+          },
+        },
+      ],
+      encoding: 'base64',
+    })
+    .send();
   for (const reserve of reserves) {
-    yield [reserve.pubkey, Reserve.decode(reserve.account.data), reserve.account];
+    yield [reserve.pubkey, Reserve.decode(Buffer.from(reserve.account.data[0], 'base64'))];
   }
 }
 
 export async function* getAllLendingMarketAccounts(
-  connection: Connection,
-  programId: PublicKey = PROGRAM_ID
-): AsyncGenerator<[PublicKey, LendingMarket], void, unknown> {
+  connection: Rpc<GetProgramAccountsApi>,
+  programId: Address = PROGRAM_ID
+): AsyncGenerator<[Address, LendingMarket], void, unknown> {
   // due to relatively very low count of lending markets, we technically don't really need a generator, but let's keep it consistent within this file
-  const lendingMarkets = await connection.getProgramAccounts(programId, {
-    filters: [
-      {
-        dataSize: LendingMarket.layout.span + 8,
-      },
-      {
-        memcmp: {
-          offset: 0,
-          bytes: bs58.encode(LendingMarket.discriminator),
+  const lendingMarkets = await connection
+    .getProgramAccounts(programId, {
+      filters: [
+        {
+          dataSize: BigInt(LendingMarket.layout.span + 8),
         },
-      },
-    ],
-  });
+        {
+          memcmp: {
+            offset: 0n,
+            bytes: bs58.encode(LendingMarket.discriminator) as Base58EncodedBytes,
+            encoding: 'base58',
+          },
+        },
+      ],
+      encoding: 'base64',
+    })
+    .send();
   for (const lendingMarket of lendingMarkets) {
-    yield [lendingMarket.pubkey, LendingMarket.decode(lendingMarket.account.data)];
+    yield [lendingMarket.pubkey, LendingMarket.decode(Buffer.from(lendingMarket.account.data[0], 'base64'))];
   }
 }

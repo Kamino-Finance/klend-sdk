@@ -18,13 +18,14 @@ import {
   U64_MAX,
   uniqueAccountsWithProgramIds,
 } from '../utils';
-import { AddressLookupTableAccount, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { AddressLookupTable } from '@solana-program/address-lookup-table';
+import { Account, Address, IInstruction, none, Option, Slot, TransactionSigner } from '@solana/kit';
 import Decimal from 'decimal.js';
 import { calcMaxWithdrawCollateral, calcRepayAmountWithSlippage } from './repay_with_collateral_calcs';
 
 export type RepayWithCollIxsResponse<QuoteResponse> = {
-  ixs: TransactionInstruction[];
-  lookupTables: AddressLookupTableAccount[];
+  ixs: IInstruction[];
+  lookupTables: Account<AddressLookupTable>[];
   flashLoanInfo: FlashLoanInfo;
   swapInputs: SwapInputs;
   initialInputs: RepayWithCollInitialInputs<QuoteResponse>;
@@ -42,20 +43,21 @@ export type RepayWithCollInitialInputs<QuoteResponse> = {
    * The quote from the provided quoter
    */
   swapQuote: SwapQuote<QuoteResponse>;
-  currentSlot: number;
-  klendAccounts: Array<PublicKey>;
+  currentSlot: Slot;
+  klendAccounts: Array<Address>;
 };
 
 interface RepayWithCollSwapInputsProps<QuoteResponse> {
   kaminoMarket: KaminoMarket;
-  debtTokenMint: PublicKey;
-  collTokenMint: PublicKey;
+  debtTokenMint: Address;
+  collTokenMint: Address;
+  owner: TransactionSigner;
   obligation: KaminoObligation;
-  referrer: PublicKey;
-  currentSlot: number;
+  referrer: Option<Address>;
+  currentSlot: Slot;
   repayAmount: Decimal;
   isClosingPosition: boolean;
-  budgetAndPriorityFeeIxs?: TransactionInstruction[];
+  budgetAndPriorityFeeIxs?: IInstruction[];
   scopeRefreshConfig?: ScopePriceRefreshConfig;
   useV2Ixs: boolean;
   quoter: SwapQuoteProvider<QuoteResponse>;
@@ -71,6 +73,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
   currentSlot,
   debtTokenMint,
   kaminoMarket,
+  owner,
   obligation,
   quoter,
   referrer,
@@ -121,6 +124,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
     kaminoMarket,
     debtReserve,
     collReserve,
+    owner,
     obligation,
     referrer,
     currentSlot,
@@ -188,6 +192,7 @@ export async function getRepayWithCollIxs<QuoteResponse>({
   currentSlot,
   debtTokenMint,
   kaminoMarket,
+  owner,
   obligation,
   quoter,
   swapper,
@@ -201,6 +206,7 @@ export async function getRepayWithCollIxs<QuoteResponse>({
     currentSlot,
     debtTokenMint,
     kaminoMarket,
+    owner,
     obligation,
     quoter,
     referrer,
@@ -244,6 +250,7 @@ export async function getRepayWithCollIxs<QuoteResponse>({
         kaminoMarket,
         debtReserve,
         collReserve,
+        owner,
         obligation,
         referrer,
         currentSlot,
@@ -272,10 +279,11 @@ async function buildRepayWithCollateralIxs<QuoteResponse>(
   market: KaminoMarket,
   debtReserve: KaminoReserve,
   collReserve: KaminoReserve,
+  owner: TransactionSigner,
   obligation: KaminoObligation,
-  referrer: PublicKey,
-  currentSlot: number,
-  budgetAndPriorityFeeIxs: TransactionInstruction[] | undefined,
+  referrer: Option<Address>,
+  currentSlot: Slot,
+  budgetAndPriorityFeeIxs: IInstruction[] | undefined,
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
   swapQuoteIxs: SwapIxs<QuoteResponse>,
   isClosingPosition: boolean,
@@ -291,23 +299,23 @@ async function buildRepayWithCollateralIxs<QuoteResponse>(
     { mint: debtReserve.getLiquidityMint(), tokenProgram: debtReserve.getLiquidityTokenProgram() },
   ];
 
-  const atasAndIxs = createAtasIdempotent(obligation.state.owner, atas);
+  const atasAndIxs = await createAtasIdempotent(owner, atas);
   const [, { ata: debtTokenAta }] = atasAndIxs;
 
-  const scopeRefreshIxn = await getScopeRefreshIx(market, collReserve, debtReserve, obligation, scopeRefreshConfig);
+  const scopeRefreshIx = await getScopeRefreshIx(market, collReserve, debtReserve, obligation, scopeRefreshConfig);
 
   // 2. Flash borrow & repay the debt to repay amount needed
   const { flashBorrowIx, flashRepayIx } = getFlashLoanInstructions({
-    borrowIxIndex: budgetIxs.length + atasAndIxs.length + (scopeRefreshIxn.length > 0 ? 1 : 0),
-    walletPublicKey: obligation.state.owner,
-    lendingMarketAuthority: market.getLendingMarketAuthority(),
+    borrowIxIndex: budgetIxs.length + atasAndIxs.length + (scopeRefreshIx.length > 0 ? 1 : 0),
+    userTransferAuthority: owner,
+    lendingMarketAuthority: await market.getLendingMarketAuthority(),
     lendingMarketAddress: market.getAddress(),
     reserve: debtReserve,
     amountLamports: debtRepayAmountLamports,
     destinationAta: debtTokenAta,
     // TODO(referrals): once we support referrals, we will have to replace the placeholder args below:
-    referrerAccount: market.programId,
-    referrerTokenState: market.programId,
+    referrerAccount: none(),
+    referrerTokenState: none(),
     programId: market.programId,
   });
 
@@ -330,7 +338,7 @@ async function buildRepayWithCollateralIxs<QuoteResponse>(
       debtReserve.getLiquidityMint(),
       isClosingPosition ? U64_MAX : collWithdrawLamports.toString(),
       collReserve.getLiquidityMint(),
-      obligation.state.owner,
+      owner,
       currentSlot,
       obligation,
       useV2Ixs,
@@ -348,7 +356,7 @@ async function buildRepayWithCollateralIxs<QuoteResponse>(
       debtReserve.getLiquidityMint(),
       isClosingPosition ? U64_MAX : collWithdrawLamports.toString(),
       collReserve.getLiquidityMint(),
-      obligation.state.owner,
+      owner,
       currentSlot,
       obligation,
       undefined,
@@ -365,7 +373,7 @@ async function buildRepayWithCollateralIxs<QuoteResponse>(
   const swapInstructions = removeBudgetIxs(swapIxs);
 
   const ixs = [
-    ...scopeRefreshIxn,
+    ...scopeRefreshIx,
     ...budgetIxs,
     ...atasAndIxs.map((x) => x.createAtaIx),
     flashBorrowIx,

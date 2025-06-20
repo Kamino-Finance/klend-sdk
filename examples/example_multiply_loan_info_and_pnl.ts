@@ -1,11 +1,11 @@
-import { getConnection } from './utils/connection';
+import { getConnectionPool } from './utils/connection';
 import { KaminoObligation, ObligationStats } from '@kamino-finance/klend-sdk';
 import { JLP_MARKET } from './utils/constants';
 import { getLoan, getMarket } from './utils/helpers';
 import axios from 'axios';
-import { PublicKey } from '@solana/web3.js';
+import { address, Address } from '@solana/kit';
 
-const EXAMPLE_MULTIPLY_OBLIGATION = new PublicKey('2nRBe7wVbVK9pcDdtYCzVB7pFFsMHEWNruThoagYwfHD');
+const EXAMPLE_MULTIPLY_OBLIGATION = address('2nRBe7wVbVK9pcDdtYCzVB7pFFsMHEWNruThoagYwfHD');
 
 export interface ObligationPnlResponse {
   usd: string;
@@ -17,8 +17,8 @@ export interface ObligationPnlResponse {
 }
 
 export async function getObligationPnl(
-  marketAddress: PublicKey,
-  obligationAddress: PublicKey,
+  marketAddress: Address,
+  obligationAddress: Address,
   pnlMode?: 'current_obligation' | 'obligation_all_time'
 ) {
   const url = `https://api.kamino.finance/v2/kamino-market/${marketAddress.toString()}/obligations/${obligationAddress.toString()}/pnl/`;
@@ -40,11 +40,11 @@ export async function getObligationPnl(
 }
 
 (async () => {
-  const connection = getConnection();
+  const c = getConnectionPool();
   console.log('fetching loan:', EXAMPLE_MULTIPLY_OBLIGATION.toString(), 'in market:', JLP_MARKET.toString());
 
   const args = {
-    connection,
+    rpc: c.rpc,
     obligationPubkey: EXAMPLE_MULTIPLY_OBLIGATION,
     marketPubkey: JLP_MARKET,
   };
@@ -77,7 +77,7 @@ export async function getObligationPnl(
   // console.log(`\Loan type: ${loan.deposits.length}`);")
 
   console.log('\nBreakdown:');
-  const currentSlot = await connection.getSlot();
+  const currentSlot = await c.rpc.getSlot().send();
   // Get the deposit
   const deposit = loan.deposits.values().next().value!;
   const collReserve = market.getReserveByMint(deposit.mintAddress);

@@ -1,4 +1,4 @@
-import { BorrowRateCurve, CurvePointFields } from '../idl_codegen/types';
+import { BorrowRateCurve, CurvePointFields } from '../@codegen/klend/types';
 
 export const CURVE_POINTS_LENGTH = 11;
 

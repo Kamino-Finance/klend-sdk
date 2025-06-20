@@ -1,17 +1,17 @@
 import { getSwapCollIxs } from '@kamino-finance/klend-sdk';
-import { getConnection } from './utils/connection';
+import { getConnectionPool } from './utils/connection';
 import { MAIN_MARKET, PYUSD_MINT, USDC_MINT } from './utils/constants';
 import { getMarket } from './utils/helpers';
-import { PublicKey } from '@solana/web3.js';
 import Decimal from 'decimal.js';
 import { getJupiterQuoter, getJupiterSwapper } from './utils/jup_utils';
 import { getKeypair } from './utils/keypair';
+import { address, none } from '@solana/kit';
 
 (async () => {
-  const wallet = getKeypair();
-  const connection = getConnection();
+  const wallet = await getKeypair();
+  const c = getConnectionPool();
 
-  const market = await getMarket({ connection, marketPubkey: MAIN_MARKET });
+  const market = await getMarket({ rpc: c.rpc, marketPubkey: MAIN_MARKET });
 
   const sourceCollSwapAmount = new Decimal(2.0);
   const sourceCollTokenMint = USDC_MINT;
@@ -21,14 +21,13 @@ import { getKeypair } from './utils/keypair';
   const sourceCollTokenReserve = market.getReserveByMint(sourceCollTokenMint)!;
   const targetCollTokenReserve = market.getReserveByMint(targetCollTokenMint)!;
 
-  const obligation = (await market.getObligationByAddress(
-    new PublicKey('HjYDundFuuUjc5KF3X5bu4pFVMhqRAnJubNBxo9KnnCr')
-  ))!;
+  const obligation = (await market.getObligationByAddress(address('HjYDundFuuUjc5KF3X5bu4pFVMhqRAnJubNBxo9KnnCr')))!;
 
-  const currentSlot = await market.getConnection().getSlot();
+  const currentSlot = await c.rpc.getSlot().send();
 
   const swapCollIxsOutputs = (
     await getSwapCollIxs({
+      owner: wallet,
       market,
       obligation,
       sourceCollSwapAmount,
@@ -36,10 +35,10 @@ import { getKeypair } from './utils/keypair';
       isClosingSourceColl: false,
       targetCollTokenMint,
       newElevationGroup: 0,
-      referrer: PublicKey.default,
+      referrer: none(),
       currentSlot,
       quoter: getJupiterQuoter(slippagePct * 100, sourceCollTokenReserve, targetCollTokenReserve),
-      swapper: getJupiterSwapper(connection, wallet.publicKey),
+      swapper: getJupiterSwapper(c.rpc, wallet.address),
       useV2Ixs: true,
     })
   )[0];

@@ -1,32 +1,32 @@
-import { getConnection } from '../utils/connection';
+import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
-import { Keypair } from '@solana/web3.js';
 import {
-  buildAndSendTxn,
   getMedianSlotDurationInMsFromLastEpochs,
   KaminoManager,
   KaminoVault,
   VaultConfigField,
 } from '@kamino-finance/klend-sdk';
+import { generateKeyPairSigner } from '@solana/kit';
+import { sendAndConfirmTx } from '../utils/tx';
 
 (async () => {
-  const connection = getConnection();
-  const user = getKeypair();
+  const c = getConnectionPool();
+  const user = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
-  const kaminoManager = new KaminoManager(connection, slotDuration);
+  const kaminoManager = new KaminoManager(c.rpc, slotDuration);
   const kaminoVault = new KaminoVault(EXAMPLE_USDC_VAULT);
 
   // update the vault farm (pubkey value)
-  const farmKeypair = new Keypair(); // note this is just a pubkey for the example, in a real world scenario this needs to be a real farm
+  const farmKeypair = await generateKeyPairSigner(); // note this is just a pubkey for the example, in a real world scenario this needs to be a real farm
   const updateFarmIxs = await kaminoManager.updateVaultConfigIxs(
     kaminoVault,
     new VaultConfigField.Farm(),
-    farmKeypair.publicKey.toString()
+    farmKeypair.address.toString()
   );
 
-  await buildAndSendTxn(
-    connection,
+  await sendAndConfirmTx(
+    c,
     user,
     [updateFarmIxs.updateVaultConfigIx, ...updateFarmIxs.updateLUTIxs],
     [],
@@ -39,8 +39,8 @@ import {
 
   const updateNameIxs = await kaminoManager.updateVaultConfigIxs(kaminoVault, new VaultConfigField.Name(), vaultName);
 
-  await buildAndSendTxn(
-    connection,
+  await sendAndConfirmTx(
+    c,
     user,
     [updateNameIxs.updateVaultConfigIx, ...updateNameIxs.updateLUTIxs],
     [],

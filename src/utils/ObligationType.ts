@@ -1,5 +1,8 @@
-import { PublicKey } from '@solana/web3.js';
+import { Address, getAddressEncoder, getProgramDerivedAddress, isNone, none, Option } from '@solana/kit';
 import { KaminoMarket, KaminoObligation } from '../classes';
+import { DEFAULT_PUBLIC_KEY } from './pubkey';
+
+const addressEncoder = getAddressEncoder();
 
 export type ObligationType = VanillaObligation | MultiplyObligation | LendingObligation | LeverageObligation;
 
@@ -13,16 +16,16 @@ export enum ObligationTypeTag {
 export type InitObligationArgsModel = {
   tag: number;
   id: number;
-  seed1: PublicKey;
-  seed2: PublicKey;
+  seed1: Address;
+  seed2: Address;
 };
 
 export class VanillaObligation {
-  readonly programId: PublicKey;
+  readonly programId: Address;
   readonly id: number;
   static tag = 0;
 
-  constructor(programId: PublicKey, id?: number) {
+  constructor(programId: Address, id?: number) {
     this.programId = programId;
     this.id = id ?? 0;
   }
@@ -31,26 +34,26 @@ export class VanillaObligation {
     const initObligationArgs: InitObligationArgsModel = {
       tag: VanillaObligation.tag,
       id: this.id,
-      seed1: PublicKey.default,
-      seed2: PublicKey.default,
+      seed1: DEFAULT_PUBLIC_KEY,
+      seed2: DEFAULT_PUBLIC_KEY,
     };
 
     return initObligationArgs;
   }
 
-  toPda(market: PublicKey, user: PublicKey) {
+  toPda(market: Address, user: Address) {
     return getObligationPdaWithArgs(market, user, this.toArgs(), this.programId);
   }
 }
 
 export class MultiplyObligation {
-  readonly collToken: PublicKey;
-  readonly debtToken: PublicKey;
-  readonly programId: PublicKey;
+  readonly collToken: Address;
+  readonly debtToken: Address;
+  readonly programId: Address;
   readonly id: number;
   static tag = 1;
 
-  constructor(collToken: PublicKey, debtToken: PublicKey, programId: PublicKey, id?: number) {
+  constructor(collToken: Address, debtToken: Address, programId: Address, id?: number) {
     this.collToken = collToken;
     this.debtToken = debtToken;
     this.programId = programId;
@@ -68,19 +71,19 @@ export class MultiplyObligation {
     return initObligationArgs;
   }
 
-  toPda(market: PublicKey, user: PublicKey) {
+  toPda(market: Address, user: Address) {
     return getObligationPdaWithArgs(market, user, this.toArgs(), this.programId);
   }
 }
 
 export class LeverageObligation {
-  readonly collToken: PublicKey;
-  readonly debtToken: PublicKey;
-  readonly programId: PublicKey;
+  readonly collToken: Address;
+  readonly debtToken: Address;
+  readonly programId: Address;
   readonly id: number;
   static tag = 3;
 
-  constructor(collToken: PublicKey, debtToken: PublicKey, programId: PublicKey, id?: number) {
+  constructor(collToken: Address, debtToken: Address, programId: Address, id?: number) {
     this.collToken = collToken;
     this.debtToken = debtToken;
     this.programId = programId;
@@ -98,18 +101,18 @@ export class LeverageObligation {
     return initObligationArgs;
   }
 
-  toPda(market: PublicKey, user: PublicKey) {
+  toPda(market: Address, user: Address) {
     return getObligationPdaWithArgs(market, user, this.toArgs(), this.programId);
   }
 }
 
 export class LendingObligation {
-  readonly token: PublicKey;
-  readonly programId: PublicKey;
+  readonly token: Address;
+  readonly programId: Address;
   readonly id: number;
   static tag = 2;
 
-  constructor(token: PublicKey, programId: PublicKey, id?: number) {
+  constructor(token: Address, programId: Address, id?: number) {
     this.token = token;
     this.programId = programId;
     this.id = id ?? 0;
@@ -126,47 +129,65 @@ export class LendingObligation {
     return initObligationArgs;
   }
 
-  toPda(market: PublicKey, user: PublicKey) {
+  toPda(market: Address, user: Address) {
     return getObligationPdaWithArgs(market, user, this.toArgs(), this.programId);
   }
 }
 
-export function getObligationPdaWithArgs(
-  market: PublicKey,
-  user: PublicKey,
+export async function getObligationPdaWithArgs(
+  market: Address,
+  user: Address,
   args: InitObligationArgsModel,
-  programId: PublicKey
-) {
-  const seed = [
+  programId: Address
+): Promise<Address> {
+  const seeds = [
     Buffer.from([args.tag]),
     Buffer.from([args.id]),
-    user.toBuffer(),
-    market.toBuffer(),
-    args.seed1.toBuffer(),
-    args.seed2.toBuffer(),
+    addressEncoder.encode(user),
+    addressEncoder.encode(market),
+    addressEncoder.encode(args.seed1),
+    addressEncoder.encode(args.seed2),
   ];
-  const [obligationAddress, _obligationAddressBump] = PublicKey.findProgramAddressSync(seed, programId);
+  const [obligationAddress, _obligationAddressBump] = await getProgramDerivedAddress({
+    seeds,
+    programAddress: programId,
+  });
   return obligationAddress;
 }
 
 export function getObligationType(
   kaminoMarket: KaminoMarket,
   obligationTag: ObligationTypeTag,
-  mintAddress1: PublicKey = PublicKey.default,
-  mintAddress2: PublicKey = PublicKey.default
+  mintAddress1: Option<Address> = none(),
+  mintAddress2: Option<Address> = none()
 ): ObligationType {
   switch (obligationTag) {
     case VanillaObligation.tag: {
       return new VanillaObligation(kaminoMarket.programId);
     }
     case MultiplyObligation.tag: {
-      return new MultiplyObligation(mintAddress1, mintAddress2, kaminoMarket.programId);
+      if (isNone(mintAddress1)) {
+        throw new Error(`Multiply obligation PDA requires mint address 1`);
+      }
+      if (isNone(mintAddress2)) {
+        throw new Error(`Multiply obligation PDA requires mint address 2`);
+      }
+      return new MultiplyObligation(mintAddress1.value, mintAddress2.value, kaminoMarket.programId);
     }
     case LeverageObligation.tag: {
-      return new LeverageObligation(mintAddress1, mintAddress2, kaminoMarket.programId);
+      if (isNone(mintAddress1)) {
+        throw new Error(`Leverage obligation PDA requires mint address 1`);
+      }
+      if (isNone(mintAddress2)) {
+        throw new Error(`Leverage obligation PDA requires mint address 2`);
+      }
+      return new LeverageObligation(mintAddress1.value, mintAddress2.value, kaminoMarket.programId);
     }
     case LendingObligation.tag: {
-      return new LendingObligation(mintAddress1, kaminoMarket.programId);
+      if (isNone(mintAddress1)) {
+        throw new Error(`Lending obligation PDA requires mint address 1`);
+      }
+      return new LendingObligation(mintAddress1.value, kaminoMarket.programId);
     }
     default: {
       throw new Error('Invalid obligation type');

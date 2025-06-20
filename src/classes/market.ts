@@ -1,77 +1,104 @@
-import { AccountInfo, Connection, PublicKey } from '@solana/web3.js';
-import { KaminoObligation } from './obligation';
-import { KaminoReserve } from './reserve';
-import { LendingMarket, Obligation, UserMetadata, ReferrerTokenState, Reserve } from '../idl_codegen/accounts';
 import {
+  Address,
+  address,
+  Base58EncodedBytes,
+  Commitment,
+  GetAccountInfoApi,
+  getAddressEncoder,
+  GetBalanceApi,
+  GetMinimumBalanceForRentExemptionApi,
+  GetMultipleAccountsApi,
+  GetProgramAccountsApi,
+  GetProgramAccountsDatasizeFilter,
+  GetProgramAccountsMemcmpFilter,
+  GetSlotApi,
+  GetTokenAccountBalanceApi,
+  Rpc,
+  Slot,
+} from '@solana/kit';
+import { KaminoObligation } from './obligation';
+import { KaminoReserve, KaminoReserveRpcApi } from './reserve';
+import { LendingMarket, Obligation, ReferrerTokenState, Reserve, UserMetadata } from '../@codegen/klend/accounts';
+import {
+  cacheOrGetPythPrices,
+  cacheOrGetScopePrice,
+  cacheOrGetSwitchboardPrice,
+  CandidatePrice,
+  DEFAULT_PUBLIC_KEY,
+  DEPOSITS_LIMIT,
+  getAllOracleAccounts,
+  getProgramAccounts,
+  getTokenOracleData,
+  isNotNullPubkey,
   lendingMarketAuthPda,
+  LendingObligation,
+  LeverageObligation,
+  MultiplyObligation,
   ObligationType,
+  PythPrices,
   referrerTokenStatePda,
   userMetadataPda,
-  getTokenOracleData,
   VanillaObligation,
-  LendingObligation,
-  MultiplyObligation,
-  LeverageObligation,
-  isNotNullPubkey,
-  getAllOracleAccounts,
-  PythPrices,
-  cacheOrGetScopePrice,
-  cacheOrGetPythPrices,
-  cacheOrGetSwitchboardPrice,
-  PubkeyHashMap,
-  CandidatePrice,
-  PublicKeySet,
-  DEPOSITS_LIMIT,
 } from '../utils';
 import base58 from 'bs58';
-import { BN } from '@coral-xyz/anchor';
+import bs58 from 'bs58';
+import BN from 'bn.js';
 import Decimal from 'decimal.js';
 import { FarmState } from '@kamino-finance/farms-sdk';
-import { PROGRAM_ID } from '../idl_codegen/programId';
-import bs58 from 'bs58';
-import { OraclePrices, Scope, U16_MAX } from '@kamino-finance/scope-sdk';
+import { PROGRAM_ID } from '../@codegen/klend/programId';
+import { Scope, U16_MAX } from '@kamino-finance/scope-sdk';
+import { OraclePrices } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts/OraclePrices';
 import { Fraction } from './fraction';
 import { chunks, KaminoPrices, MintToPriceMap } from '@kamino-finance/kliquidity-sdk';
 import { parseTokenSymbol, parseZeroPaddedUtf8 } from './utils';
-import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
-import { ObligationZP } from '../idl_codegen/zero_padding';
-import { getProgramAccounts } from '../utils';
+import { ObligationZP } from '../@codegen/klend/zero_padding';
 import { checkDefined } from '../utils/validations';
+import { Buffer } from 'buffer';
+
+export type KaminoMarketRpcApi = GetAccountInfoApi &
+  GetMultipleAccountsApi &
+  GetProgramAccountsApi &
+  GetSlotApi &
+  GetMinimumBalanceForRentExemptionApi &
+  GetTokenAccountBalanceApi &
+  GetBalanceApi;
+
+const addressEncoder = getAddressEncoder();
 
 export interface ReserveRewardInfo {
   rewardsPerSecond: Decimal; // not lamport
   rewardsRemaining: Decimal; // not lamport
   rewardApr: Decimal;
-  rewardMint: PublicKey;
+  rewardMint: Address;
   totalInvestmentUsd: Decimal;
   rewardPrice: number;
 }
 
 export class KaminoMarket {
-  private readonly connection: Connection;
+  private readonly rpc: Rpc<KaminoMarketRpcApi>;
 
-  readonly address: string;
+  readonly address: Address;
 
   state: LendingMarket;
 
-  reserves: Map<PublicKey, KaminoReserve>;
+  reserves: Map<Address, KaminoReserve>;
 
-  reservesActive: Map<PublicKey, KaminoReserve>;
+  reservesActive: Map<Address, KaminoReserve>;
 
-  readonly programId: PublicKey;
+  readonly programId: Address;
 
   private readonly recentSlotDurationMs: number;
 
   private constructor(
-    connection: Connection,
+    rpc: Rpc<KaminoMarketRpcApi>,
     state: LendingMarket,
-    marketAddress: string,
-    reserves: Map<PublicKey, KaminoReserve>,
+    marketAddress: Address,
+    reserves: Map<Address, KaminoReserve>,
     recentSlotDurationMs: number,
-    programId: PublicKey = PROGRAM_ID
+    programId: Address = PROGRAM_ID
   ) {
     this.address = marketAddress;
-    this.connection = connection;
+    this.rpc = rpc;
     this.state = state;
     this.reserves = reserves;
     this.reservesActive = getReservesActive(this.reserves);
@@ -81,22 +108,20 @@ export class KaminoMarket {
 
   /**
    * Load a new market with all of its associated reserves
-   * @param connection
+   * @param rpc
    * @param marketAddress
    * @param recentSlotDurationMs
    * @param programId
    * @param withReserves
-   * @param setupLocalTest
-   * @param withReserves
    */
   static async load(
-    connection: Connection,
-    marketAddress: PublicKey,
+    rpc: Rpc<KaminoMarketRpcApi>,
+    marketAddress: Address,
     recentSlotDurationMs: number,
-    programId: PublicKey = PROGRAM_ID,
+    programId: Address = PROGRAM_ID,
     withReserves: boolean = true
   ) {
-    const market = await LendingMarket.fetch(connection, marketAddress, programId);
+    const market = await LendingMarket.fetch(rpc, marketAddress, programId);
 
     if (market === null) {
       return null;
@@ -107,41 +132,36 @@ export class KaminoMarket {
     }
 
     const reserves = withReserves
-      ? await getReservesForMarket(marketAddress, connection, programId, recentSlotDurationMs)
-      : new Map<PublicKey, KaminoReserve>();
+      ? await getReservesForMarket(marketAddress, rpc, programId, recentSlotDurationMs)
+      : new Map<Address, KaminoReserve>();
 
-    return new KaminoMarket(connection, market, marketAddress.toString(), reserves, recentSlotDurationMs, programId);
+    return new KaminoMarket(rpc, market, marketAddress, reserves, recentSlotDurationMs, programId);
   }
 
   static loadWithReserves(
-    connection: Connection,
+    connection: Rpc<KaminoMarketRpcApi>,
     market: LendingMarket,
-    reserves: Map<PublicKey, KaminoReserve>,
-    marketAddress: PublicKey,
+    reserves: Map<Address, KaminoReserve>,
+    marketAddress: Address,
     recentSlotDurationMs: number,
-    programId: PublicKey = PROGRAM_ID
+    programId: Address = PROGRAM_ID
   ) {
-    return new KaminoMarket(connection, market, marketAddress.toString(), reserves, recentSlotDurationMs, programId);
+    return new KaminoMarket(connection, market, marketAddress, reserves, recentSlotDurationMs, programId);
   }
 
   async reload(): Promise<void> {
-    const market = await LendingMarket.fetch(this.connection, this.getAddress(), this.programId);
+    const market = await LendingMarket.fetch(this.rpc, this.getAddress(), this.programId);
     if (market === null) {
       return;
     }
 
     this.state = market;
-    this.reserves = await getReservesForMarket(
-      this.getAddress(),
-      this.connection,
-      this.programId,
-      this.recentSlotDurationMs
-    );
+    this.reserves = await getReservesForMarket(this.getAddress(), this.rpc, this.programId, this.recentSlotDurationMs);
     this.reservesActive = getReservesActive(this.reserves);
   }
 
-  async reloadSingleReserve(reservePk: PublicKey, accountData?: AccountInfo<Buffer>): Promise<void> {
-    const reserve = await getSingleReserve(reservePk, this.connection, this.recentSlotDurationMs, accountData);
+  async reloadSingleReserve(reservePk: Address, reserveData?: Reserve): Promise<void> {
+    const reserve = await getSingleReserve(reservePk, this.rpc, this.recentSlotDurationMs, reserveData);
     this.reserves.set(reservePk, reserve);
     this.reservesActive.set(reservePk, reserve);
   }
@@ -150,8 +170,8 @@ export class KaminoMarket {
    * Get the address of this market
    * @return market address public key
    */
-  getAddress(): PublicKey {
-    return new PublicKey(this.address);
+  getAddress(): Address {
+    return this.address;
   }
 
   /**
@@ -190,28 +210,20 @@ export class KaminoMarket {
    * Get the authority PDA of this market
    * @return market authority public key
    */
-  getLendingMarketAuthority(): PublicKey {
-    return lendingMarketAuthPda(this.getAddress(), this.programId)[0];
+  async getLendingMarketAuthority(): Promise<Address> {
+    return (await lendingMarketAuthPda(this.getAddress(), this.programId))[0];
   }
 
   getName(): string {
     return parseZeroPaddedUtf8(this.state.name);
   }
 
-  async getObligationDepositByWallet(
-    owner: PublicKey,
-    mint: PublicKey,
-    obligationType: ObligationType
-  ): Promise<Decimal> {
+  async getObligationDepositByWallet(owner: Address, mint: Address, obligationType: ObligationType): Promise<Decimal> {
     const obligation = await this.getObligationByWallet(owner, obligationType);
     return obligation?.getDepositByMint(mint)?.amount ?? new Decimal(0);
   }
 
-  async getObligationBorrowByWallet(
-    owner: PublicKey,
-    mint: PublicKey,
-    obligationType: ObligationType
-  ): Promise<Decimal> {
+  async getObligationBorrowByWallet(owner: Address, mint: Address, obligationType: ObligationType): Promise<Decimal> {
     const obligation = await this.getObligationByWallet(owner, obligationType);
     return obligation?.getBorrowByMint(mint)?.amount ?? new Decimal(0);
   }
@@ -232,7 +244,7 @@ export class KaminoMarket {
     return tvl;
   }
 
-  getMaxLeverageForPair(collTokenMint: PublicKey, debtTokenMint: PublicKey): number {
+  getMaxLeverageForPair(collTokenMint: Address, debtTokenMint: Address): number {
     const { maxLtv: maxCollateralLtv, borrowFactor } = this.getMaxAndLiquidationLtvAndBorrowFactorForPair(
       collTokenMint,
       debtTokenMint
@@ -255,13 +267,13 @@ export class KaminoMarket {
         item !== 0 &&
         this.state.elevationGroups[item - 1].allowNewLoans !== 0 &&
         collReserve.state.config.borrowLimitAgainstThisCollateralInElevationGroup[item - 1].gt(new BN(0)) &&
-        this.state.elevationGroups[item - 1].debtReserve.equals(debtReserve.address)
+        this.state.elevationGroups[item - 1].debtReserve === debtReserve.address
     );
   }
 
   getMaxAndLiquidationLtvAndBorrowFactorForPair(
-    collTokenMint: PublicKey,
-    debtTokenMint: PublicKey
+    collTokenMint: Address,
+    debtTokenMint: Address
   ): { maxLtv: number; liquidationLtv: number; borrowFactor: number } {
     const collReserve: KaminoReserve | undefined = this.getReserveByMint(collTokenMint);
     const debtReserve: KaminoReserve | undefined = this.getReserveByMint(debtTokenMint);
@@ -352,12 +364,12 @@ export class KaminoMarket {
       .reduce((acc, _obligation) => acc + 1, 0);
   }
 
-  async getObligationByWallet(publicKey: PublicKey, obligationType: ObligationType): Promise<KaminoObligation | null> {
+  async getObligationByWallet(Address: Address, obligationType: ObligationType): Promise<KaminoObligation | null> {
     const { address } = this;
     if (!address) {
       throw Error('Market must be initialized to call initialize.');
     }
-    const obligationAddress = obligationType.toPda(this.getAddress(), publicKey);
+    const obligationAddress = await obligationType.toPda(this.getAddress(), Address);
     return KaminoObligation.load(this, obligationAddress);
   }
 
@@ -367,7 +379,7 @@ export class KaminoMarket {
   async getMaxLeverageBorrowableAmount(
     collReserve: KaminoReserve,
     debtReserve: KaminoReserve,
-    slot: number,
+    slot: Slot,
     requestElevationGroup: boolean,
     obligation?: KaminoObligation
   ): Promise<Decimal> {
@@ -378,30 +390,31 @@ export class KaminoMarket {
 
   async loadReserves() {
     const addresses = [...this.reserves.keys()];
-    const reserveAccounts = await this.connection.getMultipleAccountsInfo(addresses, 'processed');
-    const deserializedReserves = reserveAccounts.map((reserve, i) => {
+    const reserveAccounts = await this.rpc
+      .getMultipleAccounts(addresses, { commitment: 'processed', encoding: 'base64' })
+      .send();
+    const deserializedReserves = reserveAccounts.value.map((reserve, i) => {
       if (reserve === null) {
         // maybe reuse old here
-        throw new Error(`Reserve account ${addresses[i].toBase58()} was not found`);
+        throw new Error(`Reserve account ${addresses[i]} was not found`);
       }
-      const reserveAccount = Reserve.decode(reserve.data);
+      const reserveAccount = Reserve.decode(Buffer.from(reserve.data[0], 'base64'));
       if (!reserveAccount) {
-        throw Error(`Could not parse reserve ${addresses[i].toBase58()}`);
+        throw Error(`Could not parse reserve ${addresses[i]}`);
       }
       return reserveAccount;
     });
-    const reservesAndOracles = await getTokenOracleData(this.connection, deserializedReserves);
-    const kaminoReserves = new PubkeyHashMap<PublicKey, KaminoReserve>();
+    const reservesAndOracles = await getTokenOracleData(this.getRpc(), deserializedReserves);
+    const kaminoReserves = new Map<Address, KaminoReserve>();
     reservesAndOracles.forEach(([reserve, oracle], index) => {
       if (!oracle) {
         throw Error(`Could not find oracle for ${parseTokenSymbol(reserve.config.tokenInfo.name)} reserve`);
       }
       const kaminoReserve = KaminoReserve.initialize(
-        reserveAccounts[index]!,
         addresses[index],
         reserve,
         oracle,
-        this.connection,
+        this.rpc,
         this.recentSlotDurationMs
       );
       kaminoReserves.set(kaminoReserve.address, kaminoReserve);
@@ -420,7 +433,7 @@ export class KaminoMarket {
     this.reservesActive = getReservesActive(this.reserves);
   }
 
-  getReserveByAddress(address: PublicKey) {
+  getReserveByAddress(address: Address) {
     return this.reserves.get(address);
   }
 
@@ -428,13 +441,13 @@ export class KaminoMarket {
    * Returns this market's reserve of the given address, or throws an error (including the given description) if such
    * reserve does not exist.
    */
-  getExistingReserveByAddress(address: PublicKey, description: string = 'Requested'): KaminoReserve {
+  getExistingReserveByAddress(address: Address, description: string = 'Requested'): KaminoReserve {
     return checkDefined(this.getReserveByAddress(address), `${description} reserve ${address} not found`);
   }
 
-  getReserveByMint(address: PublicKey): KaminoReserve | undefined {
+  getReserveByMint(address: Address): KaminoReserve | undefined {
     for (const reserve of this.reserves.values()) {
-      if (reserve.getLiquidityMint().equals(address)) {
+      if (reserve.getLiquidityMint() === address) {
         return reserve;
       }
     }
@@ -445,7 +458,7 @@ export class KaminoMarket {
    * Returns this market's reserve of the given mint address, or throws an error (including the given description) if
    * such reserve does not exist.
    */
-  getExistingReserveByMint(address: PublicKey, description: string = 'Requested'): KaminoReserve {
+  getExistingReserveByMint(address: Address, description: string = 'Requested'): KaminoReserve {
     return checkDefined(this.getReserveByMint(address), `${description} reserve with mint ${address} not found`);
   }
 
@@ -471,8 +484,8 @@ export class KaminoMarket {
   }
 
   async getReserveFarmInfo(
-    mint: PublicKey,
-    getRewardPrice: (mint: PublicKey) => Promise<number>
+    mint: Address,
+    getRewardPrice: (mint: Address) => Promise<number>
   ): Promise<{ borrowingRewards: ReserveRewardInfo; depositingRewards: ReserveRewardInfo }> {
     const { address } = this;
     if (!address) {
@@ -503,7 +516,7 @@ export class KaminoMarket {
         rewardsPerSecond: new Decimal(0),
         rewardsRemaining: new Decimal(0),
         rewardApr: new Decimal(0),
-        rewardMint: PublicKey.default,
+        rewardMint: DEFAULT_PUBLIC_KEY,
         totalInvestmentUsd: new Decimal(0),
         rewardPrice: 0,
       },
@@ -511,7 +524,7 @@ export class KaminoMarket {
         rewardsPerSecond: new Decimal(0),
         rewardsRemaining: new Decimal(0),
         rewardApr: new Decimal(0),
-        rewardMint: PublicKey.default,
+        rewardMint: DEFAULT_PUBLIC_KEY,
         totalInvestmentUsd: new Decimal(0),
         rewardPrice: 0,
       },
@@ -533,11 +546,11 @@ export class KaminoMarket {
   }
 
   async getRewardInfoForFarm(
-    farmAddress: PublicKey,
+    farmAddress: Address,
     totalInvestmentUsd: Decimal,
-    getRewardPrice: (mint: PublicKey) => Promise<number>
+    getRewardPrice: (mint: Address) => Promise<number>
   ): Promise<ReserveRewardInfo> {
-    const farmState = await FarmState.fetch(this.connection, farmAddress);
+    const farmState = await FarmState.fetch(this.getRpc(), farmAddress);
     if (!farmState) {
       throw Error(`Could not parse farm state. ${farmAddress}`);
     }
@@ -584,14 +597,15 @@ export class KaminoMarket {
    * @param tag
    */
   async getAllObligationsForMarket(tag?: number): Promise<KaminoObligation[]> {
-    const filters = [
+    const filters: (GetProgramAccountsDatasizeFilter | GetProgramAccountsMemcmpFilter)[] = [
       {
-        dataSize: Obligation.layout.span + 8,
+        dataSize: BigInt(Obligation.layout.span + 8),
       },
       {
         memcmp: {
-          offset: 32,
-          bytes: this.address,
+          offset: 32n,
+          bytes: this.address.toString() as Base58EncodedBytes,
+          encoding: 'base58',
         },
       },
     ];
@@ -599,30 +613,33 @@ export class KaminoMarket {
     if (tag !== undefined) {
       filters.push({
         memcmp: {
-          offset: 8,
-          bytes: base58.encode(new BN(tag).toBuffer()),
+          offset: 8n,
+          bytes: base58.encode(new BN(tag).toBuffer()) as Base58EncodedBytes,
+          encoding: 'base58',
         },
       });
     }
 
-    const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
-    const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
+    const collateralExchangeRates = new Map<Address, Decimal>();
+    const cumulativeBorrowRates = new Map<Address, Decimal>();
 
     const [slot, obligations] = await Promise.all([
-      this.connection.getSlot(),
-      getProgramAccounts(this.connection, this.programId, ObligationZP.layout.span + 8, {
-        commitment: this.connection.commitment ?? 'processed',
+      this.rpc.getSlot().send(),
+      getProgramAccounts(
+        this.rpc,
+        this.programId,
+        ObligationZP.layout.span + 8,
         filters,
-        dataSlice: { offset: 0, length: ObligationZP.layout.span + 8 }, // truncate the padding
-      }),
+        { offset: 0, length: ObligationZP.layout.span + 8 } // truncate the padding
+      ),
     ]);
 
     return obligations.map((obligation) => {
-      if (obligation.account === null) {
+      if (obligation.data === null) {
         throw new Error('Invalid account');
       }
 
-      const obligationAccount = ObligationZP.decode(obligation.account.data);
+      const obligationAccount = ObligationZP.decode(obligation.data);
       if (!obligationAccount) {
         throw Error('Could not parse obligation.');
       }
@@ -636,7 +653,7 @@ export class KaminoMarket {
       );
       return new KaminoObligation(
         this,
-        obligation.pubkey,
+        obligation.address,
         obligationAccount,
         collateralExchangeRates,
         cumulativeBorrowRates
@@ -654,14 +671,15 @@ export class KaminoMarket {
    * }
    */
   async *batchGetAllObligationsForMarket(tag?: number): AsyncGenerator<KaminoObligation[], void, unknown> {
-    const filters = [
+    const filters: (GetProgramAccountsDatasizeFilter | GetProgramAccountsMemcmpFilter)[] = [
       {
-        dataSize: Obligation.layout.span + 8,
+        dataSize: BigInt(Obligation.layout.span + 8),
       },
       {
         memcmp: {
-          offset: 32,
-          bytes: this.address,
+          offset: 32n,
+          bytes: this.address.toString() as Base58EncodedBytes,
+          encoding: 'base58',
         },
       },
     ];
@@ -669,37 +687,41 @@ export class KaminoMarket {
     if (tag !== undefined) {
       filters.push({
         memcmp: {
-          offset: 8,
-          bytes: base58.encode(new BN(tag).toBuffer()),
+          offset: 8n,
+          bytes: base58.encode(new BN(tag).toBuffer()) as Base58EncodedBytes,
+          encoding: 'base58',
         },
       });
     }
 
-    const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
-    const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
+    const collateralExchangeRates = new Map<Address, Decimal>();
+    const cumulativeBorrowRates = new Map<Address, Decimal>();
 
     const [obligationPubkeys, slot] = await Promise.all([
-      this.connection.getProgramAccounts(this.programId, {
-        filters,
-        dataSlice: { offset: 0, length: 0 },
-      }),
-      this.connection.getSlot(),
+      this.rpc
+        .getProgramAccounts(this.programId, {
+          filters,
+          encoding: 'base64',
+          dataSlice: { offset: 0, length: 0 },
+        })
+        .send(),
+      this.rpc.getSlot().send(),
     ]);
 
     for (const batch of chunks(
       obligationPubkeys.map((x) => x.pubkey),
       100
     )) {
-      const obligationAccounts = await this.connection.getMultipleAccountsInfo(batch);
+      const obligationAccounts = await this.rpc.getMultipleAccounts(batch, { encoding: 'base64' }).send();
       const obligationsBatch: KaminoObligation[] = [];
-      for (let i = 0; i < obligationAccounts.length; i++) {
-        const obligation = obligationAccounts[i];
+      for (let i = 0; i < obligationAccounts.value.length; i++) {
+        const obligation = obligationAccounts.value[i];
         const pubkey = batch[i];
         if (obligation === null) {
           continue;
         }
 
-        const obligationAccount = Obligation.decode(obligation.data);
+        const obligationAccount = Obligation.decode(Buffer.from(obligation.data[0], 'base64'));
 
         if (!obligationAccount) {
           throw Error(`Could not decode obligation ${pubkey.toString()}`);
@@ -720,41 +742,46 @@ export class KaminoMarket {
     }
   }
 
-  async getAllObligationsByTag(tag: number, market: PublicKey) {
+  async getAllObligationsByTag(tag: number, market: Address) {
     const [slot, obligations] = await Promise.all([
-      this.connection.getSlot(),
-      this.connection.getProgramAccounts(this.programId, {
-        filters: [
-          {
-            dataSize: Obligation.layout.span + 8,
-          },
-          {
-            memcmp: {
-              offset: 8,
-              bytes: base58.encode(new BN(tag).toBuffer()),
+      this.rpc.getSlot().send(),
+      this.rpc
+        .getProgramAccounts(this.programId, {
+          filters: [
+            {
+              dataSize: BigInt(Obligation.layout.span + 8),
             },
-          },
-          {
-            memcmp: {
-              offset: 32,
-              bytes: market.toBase58(),
+            {
+              memcmp: {
+                offset: 8n,
+                bytes: base58.encode(new BN(tag).toBuffer()) as Base58EncodedBytes,
+                encoding: 'base58',
+              },
             },
-          },
-        ],
-      }),
+            {
+              memcmp: {
+                offset: 32n,
+                bytes: market.toString() as Base58EncodedBytes,
+                encoding: 'base58',
+              },
+            },
+          ],
+          encoding: 'base64',
+        })
+        .send(),
     ]);
-    const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
-    const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
+    const collateralExchangeRates = new Map<Address, Decimal>();
+    const cumulativeBorrowRates = new Map<Address, Decimal>();
 
     return obligations.map((obligation) => {
       if (obligation.account === null) {
         throw new Error('Invalid account');
       }
-      if (!obligation.account.owner.equals(this.programId)) {
+      if (obligation.account.owner !== this.programId) {
         throw new Error("account doesn't belong to this program");
       }
 
-      const obligationAccount = Obligation.decode(obligation.account.data);
+      const obligationAccount = Obligation.decode(Buffer.from(obligation.account.data[0], 'base64'));
 
       if (!obligationAccount) {
         throw Error('Could not parse obligation.');
@@ -778,44 +805,49 @@ export class KaminoMarket {
     });
   }
 
-  async getAllObligationsByDepositedReserve(reserve: PublicKey) {
+  async getAllObligationsByDepositedReserve(reserve: Address) {
     const finalObligations: KaminoObligation[] = [];
     for (let i = 0; i < DEPOSITS_LIMIT; i++) {
       const [slot, obligations] = await Promise.all([
-        this.connection.getSlot(),
-        this.connection.getProgramAccounts(this.programId, {
-          filters: [
-            {
-              dataSize: Obligation.layout.span + 8,
-            },
-            {
-              memcmp: {
-                offset: 96 + 136 * i,
-                bytes: reserve.toBase58(),
+        this.rpc.getSlot().send(),
+        this.rpc
+          .getProgramAccounts(this.programId, {
+            filters: [
+              {
+                dataSize: BigInt(Obligation.layout.span + 8),
               },
-            },
-            {
-              memcmp: {
-                offset: 32,
-                bytes: this.address,
+              {
+                memcmp: {
+                  offset: 96n + 136n * BigInt(i),
+                  bytes: reserve.toString() as Base58EncodedBytes,
+                  encoding: 'base58',
+                },
               },
-            },
-          ],
-        }),
+              {
+                memcmp: {
+                  offset: 32n,
+                  bytes: this.address.toString() as Base58EncodedBytes,
+                  encoding: 'base58',
+                },
+              },
+            ],
+            encoding: 'base64',
+          })
+          .send(),
       ]);
 
-      const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
-      const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
+      const collateralExchangeRates = new Map<Address, Decimal>();
+      const cumulativeBorrowRates = new Map<Address, Decimal>();
 
       const obligationsBatch = obligations.map((obligation) => {
         if (obligation.account === null) {
           throw new Error('Invalid account');
         }
-        if (!obligation.account.owner.equals(this.programId)) {
+        if (obligation.account.owner !== this.programId) {
           throw new Error("account doesn't belong to this program");
         }
 
-        const obligationAccount = Obligation.decode(obligation.account.data);
+        const obligationAccount = Obligation.decode(Buffer.from(obligation.account.data[0], 'base64'));
 
         if (!obligationAccount) {
           throw Error('Could not parse obligation.');
@@ -842,48 +874,51 @@ export class KaminoMarket {
     return finalObligations;
   }
 
-  async getAllUserObligations(user: PublicKey, commitment = this.connection.commitment): Promise<KaminoObligation[]> {
+  async getAllUserObligations(user: Address, commitment: Commitment = 'processed'): Promise<KaminoObligation[]> {
     const [currentSlot, obligations] = await Promise.all([
-      this.connection.getSlot(),
-      this.connection.getProgramAccounts(this.programId, {
-        filters: [
-          {
-            dataSize: Obligation.layout.span + 8,
-          },
-          {
-            memcmp: {
-              offset: 0,
-              bytes: bs58.encode(Obligation.discriminator),
+      this.rpc.getSlot().send(),
+      this.rpc
+        .getProgramAccounts(this.programId, {
+          filters: [
+            {
+              dataSize: BigInt(Obligation.layout.span + 8),
             },
-          },
-          {
-            memcmp: {
-              offset: 64,
-              bytes: user.toBase58(),
+            {
+              memcmp: {
+                offset: 0n,
+                bytes: bs58.encode(Obligation.discriminator) as Base58EncodedBytes,
+                encoding: 'base58',
+              },
             },
-          },
-          {
-            memcmp: {
-              offset: 32,
-              bytes: this.address,
+            {
+              memcmp: {
+                offset: 64n,
+                bytes: user.toString() as Base58EncodedBytes,
+                encoding: 'base58',
+              },
             },
-          },
-        ],
-        commitment,
-      }),
+            {
+              memcmp: {
+                offset: 32n,
+                bytes: this.address.toString() as Base58EncodedBytes,
+                encoding: 'base58',
+              },
+            },
+          ],
+          encoding: 'base64',
+          commitment,
+        })
+        .send(),
     ]);
 
-    const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
-    const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
+    const collateralExchangeRates = new Map<Address, Decimal>();
+    const cumulativeBorrowRates = new Map<Address, Decimal>();
     return obligations.map((obligation) => {
-      if (obligation.account === null) {
-        throw new Error('Invalid account');
-      }
-      if (!obligation.account.owner.equals(this.programId)) {
+      if (obligation.account.owner !== this.programId) {
         throw new Error("account doesn't belong to this program");
       }
 
-      const obligationAccount = Obligation.decode(obligation.account.data);
+      const obligationAccount = Obligation.decode(Buffer.from(obligation.account.data[0], 'base64'));
 
       if (!obligationAccount) {
         throw Error('Could not parse obligation.');
@@ -906,41 +941,41 @@ export class KaminoMarket {
     });
   }
 
-  async getAllUserObligationsForReserve(user: PublicKey, reserve: PublicKey): Promise<KaminoObligation[]> {
-    const obligationAddresses: PublicKey[] = [];
-    obligationAddresses.push(new VanillaObligation(this.programId).toPda(this.getAddress(), user));
-    const targetReserve = new PubkeyHashMap<PublicKey, KaminoReserve>(Array.from(this.reserves.entries())).get(reserve);
+  async getAllUserObligationsForReserve(user: Address, reserve: Address): Promise<KaminoObligation[]> {
+    const obligationAddresses: Address[] = [];
+    obligationAddresses.push(await new VanillaObligation(this.programId).toPda(this.getAddress(), user));
+    const targetReserve = new Map<Address, KaminoReserve>(Array.from(this.reserves.entries())).get(reserve);
     if (!targetReserve) {
       throw Error('Could not find reserve.');
     }
     for (const [key, kaminoReserve] of this.reserves) {
-      if (targetReserve.address.equals(key)) {
+      if (targetReserve.address === key) {
         // skip target reserve
         continue;
       }
       obligationAddresses.push(
-        new MultiplyObligation(
+        await new MultiplyObligation(
           targetReserve.getLiquidityMint(),
           kaminoReserve.getLiquidityMint(),
           this.programId
         ).toPda(this.getAddress(), user)
       );
       obligationAddresses.push(
-        new MultiplyObligation(
+        await new MultiplyObligation(
           kaminoReserve.getLiquidityMint(),
           targetReserve.getLiquidityMint(),
           this.programId
         ).toPda(this.getAddress(), user)
       );
       obligationAddresses.push(
-        new LeverageObligation(
+        await new LeverageObligation(
           targetReserve.getLiquidityMint(),
           kaminoReserve.getLiquidityMint(),
           this.programId
         ).toPda(this.getAddress(), user)
       );
       obligationAddresses.push(
-        new LeverageObligation(
+        await new LeverageObligation(
           kaminoReserve.getLiquidityMint(),
           targetReserve.getLiquidityMint(),
           this.programId
@@ -956,12 +991,12 @@ export class KaminoMarket {
       obligations.forEach((obligation) => {
         if (obligation !== null) {
           for (const deposits of obligation.deposits.keys()) {
-            if (deposits.equals(reserve)) {
+            if (deposits === reserve) {
               finalObligations.push(obligation);
             }
           }
           for (const borrows of obligation.borrows.keys()) {
-            if (borrows.equals(reserve)) {
+            if (borrows === reserve) {
               finalObligations.push(obligation);
             }
           }
@@ -972,8 +1007,8 @@ export class KaminoMarket {
     return finalObligations;
   }
 
-  async getUserVanillaObligation(user: PublicKey): Promise<KaminoObligation> {
-    const vanillaObligationAddress = new VanillaObligation(this.programId).toPda(this.getAddress(), user);
+  async getUserVanillaObligation(user: Address): Promise<KaminoObligation> {
+    const vanillaObligationAddress = await new VanillaObligation(this.programId).toPda(this.getAddress(), user);
 
     const obligation = await this.getObligationByAddress(vanillaObligationAddress);
 
@@ -984,14 +1019,14 @@ export class KaminoMarket {
     return obligation;
   }
 
-  isReserveInObligation(obligation: KaminoObligation, reserve: PublicKey): boolean {
+  isReserveInObligation(obligation: KaminoObligation, reserve: Address): boolean {
     for (const deposits of obligation.deposits.keys()) {
-      if (deposits.equals(reserve)) {
+      if (deposits === reserve) {
         return true;
       }
     }
     for (const borrows of obligation.borrows.keys()) {
-      if (borrows.equals(reserve)) {
+      if (borrows === reserve) {
         return true;
       }
     }
@@ -999,46 +1034,49 @@ export class KaminoMarket {
     return false;
   }
 
-  async getUserObligationsByTag(tag: number, user: PublicKey): Promise<KaminoObligation[]> {
+  async getUserObligationsByTag(tag: number, user: Address): Promise<KaminoObligation[]> {
     const [currentSlot, obligations] = await Promise.all([
-      this.connection.getSlot(),
-      this.connection.getProgramAccounts(this.programId, {
-        filters: [
-          {
-            dataSize: Obligation.layout.span + 8,
-          },
-          {
-            memcmp: {
-              offset: 8,
-              bytes: base58.encode(new BN(tag).toBuffer()),
+      this.rpc.getSlot().send(),
+      this.rpc
+        .getProgramAccounts(this.programId, {
+          filters: [
+            {
+              dataSize: BigInt(Obligation.layout.span + 8),
             },
-          },
-          {
-            memcmp: {
-              offset: 32,
-              bytes: this.address,
+            {
+              memcmp: {
+                offset: 8n,
+                bytes: base58.encode(new BN(tag).toBuffer()) as Base58EncodedBytes,
+                encoding: 'base58',
+              },
             },
-          },
-          {
-            memcmp: {
-              offset: 64,
-              bytes: user.toBase58(),
+            {
+              memcmp: {
+                offset: 32n,
+                bytes: this.address.toString() as Base58EncodedBytes,
+                encoding: 'base58',
+              },
             },
-          },
-        ],
-      }),
+            {
+              memcmp: {
+                offset: 64n,
+                bytes: user.toString() as Base58EncodedBytes,
+                encoding: 'base58',
+              },
+            },
+          ],
+          encoding: 'base64',
+        })
+        .send(),
     ]);
-    const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
-    const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
+    const collateralExchangeRates = new Map<Address, Decimal>();
+    const cumulativeBorrowRates = new Map<Address, Decimal>();
     return obligations.map((obligation) => {
-      if (obligation.account === null) {
-        throw new Error('Invalid account');
-      }
-      if (!obligation.account.owner.equals(this.programId)) {
+      if (obligation.account.owner !== this.programId) {
         throw new Error("account doesn't belong to this program");
       }
 
-      const obligationAccount = Obligation.decode(obligation.account.data);
+      const obligationAccount = Obligation.decode(Buffer.from(obligation.account.data[0], 'base64'));
 
       if (!obligationAccount) {
         throw Error('Could not parse obligation.');
@@ -1060,14 +1098,14 @@ export class KaminoMarket {
     });
   }
 
-  async getObligationByAddress(address: PublicKey) {
+  async getObligationByAddress(address: Address) {
     if (!this.getReserves().every((reserve) => reserve.stats)) {
       await this.loadReserves();
     }
     return KaminoObligation.load(this, address);
   }
 
-  async getMultipleObligationsByAddress(addresses: PublicKey[]) {
+  async getMultipleObligationsByAddress(addresses: Address[]) {
     return KaminoObligation.loadAll(this, addresses);
   }
 
@@ -1075,51 +1113,57 @@ export class KaminoMarket {
    * Get the user metadata PDA and fetch and return the user metadata state if it exists
    * @return [address, userMetadataState] - The address of the user metadata PDA and the user metadata state, or null if it doesn't exist
    */
-  async getUserMetadata(user: PublicKey): Promise<[PublicKey, UserMetadata | null]> {
-    const [address, _bump] = userMetadataPda(user, this.programId);
+  async getUserMetadata(user: Address): Promise<[Address, UserMetadata | null]> {
+    const [address, _bump] = await userMetadataPda(user, this.programId);
 
-    const userMetadata = await UserMetadata.fetch(this.connection, address, this.programId);
+    const userMetadata = await UserMetadata.fetch(this.rpc, address, this.programId);
 
     return [address, userMetadata];
   }
 
   async getReferrerTokenStateForReserve(
-    referrer: PublicKey,
-    reserve: PublicKey
-  ): Promise<[PublicKey, ReferrerTokenState | null]> {
-    const [address, _bump] = referrerTokenStatePda(referrer, reserve, this.programId);
+    referrer: Address,
+    reserve: Address
+  ): Promise<[Address, ReferrerTokenState | null]> {
+    const address = await referrerTokenStatePda(referrer, reserve, this.programId);
 
-    const referrerTokenState = await ReferrerTokenState.fetch(this.connection, address, this.programId);
+    const referrerTokenState = await ReferrerTokenState.fetch(this.rpc, address, this.programId);
 
     return [address, referrerTokenState];
   }
 
-  async getAllReferrerTokenStates(referrer: PublicKey) {
-    const referrerTokenStates = await this.connection.getProgramAccounts(this.programId, {
-      filters: [
-        {
-          dataSize: ReferrerTokenState.layout.span + 8,
-        },
-        {
-          memcmp: {
-            offset: 8,
-            bytes: referrer.toBase58(),
+  async getAllReferrerTokenStates(referrer: Address) {
+    const referrerTokenStates = await this.rpc
+      .getProgramAccounts(this.programId, {
+        filters: [
+          {
+            dataSize: BigInt(ReferrerTokenState.layout.span + 8),
           },
-        },
-      ],
-    });
+          {
+            memcmp: {
+              offset: 8n,
+              bytes: referrer.toString() as Base58EncodedBytes,
+              encoding: 'base58',
+            },
+          },
+        ],
+        encoding: 'base64',
+      })
+      .send();
 
-    const referrerTokenStatesForMints = new PubkeyHashMap<PublicKey, ReferrerTokenState>();
+    const referrerTokenStatesForMints = new Map<Address, ReferrerTokenState>();
 
     referrerTokenStates.forEach((referrerTokenState) => {
       if (referrerTokenState.account === null) {
         throw new Error('Invalid account');
       }
-      if (!referrerTokenState.account.owner.equals(this.programId)) {
+      if (referrerTokenState.account.owner !== this.programId) {
         throw new Error("account doesn't belong to this program");
       }
 
-      const referrerTokenStateDecoded = ReferrerTokenState.decode(referrerTokenState.account.data);
+      const referrerTokenStateDecoded = ReferrerTokenState.decode(
+        Buffer.from(referrerTokenState.account.data[0], 'base64')
+      );
 
       if (!referrerTokenStateDecoded) {
         throw Error('Could not parse obligation.');
@@ -1131,10 +1175,10 @@ export class KaminoMarket {
     return referrerTokenStatesForMints;
   }
 
-  async getAllReferrerFeesUnclaimed(referrer: PublicKey) {
+  async getAllReferrerFeesUnclaimed(referrer: Address) {
     const referrerTokenStatesForMints = await this.getAllReferrerTokenStates(referrer);
 
-    const referrerFeesUnclaimedForMints = new PubkeyHashMap<PublicKey, Decimal>();
+    const referrerFeesUnclaimedForMints = new Map<Address, Decimal>();
 
     for (const mint of referrerTokenStatesForMints.keys()) {
       referrerFeesUnclaimedForMints.set(
@@ -1146,20 +1190,20 @@ export class KaminoMarket {
     return referrerFeesUnclaimedForMints;
   }
 
-  async getReferrerFeesUnclaimedForReserve(referrer: PublicKey, reserve: KaminoReserve): Promise<Decimal> {
+  async getReferrerFeesUnclaimedForReserve(referrer: Address, reserve: KaminoReserve): Promise<Decimal> {
     const [, referrerTokenState] = await this.getReferrerTokenStateForReserve(referrer, reserve.address);
     return referrerTokenState ? new Fraction(referrerTokenState.amountUnclaimedSf).toDecimal() : new Decimal(0);
   }
 
-  async getReferrerFeesCumulativeForReserve(referrer: PublicKey, reserve: KaminoReserve): Promise<Decimal> {
+  async getReferrerFeesCumulativeForReserve(referrer: Address, reserve: KaminoReserve): Promise<Decimal> {
     const [, referrerTokenState] = await this.getReferrerTokenStateForReserve(referrer, reserve.address);
     return referrerTokenState ? new Fraction(referrerTokenState.amountCumulativeSf).toDecimal() : new Decimal(0);
   }
 
-  async getAllReferrerFeesCumulative(referrer: PublicKey) {
+  async getAllReferrerFeesCumulative(referrer: Address) {
     const referrerTokenStatesForMints = await this.getAllReferrerTokenStates(referrer);
 
-    const referrerFeesCumulativeForMints = new PubkeyHashMap<PublicKey, Decimal>();
+    const referrerFeesCumulativeForMints = new Map<Address, Decimal>();
 
     for (const mint of referrerTokenStatesForMints.keys()) {
       referrerFeesCumulativeForMints.set(
@@ -1171,7 +1215,7 @@ export class KaminoMarket {
     return referrerFeesCumulativeForMints;
   }
 
-  async getReferrerUrl(baseUrl: string, referrer: PublicKey) {
+  async getReferrerUrl(baseUrl: string, referrer: Address) {
     return baseUrl + this.encodeReferrer(referrer);
   }
 
@@ -1179,21 +1223,21 @@ export class KaminoMarket {
     return this.decodeReferrer(url.split(baseUrl)[1]);
   }
 
-  async encodeReferrer(referrer: PublicKey) {
-    return bs58.encode(referrer.toBuffer());
+  async encodeReferrer(referrer: Address) {
+    return bs58.encode(Buffer.from(addressEncoder.encode(referrer)));
   }
 
   async decodeReferrer(encoded_referrer: string) {
     const referrer_buffer = bs58.decode(encoded_referrer);
-    return new PublicKey(referrer_buffer.toString());
+    return address(referrer_buffer.toString());
   }
 
   /**
-   * Get the underlying connection passed when instantiating this market
-   * @return connection
+   * Get the underlying rpc passed when instantiating this market
+   * @return rpc
    */
-  getConnection() {
-    return this.connection;
+  getRpc(): Rpc<KaminoMarketRpcApi> {
+    return this.rpc;
   }
 
   /**
@@ -1233,14 +1277,12 @@ export class KaminoMarket {
       switchboard: { spot: {}, twap: {} },
     };
     const allOracleAccounts = await getAllOracleAccounts(
-      this.connection,
+      this.rpc,
       this.getReserves().map((x) => x.state)
     );
-    const pythCache = new PubkeyHashMap<PublicKey, PythPrices>();
-    const switchboardCache = new PubkeyHashMap<PublicKey, CandidatePrice>();
-    const scopeCache = new PubkeyHashMap<PublicKey, OraclePrices>();
-
-    const switchboardV2 = await SwitchboardProgram.loadMainnet(this.connection);
+    const pythCache = new Map<Address, PythPrices>();
+    const switchboardCache = new Map<Address, CandidatePrice>();
+    const scopeCache = new Map<Address, OraclePrices>();
 
     for (const reserve of this.reserves.values()) {
       const tokenMint = reserve.getLiquidityMint().toString();
@@ -1265,9 +1307,9 @@ export class KaminoMarket {
       }
       if (isNotNullPubkey(switchboardSpotOracle)) {
         const switchboardPrices = {
-          spot: cacheOrGetSwitchboardPrice(switchboardSpotOracle, switchboardCache, allOracleAccounts, switchboardV2),
+          spot: cacheOrGetSwitchboardPrice(switchboardSpotOracle, switchboardCache, allOracleAccounts),
           twap: isNotNullPubkey(switchboardTwapOracle)
-            ? cacheOrGetSwitchboardPrice(switchboardTwapOracle, switchboardCache, allOracleAccounts, switchboardV2)
+            ? cacheOrGetSwitchboardPrice(switchboardTwapOracle, switchboardCache, allOracleAccounts)
             : null,
         };
         this.setPriceIfExist(
@@ -1282,8 +1324,8 @@ export class KaminoMarket {
     return klendPrices;
   }
 
-  getCumulativeBorrowRatesByReserve(slot: number): Map<PublicKey, Decimal> {
-    const cumulativeBorrowRates = new PubkeyHashMap<PublicKey, Decimal>();
+  getCumulativeBorrowRatesByReserve(slot: Slot): Map<Address, Decimal> {
+    const cumulativeBorrowRates = new Map<Address, Decimal>();
     for (const reserve of this.reserves.values()) {
       cumulativeBorrowRates.set(
         reserve.address,
@@ -1293,8 +1335,8 @@ export class KaminoMarket {
     return cumulativeBorrowRates;
   }
 
-  getCollateralExchangeRatesByReserve(slot: number): Map<PublicKey, Decimal> {
-    const collateralExchangeRates = new PubkeyHashMap<PublicKey, Decimal>();
+  getCollateralExchangeRatesByReserve(slot: Slot): Map<Address, Decimal> {
+    const collateralExchangeRates = new Map<Address, Decimal>();
     for (const reserve of this.reserves.values()) {
       collateralExchangeRates.set(
         reserve.address,
@@ -1333,10 +1375,10 @@ export class KaminoMarket {
         continue;
       }
       elevationGroups.push({
-        collateralReserves: new PublicKeySet<PublicKey>([]),
-        collateralLiquidityMints: new PublicKeySet<PublicKey>([]),
+        collateralReserves: new Set<Address>([]),
+        collateralLiquidityMints: new Set<Address>([]),
         debtReserve: elevationGroup.debtReserve,
-        debtLiquidityMint: PublicKey.default,
+        debtLiquidityMint: DEFAULT_PUBLIC_KEY,
         elevationGroup: elevationGroup.id,
         maxReservesAsCollateral: elevationGroup.maxReservesAsCollateral,
       });
@@ -1354,7 +1396,7 @@ export class KaminoMarket {
 
         const elevationGroupDescription = elevationGroups[elevationGroupId - 1];
         if (elevationGroupDescription) {
-          if (reserveAddress.equals(elevationGroupDescription.debtReserve)) {
+          if (reserveAddress === elevationGroupDescription.debtReserve) {
             elevationGroups[elevationGroupId - 1].debtLiquidityMint = reserveLiquidityMint;
           } else {
             elevationGroups[elevationGroupId - 1].collateralReserves.add(reserveAddress);
@@ -1371,30 +1413,30 @@ export class KaminoMarket {
 
   /* Returns all elevation groups for a given combination of liquidity mints, except the default one */
   getElevationGroupsForMintsCombination(
-    collLiquidityMints: PublicKey[],
-    debtLiquidityMint?: PublicKey
+    collLiquidityMints: Address[],
+    debtLiquidityMint?: Address
   ): ElevationGroupDescription[] {
     const allElevationGroups = this.getMarketElevationGroupDescriptions();
 
     return allElevationGroups.filter((elevationGroupDescription) => {
       return (
-        collLiquidityMints.every((mint) => elevationGroupDescription.collateralLiquidityMints.contains(mint)) &&
-        (debtLiquidityMint == undefined || debtLiquidityMint.equals(elevationGroupDescription.debtLiquidityMint))
+        collLiquidityMints.every((mint) => elevationGroupDescription.collateralLiquidityMints.has(mint)) &&
+        (debtLiquidityMint == undefined || debtLiquidityMint === elevationGroupDescription.debtLiquidityMint)
       );
     });
   }
 
   /* Returns all elevation groups for a given combination of reserves, except the default one */
   getElevationGroupsForReservesCombination(
-    collReserves: PublicKey[],
-    debtReserve?: PublicKey
+    collReserves: Address[],
+    debtReserve?: Address
   ): ElevationGroupDescription[] {
     const allElevationGroups = this.getMarketElevationGroupDescriptions();
 
     return allElevationGroups.filter((elevationGroupDescription) => {
       return (
-        collReserves.every((mint) => elevationGroupDescription.collateralReserves.contains(mint)) &&
-        (debtReserve == undefined || debtReserve.equals(elevationGroupDescription.debtReserve))
+        collReserves.every((mint) => elevationGroupDescription.collateralReserves.has(mint)) &&
+        (debtReserve == undefined || debtReserve === elevationGroupDescription.debtReserve)
       );
     });
   }
@@ -1421,7 +1463,7 @@ export type BorrowCapsAndCounters = {
 
   // Debt against collateral caps
   debtAgainstCollateralReserveCaps: {
-    collateralReserve: PublicKey;
+    collateralReserve: Address;
     elevationGroup: number;
     maxDebt: Decimal;
     currentValue: Decimal;
@@ -1429,10 +1471,10 @@ export type BorrowCapsAndCounters = {
 };
 
 export type ElevationGroupDescription = {
-  collateralReserves: PublicKeySet<PublicKey>;
-  collateralLiquidityMints: PublicKeySet<PublicKey>;
-  debtReserve: PublicKey;
-  debtLiquidityMint: PublicKey;
+  collateralReserves: Set<Address>;
+  collateralLiquidityMints: Set<Address>;
+  debtReserve: Address;
+  debtLiquidityMint: Address;
   elevationGroup: number;
   maxReservesAsCollateral: number;
 };
@@ -1444,94 +1486,74 @@ export type KlendPrices = {
 };
 
 export async function getReservesForMarket(
-  marketAddress: PublicKey,
-  connection: Connection,
-  programId: PublicKey,
+  marketAddress: Address,
+  rpc: Rpc<KaminoReserveRpcApi>,
+  programId: Address,
   recentSlotDurationMs: number
-): Promise<Map<PublicKey, KaminoReserve>> {
-  const reserves = await connection.getProgramAccounts(programId, {
-    filters: [
-      {
-        dataSize: Reserve.layout.span + 8,
-      },
-      {
-        memcmp: {
-          offset: 32,
-          bytes: marketAddress.toBase58(),
+): Promise<Map<Address, KaminoReserve>> {
+  const reserves = await rpc
+    .getProgramAccounts(programId, {
+      filters: [
+        {
+          dataSize: BigInt(Reserve.layout.span + 8),
         },
-      },
-    ],
-  });
+        {
+          memcmp: {
+            offset: 32n,
+            bytes: marketAddress.toString() as Base58EncodedBytes,
+            encoding: 'base58',
+          },
+        },
+      ],
+      encoding: 'base64',
+    })
+    .send();
   const deserializedReserves = reserves.map((reserve) => {
     if (reserve.account === null) {
-      throw new Error(`Reserve account ${reserve.pubkey.toBase58()} does not exist`);
+      throw new Error(`Reserve account ${reserve.pubkey} does not exist`);
     }
 
-    const reserveAccount = Reserve.decode(reserve.account.data);
+    const reserveAccount = Reserve.decode(Buffer.from(reserve.account.data[0], 'base64'));
 
     if (!reserveAccount) {
-      throw Error(`Could not parse reserve ${reserve.pubkey.toBase58()}`);
+      throw Error(`Could not parse reserve ${reserve.pubkey}`);
     }
     return reserveAccount;
   });
-  const allBuffers = reserves.map((reserve) => reserve.account);
-  const reservesAndOracles = await getTokenOracleData(connection, deserializedReserves);
-  const reservesByAddress = new PubkeyHashMap<PublicKey, KaminoReserve>();
+  const reservesAndOracles = await getTokenOracleData(rpc, deserializedReserves);
+  const reservesByAddress = new Map<Address, KaminoReserve>();
   reservesAndOracles.forEach(([reserve, oracle], index) => {
     if (!oracle) {
       throw Error(`Could not find oracle for ${parseTokenSymbol(reserve.config.tokenInfo.name)} reserve`);
     }
-    const kaminoReserve = KaminoReserve.initialize(
-      allBuffers[index],
-      reserves[index].pubkey,
-      reserve,
-      oracle,
-      connection,
-      recentSlotDurationMs
-    );
+    const kaminoReserve = KaminoReserve.initialize(reserves[index].pubkey, reserve, oracle, rpc, recentSlotDurationMs);
     reservesByAddress.set(kaminoReserve.address, kaminoReserve);
   });
   return reservesByAddress;
 }
 
 export async function getSingleReserve(
-  reservePk: PublicKey,
-  connection: Connection,
+  reservePk: Address,
+  rpc: Rpc<KaminoReserveRpcApi>,
   recentSlotDurationMs: number,
-  accountData?: AccountInfo<Buffer>
+  reserveData?: Reserve
 ): Promise<KaminoReserve> {
-  const reserve = accountData ? accountData : await connection.getAccountInfo(reservePk);
+  const reserve = reserveData ?? (await Reserve.fetch(rpc, reservePk));
 
   if (reserve === null) {
-    throw new Error(`Reserve account ${reservePk.toBase58()} does not exist`);
+    throw new Error(`Reserve account ${reservePk} does not exist`);
   }
-
-  const reserveAccount = Reserve.decode(reserve.data);
-
-  if (!reserveAccount) {
-    throw Error(`Could not parse reserve ${reservePk.toBase58()}`);
-  }
-
-  const reservesAndOracles = await getTokenOracleData(connection, [reserveAccount]);
-  const [reserveState, oracle] = reservesAndOracles[0];
+  const reservesAndOracles = await getTokenOracleData(rpc, [reserve]);
+  const [, oracle] = reservesAndOracles[0];
 
   if (!oracle) {
-    throw Error(`Could not find oracle for ${parseTokenSymbol(reserveState.config.tokenInfo.name)} reserve`);
+    throw Error(`Could not find oracle for ${parseTokenSymbol(reserve.config.tokenInfo.name)} reserve`);
   }
-  const kaminoReserve = KaminoReserve.initialize(
-    reserve,
-    reservePk,
-    reserveState,
-    oracle,
-    connection,
-    recentSlotDurationMs
-  );
-
-  return kaminoReserve;
+  return KaminoReserve.initialize(reservePk, reserve, oracle, rpc, recentSlotDurationMs);
 }
 
-export function getReservesActive(reserves: Map<PublicKey, KaminoReserve>): Map<PublicKey, KaminoReserve> {
-  const reservesActive = new PubkeyHashMap<PublicKey, KaminoReserve>();
+export function getReservesActive(reserves: Map<Address, KaminoReserve>): Map<Address, KaminoReserve> {
+  const reservesActive = new Map<Address, KaminoReserve>();
   for (const [key, reserve] of reserves) {
     if (reserve.state.config.status === 0) {
       reservesActive.set(key, reserve);
@@ -1540,16 +1562,16 @@ export function getReservesActive(reserves: Map<PublicKey, KaminoReserve>): Map<
   return reservesActive;
 }
 
-export function getTokenIdsForScopeRefresh(kaminoMarket: KaminoMarket, reserves: PublicKey[]): number[] {
+export function getTokenIdsForScopeRefresh(kaminoMarket: KaminoMarket, reserves: Address[]): number[] {
   const tokenIds: number[] = [];
 
   for (const reserveAddress of reserves) {
     const reserve = kaminoMarket.getReserveByAddress(reserveAddress);
     if (!reserve) {
-      throw new Error(`Reserve not found for reserve ${reserveAddress.toBase58()}`);
+      throw new Error(`Reserve not found for reserve ${reserveAddress}`);
     }
 
-    if (!reserve.state.config.tokenInfo.scopeConfiguration.priceFeed.equals(PublicKey.default)) {
+    if (reserve.state.config.tokenInfo.scopeConfiguration.priceFeed !== DEFAULT_PUBLIC_KEY) {
       let x = 0;
 
       while (reserve.state.config.tokenInfo.scopeConfiguration.priceChain[x] !== U16_MAX) {
@@ -1566,44 +1588,6 @@ export function getTokenIdsForScopeRefresh(kaminoMarket: KaminoMarket, reserves:
   }
 
   return tokenIds;
-}
-
-export async function getReserveFromMintAndMarket(
-  connection: Connection,
-  market: KaminoMarket,
-  mint: string,
-  programId: PublicKey = PROGRAM_ID
-): Promise<[PublicKey, AccountInfo<Buffer>]> {
-  const reserve = (
-    await connection.getProgramAccounts(programId, {
-      filters: [
-        {
-          dataSize: Reserve.layout.span + 8,
-        },
-        {
-          memcmp: {
-            offset: 32,
-            bytes: market.address,
-          },
-        },
-        {
-          memcmp: {
-            offset: 128,
-            bytes: mint,
-          },
-        },
-      ],
-    })
-  )[0];
-
-  if (reserve.account === null) {
-    throw new Error('Invalid account');
-  }
-  if (!reserve.account.owner.equals(programId)) {
-    throw new Error("Account doesn't belong to this program");
-  }
-
-  return [reserve.pubkey, reserve.account];
 }
 
 const lamportsToNumberDecimal = (amount: Decimal.Value, decimals: number): Decimal => {

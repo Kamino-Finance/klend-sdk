@@ -1,6 +1,6 @@
 import Decimal from 'decimal.js';
 import { KaminoMarket, KaminoObligation, KaminoReserve, numberToLamportsDecimal } from '../classes';
-import { PublicKey } from '@solana/web3.js';
+import { Address, isSome, Option, Slot } from '@solana/kit';
 import { lamportsToDecimal } from '../classes/utils';
 import {
   MaxWithdrawLtvCheck,
@@ -11,10 +11,10 @@ import {
 export function calcRepayAmountWithSlippage(
   kaminoMarket: KaminoMarket,
   debtReserve: KaminoReserve,
-  currentSlot: number,
+  currentSlot: Slot,
   obligation: KaminoObligation,
   amount: Decimal,
-  referrer: PublicKey
+  referrer: Option<Address>
 ): {
   repayAmount: Decimal;
   repayAmountLamports: Decimal;
@@ -24,7 +24,7 @@ export function calcRepayAmountWithSlippage(
     .estimateObligationInterestRate(
       kaminoMarket,
       debtReserve,
-      obligation.state.borrows.find((borrow) => borrow.borrowReserve.equals(debtReserve.address))!,
+      obligation.state.borrows.find((borrow) => borrow.borrowReserve === debtReserve.address)!,
       currentSlot
     )
     .toDecimalPlaces(debtReserve.state.liquidity.mintDecimals.toNumber(), Decimal.ROUND_CEIL);
@@ -53,7 +53,7 @@ export function calcRepayAmountWithSlippage(
   const { flashRepayAmountLamports } = calcFlashRepayAmount({
     reserve: debtReserve,
     referralFeeBps: kaminoMarket.state.referralFeeBps,
-    hasReferral: !referrer.equals(PublicKey.default),
+    hasReferral: isSome(referrer),
     flashBorrowAmountLamports: repayAmountLamports,
   });
   return { repayAmount, repayAmountLamports, flashRepayAmountLamports };
@@ -83,8 +83,8 @@ export const calcFlashRepayAmount = (props: {
 export function calcMaxWithdrawCollateral(
   market: KaminoMarket,
   obligation: KaminoObligation,
-  collReserveAddr: PublicKey,
-  debtReserveAddr: PublicKey,
+  collReserveAddr: Address,
+  debtReserveAddr: Address,
   repayAmountLamports: Decimal
 ): {
   maxWithdrawableCollLamports: Decimal;
@@ -104,7 +104,7 @@ export function calcMaxWithdrawCollateral(
   if (obligation.getBorrows().length > 1) {
     remainingBorrowsValue = obligation
       .getBorrows()
-      .filter((p) => !p.reserveAddress.equals(borrow.reserveAddress))
+      .filter((p) => p.reserveAddress !== borrow.reserveAddress)
       .reduce((acc, b) => acc.add(b.marketValueRefreshed), new Decimal('0'));
   }
 
@@ -127,7 +127,7 @@ export function calcMaxWithdrawCollateral(
   if (obligation.getDeposits().length > 1) {
     maxBorrowableValueRemainingAgainstDeposits = obligation
       .getDeposits()
-      .filter((p) => !p.reserveAddress.equals(deposit.reserveAddress))
+      .filter((p) => p.reserveAddress !== deposit.reserveAddress)
       .reduce((acc, d) => {
         const { maxLtv, liquidationLtv } = obligation.getLtvForReserve(market, d.reserveAddress);
         const maxWithdrawLtv =
@@ -174,9 +174,9 @@ export function estimateDebtRepaymentWithColl(props: {
   slippagePct: Decimal;
   flashLoanFeePct: Decimal;
   kaminoMarket: KaminoMarket;
-  debtTokenMint: PublicKey;
+  debtTokenMint: Address;
   obligation: KaminoObligation;
-  currentSlot: number;
+  currentSlot: Slot;
 }): Decimal {
   const {
     collAmount,

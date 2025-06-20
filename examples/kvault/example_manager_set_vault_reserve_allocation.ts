@@ -1,11 +1,9 @@
-import { getConnection } from '../utils/connection';
+import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { USDC_MINT, USDC_RESERVE_JLP_MARKET } from '../utils/constants';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import Decimal from 'decimal.js/decimal';
 import {
   KaminoVaultConfig,
-  buildAndSendTxn,
   KaminoManager,
   ReserveWithAddress,
   sleep,
@@ -14,18 +12,20 @@ import {
   KaminoVault,
   getMedianSlotDurationInMsFromLastEpochs,
 } from '@kamino-finance/klend-sdk';
+import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
+import { sendAndConfirmTx } from '../utils/tx';
 
 (async () => {
-  const connection = getConnection();
-  const wallet = getKeypair();
+  const c = getConnectionPool();
+  const wallet = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
-  const kaminoManager = new KaminoManager(connection, slotDuration);
+  const kaminoManager = new KaminoManager(c.rpc, slotDuration);
 
   // Init vault
   const kaminoVaultConfig = new KaminoVaultConfig({
-    admin: wallet.publicKey,
+    admin: wallet,
     tokenMint: USDC_MINT,
-    tokenMintProgramId: TOKEN_PROGRAM_ID, // the token program for the token mint above
+    tokenMintProgramId: TOKEN_PROGRAM_ADDRESS, // the token program for the token mint above
     performanceFeeRatePercentage: new Decimal(1.0),
     managementFeeRatePercentage: new Decimal(2.0),
     name: 'example vault',
@@ -34,11 +34,11 @@ import {
   });
   const { vault: vaultKp, initVaultIxs: instructions } = await kaminoManager.createVaultIxs(kaminoVaultConfig);
 
-  const vault = new KaminoVault(vaultKp.publicKey);
+  const vault = new KaminoVault(vaultKp.address);
 
   // initialize vault, lookup table for the vault and shares metadata
-  await buildAndSendTxn(
-    connection,
+  await sendAndConfirmTx(
+    c,
     wallet,
     [...instructions.initVaultIxs, instructions.createLUTIx, instructions.initSharesMetadataIx],
     [vaultKp],
@@ -49,10 +49,10 @@ import {
   await sleep(2000);
 
   // populate the LUT
-  await buildAndSendTxn(connection, wallet, instructions.populateLUTIxs, [], [], 'PopulateLUT');
+  await sendAndConfirmTx(c, wallet, instructions.populateLUTIxs, [], [], 'PopulateLUT');
 
   // Update reserve allocation (add new reserve into the allocation)
-  const usdcJlpMarketReserveState = await Reserve.fetch(connection, USDC_RESERVE_JLP_MARKET);
+  const usdcJlpMarketReserveState = await Reserve.fetch(c.rpc, USDC_RESERVE_JLP_MARKET);
   if (!usdcJlpMarketReserveState) {
     throw new Error(`USDC Reserve ${USDC_RESERVE_JLP_MARKET} not found`);
   }
@@ -70,8 +70,8 @@ import {
   );
 
   // send the transaction to update the vault allocation and sync the lookup table; if the lookup table is not initialized yet it will need prior initialization
-  const _updateTxSignature = await buildAndSendTxn(
-    connection,
+  const _updateTxSignature = await sendAndConfirmTx(
+    c,
     wallet,
     [setReserveAllocationIxs.updateReserveAllocationIx, ...setReserveAllocationIxs.updateLUTIxs],
     [],
@@ -88,8 +88,8 @@ import {
   );
 
   // send the transaction to update the vault allocation and sync the lookup table; now only the weight will get updated as the reserve is already part of the allocation
-  const _updateTxSignature2 = await buildAndSendTxn(
-    connection,
+  const _updateTxSignature2 = await sendAndConfirmTx(
+    c,
     wallet,
     [updateReserveAllocationIxs.updateReserveAllocationIx, ...updateReserveAllocationIxs.updateLUTIxs],
     [],

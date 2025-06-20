@@ -1,10 +1,10 @@
-import { getConnection } from './utils/connection';
+import { getConnectionPool } from './utils/connection';
 import { MAIN_MARKET } from './utils/constants';
 import { getMarket } from './utils/helpers';
 
 (async () => {
-  const connection = getConnection();
-  const market = await getMarket({ connection, marketPubkey: MAIN_MARKET });
+  const c = getConnectionPool();
+  const market = await getMarket({ rpc: c.rpc, marketPubkey: MAIN_MARKET });
   const reserves = market.getReserves();
   console.log(
     `found market ${MAIN_MARKET.toString()} reserves:\n\n${reserves.map((x) => x.address.toString()).join('\n')}`
@@ -12,7 +12,7 @@ import { getMarket } from './utils/helpers';
 
   console.log('Reserve supply and borrow APYs:\n');
 
-  const currentSlot = await connection.getSlot();
+  const currentSlot = await c.rpc.getSlot().send();
   for (const reserve of reserves) {
     if (reserve.state.config.status === 1 || reserve.state.config.status === 2) {
       continue;

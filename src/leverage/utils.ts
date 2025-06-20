@@ -1,6 +1,13 @@
 import { Kamino, StrategyWithAddress } from '@kamino-finance/kliquidity-sdk';
 import { KaminoMarket, KaminoReserve, lamportsToNumberDecimal } from '../classes';
-import { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import {
+  Address,
+  IInstruction,
+  GetAccountInfoApi,
+  Rpc,
+  GetTokenAccountBalanceApi,
+  TransactionSigner,
+} from '@solana/kit';
 import Decimal from 'decimal.js';
 import { getLookupTableAccounts, getTokenAccountBalanceDecimal } from '../utils';
 import { numberToLamportsDecimal } from '../classes/utils';
@@ -10,12 +17,12 @@ import { PriceAinBProvider, SwapInputs, SwapQuote, SwapIxs, SwapIxsProvider } fr
 export interface KaminoSwapperIxBuilder {
   (
     input: DepositAmountsForSwap,
-    tokenAMint: PublicKey,
-    tokenBMint: PublicKey,
-    owner: PublicKey,
+    tokenAMint: Address,
+    tokenBMint: Address,
+    owner: TransactionSigner,
     slippage: Decimal,
-    allKeys: PublicKey[]
-  ): Promise<[TransactionInstruction[], PublicKey[]]>;
+    allKeys: Address[]
+  ): Promise<[IInstruction[], Address[]]>;
 }
 
 export interface DepositAmountsForSwap {
@@ -28,7 +35,7 @@ export interface DepositAmountsForSwap {
 export async function getTokenToKtokenSwapper<QuoteResponse>(
   kaminoMarket: KaminoMarket,
   kamino: Kamino,
-  depositor: PublicKey,
+  depositor: TransactionSigner,
   slippagePct: Decimal,
   swapper: SwapIxsProvider<QuoteResponse>,
   priceAinB: PriceAinBProvider,
@@ -36,19 +43,19 @@ export async function getTokenToKtokenSwapper<QuoteResponse>(
 ): Promise<SwapIxsProvider<QuoteResponse>> {
   return async (
     inputs: SwapInputs,
-    klendAccounts: Array<PublicKey>,
+    klendAccounts: Array<Address>,
     quote: SwapQuote<QuoteResponse>
   ): Promise<Array<SwapIxs<QuoteResponse>>> => {
     const slippageBps = new Decimal(slippagePct).mul('100');
     const mintInDecimals = kaminoMarket.getExistingReserveByMint(inputs.inputMint).getMintDecimals();
     const amountIn = lamportsToNumberDecimal(inputs.inputAmountLamports, mintInDecimals);
-    console.debug('Depositing token', inputs.inputMint.toString(), ' for ', inputs.outputMint.toString(), 'ktoken');
+    console.debug('Depositing token', inputs.inputMint, ' for ', inputs.outputMint, 'ktoken');
     if (inputs.amountDebtAtaBalance === undefined) {
       throw Error('Amount in debt ATA balance is undefined for leverage ktoken deposit');
     }
 
     const ixWithLookup = (await getKtokenDepositIxs(
-      kaminoMarket.getConnection(),
+      kaminoMarket.getRpc(),
       kamino,
       depositor,
       inputs.inputMint,
@@ -63,7 +70,7 @@ export async function getTokenToKtokenSwapper<QuoteResponse>(
       quote
     ))!;
 
-    const luts = await getLookupTableAccounts(kaminoMarket.getConnection(), ixWithLookup.lookupTablesAddresses);
+    const luts = await getLookupTableAccounts(kaminoMarket.getRpc(), ixWithLookup.lookupTablesAddresses);
 
     return [
       {
@@ -81,18 +88,18 @@ export async function getTokenToKtokenSwapper<QuoteResponse>(
 }
 
 export async function getKtokenDepositIxs<QuoteResponse>(
-  connection: Connection,
+  rpc: Rpc<GetAccountInfoApi & GetTokenAccountBalanceApi>,
   kamino: Kamino,
-  depositor: PublicKey,
-  depositTokenMint: PublicKey,
-  ktokenMint: PublicKey,
+  depositor: TransactionSigner,
+  depositTokenMint: Address,
+  ktokenMint: Address,
   amountToDeposit: Decimal,
   slippageBps: Decimal,
   amountExpectedDepositAtaBalance: Decimal,
   swapper: SwapIxsProvider<QuoteResponse>,
   priceAinB: PriceAinBProvider,
   includeAtaIxs: boolean = true,
-  klendAccounts: Array<PublicKey>,
+  klendAccounts: Array<Address>,
   quote: SwapQuote<QuoteResponse>
 ) {
   const kaminoStrategy = await kamino.getStrategyByKTokenMint(ktokenMint);
@@ -100,8 +107,8 @@ export async function getKtokenDepositIxs<QuoteResponse>(
   const tokenBMint = kaminoStrategy?.strategy.tokenBMint!;
   const priceAinBDecimal = await priceAinB(tokenAMint, tokenBMint);
 
-  if (tokenAMint.equals(depositTokenMint)) {
-    const bBalance = await getTokenAccountBalanceDecimal(connection, tokenBMint, depositor);
+  if (tokenAMint === depositTokenMint) {
+    const bBalance = await getTokenAccountBalanceDecimal(rpc, tokenBMint, depositor.address);
     const tokensBalances = { a: amountExpectedDepositAtaBalance, b: bBalance };
     console.log('amountToDeposit', amountToDeposit);
     return await kamino.singleSidedDepositTokenA(
@@ -115,8 +122,8 @@ export async function getKtokenDepositIxs<QuoteResponse>(
       priceAinBDecimal,
       includeAtaIxs
     );
-  } else if (tokenBMint.equals(depositTokenMint)) {
-    const aBalance = await getTokenAccountBalanceDecimal(connection, tokenAMint, depositor);
+  } else if (tokenBMint === depositTokenMint) {
+    const aBalance = await getTokenAccountBalanceDecimal(rpc, tokenAMint, depositor.address);
     const tokensBalances = { a: aBalance, b: amountExpectedDepositAtaBalance };
     return await kamino.singleSidedDepositTokenB(
       kaminoStrategy!,
@@ -137,10 +144,10 @@ export async function getKtokenDepositIxs<QuoteResponse>(
 export async function getKtokenToTokenSwapper<QuoteResponse>(
   kaminoMarket: KaminoMarket,
   kamino: Kamino,
-  depositor: PublicKey,
+  depositor: TransactionSigner,
   swapper: SwapIxsProvider<QuoteResponse>
 ): Promise<SwapIxsProvider<QuoteResponse>> {
-  return async (inputs: SwapInputs, klendAccounts: Array<PublicKey>, quote: SwapQuote<QuoteResponse>) => {
+  return async (inputs: SwapInputs, klendAccounts: Array<Address>, quote: SwapQuote<QuoteResponse>) => {
     const amountInDecimals = kaminoMarket.getExistingReserveByMint(inputs.inputMint).getMintDecimals();
     const amountToWithdraw = lamportsToNumberDecimal(inputs.inputAmountLamports, amountInDecimals);
     const kaminoStrategy = await kamino.getStrategyByKTokenMint(inputs.inputMint);
@@ -155,7 +162,7 @@ export async function getKtokenToTokenSwapper<QuoteResponse>(
       amountToWithdraw
     );
 
-    if (inputs.outputMint.equals(kaminoStrategy!.strategy.tokenAMint!)) {
+    if (inputs.outputMint === kaminoStrategy!.strategy.tokenAMint!) {
       const swapArray = await swapper(
         {
           inputAmountLamports: estimatedBOut,
@@ -177,7 +184,7 @@ export async function getKtokenToTokenSwapper<QuoteResponse>(
           quote: swap.quote,
         },
       ];
-    } else if (inputs.outputMint.equals(kaminoStrategy!.strategy.tokenBMint!)) {
+    } else if (inputs.outputMint === kaminoStrategy!.strategy.tokenBMint) {
       const swapArray = await swapper(
         {
           inputAmountLamports: estimatedAOut,
@@ -207,7 +214,7 @@ export async function getKtokenToTokenSwapper<QuoteResponse>(
 
 export async function getKtokenWithdrawIxs(
   kamino: Kamino,
-  withdrawer: PublicKey,
+  withdrawer: TransactionSigner,
   kaminoStrategy: StrategyWithAddress,
   amountToWithdraw: Decimal
 ) {
@@ -269,17 +276,17 @@ export async function getKtokenWithdrawEstimatesAndPrice(
 
 export function swapProviderToKaminoSwapProvider<QuoteResponse>(
   swapper: SwapIxsProvider<QuoteResponse>,
-  klendAccounts: Array<PublicKey>,
+  klendAccounts: Array<Address>,
   swapQuote: SwapQuote<QuoteResponse>
 ): KaminoSwapperIxBuilder {
   return async (
     input: DepositAmountsForSwap,
-    tokenAMint: PublicKey,
-    tokenBMint: PublicKey,
-    _owner: PublicKey,
+    tokenAMint: Address,
+    tokenBMint: Address,
+    _owner: TransactionSigner,
     _slippage: Decimal,
-    _allKeys: PublicKey[]
-  ): Promise<[TransactionInstruction[], PublicKey[]]> => {
+    _allKeys: Address[]
+  ): Promise<[IInstruction[], Address[]]> => {
     if (input.tokenBToSwapAmount.lt(0)) {
       const swapperIxsArray = await swapper(
         {
@@ -293,7 +300,7 @@ export function swapProviderToKaminoSwapProvider<QuoteResponse>(
       );
       // TODO: Ktoken only supports one swap at a time for now (to be updated if we enable ktokens)
       const swapperIxs = swapperIxsArray[0];
-      return [swapperIxs.swapIxs, swapperIxs.lookupTables.map((lt) => lt.key)];
+      return [swapperIxs.swapIxs, swapperIxs.lookupTables.map((lt) => lt.address)];
     } else if (input.tokenAToSwapAmount.lt(0)) {
       const swapperIxsArray = await swapper(
         {
@@ -307,7 +314,7 @@ export function swapProviderToKaminoSwapProvider<QuoteResponse>(
       );
       // TODO: Ktoken only supports one swap at a time for now (to be updated if we enable ktokens)
       const swapperIxs = swapperIxsArray[0];
-      return [swapperIxs.swapIxs, swapperIxs.lookupTables.map((lt) => lt.key)];
+      return [swapperIxs.swapIxs, swapperIxs.lookupTables.map((lt) => lt.address)];
     } else {
       throw Error('Nothing to swap');
     }
@@ -315,13 +322,13 @@ export function swapProviderToKaminoSwapProvider<QuoteResponse>(
 }
 
 export const getExpectedTokenBalanceAfterBorrow = async (
-  connection: Connection,
-  mint: PublicKey,
-  owner: PublicKey,
+  rpc: Rpc<GetAccountInfoApi & GetTokenAccountBalanceApi>,
+  mint: Address,
+  owner: Address,
   amountToBorrowLamports: Decimal,
   amountToBorrowMintDecimals: number
-) => {
-  const initialUserTokenABalance = await getTokenAccountBalanceDecimal(connection, mint, owner);
+): Promise<Decimal> => {
+  const initialUserTokenABalance = await getTokenAccountBalanceDecimal(rpc, mint, owner);
 
   return initialUserTokenABalance
     .add(lamportsToNumberDecimal(amountToBorrowLamports, amountToBorrowMintDecimals))

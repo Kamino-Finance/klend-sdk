@@ -1,6 +1,6 @@
 import { ReserveHistoryArgs, ReserveHistoryResponse } from './utils/models';
 import axios from 'axios';
-import { getConnection } from './utils/connection';
+import { getConnectionPool } from './utils/connection';
 import { MAIN_MARKET, PYUSD_RESERVE } from './utils/constants';
 import { getReserveApy } from './example_reserve_apy';
 

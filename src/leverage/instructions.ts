@@ -1,5 +1,4 @@
-import { PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY } from '@solana/web3.js';
-import * as anchor from '@coral-xyz/anchor';
+import { Address, Option, TransactionSigner } from '@solana/kit';
 import { KaminoReserve } from '../classes';
 import {
   FlashBorrowReserveLiquidityArgs,
@@ -10,21 +9,23 @@ import {
   flashRepayReserveLiquidity,
 } from '../lib';
 import Decimal from 'decimal.js';
+import BN from 'bn.js';
+import { SYSVAR_INSTRUCTIONS_ADDRESS } from '@solana/sysvars';
 
 export const getFlashLoanInstructions = (args: {
   borrowIxIndex: number;
-  walletPublicKey: PublicKey;
-  lendingMarketAuthority: PublicKey;
-  lendingMarketAddress: PublicKey;
+  userTransferAuthority: TransactionSigner;
+  lendingMarketAuthority: Address;
+  lendingMarketAddress: Address;
   reserve: KaminoReserve;
   amountLamports: Decimal;
-  destinationAta: PublicKey;
-  referrerAccount: PublicKey;
-  referrerTokenState: PublicKey;
-  programId: PublicKey;
+  destinationAta: Address;
+  referrerAccount: Option<Address>;
+  referrerTokenState: Option<Address>;
+  programId: Address;
 }) => {
   const flashBorrowIx = getBorrowFlashLoanInstruction({
-    walletPublicKey: args.walletPublicKey,
+    userTransferAuthority: args.userTransferAuthority,
     lendingMarketAuthority: args.lendingMarketAuthority,
     lendingMarketAddress: args.lendingMarketAddress,
     reserve: args.reserve,
@@ -36,7 +37,7 @@ export const getFlashLoanInstructions = (args: {
   });
   const flashRepayIx = getRepayFlashLoanInstruction({
     borrowIxIndex: args.borrowIxIndex,
-    walletPublicKey: args.walletPublicKey,
+    userTransferAuthority: args.userTransferAuthority,
     lendingMarketAuthority: args.lendingMarketAuthority,
     lendingMarketAddress: args.lendingMarketAddress,
     reserve: args.reserve,
@@ -51,7 +52,7 @@ export const getFlashLoanInstructions = (args: {
 };
 
 export const getBorrowFlashLoanInstruction = ({
-  walletPublicKey,
+  userTransferAuthority,
   lendingMarketAuthority,
   lendingMarketAddress,
   reserve,
@@ -61,31 +62,31 @@ export const getBorrowFlashLoanInstruction = ({
   referrerTokenState,
   programId,
 }: {
-  walletPublicKey: PublicKey;
-  lendingMarketAuthority: PublicKey;
-  lendingMarketAddress: PublicKey;
+  userTransferAuthority: TransactionSigner;
+  lendingMarketAuthority: Address;
+  lendingMarketAddress: Address;
   reserve: KaminoReserve;
   amountLamports: Decimal;
-  destinationAta: PublicKey;
-  referrerAccount: PublicKey;
-  referrerTokenState: PublicKey;
-  programId: PublicKey;
+  destinationAta: Address;
+  referrerAccount: Option<Address>;
+  referrerTokenState: Option<Address>;
+  programId: Address;
 }) => {
   const args: FlashBorrowReserveLiquidityArgs = {
-    liquidityAmount: new anchor.BN(amountLamports.floor().toString()),
+    liquidityAmount: new BN(amountLamports.floor().toString()),
   };
   const accounts: FlashBorrowReserveLiquidityAccounts = {
-    userTransferAuthority: walletPublicKey,
-    lendingMarketAuthority: lendingMarketAuthority,
+    userTransferAuthority,
+    lendingMarketAuthority,
     lendingMarket: lendingMarketAddress,
     reserve: reserve.address,
     reserveLiquidityMint: reserve.getLiquidityMint(),
     reserveSourceLiquidity: reserve.state.liquidity.supplyVault,
     userDestinationLiquidity: destinationAta,
-    referrerAccount: referrerAccount,
-    referrerTokenState: referrerTokenState,
+    referrerAccount,
+    referrerTokenState,
     reserveLiquidityFeeReceiver: reserve.state.liquidity.feeVault,
-    sysvarInfo: SYSVAR_INSTRUCTIONS_PUBKEY,
+    sysvarInfo: SYSVAR_INSTRUCTIONS_ADDRESS,
     tokenProgram: reserve.getLiquidityTokenProgram(),
   };
 
@@ -94,7 +95,7 @@ export const getBorrowFlashLoanInstruction = ({
 
 export const getRepayFlashLoanInstruction = ({
   borrowIxIndex,
-  walletPublicKey,
+  userTransferAuthority,
   lendingMarketAuthority,
   lendingMarketAddress,
   reserve,
@@ -105,23 +106,23 @@ export const getRepayFlashLoanInstruction = ({
   programId,
 }: {
   borrowIxIndex: number;
-  walletPublicKey: PublicKey;
-  lendingMarketAuthority: PublicKey;
-  lendingMarketAddress: PublicKey;
+  userTransferAuthority: TransactionSigner;
+  lendingMarketAuthority: Address;
+  lendingMarketAddress: Address;
   reserve: KaminoReserve;
   amountLamports: Decimal;
-  userSourceLiquidity: PublicKey;
-  referrerAccount: PublicKey;
-  referrerTokenState: PublicKey;
-  programId: PublicKey;
+  userSourceLiquidity: Address;
+  referrerAccount: Option<Address>;
+  referrerTokenState: Option<Address>;
+  programId: Address;
 }) => {
   const args: FlashRepayReserveLiquidityArgs = {
     borrowInstructionIndex: borrowIxIndex,
-    liquidityAmount: new anchor.BN(amountLamports.floor().toString()),
+    liquidityAmount: new BN(amountLamports.floor().toString()),
   };
 
   const accounts: FlashRepayReserveLiquidityAccounts = {
-    userTransferAuthority: walletPublicKey,
+    userTransferAuthority,
     lendingMarketAuthority: lendingMarketAuthority,
     lendingMarket: lendingMarketAddress,
     reserve: reserve.address,
@@ -131,7 +132,7 @@ export const getRepayFlashLoanInstruction = ({
     referrerAccount: referrerAccount,
     referrerTokenState: referrerTokenState,
     reserveLiquidityFeeReceiver: reserve.state.liquidity.feeVault,
-    sysvarInfo: SYSVAR_INSTRUCTIONS_PUBKEY,
+    sysvarInfo: SYSVAR_INSTRUCTIONS_ADDRESS,
     tokenProgram: reserve.getLiquidityTokenProgram(),
   };
 

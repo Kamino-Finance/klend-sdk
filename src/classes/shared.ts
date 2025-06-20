@@ -1,4 +1,4 @@
-import { PublicKey } from '@solana/web3.js';
+import { Address } from '@solana/kit';
 import Decimal from 'decimal.js';
 import { FarmState, RewardInfo } from '@kamino-finance/farms-sdk';
 
@@ -28,7 +28,7 @@ export enum ReserveStatus {
 
 export type ReserveDataType = {
   status: ReserveStatus;
-  mintAddress: PublicKey;
+  mintAddress: Address;
   borrowCurve: [number, number][];
   loanToValue: number;
   maxLiquidationBonus: number;
@@ -74,7 +74,7 @@ export type TokenAmount = {
   /**
    * Token's mint key.
    */
-  mint: PublicKey;
+  mint: Address;
 
   /**
    * Amount, in lamports.

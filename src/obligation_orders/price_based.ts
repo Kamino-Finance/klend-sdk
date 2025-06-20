@@ -6,8 +6,7 @@ import {
   ObligationOrderAtIndex,
   OrderCondition,
 } from '../classes/obligationOrder';
-import { PublicKeySet } from '../utils';
-import { PublicKey } from '@solana/web3.js';
+import { Address } from '@solana/kit';
 import { checkThat, getSingleElement } from '../utils/validations';
 import { OrderContext, OrderSpecification, OrderType } from './common';
 import { createConditionBasedOrder, readTriggerBasedOrder, toOrderIndex } from './internal';
@@ -68,7 +67,7 @@ export type PriceBasedOrderContext = OrderContext & {
 /**
  * A convenient multi-way of specifying a token.
  */
-export type SymbolOrMintAddress = string | PublicKey;
+export type SymbolOrMintAddress = string | Address;
 
 /**
  * A high-level specification of a price-based order.
@@ -227,15 +226,15 @@ function resolvePositionType(context: PriceBasedOrderContext): PositionType {
   const collateralReserveAddress = getSingleElement(context.kaminoObligation.deposits.keys(), 'deposit');
   const debtReserveAddress = getSingleElement(context.kaminoObligation.borrows.keys(), 'borrow');
   const stablecoinReserveAddresses = collectReserveAddresses(context.kaminoMarket, context.stablecoins);
-  if (stablecoinReserveAddresses.contains(collateralReserveAddress)) {
+  if (stablecoinReserveAddresses.has(collateralReserveAddress)) {
     checkThat(
-      !stablecoinReserveAddresses.contains(debtReserveAddress),
+      !stablecoinReserveAddresses.has(debtReserveAddress),
       'cannot resolve long vs short position from all-stablecoins obligation'
     );
     return PositionType.Short;
   } else {
     checkThat(
-      stablecoinReserveAddresses.contains(debtReserveAddress),
+      stablecoinReserveAddresses.has(debtReserveAddress),
       'cannot resolve long vs short position from no-stablecoins obligation'
     );
     return PositionType.Long;
@@ -245,8 +244,8 @@ function resolvePositionType(context: PriceBasedOrderContext): PositionType {
 function collectReserveAddresses(
   kaminoMarket: KaminoMarket,
   symbolOrMintAddresses: SymbolOrMintAddress[]
-): PublicKeySet<PublicKey> {
-  return new PublicKeySet(
+): Set<Address> {
+  return new Set<Address>(
     symbolOrMintAddresses.map((symbolOrMintAddress) =>
       typeof symbolOrMintAddress === 'string'
         ? kaminoMarket.getExistingReserveBySymbol(symbolOrMintAddress).address

@@ -21,7 +21,7 @@ This is the Kamino Lending Typescript SDK to interact with the Kamino Lend smart
 // 1. Initalize market with parameters and metadata
 const market = await KaminoMarket.load(
   connection,
-  new PublicKey("7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF") // main market address. Defaults to 'Main' market
+  address("7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF") // main market address. Defaults to 'Main' market
 );
 console.log(market.reserves.map((reserve) => reserve.config.loanToValueRatio));
 

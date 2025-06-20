@@ -14,7 +14,7 @@ yarn
 
 #### Requirements
 
-In order to use the CLI, the followign `.env` configuration is required (i.e. you need to create a `.env` file in the root of the project with the content below but replace the values of ADMIN and RPC with your own):
+In order to use the CLI, the following `.env` configuration is required (i.e. you need to create a `.env` file in the root of the project with the content below but replace the values of ADMIN and RPC with your own):
 
 ```
 ADMIN="admin.json"

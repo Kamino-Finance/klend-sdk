@@ -1,22 +1,17 @@
-import {
-  KaminoAction,
-  PROGRAM_ID,
-  VanillaObligation,
-  buildVersionedTransaction,
-  sendAndConfirmVersionedTransaction,
-} from '@kamino-finance/klend-sdk';
-import { getConnection } from './utils/connection';
+import { KaminoAction, PROGRAM_ID, VanillaObligation } from '@kamino-finance/klend-sdk';
+import { getConnectionPool } from './utils/connection';
 import { getKeypair } from './utils/keypair';
 import BN from 'bn.js';
 import { MAIN_MARKET, USDC_MINT } from './utils/constants';
 import { loadReserveData } from './utils/helpers';
+import { sendAndConfirmTx } from './utils/tx';
 
 (async () => {
-  const connection = getConnection();
-  const wallet = getKeypair();
+  const c = getConnectionPool();
+  const wallet = await getKeypair();
 
   const { market, reserve: usdcReserve } = await loadReserveData({
-    connection,
+    rpc: c.rpc,
     marketPubkey: MAIN_MARKET,
     mintPubkey: USDC_MINT,
   });
@@ -25,7 +20,7 @@ import { loadReserveData } from './utils/helpers';
     market,
     new BN(1_000_000),
     usdcReserve.getLiquidityMint(),
-    wallet.publicKey,
+    wallet,
     new VanillaObligation(PROGRAM_ID),
     false,
     undefined,
@@ -61,16 +56,19 @@ import { loadReserveData } from './utils/helpers';
   //   'RefreshFarmForObligation[Collateral, res=D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59, obl=2CojYC9YCsYjszfRYi2AKVThg7qvfGS74Y5mLgsNRo1w]'
   // ]
 
-  const tx = await buildVersionedTransaction(connection, wallet.publicKey, [
-    ...depositAction.computeBudgetIxs,
-    ...depositAction.setupIxs,
-    ...depositAction.lendingIxs,
-    ...depositAction.cleanupIxs,
-  ]);
-
-  tx.sign([wallet]);
-
-  const txHash = await sendAndConfirmVersionedTransaction(connection, tx, 'processed', { skipPreflight: true });
+  const txHash = await sendAndConfirmTx(
+    c,
+    wallet,
+    [
+      ...depositAction.computeBudgetIxs,
+      ...depositAction.setupIxs,
+      ...depositAction.lendingIxs,
+      ...depositAction.cleanupIxs,
+    ],
+    [],
+    [],
+    'deposit'
+  );
   console.log('txHash', txHash);
 })().catch(async (e) => {
   console.error(e);

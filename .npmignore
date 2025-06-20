@@ -1,4 +1,4 @@
-client.ts
+src/client/client.ts
 node_modules
 tests
 deps

@@ -1,12 +1,10 @@
 import { LoanArgs, MarketArgs, ReserveArgs } from './models';
 import {
-  buildAndSendTxn,
   KaminoMarket,
   KaminoObligation,
   KaminoReserve,
   lamportsToNumberDecimal,
   getMedianSlotDurationInMsFromLastEpochs,
-  PubkeyHashMap,
   MarketOverview,
   ReserveOverview,
   pubkeyHashMapToJson,
@@ -15,19 +13,21 @@ import {
   VaultOverview,
 } from '@kamino-finance/klend-sdk';
 import Decimal from 'decimal.js';
-import { FarmState, RewardInfo } from '@kamino-finance/farms-sdk';
+import { DEFAULT_PUBLIC_KEY, FarmState, RewardInfo } from '@kamino-finance/farms-sdk';
 import { Scope } from '@kamino-finance/scope-sdk';
 import { aprToApy, KaminoPrices } from '@kamino-finance/kliquidity-sdk';
-import { Connection, Keypair, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { Address, IInstruction, TransactionSigner } from '@solana/kit';
+import { ConnectionPool } from './connection';
+import { sendAndConfirmTx } from './tx';
 
 /**
  * Get Kamino Lending Market
- * @param connection
+ * @param rpc
  * @param marketPubkey
  */
-export async function getMarket({ connection, marketPubkey }: MarketArgs) {
+export async function getMarket({ rpc, marketPubkey }: MarketArgs) {
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
-  const market = await KaminoMarket.load(connection, marketPubkey, slotDuration);
+  const market = await KaminoMarket.load(rpc, marketPubkey, slotDuration);
   if (!market) {
     throw Error(`Could not load market ${marketPubkey.toString()}`);
   }
@@ -43,13 +43,13 @@ export async function getLoan(args: LoanArgs): Promise<KaminoObligation | null> 
   return market.getObligationByAddress(args.obligationPubkey);
 }
 
-export async function loadReserveData({ connection, marketPubkey, mintPubkey }: ReserveArgs) {
-  const market = await getMarket({ connection, marketPubkey });
+export async function loadReserveData({ rpc, marketPubkey, mintPubkey }: ReserveArgs) {
+  const market = await getMarket({ rpc: rpc, marketPubkey });
   const reserve = market.getReserveByMint(mintPubkey);
   if (!reserve) {
     throw Error(`Could not load reserve for ${mintPubkey.toString()}`);
   }
-  const currentSlot = await connection.getSlot();
+  const currentSlot = await rpc.getSlot().send();
 
   return { market, reserve, currentSlot };
 }
@@ -61,20 +61,17 @@ export async function getReserveRewardsApy(args: ReserveArgs) {
   const { market, reserve } = await loadReserveData(args);
   const rewardApys: { rewardApy: Decimal; rewardInfo: RewardInfo }[] = [];
 
-  const scope = new Scope('mainnet-beta', args.connection);
+  const scope = new Scope('mainnet-beta', args.rpc);
   const oraclePrices = await scope.getOraclePrices();
   const prices = await market.getAllScopePrices(scope, oraclePrices);
 
-  const farmStates = await FarmState.fetchMultiple(args.connection, [
-    reserve.state.farmDebt,
-    reserve.state.farmCollateral,
-  ]);
+  const farmStates = await FarmState.fetchMultiple(args.rpc, [reserve.state.farmDebt, reserve.state.farmCollateral]);
 
   // We are not calculating APY for debt rewards
   const isDebtReward = false;
 
   for (const farmState of farmStates.filter((x) => x !== null)) {
-    for (const rewardInfo of farmState!.rewardInfos.filter((x) => !x.token.mint.equals(PublicKey.default))) {
+    for (const rewardInfo of farmState!.rewardInfos.filter((x) => x.token.mint !== DEFAULT_PUBLIC_KEY)) {
       const { apy } = calculateRewardApy(prices, reserve, rewardInfo, isDebtReward);
       rewardApys.push({ rewardApy: apy, rewardInfo });
     }
@@ -141,20 +138,20 @@ function getRewardPerTimeUnitSecond(reward: RewardInfo) {
 }
 
 export async function executeUserSetupLutsTransactions(
-  connection: Connection,
-  wallet: Keypair,
-  setupIxs: Array<Array<TransactionInstruction>>
+  connection: ConnectionPool,
+  wallet: TransactionSigner,
+  setupIxs: Array<Array<IInstruction>>
 ) {
   for (const setupIxsGroup of setupIxs) {
     if (setupIxsGroup.length === 0) {
       continue;
     }
-    const txHash = await buildAndSendTxn(connection, wallet, setupIxsGroup, [], []);
+    const txHash = await sendAndConfirmTx(connection, wallet, setupIxsGroup, [], [], 'setupUserLuts');
     console.log('txHash', txHash);
   }
 }
 
-export function printReservesOverviewMap(map: PubkeyHashMap<PublicKey, ReserveOverview>) {
+export function printReservesOverviewMap(map: Map<Address, ReserveOverview>) {
   map.forEach((value, key) => {
     console.log('Reserve:', key.toString());
     printReserveOverview(value);
@@ -171,7 +168,7 @@ export function printReserveOverview(reserveOverview: ReserveOverview) {
   console.log('Lending market:', reserveOverview.market.toString());
 }
 
-export function printMarketsOverviewMap(map: PubkeyHashMap<PublicKey, MarketOverview>) {
+export function printMarketsOverviewMap(map: Map<Address, MarketOverview>) {
   map.forEach((value, key) => {
     console.log('Reserve:', key.toString());
     printMarketOverview(value);
@@ -188,7 +185,7 @@ export function printMarketOverview(marketOverview: MarketOverview) {
   });
 }
 
-export function printReservesAllocationOverviewMap(map: PubkeyHashMap<PublicKey, ReserveAllocationOverview>) {
+export function printReservesAllocationOverviewMap(map: Map<Address, ReserveAllocationOverview>) {
   map.forEach((value, key) => {
     console.log('Reserve:', key.toString());
     printReserveAllocationOverview(value);
@@ -202,7 +199,7 @@ export function printReserveAllocationOverview(reserveAllocationOverview: Reserv
   console.log('  Ctoken allocation:', reserveAllocationOverview.ctokenAllocation.toString());
 }
 
-export function printPubkeyHashMap<V>(map: PubkeyHashMap<PublicKey, V>) {
+export function printPubkeyHashMap<V>(map: Map<Address, V>) {
   console.log(pubkeyHashMapToJson(map));
 }
 

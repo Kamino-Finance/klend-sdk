@@ -1,32 +1,32 @@
-import { getConnection } from '../utils/connection';
+import { getConnectionPool } from '../utils/connection';
 import Decimal from 'decimal.js/decimal';
 import {
+  DEFAULT_PUBLIC_KEY,
   getMedianSlotDurationInMsFromLastEpochs,
   KaminoManager,
   KaminoVault,
-  PubkeyHashMap,
   Reserve,
   UserState,
+  WRAPPED_SOL_MINT,
 } from '@kamino-finance/klend-sdk';
-import { PublicKey } from '@solana/web3.js';
 import { calculatePendingRewards, Farms, FarmState, getUserStatePDA } from '@kamino-finance/farms-sdk';
-import { WSOLMint } from '@raydium-io/raydium-sdk-v2/lib';
 import { lamportsToDecimal } from '../../src';
+import { Address, address } from '@solana/kit';
 
 export const getKaminoAllPricesAPI = 'https://api.hubbleprotocol.io/prices?env=mainnet-beta&source=scope';
 
 (async () => {
-  const vaultAddress = new PublicKey('<YOUR_VAULT>');
-  const vaultHolder = new PublicKey('<YOUR_WALLET>');
+  const vaultAddress = address('<YOUR_VAULT>');
+  const vaultHolder = address('<YOUR_WALLET>');
 
-  const connection = getConnection();
-  const farmsClient = new Farms(connection);
+  const c = getConnectionPool();
+  const farmsClient = new Farms(c.rpc);
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-  const kaminoManager = new KaminoManager(connection, slotDuration);
+  const kaminoManager = new KaminoManager(c.rpc, slotDuration);
 
   const vault = new KaminoVault(vaultAddress);
-  const vaultState = await vault.getState(connection); // this reads the vault state from the chain and set is, if not set it will fetch it from the chain any time we use it
+  const vaultState = await vault.getState(c.rpc); // this reads the vault state from the chain and set is, if not set it will fetch it from the chain any time we use it
 
   // get how many shares the user has
   const userShares = await kaminoManager.getUserSharesBalanceSingleVault(vaultHolder, vault);
@@ -38,15 +38,15 @@ export const getKaminoAllPricesAPI = 'https://api.hubbleprotocol.io/prices?env=m
   // for each reserve in the allocation compute the potential user farm state and check if there are pending rewards
   const reserves = kaminoManager.getVaultAllocations(vaultState);
 
-  const farmUserStatesAddresses: PublicKey[] = [];
+  const farmUserStatesAddresses: Address[] = [];
   for (const reserve of reserves.keys()) {
-    const reserveState = await Reserve.fetch(connection, reserve);
+    const reserveState = await Reserve.fetch(c.rpc, reserve);
     if (!reserveState) {
       console.log('Reserve state not found:', reserve);
       continue;
     }
 
-    if (reserveState.farmCollateral.equals(PublicKey.default)) {
+    if (reserveState.farmCollateral === DEFAULT_PUBLIC_KEY) {
       continue;
     } else {
       const delegateePDA = kaminoManager.computeUserFarmStateForUserInVault(
@@ -56,22 +56,26 @@ export const getKaminoAllPricesAPI = 'https://api.hubbleprotocol.io/prices?env=m
         vaultHolder
       );
 
-      const farmUserState = getUserStatePDA(farmsClient.getProgramID(), reserveState.farmCollateral, delegateePDA[0]);
+      const farmUserState = await getUserStatePDA(
+        farmsClient.getProgramID(),
+        reserveState.farmCollateral,
+        delegateePDA[0]
+      );
 
       farmUserStatesAddresses.push(farmUserState);
     }
   }
 
-  const pendingRewardsPerToken: PubkeyHashMap<PublicKey, Decimal> = new PubkeyHashMap();
+  const pendingRewardsPerToken: Map<Address, Decimal> = new Map();
   const currentTimestamp = new Decimal(new Date().getTime() / 1000);
-  const farmUserStates = await UserState.fetchMultiple(connection, farmUserStatesAddresses, farmsClient.getProgramID());
+  const farmUserStates = await UserState.fetchMultiple(c.rpc, farmUserStatesAddresses, farmsClient.getProgramID());
 
   for (const farmUserState of farmUserStates) {
     if (!farmUserState) {
       continue;
     }
 
-    const farmState = await FarmState.fetch(connection, farmUserState.farmState);
+    const farmState = await FarmState.fetch(c.rpc, farmUserState.farmState);
     const rewardInfos = farmState!.rewardInfos;
     for (let indexReward = 0; indexReward < rewardInfos.length; indexReward++) {
       const pendingReward = lamportsToDecimal(
@@ -94,12 +98,12 @@ export const getKaminoAllPricesAPI = 'https://api.hubbleprotocol.io/prices?env=m
     // read the prices from Kamino price API
     const prices = await fetch(getKaminoAllPricesAPI);
     const pricesJson = await prices.json();
-    const pricesMap = new PubkeyHashMap<PublicKey, Decimal>();
+    const pricesMap = new Map<Address, Decimal>();
     for (const price of pricesJson) {
-      pricesMap.set(new PublicKey(price.mint), new Decimal(price.usdPrice));
+      pricesMap.set(address(price.mint), new Decimal(price.usdPrice));
     }
 
-    const SOL_PRICE = pricesMap.get(WSOLMint);
+    const SOL_PRICE = pricesMap.get(WRAPPED_SOL_MINT);
 
     for (const [tokenMint, pendingReward] of pendingRewardsPerToken.entries()) {
       const tokenPrice = pricesMap.get(tokenMint);

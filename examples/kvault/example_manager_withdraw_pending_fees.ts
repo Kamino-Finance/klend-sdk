@@ -1,35 +1,24 @@
-import { getConnection } from '../utils/connection';
+import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
-import {
-  buildAndSendTxn,
-  getMedianSlotDurationInMsFromLastEpochs,
-  KaminoManager,
-  KaminoVault,
-} from '@kamino-finance/klend-sdk';
+import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } from '@kamino-finance/klend-sdk';
+import { sendAndConfirmTx } from '../utils/tx';
 
 (async () => {
-  const connection = getConnection();
-  const user = getKeypair();
+  const c = getConnectionPool();
+  const user = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
-  const kaminoManager = new KaminoManager(connection, slotDuration);
+  const kaminoManager = new KaminoManager(c.rpc, slotDuration);
   const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
 
   const withdrawPendingFeesIxs = await kaminoManager.withdrawPendingFeesIxs(
     vault,
-    await connection.getSlot('confirmed')
+    await c.rpc.getSlot({ commitment: 'confirmed' }).send()
   );
 
   // read the vault state so we can use the LUT in the tx
-  const vaultState = await vault.getState(connection);
-  await buildAndSendTxn(
-    connection,
-    user,
-    withdrawPendingFeesIxs,
-    [],
-    [vaultState.vaultLookupTable],
-    'WithdrawPendingFees'
-  );
+  const vaultState = await vault.getState(c.rpc);
+  await sendAndConfirmTx(c, user, withdrawPendingFeesIxs, [], [vaultState.vaultLookupTable], 'WithdrawPendingFees');
 })().catch(async (e) => {
   console.error(e);
 });

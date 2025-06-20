@@ -1,24 +1,19 @@
-import { getConnection } from './utils/connection';
-import {
-  buildAndSendTxn,
-  createPriceBasedOrder,
-  KaminoAction,
-  OrderType,
-  readPriceBasedOrder,
-} from '@kamino-finance/klend-sdk';
+import { getConnectionPool } from './utils/connection';
+import { createPriceBasedOrder, KaminoAction, OrderType, readPriceBasedOrder } from '@kamino-finance/klend-sdk';
 import { EXAMPLE_OBLIGATION, MAIN_MARKET } from './utils/constants';
 import { getLoan, getMarket } from './utils/helpers';
 import { checkNotNull } from '../src/utils/validations';
 import Decimal from 'decimal.js';
 import { getKeypair } from './utils/keypair';
 import { OrderActionType, PriceBasedOrderTriggerType } from '../src';
+import { sendAndConfirmTx } from './utils/tx';
 
 (async () => {
   // General set-up:
-  const connection = getConnection();
-  const wallet = getKeypair();
+  const c = getConnectionPool();
+  const wallet = await getKeypair();
   const args = {
-    connection,
+    rpc: c.rpc,
     obligationPubkey: EXAMPLE_OBLIGATION,
     marketPubkey: MAIN_MARKET,
   };
@@ -59,8 +54,8 @@ import { OrderActionType, PriceBasedOrderTriggerType } from '../src';
   });
 
   // Create an instruction that will actually set the new order's state on-chain:
-  const ix = KaminoAction.buildSetObligationOrderIxn(kaminoMarket, kaminoObligation, newStopLoss);
-  const txHash = await buildAndSendTxn(connection, wallet, [ix], [], []);
+  const ix = KaminoAction.buildSetObligationOrderIxn(wallet, kaminoMarket, kaminoObligation, newStopLoss);
+  const txHash = await sendAndConfirmTx(c, wallet, [ix], [], [], 'setObligationOrder');
   console.log('txHash', txHash);
 })().catch(async (e) => {
   console.error(e);

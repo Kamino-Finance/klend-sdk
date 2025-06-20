@@ -1,9 +1,9 @@
 import Decimal from 'decimal.js';
-import { PROGRAM_ID } from '../idl_codegen/programId';
-import { PublicKey } from '@solana/web3.js';
+import { PROGRAM_ID } from '../@codegen/klend/programId';
+import { address, Address } from '@solana/kit';
 import BN from 'bn.js';
 
-export const STAGING_PROGRAM_ID: PublicKey = new PublicKey('SLendK7ySfcEzyaFqy93gDnD3RtrpXJcnRwb6zFHJSh');
+export const STAGING_PROGRAM_ID: Address = address('SLendK7ySfcEzyaFqy93gDnD3RtrpXJcnRwb6zFHJSh');
 export const DEFAULT_KLEND_PROGRAM_ID: string = PROGRAM_ID.toString();
 export const U64_MAX = '18446744073709551615';
 const INITIAL_COLLATERAL_RATIO = 1;
@@ -19,8 +19,8 @@ export function isENV(value: any): value is ENV {
   return value === 'mainnet-beta' || value === 'devnet' || value === 'localnet';
 }
 
-export function getApiEndpoint(programId: PublicKey, apiBaseUrl: string = 'https://api.kamino.finance') {
-  if (programId.equals(PROGRAM_ID)) {
+export function getApiEndpoint(programId: Address, apiBaseUrl: string = 'https://api.kamino.finance') {
+  if (programId === PROGRAM_ID) {
     return `${apiBaseUrl}/v2/kamino-market`;
   } else {
     return `${apiBaseUrl}/v2/kamino-market/?programId=${programId.toString()}`;
@@ -74,8 +74,6 @@ export const SLOTS_PER_YEAR = SLOTS_PER_DAY * 365;
 export const MIN_AUTODELEVERAGE_BONUS_BPS = 50;
 
 export const SOL_DECIMALS = 9;
-
-export const MAINNET_BETA_CHAIN_ID = 101;
 
 export const BORROWS_LIMIT = 5;
 export const DEPOSITS_LIMIT = 8;

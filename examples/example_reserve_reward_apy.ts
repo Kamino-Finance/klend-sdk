@@ -1,17 +1,17 @@
 import { loadReserveData } from './utils/helpers';
-import { getConnection } from './utils/connection';
+import { getConnectionPool } from './utils/connection';
 import { MAIN_MARKET, PYUSD_MINT } from './utils/constants';
 import { Scope } from '@kamino-finance/scope-sdk/dist/Scope';
 
 (async () => {
-  const connection = getConnection();
+  const c = getConnectionPool();
   console.log(`fetching data for market ${MAIN_MARKET.toString()} reserve for ${PYUSD_MINT.toString()}`);
   const { market, reserve } = await loadReserveData({
-    connection,
+    rpc: c.rpc,
     marketPubkey: MAIN_MARKET,
     mintPubkey: PYUSD_MINT,
   });
-  const scope = new Scope('mainnet-beta', connection);
+  const scope = new Scope('mainnet-beta', c.rpc);
   const prices = await market.getAllScopePrices(scope);
   const rewardApys = await reserve.getRewardYields(prices);
   for (const rewardApy of rewardApys) {

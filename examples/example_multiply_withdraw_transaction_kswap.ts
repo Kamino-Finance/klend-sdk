@@ -1,16 +1,13 @@
 import {
   MultiplyObligation,
   PROGRAM_ID,
-  buildAndSendTxn,
-  buildAndSendTxnWithLogs,
   getComputeBudgetAndPriorityFeeIxs,
   getUserLutAddressAndSetupIxs,
   getWithdrawWithLeverageIxs,
   lamportsToNumberDecimal,
 } from '@kamino-finance/klend-sdk';
-import { getConnection } from './utils/connection';
+import { getConnectionPool } from './utils/connection';
 import { getKeypair } from './utils/keypair';
-import BN from 'bn.js';
 import { JLP_MARKET, JLP_MARKET_LUT, JLP_MINT, JUP_QUOTE_BUFFER_BPS, USDC_MINT } from './utils/constants';
 import { executeUserSetupLutsTransactions, getMarket } from './utils/helpers';
 import { getKaminoResources } from './utils/kamino_resources';
@@ -19,17 +16,19 @@ import Decimal from 'decimal.js';
 import { Scope } from '@kamino-finance/scope-sdk/';
 import { KswapSdk, RouteOutput } from '@kamino-finance/kswap-sdk/dist';
 import { getKswapQuoter, getKswapSwapper, getTokenPriceFromJupWithFallback, KSWAP_API } from './utils/kswap_utils';
-import { buildVersionedTransactionSync, getLookupTableAccountsFromAddresses } from '../src';
+import { address, Address, none } from '@solana/kit';
+import { fetchAllAddressLookupTable } from '@solana-program/address-lookup-table';
+import { sendAndConfirmTx, simulateTx } from './utils/tx';
 
 // For this example we are only using JLP/USDC multiply
 // This can be also used for leverage by using the correct type when creating the obligation
 (async () => {
-  const connection = getConnection();
-  const wallet = getKeypair();
+  const c = getConnectionPool();
+  const wallet = await getKeypair();
 
-  const market = await getMarket({ connection, marketPubkey: JLP_MARKET });
-  const scope = new Scope('mainnet-beta', connection);
-  const kswapSdk = new KswapSdk(KSWAP_API, connection);
+  const market = await getMarket({ rpc: c.rpc, marketPubkey: JLP_MARKET });
+  const scope = new Scope('mainnet-beta', c.rpc);
+  const kswapSdk = new KswapSdk(KSWAP_API, c.legacyConnection);
 
   const collTokenMint = JLP_MINT;
   const debtTokenMint = USDC_MINT;
@@ -41,15 +40,15 @@ import { buildVersionedTransactionSync, getLookupTableAccountsFromAddresses } fr
   const kaminoResources = await getKaminoResources();
 
   const multiplyColPairs = kaminoResources.multiplyLUTsPairs[collTokenMint.toString()] || {};
-  const multiplyLut = multiplyColPairs[debtTokenMint.toString()] || [];
+  const multiplyLut = multiplyColPairs[debtTokenMint] || [];
 
-  const multiplyLutKeys = multiplyLut.map((lut) => new PublicKey(lut));
+  const multiplyLutKeys = multiplyLut.map((lut) => address(lut));
 
-  const multiplyMints: { coll: PublicKey; debt: PublicKey }[] = [{ coll: collTokenMint, debt: debtTokenMint }];
-  const leverageMints: { coll: PublicKey; debt: PublicKey }[] = [];
+  const multiplyMints: { coll: Address; debt: Address }[] = [{ coll: collTokenMint, debt: debtTokenMint }];
+  const leverageMints: { coll: Address; debt: Address }[] = [];
   multiplyMints.push({
-    coll: new PublicKey(collTokenMint),
-    debt: new PublicKey(debtTokenMint),
+    coll: collTokenMint,
+    debt: debtTokenMint,
   });
 
   // This is the setup step that should happen each time the user has to extend it's LookupTable with missing keys
@@ -57,8 +56,8 @@ import { buildVersionedTransactionSync, getLookupTableAccountsFromAddresses } fr
   // This will return an empty array in case the lut is already created and extended
   const [userLookupTable, txsIxs] = await getUserLutAddressAndSetupIxs(
     market,
-    wallet.publicKey,
-    PublicKey.default,
+    wallet,
+    none(),
     true, // always extending LUT
     multiplyMints,
     leverageMints
@@ -67,10 +66,10 @@ import { buildVersionedTransactionSync, getLookupTableAccountsFromAddresses } fr
   const debtTokenReserve = market.getReserveByMint(debtTokenMint);
   const collTokenReserve = market.getReserveByMint(collTokenMint);
 
-  await executeUserSetupLutsTransactions(connection, wallet, txsIxs);
+  await executeUserSetupLutsTransactions(c, wallet, txsIxs);
 
   const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, PROGRAM_ID); // new LeverageObligation(collTokenMint, debtTokenMint, PROGRAM_ID); for leverage
-  const obligationAddress = obligationType.toPda(market.getAddress(), wallet.publicKey);
+  const obligationAddress = await obligationType.toPda(market.getAddress(), wallet.address);
   const obligation = await market.getObligationByAddress(obligationAddress);
   const deposited = lamportsToNumberDecimal(
     Array.from(obligation!.deposits.values())[0]?.amount.toString() || '0',
@@ -81,10 +80,10 @@ import { buildVersionedTransactionSync, getLookupTableAccountsFromAddresses } fr
     debtTokenReserve?.state.liquidity.mintDecimals.toNumber()!
   );
 
-  const currentSlot = await market.getConnection().getSlot();
+  const currentSlot = await c.rpc.getSlot().send();
 
   // Price A in B callback can be defined in different ways. Here we use jupiter price API
-  const getPriceAinB = async (tokenAMint: PublicKey, tokenBMint: PublicKey): Promise<Decimal> => {
+  const getPriceAinB = async (tokenAMint: Address, tokenBMint: Address): Promise<Decimal> => {
     const price = await getTokenPriceFromJupWithFallback(kswapSdk, tokenAMint, tokenBMint);
     return new Decimal(price);
   };
@@ -96,14 +95,14 @@ import { buildVersionedTransactionSync, getLookupTableAccountsFromAddresses } fr
   const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
 
   const withdrawWithLeverageRoutes = await getWithdrawWithLeverageIxs<RouteOutput>({
-    owner: wallet.publicKey,
+    owner: wallet,
     kaminoMarket: market,
     debtTokenMint: debtTokenMint,
     collTokenMint: collTokenMint,
     obligation: obligation!, // obligation does not exist as we are creating it with this deposit
     deposited: deposited,
     borrowed: borrowed,
-    referrer: PublicKey.default,
+    referrer: none(),
     currentSlot,
     withdrawAmount,
     priceCollToDebt,
@@ -114,28 +113,28 @@ import { buildVersionedTransactionSync, getLookupTableAccountsFromAddresses } fr
     kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
     scopeRefreshConfig: { scope, scopeFeed: 'hubble' },
     quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
-    isKtoken: async (token: PublicKey | string): Promise<boolean> => {
+    isKtoken: async (token: Address): Promise<boolean> => {
       return false;
     }, // should return true if the token is a ktoken which is currently not supported
     quoter: getKswapQuoter(
       kswapSdk,
-      wallet.publicKey,
+      wallet.address,
       slippageBps,
       market.getReserveByMint(collTokenMint)!,
       market.getReserveByMint(debtTokenMint)!
     ), // IMPORTANT!: For deposit the input mint is the debt token mint and the output mint is the collateral token
-    swapper: getKswapSwapper(kswapSdk, wallet.publicKey, slippageBps),
+    swapper: getKswapSwapper(kswapSdk, wallet.address, slippageBps),
     useV2Ixs: true,
   });
 
-  const klendLookupTableKeys: PublicKey[] = [];
+  const klendLookupTableKeys: Address[] = [];
   klendLookupTableKeys.push(userLookupTable);
   klendLookupTableKeys.push(...multiplyLutKeys);
   klendLookupTableKeys.push(JLP_MARKET_LUT);
 
   const [blockhash, klendLutAccounts] = await Promise.all([
-    connection.getLatestBlockhash('finalized'),
-    await getLookupTableAccountsFromAddresses(connection, klendLookupTableKeys),
+    c.rpc.getLatestBlockhash({ commitment: 'finalized' }).send(),
+    await fetchAllAddressLookupTable(c.rpc, klendLookupTableKeys),
   ]);
 
   console.log(`depositWithLeverageRoutes length`, withdrawWithLeverageRoutes.length);
@@ -146,12 +145,7 @@ import { buildVersionedTransactionSync, getLookupTableAccountsFromAddresses } fr
       lookupTables.push(...klendLutAccounts);
 
       try {
-        const transaction = buildVersionedTransactionSync(wallet.publicKey, ixs, blockhash.blockhash, lookupTables);
-
-        const simulation = await connection.simulateTransaction(transaction, {
-          sigVerify: false,
-          commitment: 'confirmed',
-        });
+        const simulation = await simulateTx(c.rpc, wallet.address, ixs, lookupTables);
 
         if (simulation.value.err) {
           console.log(`Simulation failed for route ${i}`, simulation.value.err);
@@ -159,7 +153,8 @@ import { buildVersionedTransactionSync, getLookupTableAccountsFromAddresses } fr
         }
 
         return {
-          tx: transaction,
+          ixs,
+          luts: lookupTables.map((l) => l.address),
           routeOutput: route.quote!,
           swapInputs: route.swapInputs,
         };
@@ -201,7 +196,7 @@ import { buildVersionedTransactionSync, getLookupTableAccountsFromAddresses } fr
 
   console.log('Best route type: ', transactionToExecute.routeOutput.routerType);
 
-  const txHash = await buildAndSendTxnWithLogs(connection, transactionToExecute.tx, wallet, [], true);
+  const txHash = await sendAndConfirmTx(c, wallet, transactionToExecute.ixs, [], transactionToExecute.luts, 'swap');
 
   console.log('txHash', txHash);
 })().catch(async (e) => {

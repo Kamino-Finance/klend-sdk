@@ -1,54 +1,54 @@
-import { TransactionInstruction } from '@solana/web3.js';
+import { IInstruction } from '@solana/kit';
 import Decimal from 'decimal.js/decimal';
 
 /** the populateLUTIxs should be executed in a separate transaction as we cannot create and populate a lookup table in the same tx */
 export type InitVaultIxs = {
-  createAtaIfNeededIxs: TransactionInstruction[];
-  initVaultIxs: TransactionInstruction[];
-  createLUTIx: TransactionInstruction;
-  populateLUTIxs: TransactionInstruction[];
-  cleanupIxs: TransactionInstruction[];
-  initSharesMetadataIx: TransactionInstruction;
+  createAtaIfNeededIxs: IInstruction[];
+  initVaultIxs: IInstruction[];
+  createLUTIx: IInstruction;
+  populateLUTIxs: IInstruction[];
+  cleanupIxs: IInstruction[];
+  initSharesMetadataIx: IInstruction;
 };
 
 export type AcceptVaultOwnershipIxs = {
-  acceptVaultOwnershipIx: TransactionInstruction;
-  initNewLUTIx: TransactionInstruction;
-  updateLUTIxs: TransactionInstruction[]; // this has to be executed in a transaction after the initNewLUTIx is executed
+  acceptVaultOwnershipIx: IInstruction;
+  initNewLUTIx: IInstruction;
+  updateLUTIxs: IInstruction[]; // this has to be executed in a transaction after the initNewLUTIx is executed
 };
 
 export type UpdateReserveAllocationIxs = {
-  updateReserveAllocationIx: TransactionInstruction;
-  updateLUTIxs: TransactionInstruction[];
+  updateReserveAllocationIx: IInstruction;
+  updateLUTIxs: IInstruction[];
 };
 
 export type WithdrawAndBlockReserveIxs = {
-  updateReserveAllocationIxs: TransactionInstruction[];
-  investIxs: TransactionInstruction[];
+  updateReserveAllocationIxs: IInstruction[];
+  investIxs: IInstruction[];
 };
 
 export type UpdateVaultConfigIxs = {
-  updateVaultConfigIx: TransactionInstruction;
-  updateLUTIxs: TransactionInstruction[];
+  updateVaultConfigIx: IInstruction;
+  updateLUTIxs: IInstruction[];
 };
 
 /** If there are ixs to setup the LUT it means it doesn't already exist and it needs to be created in a separate tx before inserting into it */
 export type SyncVaultLUTIxs = {
-  setupLUTIfNeededIxs: TransactionInstruction[];
-  syncLUTIxs: TransactionInstruction[];
+  setupLUTIfNeededIxs: IInstruction[];
+  syncLUTIxs: IInstruction[];
 };
 
 /** If the stakeInFarmIfNeededIxs exist they have to be executed after the deposit so the shares received from the deposit are staked in the vault farm */
 export type DepositIxs = {
-  depositIxs: TransactionInstruction[];
-  stakeInFarmIfNeededIxs: TransactionInstruction[];
+  depositIxs: IInstruction[];
+  stakeInFarmIfNeededIxs: IInstruction[];
 };
 
 /** the ixs to unstake shares from farm and withdraw them from the vault. The `unstakeFromFarmIfNeededIxs` should be in the tx before `withdrawIxs`*/
 export type WithdrawIxs = {
-  unstakeFromFarmIfNeededIxs: TransactionInstruction[];
-  withdrawIxs: TransactionInstruction[];
-  postWithdrawIxs: TransactionInstruction[]; // if needed: wSOL ATA close ix + share ATA close ix
+  unstakeFromFarmIfNeededIxs: IInstruction[];
+  withdrawIxs: IInstruction[];
+  postWithdrawIxs: IInstruction[]; // if needed: wSOL ATA close ix + share ATA close ix
 };
 
 /** The shares an user has in a vault (staked and unstaked), in tokens */

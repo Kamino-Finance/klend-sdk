@@ -1,12 +1,15 @@
 import { Kamino } from '@kamino-finance/kliquidity-sdk';
-import { getMint } from '@solana/spl-token';
-import { PublicKey } from '@solana/web3.js';
+import { Address, getAddressEncoder, getProgramDerivedAddress, isSome } from '@solana/kit';
+import { fetchMint } from '@solana-program/token-2022';
+import { Buffer } from 'buffer';
 
-export async function isKtoken(mintKey: PublicKey, kamino: Kamino): Promise<boolean> {
-  const [expectedMintAuthority] = PublicKey.findProgramAddressSync(
-    [Buffer.from('authority'), mintKey.toBuffer()],
-    kamino.getProgramID()
-  );
-  const mint = await getMint(kamino.getConnection(), mintKey);
-  return mint.mintAuthority !== null && mint.mintAuthority.equals(expectedMintAuthority);
+const addressEncoder = getAddressEncoder();
+
+export async function isKtoken(mint: Address, kamino: Kamino): Promise<boolean> {
+  const [expectedMintAuthority] = await getProgramDerivedAddress({
+    seeds: [Buffer.from('authority'), addressEncoder.encode(mint)],
+    programAddress: kamino.getProgramID(),
+  });
+  const mintState = await fetchMint(kamino.getConnection(), mint);
+  return isSome(mintState.data.mintAuthority) && mintState.data.mintAuthority.value === expectedMintAuthority;
 }

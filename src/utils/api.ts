@@ -1,4 +1,4 @@
-import { PublicKey } from '@solana/web3.js';
+import { Address } from '@solana/kit';
 import axios from 'axios';
 import { ConfigType, isEmptyObject } from '../classes';
 import { CDN_ENDPOINT, getApiEndpoint } from '../utils';
@@ -6,7 +6,7 @@ import { IBackOffOptions, backOff } from 'exponential-backoff';
 import { PROGRAM_ID } from '../lib';
 
 export type ApiRequestOptions = {
-  programId?: PublicKey;
+  programId?: Address;
   source?: 'API' | 'CDN';
   apiBaseUrl?: string;
 };

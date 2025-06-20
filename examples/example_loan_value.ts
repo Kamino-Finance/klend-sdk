@@ -1,5 +1,5 @@
 import { KaminoObligation, ObligationTypeTag } from '@kamino-finance/klend-sdk';
-import { getConnection } from './utils/connection';
+import { getConnectionPool } from './utils/connection';
 import { EXAMPLE_OBLIGATION, MAIN_MARKET } from './utils/constants';
 import { getLoan } from './utils/helpers';
 
@@ -16,9 +16,9 @@ function getLoanValue(loan: KaminoObligation) {
 }
 
 (async () => {
-  const connection = getConnection();
+  const c = getConnectionPool();
   const loan = await getLoan({
-    connection,
+    rpc: c.rpc,
     obligationPubkey: EXAMPLE_OBLIGATION,
     marketPubkey: MAIN_MARKET,
   });

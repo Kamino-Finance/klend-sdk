@@ -1,39 +1,33 @@
-import {
-  KaminoAction,
-  PROGRAM_ID,
-  VanillaObligation,
-  buildVersionedTransaction,
-  getAssociatedTokenAddress,
-  sendAndConfirmVersionedTransaction,
-} from '@kamino-finance/klend-sdk';
-import { getConnection } from './utils/connection';
+import { KaminoAction, PROGRAM_ID, VanillaObligation, getAssociatedTokenAddress } from '@kamino-finance/klend-sdk';
+import { getConnectionPool } from './utils/connection';
 import { getKeypair } from './utils/keypair';
 import { MAIN_MARKET, USDC_MINT } from './utils/constants';
 import BN from 'bn.js';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { loadReserveData } from './utils/helpers';
+import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
+import { sendAndConfirmTx } from './utils/tx';
 
 (async () => {
-  const connection = getConnection();
-  const wallet = getKeypair();
+  const c = getConnectionPool();
+  const wallet = await getKeypair();
 
   const { market, reserve: usdcReserve } = await loadReserveData({
-    connection,
+    rpc: c.rpc,
     marketPubkey: MAIN_MARKET,
     mintPubkey: USDC_MINT,
   });
   const cUsdcMint = usdcReserve.getCTokenMint();
 
-  const cUsdcAta = getAssociatedTokenAddress(cUsdcMint, wallet.publicKey, false, TOKEN_PROGRAM_ID);
+  const cUsdcAta = await getAssociatedTokenAddress(cUsdcMint, wallet.address, TOKEN_PROGRAM_ADDRESS);
 
-  const cUsdcBalance = (await connection.getTokenAccountBalance(cUsdcAta)).value.amount;
+  const cUsdcBalance = (await c.rpc.getTokenAccountBalance(cUsdcAta).send()).value.amount;
 
   // Redeem the whole cUSDC balance
   const redeemAction = await KaminoAction.buildRedeemReserveCollateralTxns(
     market,
     new BN(cUsdcBalance),
     usdcReserve.getLiquidityMint(),
-    wallet.publicKey,
+    wallet,
     new VanillaObligation(PROGRAM_ID),
     undefined,
     300_000,
@@ -49,16 +43,19 @@ import { loadReserveData } from './utils/helpers';
   console.log('redeemAction.cleanupIxs', redeemAction.cleanupIxsLabels);
   // redeemAction.cleanupIxsLabels []
 
-  const tx = await buildVersionedTransaction(connection, wallet.publicKey, [
-    ...redeemAction.computeBudgetIxs,
-    ...redeemAction.setupIxs,
-    ...redeemAction.lendingIxs,
-    ...redeemAction.cleanupIxs,
-  ]);
-
-  tx.sign([wallet]);
-
-  const txHash = await sendAndConfirmVersionedTransaction(connection, tx, 'processed', { skipPreflight: true });
+  const txHash = await sendAndConfirmTx(
+    c,
+    wallet,
+    [
+      ...redeemAction.computeBudgetIxs,
+      ...redeemAction.setupIxs,
+      ...redeemAction.lendingIxs,
+      ...redeemAction.cleanupIxs,
+    ],
+    [],
+    [],
+    'redeem'
+  );
   console.log('txHash', txHash);
 })().catch(async (e) => {
   console.error(e);

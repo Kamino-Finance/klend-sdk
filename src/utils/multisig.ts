@@ -1,20 +1,20 @@
-import { PublicKey } from '@solana/web3.js';
+import { Address } from '@solana/kit';
 
 const SQUADS_API_BASE_URL = 'https://4fnetmviidiqkjzenwxe66vgoa0soerr.lambda-url.us-east-1.on.aws';
 
-export async function walletIsSquadsMultisig(wallet: PublicKey) {
-  const response = await fetch(`${SQUADS_API_BASE_URL}/isSquad/${wallet.toBase58()}`);
+export async function walletIsSquadsMultisig(wallet: Address) {
+  const response = await fetch(`${SQUADS_API_BASE_URL}/isSquad/${wallet}`);
   const data = await response.json();
   const squadsResponse = data as SquadsMultisigResponse;
   return squadsResponse.isSquad;
 }
 
 // todo: find a way to get the admins number and threshold
-export async function getSquadsMultisigAdminsAndThreshold(wallet: PublicKey): Promise<{
+export async function getSquadsMultisigAdminsAndThreshold(wallet: Address): Promise<{
   adminsNumber: number;
   threshold: number;
 }> {
-  const response = await fetch(`${SQUADS_API_BASE_URL}/multisig/${wallet.toBase58()}`);
+  const response = await fetch(`${SQUADS_API_BASE_URL}/multisig/${wallet}`);
   const data = await response.json();
   const squadsResponse = data as SquadsMultisigAccountResponse;
   return {

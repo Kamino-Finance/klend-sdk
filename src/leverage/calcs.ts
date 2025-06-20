@@ -1,4 +1,4 @@
-import { PublicKey } from '@solana/web3.js';
+import { Address, Slot } from '@solana/kit';
 import Decimal from 'decimal.js';
 import { collToLamportsDecimal, Kamino, StrategyWithAddress, TokenAmounts } from '@kamino-finance/kliquidity-sdk';
 import { KaminoMarket, KaminoObligation, KaminoReserve, toJson } from '../classes';
@@ -25,9 +25,9 @@ export interface LeverageCalcsArgs {
   withdrawAmount: Decimal;
   deposited: Decimal;
   borrowed: Decimal;
-  debtTokenMint: PublicKey;
-  selectedTokenMint: PublicKey;
-  collTokenMint: PublicKey;
+  debtTokenMint: Address;
+  selectedTokenMint: Address;
+  collTokenMint: Address;
   targetLeverage: Decimal;
   activeLeverageOption: LeverageOption;
   flashLoanFeeRatio: Decimal;
@@ -46,7 +46,7 @@ export interface LeverageCalcsResult {
 }
 
 export async function calculateMultiplyEffects(
-  getPriceByTokenMintDecimal: (mint: PublicKey | string) => Promise<Decimal>,
+  getPriceByTokenMintDecimal: (mint: Address) => Promise<Decimal>,
   {
     depositAmount,
     withdrawAmount,
@@ -210,8 +210,8 @@ interface UseEstimateWithdrawAmountsProps {
   amount: Decimal.Value;
   deposited: Decimal;
   borrowed: Decimal;
-  collTokenMint: PublicKey;
-  selectedTokenMint: PublicKey;
+  collTokenMint: Address;
+  selectedTokenMint: Address;
 }
 
 export const estimateWithdrawMode = (props: UseEstimateWithdrawAmountsProps) => {
@@ -232,8 +232,8 @@ export interface WithdrawParams {
   currentDepositPosition: Decimal;
   priceCollToDebt: Decimal;
   withdrawAmount: Decimal;
-  selectedTokenMint: PublicKey;
-  collTokenMint: PublicKey;
+  selectedTokenMint: Address;
+  collTokenMint: Address;
 }
 
 interface WithdrawResult {
@@ -259,9 +259,8 @@ export function calcWithdrawAmounts(params: WithdrawParams): WithdrawResult {
 
   const initialDepositInCollateralToken = currentDepositPosition.minus(currentBorrowPosition.div(priceCollToDebt));
 
-  const amountToWithdrawDepositToken = selectedTokenMint.equals(collTokenMint)
-    ? withdrawAmount
-    : withdrawAmount.div(priceCollToDebt);
+  const amountToWithdrawDepositToken =
+    selectedTokenMint === collTokenMint ? withdrawAmount : withdrawAmount.div(priceCollToDebt);
 
   const targetDeposit = initialDepositInCollateralToken.minus(amountToWithdrawDepositToken).mul(targetLeverage);
 
@@ -284,8 +283,8 @@ export function calcWithdrawAmounts(params: WithdrawParams): WithdrawResult {
 
 interface UseEstimateAdjustAmountsProps {
   targetLeverage: Decimal;
-  debtTokenMint: PublicKey;
-  collTokenMint: PublicKey;
+  debtTokenMint: Address;
+  collTokenMint: Address;
   totalDeposited: Decimal;
   totalBorrowed: Decimal;
   flashLoanFee: Decimal;
@@ -364,8 +363,8 @@ interface UseTransactionInfoStats {
   priceDebtToColl: Decimal;
   amount: Decimal;
   targetLeverage: Decimal;
-  selectedTokenMint: PublicKey;
-  collTokenMint: PublicKey;
+  selectedTokenMint: Address;
+  collTokenMint: Address;
   flashLoanFee: Decimal;
   slippagePct?: Decimal;
 }
@@ -382,7 +381,7 @@ export const estimateDepositMode = ({
   flashLoanFee,
   slippagePct = new Decimal(0),
 }: UseTransactionInfoStats) => {
-  const isDepositingCollToken = selectedTokenMint.equals(collTokenMint);
+  const isDepositingCollToken = selectedTokenMint === collTokenMint;
 
   const finalCollTokenAmount = isDepositingCollToken
     ? new Decimal(amount).mul(targetLeverage).toNumber()
@@ -538,7 +537,7 @@ export const depositLeverageCalcs = (props: {
 export const depositLeverageKtokenCalcs = async (props: {
   kamino: Kamino;
   strategy: StrategyWithAddress;
-  debtTokenMint: PublicKey;
+  debtTokenMint: Address;
   depositAmount: Decimal;
   depositTokenIsCollToken: boolean;
   depositTokenIsSol: boolean;
@@ -601,12 +600,13 @@ export const depositLeverageKtokenCalcs = async (props: {
     // So we use the actualColl as the amount we will deposit
     const [estimatedA, estimatedB, actualColl] = await simulateMintKToken(
       kamino!,
-      strategy!,
+      strategy,
       finalColl,
       strategyHoldings
     );
-    const pxAinB = await priceAinB(strategy!.strategy.tokenAMint, strategy!.strategy.tokenBMint);
-    const isTokenADeposit = strategy.strategy.tokenAMint.equals(debtTokenMint);
+    const { tokenAMint, tokenBMint } = strategy.strategy;
+    const pxAinB = await priceAinB(tokenAMint, tokenBMint);
+    const isTokenADeposit = tokenAMint === debtTokenMint;
     // Calculate the amount we need to flash borrow by combining value of A and B into the debt token
     const singleSidedDepositAmount = isTokenADeposit
       ? estimatedA.add(estimatedB.div(pxAinB))
@@ -646,10 +646,10 @@ export function withdrawLeverageCalcs(
   withdrawAmount: Decimal,
   deposited: Decimal,
   borrowed: Decimal,
-  currentSlot: number,
+  currentSlot: Slot,
   isClosingPosition: boolean,
   selectedTokenIsCollToken: boolean,
-  selectedTokenMint: PublicKey,
+  selectedTokenMint: Address,
   obligation: KaminoObligation,
   flashLoanFee: Decimal,
   slippagePct: Decimal
@@ -711,7 +711,7 @@ export function withdrawLeverageCalcs(
 
 export async function adjustDepositLeverageCalcs(
   market: KaminoMarket,
-  owner: PublicKey,
+  owner: Address,
   debtReserve: KaminoReserve,
   adjustDepositPosition: Decimal,
   adjustBorrowPosition: Decimal,
@@ -732,7 +732,7 @@ export async function adjustDepositLeverageCalcs(
     .div(priceDebtToColl);
 
   const expectedDebtTokenAtaBalance = await getExpectedTokenBalanceAfterBorrow(
-    market.getConnection(),
+    market.getRpc(),
     debtReserve.getLiquidityMint(),
     owner,
     collToLamportsDecimal(!collIsKtoken ? borrowAmount : amountToFlashBorrowDebt, debtReserve!.stats.decimals).floor(),
