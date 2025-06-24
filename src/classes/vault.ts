@@ -9,6 +9,7 @@ import {
   generateKeyPairSigner,
   GetAccountInfoApi,
   getAddressEncoder,
+  getBase58Decoder,
   GetProgramAccountsDatasizeFilter,
   GetProgramAccountsMemcmpFilter,
   getProgramDerivedAddress,
@@ -81,7 +82,6 @@ import {
   U64_MAX,
   VAULT_INITIAL_DEPOSIT,
 } from '../utils';
-import bs58 from 'bs58';
 import { getAccountOwner, getProgramAccounts } from '../utils/rpc';
 import {
   AcceptVaultOwnershipIxs,
@@ -136,6 +136,7 @@ export const METADATA_PROGRAM_ID: Address = address('metaqbxxUerdq28cj1RbAWkYQm3
 export const INITIAL_DEPOSIT_LAMPORTS = 1000;
 
 const addressEncoder = getAddressEncoder();
+const base58Decoder = getBase58Decoder();
 
 /**
  * KaminoVaultClient is a class that provides a high-level interface to interact with the Kamino Vault program.
@@ -2043,7 +2044,7 @@ export class KaminoVaultClient {
       {
         memcmp: {
           offset: 0n,
-          bytes: bs58.encode(VaultState.discriminator) as Base58EncodedBytes,
+          bytes: base58Decoder.decode(VaultState.discriminator) as Base58EncodedBytes,
           encoding: 'base58',
         },
       },
@@ -2065,7 +2066,7 @@ export class KaminoVaultClient {
       {
         memcmp: {
           offset: 0n,
-          bytes: bs58.encode(VaultState.discriminator) as Base58EncodedBytes,
+          bytes: base58Decoder.decode(VaultState.discriminator) as Base58EncodedBytes,
           encoding: 'base58',
         },
       },

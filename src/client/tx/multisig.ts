@@ -4,6 +4,7 @@ import {
   appendTransactionMessageInstructions,
   compileTransactionMessage,
   createTransactionMessage,
+  getBase58Decoder,
   getCompiledTransactionMessageEncoder,
   IInstruction,
   pipe,
@@ -13,8 +14,9 @@ import {
 } from '@solana/kit';
 import { INVALID_BUT_SUFFICIENT_FOR_COMPILATION_BLOCKHASH } from './simulate';
 import { AddressLookupTable } from '@solana-program/address-lookup-table';
-import bs58 from 'bs58';
 import { removeComputeBudgetProgramInstructions } from './priorityFee';
+
+const base58Decoder = getBase58Decoder();
 
 export async function printMultisigTx(
   payer: TransactionSigner,
@@ -40,6 +42,6 @@ export async function printMultisigTx(
   const compiled = compileTransactionMessage(transactionMessage);
   const encodedMessageBytes = getCompiledTransactionMessageEncoder().encode(compiled);
 
-  const base58EncodedMessage = bs58.encode(Uint8Array.from(encodedMessageBytes));
+  const base58EncodedMessage = base58Decoder.decode(encodedMessageBytes);
   console.log('Base58 encoded tx:', base58EncodedMessage);
 }

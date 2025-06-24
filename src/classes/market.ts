@@ -4,8 +4,8 @@ import {
   Base58EncodedBytes,
   Commitment,
   GetAccountInfoApi,
-  getAddressEncoder,
   GetBalanceApi,
+  getBase58Decoder,
   GetMinimumBalanceForRentExemptionApi,
   GetMultipleAccountsApi,
   GetProgramAccountsApi,
@@ -40,8 +40,6 @@ import {
   userMetadataPda,
   VanillaObligation,
 } from '../utils';
-import base58 from 'bs58';
-import bs58 from 'bs58';
 import BN from 'bn.js';
 import Decimal from 'decimal.js';
 import { FarmState } from '@kamino-finance/farms-sdk';
@@ -63,7 +61,7 @@ export type KaminoMarketRpcApi = GetAccountInfoApi &
   GetTokenAccountBalanceApi &
   GetBalanceApi;
 
-const addressEncoder = getAddressEncoder();
+const base58Decoder = getBase58Decoder();
 
 export interface ReserveRewardInfo {
   rewardsPerSecond: Decimal; // not lamport
@@ -614,7 +612,7 @@ export class KaminoMarket {
       filters.push({
         memcmp: {
           offset: 8n,
-          bytes: base58.encode(new BN(tag).toBuffer()) as Base58EncodedBytes,
+          bytes: base58Decoder.decode(new BN(tag).toBuffer()) as Base58EncodedBytes,
           encoding: 'base58',
         },
       });
@@ -688,7 +686,7 @@ export class KaminoMarket {
       filters.push({
         memcmp: {
           offset: 8n,
-          bytes: base58.encode(new BN(tag).toBuffer()) as Base58EncodedBytes,
+          bytes: base58Decoder.decode(new BN(tag).toBuffer()) as Base58EncodedBytes,
           encoding: 'base58',
         },
       });
@@ -754,7 +752,7 @@ export class KaminoMarket {
             {
               memcmp: {
                 offset: 8n,
-                bytes: base58.encode(new BN(tag).toBuffer()) as Base58EncodedBytes,
+                bytes: base58Decoder.decode(new BN(tag).toBuffer()) as Base58EncodedBytes,
                 encoding: 'base58',
               },
             },
@@ -886,7 +884,7 @@ export class KaminoMarket {
             {
               memcmp: {
                 offset: 0n,
-                bytes: bs58.encode(Obligation.discriminator) as Base58EncodedBytes,
+                bytes: base58Decoder.decode(Obligation.discriminator) as Base58EncodedBytes,
                 encoding: 'base58',
               },
             },
@@ -1046,7 +1044,7 @@ export class KaminoMarket {
             {
               memcmp: {
                 offset: 8n,
-                bytes: base58.encode(new BN(tag).toBuffer()) as Base58EncodedBytes,
+                bytes: base58Decoder.decode(new BN(tag).toBuffer()) as Base58EncodedBytes,
                 encoding: 'base58',
               },
             },
@@ -1215,21 +1213,12 @@ export class KaminoMarket {
     return referrerFeesCumulativeForMints;
   }
 
-  async getReferrerUrl(baseUrl: string, referrer: Address) {
-    return baseUrl + this.encodeReferrer(referrer);
+  getReferrerUrl(baseUrl: string, referrer: Address) {
+    return `${baseUrl}${referrer.toString()}`;
   }
 
-  async getReferrerFromUrl(baseUrl: string, url: string) {
-    return this.decodeReferrer(url.split(baseUrl)[1]);
-  }
-
-  async encodeReferrer(referrer: Address) {
-    return bs58.encode(Buffer.from(addressEncoder.encode(referrer)));
-  }
-
-  async decodeReferrer(encoded_referrer: string) {
-    const referrer_buffer = bs58.decode(encoded_referrer);
-    return address(referrer_buffer.toString());
+  getReferrerFromUrl(baseUrl: string, url: string) {
+    return address(url.split(baseUrl)[1]);
   }
 
   /**

@@ -1,7 +1,8 @@
-import { Address, Base58EncodedBytes, GetProgramAccountsApi, Rpc } from '@solana/kit';
+import { Address, Base58EncodedBytes, getBase58Decoder, GetProgramAccountsApi, Rpc } from '@solana/kit';
 import { LendingMarket, Obligation, Reserve } from '../@codegen/klend/accounts';
 import { PROGRAM_ID } from '../@codegen/klend/programId';
-import bs58 from 'bs58';
+
+const base58Decoder = getBase58Decoder();
 
 export async function* getAllObligationAccounts(
   connection: Rpc<GetProgramAccountsApi>
@@ -17,14 +18,14 @@ export async function* getAllObligationAccounts(
           {
             memcmp: {
               offset: 0n,
-              bytes: bs58.encode(Obligation.discriminator) as Base58EncodedBytes,
+              bytes: base58Decoder.decode(Obligation.discriminator) as Base58EncodedBytes,
               encoding: 'base58',
             },
           },
           {
             memcmp: {
               offset: 64n,
-              bytes: bs58.encode([i]) as Base58EncodedBytes, // ...via sharding by userId's first byte (just as a source of randomness)
+              bytes: base58Decoder.decode(Buffer.from([i])) as Base58EncodedBytes, // ...via sharding by userId's first byte (just as a source of randomness)
               encoding: 'base58',
             },
           },
@@ -51,7 +52,7 @@ export async function* getAllReserveAccounts(
         {
           memcmp: {
             offset: 0n,
-            bytes: bs58.encode(Reserve.discriminator) as Base58EncodedBytes,
+            bytes: base58Decoder.decode(Reserve.discriminator) as Base58EncodedBytes,
             encoding: 'base58',
           },
         },
@@ -78,7 +79,7 @@ export async function* getAllLendingMarketAccounts(
         {
           memcmp: {
             offset: 0n,
-            bytes: bs58.encode(LendingMarket.discriminator) as Base58EncodedBytes,
+            bytes: base58Decoder.decode(LendingMarket.discriminator) as Base58EncodedBytes,
             encoding: 'base58',
           },
         },

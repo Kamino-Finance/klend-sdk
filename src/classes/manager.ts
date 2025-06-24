@@ -12,6 +12,7 @@ import {
   GetProgramAccountsMemcmpFilter,
   ProgramDerivedAddress,
   Base58EncodedBytes,
+  getBase58Decoder,
 } from '@solana/kit';
 import {
   KaminoVault,
@@ -70,7 +71,6 @@ import BN from 'bn.js';
 import { ReserveConfig, UpdateLendingMarketMode, UpdateLendingMarketModeKind } from '../@codegen/klend/types';
 import Decimal from 'decimal.js';
 import { VaultState } from '../@codegen/kvault/accounts';
-import bs58 from 'bs58';
 import { getProgramAccounts } from '../utils/rpc';
 import { VaultConfigField, VaultConfigFieldKind } from '../@codegen/kvault/types';
 import {
@@ -95,6 +95,8 @@ import { SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
 import type { AccountInfoBase, AccountInfoWithJsonData, AccountInfoWithPubkey } from '@solana/rpc-types';
 import { arrayElementConfigItems, ConfigUpdater } from './configItems';
+
+const base58Decoder = getBase58Decoder();
 
 /**
  * KaminoManager is a class that provides a high-level interface to interact with the Kamino Lend and Kamino Vault programs, in order to create and manage a market, as well as vaults
@@ -768,7 +770,7 @@ export class KaminoManager {
       {
         memcmp: {
           offset: 0n,
-          bytes: bs58.encode(VaultState.discriminator) as Base58EncodedBytes,
+          bytes: base58Decoder.decode(VaultState.discriminator) as Base58EncodedBytes,
           encoding: 'base58',
         },
       },
