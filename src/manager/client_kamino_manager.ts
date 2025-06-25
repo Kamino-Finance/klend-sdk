@@ -1327,6 +1327,21 @@ async function main() {
     });
 
   commands
+    .command('get-reserve-farms-apy')
+    .requiredOption('--reserve <string>', 'Reserve address')
+    .requiredOption('--token-price <number>', 'Reserve token price in USD')
+    .option(`--staging`, 'If true, will use the staging programs')
+    .action(async ({ reserve, tokenPrice, staging }) => {
+      const env = await initEnv(staging);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+
+      const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, address("KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD"), env.kvaultProgramId);
+
+      const farmAPY = await kaminoManager.getReserveFarmRewardsAPY(address(reserve), new Decimal(tokenPrice));
+      console.log('farmAPY', farmAPY);
+    });
+
+  commands
     .command('get-vault-allocation-distribution')
     .requiredOption('--vault <string>', 'Vault address')
     .option(`--staging`, 'If true, will use the staging programs')

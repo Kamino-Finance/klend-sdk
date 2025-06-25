@@ -86,7 +86,7 @@ import {
   WithdrawAndBlockReserveIxs,
   WithdrawIxs,
 } from './vault_types';
-import { FarmIncentives, FarmState } from '@kamino-finance/farms-sdk/dist';
+import { FarmIncentives, Farms, FarmState } from '@kamino-finance/farms-sdk/dist';
 import { getSquadsMultisigAdminsAndThreshold, walletIsSquadsMultisig, WalletType } from '../utils/multisig';
 import { decodeVaultState } from '../utils/vault';
 import { noopSigner } from '../utils/signer';
@@ -95,6 +95,7 @@ import { SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
 import type { AccountInfoBase, AccountInfoWithJsonData, AccountInfoWithPubkey } from '@solana/rpc-types';
 import { arrayElementConfigItems, ConfigUpdater } from './configItems';
+import { getFarmIncentives, ReserveIncentives } from '@kamino-finance/farms-sdk/dist/utils/apy';
 
 const base58Decoder = getBase58Decoder();
 
@@ -1087,6 +1088,77 @@ export class KaminoManager {
    */
   async getVaultFarmRewardsAPY(vault: KaminoVault, vaultTokenPrice: Decimal, slot?: Slot): Promise<FarmIncentives> {
     return this._vaultClient.getVaultRewardsAPY(vault, vaultTokenPrice, slot);
+  }
+
+  /**
+   * This will return the APY of the reserve farms (debt and supply)
+   * @param reserve - the reserve to get the farms APY for
+   * @param reserveTokenPrice - the price of the reserve token in USD (e.g. 1.0 for USDC)
+   * @param [reserveState] - the reserve state. Optional. If not provided, the function will fetch the reserve state
+   * @param [kaminoMarket] - the kamino market. Optional. If not provided, the function will fetch the kamino market
+   * @returns the APY of the farm built on top of the reserve
+   */
+  async getReserveFarmRewardsAPY(
+    reserve: Address,
+    reserveTokenPrice: Decimal,
+    reserveState?: Reserve,
+    kaminoMarket?: KaminoMarket
+  ): Promise<ReserveIncentives> {
+    const reserveIncentives: ReserveIncentives = {
+      collateralFarmIncentives: null,
+      debtFarmIncentives: null,
+    };
+
+    console.log("this._kaminoLendProgramId", this._kaminoLendProgramId.toString());
+    const reserveAccount = reserveState
+      ? reserveState
+      : await Reserve.fetch(this._rpc, reserve, this._kaminoLendProgramId);
+    if (!reserveAccount) {
+      throw new Error(`Reserve ${reserve} not found`);
+    }
+
+    let market = kaminoMarket;
+    if (!market) {
+      const fetckedMarket = await KaminoMarket.load(this._rpc, reserveAccount.lendingMarket, 450);
+      if (!fetckedMarket) {
+        throw new Error(`Market ${reserveAccount.lendingMarket} not found`);
+      }
+      market = fetckedMarket;
+    }
+
+    const kaminoReserve = market.getReserveByAddress(reserve);
+    if (!kaminoReserve) {
+      throw new Error(`Strategy state not found for strategy: ${reserve}`);
+    }
+
+    const farmCollateral = kaminoReserve.state.farmCollateral;
+    const farmDebt = kaminoReserve.state.farmDebt;
+
+    const stakedTokenMintDecimals = kaminoReserve.getMintDecimals();
+    const reserveCtokenPrice = reserveTokenPrice.div(kaminoReserve.getCollateralExchangeRate());
+
+    const farmsClient = new Farms(this._rpc);
+    if (farmCollateral !== DEFAULT_PUBLIC_KEY) {
+      const farmIncentivesCollateral = await getFarmIncentives(
+        farmsClient,
+        farmCollateral,
+        reserveCtokenPrice,
+        6 // all cTokens have 6 decimals
+      );
+      reserveIncentives.collateralFarmIncentives = farmIncentivesCollateral;
+    }
+
+    if (farmDebt !== DEFAULT_PUBLIC_KEY) {
+      const farmIncentivesDebt = await getFarmIncentives(
+        farmsClient,
+        farmDebt,
+        reserveTokenPrice,
+        stakedTokenMintDecimals
+      );
+      reserveIncentives.debtFarmIncentives = farmIncentivesDebt;
+    }
+
+    return reserveIncentives;
   }
 
   /**
