@@ -86,7 +86,7 @@ import {
   WithdrawAndBlockReserveIxs,
   WithdrawIxs,
 } from './vault_types';
-import { FarmState } from '@kamino-finance/farms-sdk/dist';
+import { FarmIncentives, FarmState } from '@kamino-finance/farms-sdk/dist';
 import { getSquadsMultisigAdminsAndThreshold, walletIsSquadsMultisig, WalletType } from '../utils/multisig';
 import { decodeVaultState } from '../utils/vault';
 import { noopSigner } from '../utils/signer';
@@ -1067,7 +1067,7 @@ export class KaminoManager {
   }
 
   /**
-   * This will compute the PDA that is used as delegatee in Farms program to compute the user state PDA
+   * This will compute the PDA that is used as delegatee in Farms program to compute the user state PDA for vault depositor investing in vault with reserve having a supply farm
    */
   computeUserFarmStateForUserInVault(
     farmsProgramId: Address,
@@ -1076,6 +1076,17 @@ export class KaminoManager {
     user: Address
   ): Promise<ProgramDerivedAddress> {
     return this._vaultClient.computeUserFarmStateDelegateePDAForUserInVault(farmsProgramId, reserve, vault, user);
+  }
+
+  /**
+   * Read the APY of the farm built on top of the vault (farm in vaultState.vaultFarm)
+   * @param vault - the vault to read the farm APY for
+   * @param vaultTokenPrice - the price of the vault token in USD (e.g. 1.0 for USDC)
+   * @param [slot] - the slot to read the farm APY for. Optional. If not provided, the function will read the current slot
+   * @returns the APY of the farm built on top of the vault
+   */
+  async getVaultFarmRewardsAPY(vault: KaminoVault, vaultTokenPrice: Decimal, slot?: Slot): Promise<FarmIncentives> {
+    return this._vaultClient.getVaultRewardsAPY(vault, vaultTokenPrice, slot);
   }
 
   /**

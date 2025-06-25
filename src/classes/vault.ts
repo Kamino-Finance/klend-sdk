@@ -98,7 +98,7 @@ import {
 } from './vault_types';
 import { batchFetch, collToLamportsDecimal, ZERO } from '@kamino-finance/kliquidity-sdk';
 import { FullBPSDecimal } from '@kamino-finance/kliquidity-sdk/dist/utils/CreationParameters';
-import { FarmState } from '@kamino-finance/farms-sdk/dist';
+import { FarmIncentives, FarmState } from '@kamino-finance/farms-sdk/dist';
 import { getAccountsInLut, initLookupTableIx } from '../utils/lookupTable';
 import {
   getFarmStakeIxs,
@@ -120,6 +120,7 @@ import { SYSVAR_INSTRUCTIONS_ADDRESS, SYSVAR_RENT_ADDRESS } from '@solana/sysvar
 import { noopSigner } from '../utils/signer';
 import { getExtendLookupTableInstruction } from '@solana-program/address-lookup-table';
 import { Farms } from '@kamino-finance/farms-sdk';
+import { getFarmIncentives } from '@kamino-finance/farms-sdk/dist/utils/apy';
 
 export const kaminoVaultId = address('KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd');
 export const kaminoVaultStagingId = address('stKvQfwRsQiKnLtMNVLHKS3exFJmZFsgfzBPWHECUYK');
@@ -2918,6 +2919,9 @@ export class KaminoVaultClient {
     };
   }
 
+  /**
+   * This will compute the PDA that is used as delegatee in Farms program to compute the user state PDA for vault depositor investing in vault with reserve having a supply farm
+   */
   computeUserFarmStateDelegateePDAForUserInVault(
     farmsProgramId: Address,
     vault: Address,
@@ -2928,6 +2932,30 @@ export class KaminoVaultClient {
       seeds: [addressEncoder.encode(vault), addressEncoder.encode(reserve), addressEncoder.encode(user)],
       programAddress: farmsProgramId,
     });
+  }
+
+  /**
+   * Read the APY of the farm built on top of the vault (farm in vaultState.vaultFarm)
+   * @param vault - the vault to read the farm APY for
+   * @param vaultTokenPrice - the price of the vault token in USD (e.g. 1.0 for USDC)
+   * @param [slot] - the slot to read the farm APY for. Optional. If not provided, the function will read the current slot
+   * @returns the APY of the farm built on top of the vault
+   */
+  async getVaultRewardsAPY(vault: KaminoVault, vaultTokenPrice: Decimal, slot?: Slot): Promise<FarmIncentives> {
+    const vaultState = await vault.getState(this.getConnection());
+    if (vaultState.vaultFarm === DEFAULT_PUBLIC_KEY) {
+      return {
+        incentivesStats: [],
+        totalIncentivesApy: 0,
+      };
+    }
+
+    const tokensPerShare = await this.getTokensPerShareSingleVault(vault, slot);
+    const sharePrice = tokensPerShare.mul(vaultTokenPrice);
+    const stakedTokenMintDecimals = vaultState.sharesMintDecimals.toNumber();
+
+    const farmsClient = new Farms(this.getConnection());
+    return getFarmIncentives(farmsClient, vaultState.vaultFarm, sharePrice, stakedTokenMintDecimals);
   }
 
   private appendRemainingAccountsForVaultReserves(
