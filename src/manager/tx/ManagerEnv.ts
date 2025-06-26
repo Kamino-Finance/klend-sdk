@@ -111,8 +111,8 @@ function defaultProgramConfig(programConfig: {
   const stagingOpt = programConfig.staging ?? false;
   const config: Required<ProgramConfig> = {
     staging: stagingOpt,
-    klendProgramId: programConfig?.klendProgramId ?? stagingOpt ? KLEND_STAGING_PROGRAM_ID : KLEND_PROGRAM_ID,
-    kvaultProgramId: programConfig.kvaultProgramId ?? stagingOpt ? KVAULT_STAGING_PROGRAM_ID : KVAULT_PROGRAM_ID,
+    klendProgramId: programConfig?.klendProgramId ?? (stagingOpt ? KLEND_STAGING_PROGRAM_ID : KLEND_PROGRAM_ID),
+    kvaultProgramId: programConfig.kvaultProgramId ?? (stagingOpt ? KVAULT_STAGING_PROGRAM_ID : KVAULT_PROGRAM_ID),
     farmsProgramId: programConfig?.farmsProgramId ?? FARMS_PROGRAM_ID,
     farmsGlobalConfig: programConfig?.farmsGlobalConfig ?? FARMS_GLOBAL_CONFIG_MAINNET,
   };
