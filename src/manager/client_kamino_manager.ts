@@ -445,10 +445,15 @@ async function main() {
       );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kvaultProgramId);
-      const vaultState = await vault.getState(env.c.rpc);
+      const vaultState = await kaminoVault.getState(env.c.rpc);
       const signer = await env.getSigner({ vaultState });
 
-      const instructions = await kaminoManager.updateVaultConfigIxs(kaminoVault, new PendingVaultAdmin(), newAdmin);
+      const instructions = await kaminoManager.updateVaultConfigIxs(
+        kaminoVault,
+        new PendingVaultAdmin(),
+        newAdmin,
+        signer
+      );
 
       await processTx(
         env.c,
@@ -492,7 +497,7 @@ async function main() {
       const vaultState = await vault.getState(env.c.rpc);
       const signer = await env.getSigner({ vaultState });
 
-      const instructions = await kaminoManager.updateVaultConfigIxs(kaminoVault, field, value);
+      const instructions = await kaminoManager.updateVaultConfigIxs(kaminoVault, field, value, signer);
 
       await processTx(
         env.c,
@@ -998,9 +1003,11 @@ async function main() {
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms);
-      const signer = await env.getSigner();
       const reserveAddress = address(reserve);
       const vaultAddress = address(vault);
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kvaultProgramId);
+      const vaultState = await kaminoVault.getState(env.c.rpc);
+      const signer = await env.getSigner({ vaultState });
       const allocationWeightValue = Number(allocationWeight);
       const allocationCapDecimal = new Decimal(allocationCap);
 
@@ -1024,7 +1031,7 @@ async function main() {
         allocationWeightValue,
         allocationCapDecimal
       );
-      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kvaultProgramId);
+
       const instructions = await kaminoManager.updateVaultReserveAllocationIxs(
         kaminoVault,
         firstReserveAllocationConfig,
@@ -1335,7 +1342,12 @@ async function main() {
       const env = await initEnv(staging);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-      const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, address("KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD"), env.kvaultProgramId);
+      const kaminoManager = new KaminoManager(
+        env.c.rpc,
+        slotDuration,
+        address('KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD'),
+        env.kvaultProgramId
+      );
 
       const farmAPY = await kaminoManager.getReserveFarmRewardsAPY(address(reserve), new Decimal(tokenPrice));
       console.log('farmAPY', farmAPY);

@@ -1,5 +1,6 @@
 import {
   Account,
+  AccountRole,
   Address,
   AddressesByLookupTableAddress,
   addSignersToTransactionMessage,
@@ -12,6 +13,7 @@ import {
   GetLatestBlockhashApi,
   GetMultipleAccountsApi,
   getSignatureFromTransaction,
+  IAccountSignerMeta,
   IInstruction,
   pipe,
   Rpc,
