@@ -1,16 +1,4 @@
-import {
-  Address,
-  createKeyPairSignerFromBytes,
-  KeyPairSigner,
-  SignatureDictionary,
-  TransactionPartialSigner,
-  TransactionSigner,
-} from '@solana/kit';
-
-export async function parseKeypairFile(path: string): Promise<KeyPairSigner> {
-  const wallet = Buffer.from(JSON.parse(require('fs').readFileSync(path)));
-  return await createKeyPairSignerFromBytes(wallet);
-}
+import { Address, SignatureDictionary, TransactionPartialSigner, TransactionSigner } from '@solana/kit';
 
 export function noopSigner(address: Address): TransactionSigner {
   const signer: TransactionPartialSigner = {
