@@ -3,15 +3,18 @@ import { Command } from 'commander';
 import { Address, address, IInstruction } from '@solana/kit';
 import {
   AssetReserveConfigCli,
+  calculateAPYFromAPR,
   createLookupTableIx,
   DEFAULT_RECENT_SLOT_DURATION_MS,
   encodeTokenName,
   extendLookupTableIxs,
   getMedianSlotDurationInMsFromLastEpochs,
+  getTokenOracleData,
   globalConfigPda,
   initLookupTableIx,
   KaminoManager,
   KaminoMarket,
+  KaminoReserve,
   KaminoVault,
   KaminoVaultConfig,
   lamportsToDecimal,
@@ -317,7 +320,7 @@ async function main() {
         throw new Error('If using multisig mode, multisig is required');
       }
       const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(ms, staging);
+      const env = await initEnv(staging, ms);
       const tokenMint = address(mint);
 
       const kaminoManager = new KaminoManager(
@@ -920,7 +923,7 @@ async function main() {
       );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kvaultProgramId);
-      const vaultState = await vault.getState(env.c.rpc);
+      const vaultState = await kaminoVault.getState(env.c.rpc);
       const signer = await env.getSigner({ vaultState });
       const instruction = await kaminoManager.removeReserveFromAllocationIx(kaminoVault, reserveAddress, signer);
 
@@ -1342,12 +1345,7 @@ async function main() {
       const env = await initEnv(staging);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
-      const kaminoManager = new KaminoManager(
-        env.c.rpc,
-        slotDuration,
-        address('KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD'),
-        env.kvaultProgramId
-      );
+      const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
 
       const farmAPY = await kaminoManager.getReserveFarmRewardsAPY(address(reserve), new Decimal(tokenPrice));
       console.log('farmAPY', farmAPY);
@@ -1469,6 +1467,44 @@ async function main() {
       for (const [reserveAddress, reserveOverview] of vaultOverview.reservesOverview) {
         console.log(`reserve ${reserveAddress} supplyAPY ${reserveOverview.supplyAPY}`);
       }
+    });
+
+  commands
+    .command('simulate-reserve-apy')
+    .requiredOption('--reserve <string>', 'Reserve address')
+    .action(async ({ reserve }) => {
+      const env = await initEnv();
+
+      const reserveState = await Reserve.fetch(env.c.rpc, address(reserve), env.klendProgramId);
+      if (!reserveState) {
+        throw new Error('Reserve not found');
+      }
+
+      const tokenOracleData = await getTokenOracleData(env.c.rpc, [reserveState]);
+      if (!tokenOracleData[0]) {
+        throw new Error('Token oracle data not found');
+      }
+
+      const kaminoReserve = new KaminoReserve(
+        reserveState,
+        address(reserve),
+        tokenOracleData[0]![1]!,
+        env.c.rpc,
+        DEFAULT_RECENT_SLOT_DURATION_MS
+      );
+
+      const slot = await env.c.rpc.getSlot({ commitment: 'confirmed' }).send();
+      console.log('slot', slot);
+      const amount = new Decimal(0);
+      const simulatedApr = kaminoReserve.calcSimulatedSupplyAPR(amount, 'deposit', slot, 0);
+      console.log('simulated apr', simulatedApr);
+      const apy = calculateAPYFromAPR(simulatedApr);
+      console.log('simulated apy', apy);
+
+      const computedAPR = kaminoReserve.calculateSupplyAPR(slot, 0);
+      console.log('computed apr', computedAPR);
+      const computedAPY = kaminoReserve.totalSupplyAPY(slot);
+      console.log('computed apy', computedAPY);
     });
 
   commands
