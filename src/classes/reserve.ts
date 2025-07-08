@@ -17,6 +17,7 @@ import {
 import Decimal from 'decimal.js';
 import {
   DEFAULT_PUBLIC_KEY,
+  getTokenOracleData,
   globalConfigPda,
   INITIAL_COLLATERAL_RATE,
   lendingMarketAuthPda,
@@ -95,6 +96,25 @@ export class KaminoReserve {
     const reserve = new KaminoReserve(state, address, tokenOraclePrice, rpc, recentSlotDurationMs);
     reserve.stats = reserve.formatReserveData(state);
     return reserve;
+  }
+
+  static async initializeFromAddress(
+    address: Address,
+    rpc: Rpc<KaminoReserveRpcApi>,
+    recentSlotDurationMs: number,
+    reserveState?: Reserve
+  ) {
+    const reserve = reserveState ?? (await Reserve.fetch(rpc, address));
+    if (reserve === null) {
+      throw new Error(`Reserve account ${address} does not exist`);
+    }
+
+    const tokenOracleDataWithReserve = await getTokenOracleData(rpc, [reserve]);
+    if (!tokenOracleDataWithReserve[0]) {
+      throw new Error('Token oracle data not found');
+    }
+    const tokenOracleData = tokenOracleDataWithReserve[0]![1]!;
+    return new KaminoReserve(reserve, address, tokenOracleData, rpc, recentSlotDurationMs);
   }
 
   /// GETTERS

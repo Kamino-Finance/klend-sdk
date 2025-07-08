@@ -5,11 +5,11 @@ import {
   AssetReserveConfigCli,
   calculateAPYFromAPR,
   createLookupTableIx,
+  DEFAULT_PUBLIC_KEY,
   DEFAULT_RECENT_SLOT_DURATION_MS,
   encodeTokenName,
   extendLookupTableIxs,
   getMedianSlotDurationInMsFromLastEpochs,
-  getTokenOracleData,
   globalConfigPda,
   initLookupTableIx,
   KaminoManager,
@@ -48,7 +48,7 @@ import { fetchMint, findAssociatedTokenPda } from '@solana-program/token-2022';
 import { initEnv, ManagerEnv } from './tx/ManagerEnv';
 import { processTx } from './tx/processor';
 import { getPriorityFeeAndCuIxs } from '../client/tx/priorityFee';
-import { fetchAddressLookupTable } from '@solana-program/address-lookup-table';
+import { fetchAddressLookupTable, fetchAllAddressLookupTable } from '@solana-program/address-lookup-table';
 
 dotenv.config({
   path: `.env${process.env.ENV ? '.' + process.env.ENV : ''}`,
@@ -409,7 +409,7 @@ async function main() {
         env.klendProgramId,
         env.kvaultProgramId
       );
-      const vaultState = await vault.getState(env.c.rpc);
+      const vaultState = await kVault.getState(env.c.rpc);
       const signer = await env.getSigner({ vaultState });
       const ix = await kaminoManager.getSetSharesMetadataIx(signer, kVault, symbol, extraName);
 
@@ -497,7 +497,7 @@ async function main() {
       );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kvaultProgramId);
-      const vaultState = await vault.getState(env.c.rpc);
+      const vaultState = await kaminoVault.getState(env.c.rpc);
       const signer = await env.getSigner({ vaultState });
 
       const instructions = await kaminoManager.updateVaultConfigIxs(kaminoVault, field, value, signer);
@@ -540,7 +540,7 @@ async function main() {
       );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kvaultProgramId);
-      const vaultState = await vault.getState(env.c.rpc);
+      const vaultState = await kaminoVault.getState(env.c.rpc);
       const signer = await env.getSigner({ vaultState });
       const instructions = await kaminoManager.updateVaultConfigIxs(
         kaminoVault,
@@ -652,7 +652,7 @@ async function main() {
       );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kvaultProgramId);
-      const vaultState = await vault.getState(env.c.rpc);
+      const vaultState = await kaminoVault.getState(env.c.rpc);
       const signer = await env.getSigner({ vaultState });
       const syncLUTIxs = await kaminoManager.syncVaultLUTIxs(signer, kaminoVault);
 
@@ -712,7 +712,7 @@ async function main() {
       );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kvaultProgramId);
-      const vaultState = await vault.getState(env.c.rpc);
+      const vaultState = await kaminoVault.getState(env.c.rpc);
       const signer = await env.getSigner({ vaultState });
       const instructions = await kaminoManager.updateVaultConfigIxs(
         kaminoVault,
@@ -758,7 +758,7 @@ async function main() {
       );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kvaultProgramId);
-      const vaultState = await vault.getState(env.c.rpc);
+      const vaultState = await kaminoVault.getState(env.c.rpc);
       const pendingAdmin = await env.getSigner({
         vaultState,
         useVaultPendingAdmin: true,
@@ -836,7 +836,7 @@ async function main() {
       );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kvaultProgramId);
-      const vaultState = await vault.getState(env.c.rpc);
+      const vaultState = await kaminoVault.getState(env.c.rpc);
       const signer = await env.getSigner({ vaultState });
       const instruction = await kaminoManager.giveUpPendingFeesIx(kaminoVault, new Decimal(maxAmountToGiveUp), signer);
 
@@ -876,7 +876,7 @@ async function main() {
       );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kvaultProgramId);
-      const vaultState = await vault.getState(env.c.rpc);
+      const vaultState = await kaminoVault.getState(env.c.rpc);
       const signer = await env.getSigner({ vaultState });
 
       const instructions = await kaminoManager.withdrawPendingFeesIxs(
@@ -925,25 +925,25 @@ async function main() {
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kvaultProgramId);
       const vaultState = await kaminoVault.getState(env.c.rpc);
       const signer = await env.getSigner({ vaultState });
-      const instruction = await kaminoManager.removeReserveFromAllocationIx(kaminoVault, reserveAddress, signer);
 
-      if (instruction) {
-        await processTx(
-          env.c,
-          signer,
-          [
-            instruction,
-            ...getPriorityFeeAndCuIxs({
-              priorityFeeMultiplier: 2500,
-            }),
-          ],
-          mode,
-          []
-        );
-        mode === 'execute' && console.log('Vault allocation updated');
-      } else {
-        console.log('No updates to vault allocation to perform');
+      const ixs = await kaminoManager.fullRemoveReserveFromVaultIxs(signer, kaminoVault, reserveAddress);
+
+      const transactionIxs = [
+        ...ixs,
+        ...getPriorityFeeAndCuIxs({
+          priorityFeeMultiplier: 2500,
+          computeUnits: 1_000_000,
+        }),
+      ];
+
+      const lookupTableAddresses = [];
+      if (vaultState.vaultLookupTable !== DEFAULT_PUBLIC_KEY) {
+        lookupTableAddresses.push(vaultState.vaultLookupTable);
       }
+      const lookupTables = await fetchAllAddressLookupTable(env.c.rpc, lookupTableAddresses);
+
+      await processTx(env.c, signer, transactionIxs, mode, lookupTables);
+      mode === 'execute' && console.log('Vault allocation removed');
     });
 
   commands
@@ -1480,21 +1480,14 @@ async function main() {
         throw new Error('Reserve not found');
       }
 
-      const tokenOracleData = await getTokenOracleData(env.c.rpc, [reserveState]);
-      if (!tokenOracleData[0]) {
-        throw new Error('Token oracle data not found');
-      }
-
-      const kaminoReserve = new KaminoReserve(
-        reserveState,
+      const kaminoReserve = await KaminoReserve.initializeFromAddress(
         address(reserve),
-        tokenOracleData[0]![1]!,
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        reserveState
       );
 
       const slot = await env.c.rpc.getSlot({ commitment: 'confirmed' }).send();
-      console.log('slot', slot);
       const amount = new Decimal(0);
       const simulatedApr = kaminoReserve.calcSimulatedSupplyAPR(amount, 'deposit', slot, 0);
       console.log('simulated apr', simulatedApr);

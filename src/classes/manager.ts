@@ -283,6 +283,70 @@ export class KaminoManager {
   }
 
   /**
+   * This method sets weight to 0, remove tokens and remove from allocation a reserve from the vault
+   * @param signer - signer to use for the transaction
+   * @param kaminoVault - vault to remove the reserve from
+   * @param reserveAddress - reserve to remove from the vault allocation strategy
+   * @param [reserveState] - optional parameter to pass a reserve state. If not provided, the reserve will be fetched from the connection
+   * @returns - an array of instructions to set the reserve allocation to 0, invest the reserve if it has tokens, and remove the reserve from the allocation
+   */
+  async fullRemoveReserveFromVaultIxs(
+    signer: TransactionSigner,
+    kaminoVault: KaminoVault,
+    reserveAddress: Address,
+    reserveState?: Reserve
+  ): Promise<IInstruction[]> {
+    const connection = this.getRpc();
+    const vaultState = await kaminoVault.getState(connection);
+
+    const allocations = this.getVaultReserves(vaultState);
+    if (!allocations.includes(reserveAddress)) {
+      throw new Error('Reserve not found in vault allocations');
+    }
+
+    const fetchedReserveState =
+      reserveState ?? (await Reserve.fetch(connection, reserveAddress, this._kaminoLendProgramId));
+    if (!fetchedReserveState) {
+      throw new Error('Reserve not found');
+    }
+    const reserveWithAddress: ReserveWithAddress = {
+      address: reserveAddress,
+      state: fetchedReserveState,
+    };
+
+    const kaminoReserve = await KaminoReserve.initializeFromAddress(
+      reserveAddress,
+      connection,
+      this.recentSlotDurationMs,
+      reserveState
+    );
+
+    const reserveAllocationConfig = new ReserveAllocationConfig(reserveWithAddress, 0, new Decimal(0));
+    const setAllocationToZeroIx = await this.updateVaultReserveAllocationIxs(
+      kaminoVault,
+      reserveAllocationConfig,
+      signer
+    );
+
+    const investIx = await this.investSingleReserveIxs(signer, kaminoVault, reserveWithAddress);
+
+    const removeAllocationIx = await this.removeReserveFromAllocationIx(kaminoVault, reserveAddress, signer);
+
+    const ixs = [setAllocationToZeroIx.updateReserveAllocationIx];
+
+    const slot = await connection.getSlot({ commitment: 'confirmed' }).send();
+    const suppliedInReserve = this.getSuppliedInReserve(vaultState, slot, kaminoReserve);
+    if (suppliedInReserve.gt(new Decimal(0))) {
+      ixs.push(...investIx);
+    }
+    if (removeAllocationIx) {
+      ixs.push(removeAllocationIx);
+    }
+
+    return ixs;
+  }
+
+  /**
    * This method withdraws all the funds from a reserve and blocks it from being invested by setting its weight and ctoken allocation to 0
    * @param vault - the vault to withdraw the funds from
    * @param reserve - the reserve to withdraw the funds from
@@ -1109,7 +1173,7 @@ export class KaminoManager {
       debtFarmIncentives: null,
     };
 
-    console.log("this._kaminoLendProgramId", this._kaminoLendProgramId.toString());
+    console.log('this._kaminoLendProgramId', this._kaminoLendProgramId.toString());
     const reserveAccount = reserveState
       ? reserveState
       : await Reserve.fetch(this._rpc, reserve, this._kaminoLendProgramId);
