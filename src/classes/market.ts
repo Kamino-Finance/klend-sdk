@@ -87,6 +87,10 @@ export class KaminoMarket {
 
   private readonly recentSlotDurationMs: number;
 
+  // key = scope feed (oracle prices) pubkey
+  // value = reserve pubkey
+  private readonly reserveScopeFeeds: Map<Address, Address>;
+
   private constructor(
     rpc: Rpc<KaminoMarketRpcApi>,
     state: LendingMarket,
@@ -102,6 +106,11 @@ export class KaminoMarket {
     this.reservesActive = getReservesActive(this.reserves);
     this.programId = programId;
     this.recentSlotDurationMs = recentSlotDurationMs;
+    this.reserveScopeFeeds = new Map(
+      Array.from(this.reserves.values())
+        .filter((r) => isNotNullPubkey(r.state.config.tokenInfo.scopeConfiguration.priceFeed))
+        .map((r) => [r.address, r.state.config.tokenInfo.scopeConfiguration.priceFeed])
+    );
   }
 
   /**
@@ -1230,12 +1239,26 @@ export class KaminoMarket {
   }
 
   /**
+   * Get all scope OraclePrices accounts for all market reserves
+   * @param scope
+   */
+  async getReserveOraclePrices(scope: Scope): Promise<Map<Address, OraclePrices>> {
+    const reserveOraclePrices: Map<Address, OraclePrices> = new Map();
+    const oraclePrices = await scope.getMultipleOraclePrices(Array.from(this.reserveScopeFeeds.keys()));
+    for (const [feed, oraclePricesAccount] of oraclePrices) {
+      const reserve = this.reserveScopeFeeds.get(feed);
+      if (reserve) {
+        reserveOraclePrices.set(reserve, oraclePricesAccount);
+      }
+    }
+    return reserveOraclePrices;
+  }
+
+  /**
    * Get all Scope prices used by all the market reserves
    */
-  async getAllScopePrices(scope: Scope, oraclePrices?: OraclePrices): Promise<KaminoPrices> {
-    if (!oraclePrices) {
-      oraclePrices = await scope.getOraclePrices();
-    }
+  async getAllScopePrices(scope: Scope): Promise<KaminoPrices> {
+    const allOraclePrices = await this.getReserveOraclePrices(scope);
     const spot: MintToPriceMap = {};
     const twaps: MintToPriceMap = {};
     for (const reserve of this.reserves.values()) {
@@ -1244,11 +1267,12 @@ export class KaminoMarket {
       const oracle = reserve.state.config.tokenInfo.scopeConfiguration.priceFeed;
       const chain = reserve.state.config.tokenInfo.scopeConfiguration.priceChain;
       const twapChain = reserve.state.config.tokenInfo.scopeConfiguration.twapChain.filter((x) => x > 0);
-      if (oracle && isNotNullPubkey(oracle) && chain && Scope.isScopeChainValid(chain)) {
+      const oraclePrices = allOraclePrices.get(reserve.address);
+      if (oraclePrices && oracle && isNotNullPubkey(oracle) && chain && Scope.isScopeChainValid(chain)) {
         const spotPrice = await scope.getPriceFromChain(chain, oraclePrices);
         spot[tokenMint] = { price: spotPrice.price, name: tokenName };
       }
-      if (oracle && isNotNullPubkey(oracle) && twapChain && Scope.isScopeChainValid(twapChain)) {
+      if (oraclePrices && oracle && isNotNullPubkey(oracle) && twapChain && Scope.isScopeChainValid(twapChain)) {
         const twap = await scope.getPriceFromChain(twapChain, oraclePrices);
         twaps[tokenMint] = { price: twap.price, name: tokenName };
       }

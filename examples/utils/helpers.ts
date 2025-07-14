@@ -62,8 +62,7 @@ export async function getReserveRewardsApy(args: ReserveArgs) {
   const rewardApys: { rewardApy: Decimal; rewardInfo: RewardInfo }[] = [];
 
   const scope = new Scope('mainnet-beta', args.rpc);
-  const oraclePrices = await scope.getOraclePrices();
-  const prices = await market.getAllScopePrices(scope, oraclePrices);
+  const prices = await market.getAllScopePrices(scope);
 
   const farmStates = await FarmState.fetchMultiple(args.rpc, [reserve.state.farmDebt, reserve.state.farmCollateral]);
 
