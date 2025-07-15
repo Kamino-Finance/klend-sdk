@@ -1244,7 +1244,7 @@ export class KaminoMarket {
    */
   async getReserveOraclePrices(scope: Scope): Promise<Map<Address, OraclePrices>> {
     const reserveOraclePrices: Map<Address, OraclePrices> = new Map();
-    const oraclePrices = await scope.getMultipleOraclePrices(Array.from(this.reserveScopeFeeds.keys()));
+    const oraclePrices = await scope.getMultipleOraclePrices(Array.from(this.reserveScopeFeeds.values()));
     for (const [feed, oraclePricesAccount] of oraclePrices) {
       const reserve = this.reserveScopeFeeds.get(feed);
       if (reserve) {
