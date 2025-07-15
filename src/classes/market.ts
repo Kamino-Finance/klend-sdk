@@ -87,9 +87,8 @@ export class KaminoMarket {
 
   private readonly recentSlotDurationMs: number;
 
-  // key = scope feed (oracle prices) pubkey
-  // value = reserve pubkey
-  private readonly reserveScopeFeeds: Map<Address, Address>;
+  // scope feeds used by all market reserves
+  private readonly scopeFeeds: Set<Address>;
 
   private constructor(
     rpc: Rpc<KaminoMarketRpcApi>,
@@ -106,10 +105,10 @@ export class KaminoMarket {
     this.reservesActive = getReservesActive(this.reserves);
     this.programId = programId;
     this.recentSlotDurationMs = recentSlotDurationMs;
-    this.reserveScopeFeeds = new Map(
+    this.scopeFeeds = new Set(
       Array.from(this.reserves.values())
         .filter((r) => isNotNullPubkey(r.state.config.tokenInfo.scopeConfiguration.priceFeed))
-        .map((r) => [r.address, r.state.config.tokenInfo.scopeConfiguration.priceFeed])
+        .map((r) => r.state.config.tokenInfo.scopeConfiguration.priceFeed)
     );
   }
 
@@ -1244,12 +1243,16 @@ export class KaminoMarket {
    */
   async getReserveOraclePrices(scope: Scope): Promise<Map<Address, OraclePrices>> {
     const reserveOraclePrices: Map<Address, OraclePrices> = new Map();
-    const oraclePrices = await scope.getMultipleOraclePrices(Array.from(this.reserveScopeFeeds.values()));
-    for (const [feed, oraclePricesAccount] of oraclePrices) {
-      const reserve = this.reserveScopeFeeds.get(feed);
-      if (reserve) {
-        reserveOraclePrices.set(reserve, oraclePricesAccount);
-      }
+    const oraclePrices = await scope.getMultipleOraclePrices(Array.from(this.scopeFeeds.keys()));
+    const oraclePriceMap = new Map<Address, OraclePrices>();
+    for (const [feed, account] of oraclePrices) {
+      oraclePriceMap.set(feed, account);
+    }
+    for (const [reserveAddress, reserve] of this.reserves) {
+      reserveOraclePrices.set(
+        reserveAddress,
+        oraclePriceMap.get(reserve.state.config.tokenInfo.scopeConfiguration.priceFeed)!
+      );
     }
     return reserveOraclePrices;
   }
