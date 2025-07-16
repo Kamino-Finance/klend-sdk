@@ -1759,7 +1759,7 @@ export class KaminoVaultClient {
     // deduplicate missing accounts and remove default accounts and convert it back to an array
     const missingAccountsList = [...new Set<Address>(missingAccounts)];
 
-    const chunkSize = 20;
+    const chunkSize = 10;
     const ixs: IInstruction[] = [];
 
     for (let i = 0; i < missingAccountsList.length; i += chunkSize) {
