@@ -1,4 +1,4 @@
-import { IInstruction } from '@solana/kit';
+import { Address, IInstruction } from '@solana/kit';
 import Decimal from 'decimal.js/decimal';
 
 /** the populateLUTIxs should be executed in a separate transaction as we cannot create and populate a lookup table in the same tx */
@@ -27,9 +27,19 @@ export type WithdrawAndBlockReserveIxs = {
   investIxs: IInstruction[];
 };
 
+export type DisinvestAllReservesIxs = {
+  updateReserveAllocationIxs: IInstruction[];
+  investIxs: IInstruction[];
+};
+
 export type UpdateVaultConfigIxs = {
   updateVaultConfigIx: IInstruction;
   updateLUTIxs: IInstruction[];
+};
+
+export type VaultComputedAllocation = {
+  targetUnallocatedAmount: Decimal;
+  targetReservesAllocation: Map<Address, Decimal>;
 };
 
 /** If there are ixs to setup the LUT it means it doesn't already exist and it needs to be created in a separate tx before inserting into it */

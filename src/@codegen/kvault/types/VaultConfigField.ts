@@ -280,6 +280,52 @@ export class AllocationAdmin {
   }
 }
 
+export interface UnallocatedWeightJSON {
+  kind: "UnallocatedWeight"
+}
+
+export class UnallocatedWeight {
+  static readonly discriminator = 12
+  static readonly kind = "UnallocatedWeight"
+  readonly discriminator = 12
+  readonly kind = "UnallocatedWeight"
+
+  toJSON(): UnallocatedWeightJSON {
+    return {
+      kind: "UnallocatedWeight",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UnallocatedWeight: {},
+    }
+  }
+}
+
+export interface UnallocatedTokensCapJSON {
+  kind: "UnallocatedTokensCap"
+}
+
+export class UnallocatedTokensCap {
+  static readonly discriminator = 13
+  static readonly kind = "UnallocatedTokensCap"
+  readonly discriminator = 13
+  readonly kind = "UnallocatedTokensCap"
+
+  toJSON(): UnallocatedTokensCapJSON {
+    return {
+      kind: "UnallocatedTokensCap",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UnallocatedTokensCap: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.VaultConfigFieldKind {
   if (typeof obj !== "object") {
@@ -321,6 +367,12 @@ export function fromDecoded(obj: any): types.VaultConfigFieldKind {
   }
   if ("AllocationAdmin" in obj) {
     return new AllocationAdmin()
+  }
+  if ("UnallocatedWeight" in obj) {
+    return new UnallocatedWeight()
+  }
+  if ("UnallocatedTokensCap" in obj) {
+    return new UnallocatedTokensCap()
   }
 
   throw new Error("Invalid enum object")
@@ -366,6 +418,12 @@ export function fromJSON(
     case "AllocationAdmin": {
       return new AllocationAdmin()
     }
+    case "UnallocatedWeight": {
+      return new UnallocatedWeight()
+    }
+    case "UnallocatedTokensCap": {
+      return new UnallocatedTokensCap()
+    }
   }
 }
 
@@ -383,6 +441,8 @@ export function layout(property?: string) {
     borsh.struct([], "LookupTable"),
     borsh.struct([], "Farm"),
     borsh.struct([], "AllocationAdmin"),
+    borsh.struct([], "UnallocatedWeight"),
+    borsh.struct([], "UnallocatedTokensCap"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

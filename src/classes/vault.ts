@@ -87,12 +87,14 @@ import {
   AcceptVaultOwnershipIxs,
   APYs,
   DepositIxs,
+  DisinvestAllReservesIxs,
   InitVaultIxs,
   ReserveAllocationOverview,
   SyncVaultLUTIxs,
   UpdateReserveAllocationIxs,
   UpdateVaultConfigIxs,
   UserSharesForVault,
+  VaultComputedAllocation,
   WithdrawAndBlockReserveIxs,
   WithdrawIxs,
 } from './vault_types';
@@ -121,6 +123,7 @@ import { noopSigner } from '../utils/signer';
 import { getExtendLookupTableInstruction } from '@solana-program/address-lookup-table';
 import { Farms } from '@kamino-finance/farms-sdk';
 import { getFarmIncentives } from '@kamino-finance/farms-sdk/dist/utils/apy';
+import { computeReservesAllocation } from '../utils/vaultAllocation';
 
 export const kaminoVaultId = address('KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd');
 export const kaminoVaultStagingId = address('stKvQfwRsQiKnLtMNVLHKS3exFJmZFsgfzBPWHECUYK');
@@ -454,6 +457,50 @@ export class KaminoVaultClient {
   }
 
   /**
+   * This method updates the unallocated weight and cap of a vault (both are optional, if not provided the current values will be used)
+   * @param vault - the vault to update the unallocated weight and cap for
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @param [unallocatedWeight] - the new unallocated weight to set. If not provided, the current unallocated weight will be used
+   * @param [unallocatedCap] - the new unallocated cap to set. If not provided, the current unallocated cap will be used
+   * @returns - a list of instructions to update the unallocated weight and cap
+   */
+  async updateVaultUnallocatedWeightAndCapIxs(
+    vault: KaminoVault,
+    vaultAdminAuthority?: TransactionSigner,
+    unallocatedWeight?: BN,
+    unallocatedCap?: BN
+  ) {
+    const vaultState = await vault.getState(this.getConnection());
+
+    const unallocatedWeightToUse = unallocatedWeight ? unallocatedWeight : vaultState.unallocatedWeight;
+    const unallocatedCapToUse = unallocatedCap ? unallocatedCap : vaultState.unallocatedTokensCap;
+
+    const ixs: IInstruction[] = [];
+
+    if (!unallocatedWeightToUse.eq(vaultState.unallocatedWeight)) {
+      const updateVaultUnallocatedWeightIx = await this.updateVaultConfigIxs(
+        vault,
+        new VaultConfigField.UnallocatedWeight(),
+        unallocatedWeightToUse.toString(),
+        vaultAdminAuthority
+      );
+      ixs.push(updateVaultUnallocatedWeightIx.updateVaultConfigIx);
+    }
+
+    if (!unallocatedCapToUse.eq(vaultState.unallocatedTokensCap)) {
+      const updateVaultUnallocatedCapIx = await this.updateVaultConfigIxs(
+        vault,
+        new VaultConfigField.UnallocatedTokensCap(),
+        unallocatedCapToUse.toString(),
+        vaultAdminAuthority
+      );
+      ixs.push(updateVaultUnallocatedCapIx.updateVaultConfigIx);
+    }
+
+    return ixs;
+  }
+
+  /**
    * This method withdraws all the funds from a reserve and blocks it from being invested by setting its weight and ctoken allocation to 0
    * @param vault - the vault to withdraw the funds from
    * @param reserve - the reserve to withdraw the funds from
@@ -506,7 +553,7 @@ export class KaminoVaultClient {
    * @param vault - the vault to withdraw the invested funds from
    * @param [vaultReservesMap] - optional parameter to pass a map of the vault reserves. If not provided, the reserves will be loaded from the vault
    * @param [payer] - optional parameter to pass a different payer for the transaction. If not provided, the admin of the vault will be used; this is the payer for the invest ixs and it should have an ATA and some lamports (2x no_of_reserves) of the token vault
-   * @returns - a struct with an instruction to update the reserve allocation and an optional list of instructions to update the lookup table for the allocation changes
+   * @returns - a struct with an instruction to update the reserve allocations (set weight and ctoken allocation to 0) and an a list of instructions to disinvest the funds in the reserves
    */
   async withdrawEverythingFromAllReservesAndBlockInvest(
     vault: KaminoVault,
@@ -542,6 +589,59 @@ export class KaminoVaultClient {
     withdrawAndBlockReserveIxs.investIxs = investIxs;
 
     return withdrawAndBlockReserveIxs;
+  }
+
+  /**
+   * This method disinvests all the funds from all the reserves and set their weight to 0; for vaults that are managed by external bot/crank, the bot can change the weight and invest in the reserves again
+   * @param vault - the vault to disinvest the invested funds from
+   * @param [vaultReservesMap] - optional parameter to pass a map of the vault reserves. If not provided, the reserves will be loaded from the vault
+   * @param [payer] - optional parameter to pass a different payer for the transaction. If not provided, the admin of the vault will be used; this is the payer for the invest ixs and it should have an ATA and some lamports (2x no_of_reserves) of the token vault
+   * @returns - a struct with an instruction to update the reserve allocations to 0 weight and a list of instructions to disinvest the funds in the reserves
+   */
+  async disinvestAllReservesIxs(
+    vault: KaminoVault,
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    payer?: TransactionSigner
+  ): Promise<DisinvestAllReservesIxs> {
+    const vaultState = await vault.getState(this.getConnection());
+
+    const reserves = this.getVaultReserves(vaultState);
+    const disinvestAllReservesIxs: DisinvestAllReservesIxs = {
+      updateReserveAllocationIxs: [],
+      investIxs: [],
+    };
+
+    if (!vaultReservesMap) {
+      vaultReservesMap = await this.loadVaultReserves(vaultState);
+    }
+
+    for (const reserve of reserves) {
+      const reserveWithAddress: ReserveWithAddress = {
+        address: reserve,
+        state: vaultReservesMap.get(reserve)!.state,
+      };
+      const existingReserveAllocation = vaultState.vaultAllocationStrategy.find(
+        (allocation) => allocation.reserve === reserve
+      );
+      if (!existingReserveAllocation) {
+        continue;
+      }
+      const reserveAllocationConfig = new ReserveAllocationConfig(
+        reserveWithAddress,
+        0,
+        new Decimal(existingReserveAllocation.tokenAllocationCap.toString())
+      );
+
+      // update allocation to have 0 weight and 0 cap
+      const updateAllocIxs = await this.updateReserveAllocationIxs(vault, reserveAllocationConfig, payer);
+      disinvestAllReservesIxs.updateReserveAllocationIxs.push(updateAllocIxs.updateReserveAllocationIx);
+    }
+
+    const investPayer = payer ? payer : noopSigner(vaultState.vaultAdminAuthority);
+    const investIxs = await this.investAllReservesIxs(investPayer, vault);
+    disinvestAllReservesIxs.investIxs = investIxs;
+
+    return disinvestAllReservesIxs;
   }
 
   /**
@@ -1354,7 +1454,7 @@ export class KaminoVaultClient {
     for (let index = 0; index < allReserves.length; index++) {
       const reservePubkey = allReserves[index];
       const reserveState = allReservesStateMap.get(reservePubkey)!;
-      const computedAllocation = computedReservesAllocation.get(reservePubkey)!;
+      const computedAllocation = computedReservesAllocation.targetReservesAllocation.get(reservePubkey)!;
       const currentCTokenAllocation = curentVaultAllocations.get(reservePubkey)!.ctokenAllocation;
       const currentAllocationCap = curentVaultAllocations.get(reservePubkey)!.tokenAllocationCap;
 
@@ -1790,7 +1890,10 @@ export class KaminoVaultClient {
     slot?: Slot,
     vaultReserves?: Map<Address, KaminoReserve>,
     currentSlot?: Slot
-  ): Promise<Map<Address, Decimal>> {
+  ): Promise<VaultComputedAllocation> {
+    // 1. Read the states
+    const holdings = await this.getVaultHoldings(vaultState, slot, vaultReserves, currentSlot);
+
     // if there are no vault reserves or all have weight 0 everything has to be in Available
     const allReservesPubkeys = this.getVaultReserves(vaultState);
     const reservesAllocations = this.getVaultAllocations(vaultState);
@@ -1803,50 +1906,30 @@ export class KaminoVaultClient {
       allReservesPubkeys.forEach((reserve) => {
         computedHoldings.set(reserve, new Decimal(0));
       });
-      return computedHoldings;
+      return {
+        targetUnallocatedAmount: holdings.totalAUMIncludingFees.sub(holdings.pendingFees),
+        targetReservesAllocation: computedHoldings,
+      };
     }
 
-    const holdings = await this.getVaultHoldings(vaultState, slot, vaultReserves, currentSlot);
     const initialVaultAllocations = this.getVaultAllocations(vaultState);
 
-    const allReserves = this.getVaultReserves(vaultState);
+    // 2. Compute the allocation
+    return this.computeReservesAllocation(
+      holdings.totalAUMIncludingFees.sub(holdings.pendingFees),
+      new Decimal(vaultState.unallocatedWeight.toString()),
+      new Decimal(vaultState.unallocatedTokensCap.toString()),
+      initialVaultAllocations
+    );
+  }
 
-    let totalAllocation = new Decimal(0);
-    initialVaultAllocations.forEach((allocation) => {
-      totalAllocation = totalAllocation.add(allocation.targetWeight);
-    });
-    const expectedHoldingsDistribution = new Map<Address, Decimal>();
-    allReserves.forEach((reserve) => {
-      expectedHoldingsDistribution.set(reserve, new Decimal(0));
-    });
-
-    let totalLeftToInvest = holdings.totalAUMIncludingFees.sub(holdings.pendingFees);
-    let currentAllocationSum = totalAllocation;
-    const ONE = new Decimal(1);
-    while (totalLeftToInvest.gt(ONE)) {
-      const totalLeftover = totalLeftToInvest;
-      for (const reserve of allReserves) {
-        const reserveWithWeight = initialVaultAllocations.get(reserve);
-        const targetAllocation = reserveWithWeight!.targetWeight.mul(totalLeftover).div(currentAllocationSum);
-        const reserveCap = reserveWithWeight!.tokenAllocationCap;
-        let amountToInvest = Decimal.min(targetAllocation, totalLeftToInvest);
-        if (reserveCap.gt(ZERO)) {
-          amountToInvest = Decimal.min(amountToInvest, reserveCap);
-        }
-        totalLeftToInvest = totalLeftToInvest.sub(amountToInvest);
-        if (amountToInvest.eq(reserveCap) && reserveCap.gt(ZERO)) {
-          currentAllocationSum = currentAllocationSum.sub(reserveWithWeight!.targetWeight);
-        }
-        const reserveHasPreallocation = expectedHoldingsDistribution.has(reserve);
-        if (reserveHasPreallocation) {
-          expectedHoldingsDistribution.set(reserve, expectedHoldingsDistribution.get(reserve)!.add(amountToInvest));
-        } else {
-          expectedHoldingsDistribution.set(reserve, amountToInvest);
-        }
-      }
-    }
-
-    return expectedHoldingsDistribution;
+  private computeReservesAllocation(
+    vaultAUM: Decimal,
+    vaultUnallocatedWeight: Decimal,
+    vaultUnallocatedCap: Decimal,
+    initialVaultAllocations: Map<Address, ReserveAllocationOverview>
+  ) {
+    return computeReservesAllocation(vaultAUM, vaultUnallocatedWeight, vaultUnallocatedCap, initialVaultAllocations);
   }
 
   /**

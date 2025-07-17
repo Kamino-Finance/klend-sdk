@@ -47,6 +47,7 @@ export type CustomError =
   | InvestTooSoon
   | WrongAdminOrAllocationAdmin
   | ReserveHasNonZeroAllocationOrCTokens
+  | DepositAmountGreaterThanRequestedAmount
 
 export class DepositAmountsZero extends Error {
   static readonly code = 7000
@@ -579,6 +580,17 @@ export class ReserveHasNonZeroAllocationOrCTokens extends Error {
   }
 }
 
+export class DepositAmountGreaterThanRequestedAmount extends Error {
+  static readonly code = 7048
+  readonly code = 7048
+  readonly name = "DepositAmountGreaterThanRequestedAmount"
+  readonly msg = "Deposit amount is greater than requested amount"
+
+  constructor(readonly logs?: string[]) {
+    super("7048: Deposit amount is greater than requested amount")
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 7000:
@@ -677,6 +689,8 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new WrongAdminOrAllocationAdmin(logs)
     case 7047:
       return new ReserveHasNonZeroAllocationOrCTokens(logs)
+    case 7048:
+      return new DepositAmountGreaterThanRequestedAmount(logs)
   }
 
   return null

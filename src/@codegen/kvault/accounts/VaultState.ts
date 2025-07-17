@@ -28,7 +28,7 @@ export interface VaultStateFields {
   tokenAvailable: BN
   sharesIssued: BN
   availableCrankFunds: BN
-  padding0: BN
+  unallocatedWeight: BN
   performanceFeeBps: BN
   managementFeeBps: BN
   lastFeeChargeTimestamp: BN
@@ -49,7 +49,7 @@ export interface VaultStateFields {
   vaultLookupTable: Address
   vaultFarm: Address
   creationTimestamp: BN
-  padding2: BN
+  unallocatedTokensCap: BN
   allocationAdmin: Address
   padding3: Array<BN>
 }
@@ -67,7 +67,7 @@ export interface VaultStateJSON {
   tokenAvailable: string
   sharesIssued: string
   availableCrankFunds: string
-  padding0: string
+  unallocatedWeight: string
   performanceFeeBps: string
   managementFeeBps: string
   lastFeeChargeTimestamp: string
@@ -88,7 +88,7 @@ export interface VaultStateJSON {
   vaultLookupTable: string
   vaultFarm: string
   creationTimestamp: string
-  padding2: string
+  unallocatedTokensCap: string
   allocationAdmin: string
   padding3: Array<string>
 }
@@ -106,7 +106,7 @@ export class VaultState {
   readonly tokenAvailable: BN
   readonly sharesIssued: BN
   readonly availableCrankFunds: BN
-  readonly padding0: BN
+  readonly unallocatedWeight: BN
   readonly performanceFeeBps: BN
   readonly managementFeeBps: BN
   readonly lastFeeChargeTimestamp: BN
@@ -127,7 +127,7 @@ export class VaultState {
   readonly vaultLookupTable: Address
   readonly vaultFarm: Address
   readonly creationTimestamp: BN
-  readonly padding2: BN
+  readonly unallocatedTokensCap: BN
   readonly allocationAdmin: Address
   readonly padding3: Array<BN>
 
@@ -148,7 +148,7 @@ export class VaultState {
     borsh.u64("tokenAvailable"),
     borsh.u64("sharesIssued"),
     borsh.u64("availableCrankFunds"),
-    borsh.u64("padding0"),
+    borsh.u64("unallocatedWeight"),
     borsh.u64("performanceFeeBps"),
     borsh.u64("managementFeeBps"),
     borsh.u64("lastFeeChargeTimestamp"),
@@ -169,7 +169,7 @@ export class VaultState {
     borshAddress("vaultLookupTable"),
     borshAddress("vaultFarm"),
     borsh.u64("creationTimestamp"),
-    borsh.u64("padding2"),
+    borsh.u64("unallocatedTokensCap"),
     borshAddress("allocationAdmin"),
     borsh.array(borsh.u128(), 242, "padding3"),
   ])
@@ -187,7 +187,7 @@ export class VaultState {
     this.tokenAvailable = fields.tokenAvailable
     this.sharesIssued = fields.sharesIssued
     this.availableCrankFunds = fields.availableCrankFunds
-    this.padding0 = fields.padding0
+    this.unallocatedWeight = fields.unallocatedWeight
     this.performanceFeeBps = fields.performanceFeeBps
     this.managementFeeBps = fields.managementFeeBps
     this.lastFeeChargeTimestamp = fields.lastFeeChargeTimestamp
@@ -210,7 +210,7 @@ export class VaultState {
     this.vaultLookupTable = fields.vaultLookupTable
     this.vaultFarm = fields.vaultFarm
     this.creationTimestamp = fields.creationTimestamp
-    this.padding2 = fields.padding2
+    this.unallocatedTokensCap = fields.unallocatedTokensCap
     this.allocationAdmin = fields.allocationAdmin
     this.padding3 = fields.padding3
   }
@@ -271,7 +271,7 @@ export class VaultState {
       tokenAvailable: dec.tokenAvailable,
       sharesIssued: dec.sharesIssued,
       availableCrankFunds: dec.availableCrankFunds,
-      padding0: dec.padding0,
+      unallocatedWeight: dec.unallocatedWeight,
       performanceFeeBps: dec.performanceFeeBps,
       managementFeeBps: dec.managementFeeBps,
       lastFeeChargeTimestamp: dec.lastFeeChargeTimestamp,
@@ -296,7 +296,7 @@ export class VaultState {
       vaultLookupTable: dec.vaultLookupTable,
       vaultFarm: dec.vaultFarm,
       creationTimestamp: dec.creationTimestamp,
-      padding2: dec.padding2,
+      unallocatedTokensCap: dec.unallocatedTokensCap,
       allocationAdmin: dec.allocationAdmin,
       padding3: dec.padding3,
     })
@@ -316,7 +316,7 @@ export class VaultState {
       tokenAvailable: this.tokenAvailable.toString(),
       sharesIssued: this.sharesIssued.toString(),
       availableCrankFunds: this.availableCrankFunds.toString(),
-      padding0: this.padding0.toString(),
+      unallocatedWeight: this.unallocatedWeight.toString(),
       performanceFeeBps: this.performanceFeeBps.toString(),
       managementFeeBps: this.managementFeeBps.toString(),
       lastFeeChargeTimestamp: this.lastFeeChargeTimestamp.toString(),
@@ -339,7 +339,7 @@ export class VaultState {
       vaultLookupTable: this.vaultLookupTable,
       vaultFarm: this.vaultFarm,
       creationTimestamp: this.creationTimestamp.toString(),
-      padding2: this.padding2.toString(),
+      unallocatedTokensCap: this.unallocatedTokensCap.toString(),
       allocationAdmin: this.allocationAdmin,
       padding3: this.padding3.map((item) => item.toString()),
     }
@@ -359,7 +359,7 @@ export class VaultState {
       tokenAvailable: new BN(obj.tokenAvailable),
       sharesIssued: new BN(obj.sharesIssued),
       availableCrankFunds: new BN(obj.availableCrankFunds),
-      padding0: new BN(obj.padding0),
+      unallocatedWeight: new BN(obj.unallocatedWeight),
       performanceFeeBps: new BN(obj.performanceFeeBps),
       managementFeeBps: new BN(obj.managementFeeBps),
       lastFeeChargeTimestamp: new BN(obj.lastFeeChargeTimestamp),
@@ -382,7 +382,7 @@ export class VaultState {
       vaultLookupTable: address(obj.vaultLookupTable),
       vaultFarm: address(obj.vaultFarm),
       creationTimestamp: new BN(obj.creationTimestamp),
-      padding2: new BN(obj.padding2),
+      unallocatedTokensCap: new BN(obj.unallocatedTokensCap),
       allocationAdmin: address(obj.allocationAdmin),
       padding3: obj.padding3.map((item) => new BN(item)),
     })

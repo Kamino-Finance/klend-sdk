@@ -77,12 +77,14 @@ import {
   AcceptVaultOwnershipIxs,
   APYs,
   DepositIxs,
+  DisinvestAllReservesIxs,
   InitVaultIxs,
   ReserveAllocationOverview,
   SyncVaultLUTIxs,
   UpdateReserveAllocationIxs,
   UpdateVaultConfigIxs,
   UserSharesForVault,
+  VaultComputedAllocation,
   WithdrawAndBlockReserveIxs,
   WithdrawIxs,
 } from './vault_types';
@@ -268,6 +270,28 @@ export class KaminoManager {
   }
 
   /**
+   * This method updates the unallocated weight and cap of a vault (both are optional, if not provided the current values will be used)
+   * @param vault - the vault to update the unallocated weight and cap for
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @param [unallocatedWeight] - the new unallocated weight to set. If not provided, the current unallocated weight will be used
+   * @param [unallocatedCap] - the new unallocated cap to set. If not provided, the current unallocated cap will be used
+   * @returns - a list of instructions to update the unallocated weight and cap
+   */
+  async updateVaultUnallocatedWeightAndCapIxs(
+    vault: KaminoVault,
+    vaultAdminAuthority?: TransactionSigner,
+    unallocatedWeight?: BN,
+    unallocatedCap?: BN
+  ): Promise<IInstruction[]> {
+    return this._vaultClient.updateVaultUnallocatedWeightAndCapIxs(
+      vault,
+      vaultAdminAuthority,
+      unallocatedWeight,
+      unallocatedCap
+    );
+  }
+
+  /**
    * This method removes a reserve from the vault allocation strategy if already part of the allocation strategy
    * @param vault - vault to remove the reserve from
    * @param reserve - reserve to remove from the vault allocation strategy
@@ -374,6 +398,21 @@ export class KaminoManager {
     payer?: TransactionSigner
   ): Promise<WithdrawAndBlockReserveIxs> {
     return this._vaultClient.withdrawEverythingFromAllReservesAndBlockInvest(vault, vaultReservesMap, payer);
+  }
+
+  /**
+   * This method disinvests all the funds from all the reserves and set their weight to 0; for vaults that are managed by external bot/crank, the bot can change the weight and invest in the reserves again
+   * @param vault - the vault to disinvest the invested funds from
+   * @param [vaultReservesMap] - optional parameter to pass a map of the vault reserves. If not provided, the reserves will be loaded from the vault
+   * @param [payer] - optional parameter to pass a different payer for the transaction. If not provided, the admin of the vault will be used; this is the payer for the invest ixs and it should have an ATA and some lamports (2x no_of_reserves) of the token vault
+   * @returns - a struct with an instruction to update the reserve allocations to 0 weight and a list of instructions to disinvest the funds in the reserves
+   */
+  async disinvestAllReservesIxs(
+    vault: KaminoVault,
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    payer?: TransactionSigner
+  ): Promise<DisinvestAllReservesIxs> {
+    return this._vaultClient.disinvestAllReservesIxs(vault, vaultReservesMap, payer);
   }
 
   // async closeVault(vault: KaminoVault): Promise<TransactionInstruction> {
@@ -1112,7 +1151,7 @@ export class KaminoManager {
     slot?: Slot,
     vaultReserves?: Map<Address, KaminoReserve>,
     currentSlot?: Slot
-  ): Promise<Map<Address, Decimal>> {
+  ): Promise<VaultComputedAllocation> {
     return this._vaultClient.getVaultComputedReservesAllocation(vaultState, slot, vaultReserves, currentSlot);
   }
 

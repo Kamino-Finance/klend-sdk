@@ -21,7 +21,8 @@ export function decodeVaultState(data: Buffer): VaultState {
     tokenAvailable: dec.tokenAvailable,
     sharesIssued: dec.sharesIssued,
     availableCrankFunds: dec.availableCrankFunds,
-    padding0: dec.padding0,
+    unallocatedWeight: dec.unallocatedWeight,
+    unallocatedTokensCap: dec.unallocatedTokensCap,
     performanceFeeBps: dec.performanceFeeBps,
     managementFeeBps: dec.managementFeeBps,
     lastFeeChargeTimestamp: dec.lastFeeChargeTimestamp,
@@ -44,7 +45,6 @@ export function decodeVaultState(data: Buffer): VaultState {
     vaultLookupTable: dec.vaultLookupTable,
     vaultFarm: dec.vaultFarm,
     creationTimestamp: dec.creationTimestamp,
-    padding2: dec.padding2,
     allocationAdmin: dec.allocationAdmin,
     padding3: dec.padding3,
   });
