@@ -10,6 +10,7 @@ export async function deposit(env: CliEnv, mode: SendTxMode, token: string, depo
   const signer = await env.getSigner();
   const programId = getProgramId('staging');
   const kaminoMarket = await getMarket(env.c.rpc, programId);
+  const scope = new Scope('mainnet-beta', env.c.rpc);
   const kaminoAction = await KaminoAction.buildDepositTxns(
     kaminoMarket,
     depositAmount,
@@ -17,7 +18,7 @@ export async function deposit(env: CliEnv, mode: SendTxMode, token: string, depo
     signer,
     new VanillaObligation(STAGING_LENDING_MARKET),
     true,
-    { scope: new Scope('mainnet-beta', env.c.rpc), scopeFeed: 'hubble' }
+    { scope, scopeConfigurations: await scope.getAllConfigurations() }
   );
   console.log('User obligation', await kaminoAction.getObligationPda());
 

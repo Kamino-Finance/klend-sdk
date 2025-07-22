@@ -14,3 +14,4 @@ export * from './lookupTable';
 export * from './managerTypes';
 export * from './fuzz';
 export * from './rpc';
+export * from './map';

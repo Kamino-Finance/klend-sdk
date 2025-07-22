@@ -10,6 +10,7 @@ export async function withdraw(env: CliEnv, mode: SendTxMode, token: string, dep
   const signer = await env.getSigner();
   const programId = getProgramId('staging');
   const kaminoMarket = await getMarket(env.c.rpc, programId);
+  const scope = new Scope('mainnet-beta', env.c.rpc);
   const kaminoAction = await KaminoAction.buildWithdrawTxns(
     kaminoMarket,
     depositAmount,
@@ -17,7 +18,7 @@ export async function withdraw(env: CliEnv, mode: SendTxMode, token: string, dep
     signer,
     new VanillaObligation(STAGING_LENDING_MARKET),
     true,
-    { scope: new Scope('mainnet-beta', env.c.rpc), scopeFeed: 'hubble' }
+    { scope, scopeConfigurations: await scope.getAllConfigurations() }
   );
   console.log('User obligation', await kaminoAction.getObligationPda());
 

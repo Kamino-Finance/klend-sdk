@@ -37,6 +37,7 @@ import {
   ObligationType,
   PythPrices,
   referrerTokenStatePda,
+  setOrAppend,
   userMetadataPda,
   VanillaObligation,
 } from '../utils';
@@ -88,7 +89,7 @@ export class KaminoMarket {
   private readonly recentSlotDurationMs: number;
 
   // scope feeds used by all market reserves
-  private readonly scopeFeeds: Set<Address>;
+  readonly scopeFeeds: Set<Address>;
 
   private constructor(
     rpc: Rpc<KaminoMarketRpcApi>,
@@ -1578,26 +1579,31 @@ export function getReservesActive(reserves: Map<Address, KaminoReserve>): Map<Ad
   return reservesActive;
 }
 
-export function getTokenIdsForScopeRefresh(kaminoMarket: KaminoMarket, reserves: Address[]): number[] {
-  const tokenIds: number[] = [];
+/**
+ *
+ * @param kaminoMarket
+ * @param reserves
+ */
+export function getTokenIdsForScopeRefresh(kaminoMarket: KaminoMarket, reserves: Address[]): Map<Address, number[]> {
+  const tokenIds = new Map<Address, number[]>();
 
   for (const reserveAddress of reserves) {
     const reserve = kaminoMarket.getReserveByAddress(reserveAddress);
     if (!reserve) {
       throw new Error(`Reserve not found for reserve ${reserveAddress}`);
     }
-
-    if (reserve.state.config.tokenInfo.scopeConfiguration.priceFeed !== DEFAULT_PUBLIC_KEY) {
+    const { scopeConfiguration } = reserve.state.config.tokenInfo;
+    if (scopeConfiguration.priceFeed !== DEFAULT_PUBLIC_KEY) {
       let x = 0;
 
-      while (reserve.state.config.tokenInfo.scopeConfiguration.priceChain[x] !== U16_MAX) {
-        tokenIds.push(reserve.state.config.tokenInfo.scopeConfiguration.priceChain[x]);
+      while (scopeConfiguration.priceChain[x] !== U16_MAX) {
+        setOrAppend(tokenIds, scopeConfiguration.priceFeed, scopeConfiguration.priceChain[x]);
         x++;
       }
 
       x = 0;
-      while (reserve.state.config.tokenInfo.scopeConfiguration.twapChain[x] !== U16_MAX) {
-        tokenIds.push(reserve.state.config.tokenInfo.scopeConfiguration.twapChain[x]);
+      while (scopeConfiguration.twapChain[x] !== U16_MAX) {
+        setOrAppend(tokenIds, scopeConfiguration.priceFeed, scopeConfiguration.twapChain[x]);
         x++;
       }
     }

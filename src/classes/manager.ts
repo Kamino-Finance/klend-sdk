@@ -57,6 +57,7 @@ import {
   Reserve,
   ReserveWithAddress,
   ScopeOracleConfig,
+  setOrAppend,
   updateEntireReserveConfigIx,
   updateLendingMarket,
   UpdateLendingMarketAccounts,
@@ -98,6 +99,7 @@ import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
 import type { AccountInfoBase, AccountInfoWithJsonData, AccountInfoWithPubkey } from '@solana/rpc-types';
 import { arrayElementConfigItems, ConfigUpdater } from './configItems';
 import { getFarmIncentives, ReserveIncentives } from '@kamino-finance/farms-sdk/dist/utils/apy';
+import { OracleMappings } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts';
 
 const base58Decoder = getBase58Decoder();
 
@@ -437,6 +439,7 @@ export class KaminoManager {
    * @param lendingMarketOwner - market admin
    * @param market - lending market which owns the reserve
    * @param reserve - reserve which to be updated
+   * @param oraclePrices - scope OraclePrices account pubkey
    * @param scopeOracleConfig - new scope oracle config
    * @param scopeTwapConfig - new scope twap config
    * @param maxAgeBufferSeconds - buffer to be added to onchain max_age - if oracle price is older than that, txns interacting with the reserve will fail
@@ -446,6 +449,7 @@ export class KaminoManager {
     lendingMarketOwner: TransactionSigner,
     market: MarketWithAddress,
     reserve: ReserveWithAddress,
+    oraclePrices: Address,
     scopeOracleConfig: ScopeOracleConfig,
     scopeTwapConfig?: ScopeOracleConfig,
     maxAgeBufferSeconds: number = 20
@@ -462,7 +466,7 @@ export class KaminoManager {
     }
 
     const { scopeConfiguration } = getReserveOracleConfigs({
-      scopePriceConfigAddress: scopeOracleConfig.scopePriceConfigAddress,
+      scopePriceConfigAddress: oraclePrices,
       scopeChain: [scopeOracleConfig.oracleId],
       scopeTwapChain: [scopeTwapId],
     });
@@ -1364,43 +1368,62 @@ export class KaminoManager {
 
   /**
    * This returns an array of scope oracle configs to be used to set the scope price and twap oracles for a reserve
-   * @param feed - scope feed to fetch prices from
+   * @param market kamino market
    * @param cluster - cluster to fetch from, this should be left unchanged unless working on devnet or locally
-   * @returns - an array of scope oracle configs
+   * @returns - a map with keys as scope OraclePrices pubkeys and values of scope oracle configs
    */
   async getScopeOracleConfigs(
-    feed: string = 'hubble',
+    market: KaminoMarket,
     cluster: ENV = 'mainnet-beta'
-  ): Promise<Array<ScopeOracleConfig>> {
-    const scopeOracleConfigs: Array<ScopeOracleConfig> = [];
+  ): Promise<Map<Address, ScopeOracleConfig[]>> {
+    const scopeOracleConfigs = new Map<Address, ScopeOracleConfig[]>();
 
     const scope = new Scope(cluster, this._rpc);
-    const oracleMappings = await scope.getOracleMappings({ feed: feed });
-    const [, feedConfig] = await scope.getFeedConfiguration({ feed: feed });
-    const tokenMetadatas = await TokenMetadatas.fetch(this._rpc, feedConfig.tokensMetadata);
+    const configs = (await scope.getAllConfigurations()).filter(([_, config]) =>
+      market.scopeFeeds.has(config.oraclePrices)
+    );
+    if (!configs || configs.length === 0) {
+      return scopeOracleConfigs;
+    }
+    const configOracleMappings = await OracleMappings.fetchMultiple(
+      this._rpc,
+      configs.map(([_, config]) => config.oracleMappings),
+      scope.config.programId
+    );
+
+    const configTokenMetadatas = await TokenMetadatas.fetchMultiple(
+      this._rpc,
+      configs.map(([_, config]) => config.tokensMetadata),
+      scope.config.programId
+    );
+
     const decoder = new TextDecoder('utf-8');
 
-    console.log('feedConfig.tokensMetadata', feedConfig.tokensMetadata);
+    for (let i = 0; i < configs.length; i++) {
+      const [configPubkey, config] = configs[i];
+      const oracleMappings = configOracleMappings[i];
+      const tokenMetadatas = configTokenMetadatas[i];
+      if (!oracleMappings) {
+        throw new Error(`OracleMappings account not found for config ${configPubkey}`);
+      }
+      if (!tokenMetadatas) {
+        throw new Error(`TokenMetadatas account not found for config ${configPubkey}`);
+      }
 
-    if (tokenMetadatas === null) {
-      throw new Error('TokenMetadatas not found');
-    }
-
-    for (let index = 0; index < oracleMappings.priceInfoAccounts.length; index++) {
-      if (oracleMappings.priceInfoAccounts[index] !== DEFAULT_PUBLIC_KEY) {
-        const name = decoder.decode(Uint8Array.from(tokenMetadatas.metadatasArray[index].name)).replace(/\0/g, '');
-        const oracleType = parseOracleType(oracleMappings.priceTypes[index]);
-
-        scopeOracleConfigs.push({
-          scopePriceConfigAddress: feedConfig.oraclePrices,
-          name: name,
-          oracleType: oracleType,
-          oracleId: index,
-          oracleAccount: oracleMappings.priceInfoAccounts[index],
-          twapEnabled: oracleMappings.twapEnabled[index] === 1,
-          twapSourceId: oracleMappings.twapSource[index],
-          max_age: tokenMetadatas.metadatasArray[index].maxAgePriceSlots.toNumber(),
-        });
+      for (let j = 0; j < oracleMappings.priceInfoAccounts.length; j++) {
+        if (oracleMappings.priceInfoAccounts[j] !== DEFAULT_PUBLIC_KEY) {
+          const name = decoder.decode(Uint8Array.from(tokenMetadatas.metadatasArray[j].name)).replace(/\0/g, '');
+          const oracleType = parseOracleType(oracleMappings.priceTypes[j]);
+          setOrAppend(scopeOracleConfigs, config.oraclePrices, {
+            name: name,
+            oracleType: oracleType,
+            oracleId: j,
+            oracleAccount: oracleMappings.priceInfoAccounts[j],
+            twapEnabled: oracleMappings.twapEnabled[j] === 1,
+            twapSourceId: oracleMappings.twapSource[j],
+            max_age: tokenMetadatas.metadatasArray[j].maxAgePriceSlots.toNumber(),
+          });
+        }
       }
     }
 

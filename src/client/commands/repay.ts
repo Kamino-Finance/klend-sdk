@@ -10,6 +10,7 @@ export async function repay(env: CliEnv, mode: SendTxMode, token: string, borrow
   const signer = await env.getSigner();
   const programId = getProgramId('staging');
   const kaminoMarket = await getMarket(env.c.rpc, programId);
+  const scope = new Scope('mainnet-beta', env.c.rpc);
   const kaminoAction = await KaminoAction.buildRepayTxns(
     kaminoMarket,
     borrowAmount,
@@ -17,7 +18,7 @@ export async function repay(env: CliEnv, mode: SendTxMode, token: string, borrow
     signer,
     new VanillaObligation(STAGING_LENDING_MARKET),
     true,
-    { scope: new Scope('mainnet-beta', env.c.rpc), scopeFeed: 'hubble' },
+    { scope, scopeConfigurations: await scope.getAllConfigurations() },
     await env.c.rpc.getSlot().send()
   );
   console.log('User obligation', await kaminoAction.getObligationPda());

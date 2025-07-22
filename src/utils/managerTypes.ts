@@ -13,7 +13,7 @@ import {
   WithdrawalCaps,
 } from '../@codegen/klend/types';
 import Decimal from 'decimal.js';
-import { Fraction, ZERO_FRACTION } from '../classes/fraction';
+import { Fraction, ZERO_FRACTION } from '../classes';
 import BN from 'bn.js';
 import { numberToLamportsDecimal } from '../classes';
 import { NULL_PUBKEY } from './pubkey';
@@ -22,7 +22,6 @@ import { OracleType } from '@kamino-finance/scope-sdk/dist/@codegen/scope/types'
 import { LendingMarket } from '../lib';
 
 export type ScopeOracleConfig = {
-  scopePriceConfigAddress: Address;
   name: string;
   oracleType: string;
   oracleId: number;
@@ -80,7 +79,7 @@ export class AssetReserveConfig implements AssetConfig {
     this.mintTokenProgram = fields.mintTokenProgram;
 
     // TODO: verify defaults and ensure opinionated
-    this.assetReserveConfigParams = DefaultConfigParams;
+    this.assetReserveConfigParams = getDefaultConfigParams();
     this.assetReserveConfigParams.priceFeed = fields.priceFeed;
     this.assetReserveConfigParams.loanToValuePct = fields.loanToValuePct;
     this.assetReserveConfigParams.liquidationThresholdPct = fields.liquidationThresholdPct;
@@ -114,7 +113,7 @@ export class AssetReserveConfigCli implements AssetConfig {
     this.reserveConfig = reserveConfig;
     this.tokenName = '';
     this.mintDecimals = 0;
-    this.assetReserveConfigParams = DefaultConfigParams;
+    this.assetReserveConfigParams = getDefaultConfigParams();
     this.mint = mint;
     this.mintTokenProgram = mintTokenProgram;
   }
@@ -160,7 +159,7 @@ export class CollateralConfig implements AssetConfig {
     this.mintTokenProgram = fields.mintTokenProgram;
 
     // TODO: verify defaults and ensure opinionated
-    this.assetReserveConfigParams = DefaultConfigParams;
+    this.assetReserveConfigParams = getDefaultConfigParams();
     this.assetReserveConfigParams.priceFeed = fields.priceFeed;
     this.assetReserveConfigParams.loanToValuePct = fields.loanToValuePct;
     this.assetReserveConfigParams.liquidationThresholdPct = fields.liquidationThresholdPct;
@@ -207,7 +206,7 @@ export class DebtConfig implements AssetConfig {
     this.debtWithdrawalCapConfigCapacity = fields.debtWithdrawalCapConfigCapacity;
 
     // TODO: verify defaults and ensure opinionated
-    this.assetReserveConfigParams = DefaultConfigParams;
+    this.assetReserveConfigParams = getDefaultConfigParams();
     this.assetReserveConfigParams.priceFeed = fields.priceFeed;
     this.assetReserveConfigParams.borrowRateCurve = fields.borrowRateCurve;
   }
@@ -254,28 +253,30 @@ export type AssetReserveConfigParams = {
   borrowRateCurve: BorrowRateCurve;
 };
 
-export const DefaultConfigParams: AssetReserveConfigParams = {
-  loanToValuePct: 70,
-  maxLiquidationBonusBps: 500,
-  minLiquidationBonusBps: 200,
-  badDebtLiquidationBonusBps: 10,
-  liquidationThresholdPct: 75,
-  borrowFeeSf: ZERO_FRACTION,
-  flashLoanFeeSf: ZERO_FRACTION,
-  protocolTakeRate: 0,
-  elevationGroups: new Array(20).fill(0),
-  priceFeed: null,
-  borrowLimit: new Decimal(1000.0),
-  depositLimit: new Decimal(1000.0),
-  borrowRateCurve: new BorrowRateCurve({
-    points: [
-      new CurvePoint({ utilizationRateBps: 0, borrowRateBps: 1000 }),
-      new CurvePoint({ utilizationRateBps: 10000, borrowRateBps: 1000 }),
-      ...Array(9).fill(new CurvePoint({ utilizationRateBps: 10000, borrowRateBps: 1000 })),
-    ],
-  } as BorrowRateCurveFields),
-  maxAgePriceSeconds: 180,
-  maxAgeTwapSeconds: 240,
+export const getDefaultConfigParams = (): AssetReserveConfigParams => {
+  return {
+    loanToValuePct: 70,
+    maxLiquidationBonusBps: 500,
+    minLiquidationBonusBps: 200,
+    badDebtLiquidationBonusBps: 10,
+    liquidationThresholdPct: 75,
+    borrowFeeSf: ZERO_FRACTION,
+    flashLoanFeeSf: ZERO_FRACTION,
+    protocolTakeRate: 0,
+    elevationGroups: new Array(20).fill(0),
+    priceFeed: null,
+    borrowLimit: new Decimal(1000.0),
+    depositLimit: new Decimal(1000.0),
+    borrowRateCurve: new BorrowRateCurve({
+      points: [
+        new CurvePoint({ utilizationRateBps: 0, borrowRateBps: 1000 }),
+        new CurvePoint({ utilizationRateBps: 10000, borrowRateBps: 1000 }),
+        ...Array(9).fill(new CurvePoint({ utilizationRateBps: 10000, borrowRateBps: 1000 })),
+      ],
+    } as BorrowRateCurveFields),
+    maxAgePriceSeconds: 180,
+    maxAgeTwapSeconds: 240,
+  };
 };
 
 export const encodeTokenName = (tokenName: string): number[] => {

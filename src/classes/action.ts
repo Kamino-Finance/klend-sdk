@@ -428,12 +428,12 @@ export class KaminoAction {
     return axn;
   }
 
-  async addScopeRefreshIxs(scope: Scope, tokens: number[], feed: string = 'hubble') {
+  async addScopeRefreshIxs(scope: Scope, tokens: number[], scopeConfig: Address) {
     this.setupIxsLabels.unshift(`refreshScopePrices`);
     this.setupIxs.unshift(
       await scope.refreshPriceListIx(
         {
-          feed: feed,
+          config: scopeConfig,
         },
         tokens
       )
@@ -732,10 +732,15 @@ export class KaminoAction {
         ...(axn.preLoadedDepositReservesSameTx ? axn.preLoadedDepositReservesSameTx : []),
       ]),
     ];
-    const tokenIds = getTokenIdsForScopeRefresh(axn.kaminoMarket, allReserves);
+    const scopeTokensMap = getTokenIdsForScopeRefresh(axn.kaminoMarket, allReserves);
 
-    if (tokenIds.length > 0 && scopeRefreshConfig) {
-      await axn.addScopeRefreshIxs(scopeRefreshConfig.scope, tokenIds, scopeRefreshConfig.scopeFeed);
+    if (scopeTokensMap.size > 0 && scopeRefreshConfig) {
+      for (const [configPubkey, config] of scopeRefreshConfig.scopeConfigurations) {
+        const tokenIds = scopeTokensMap.get(config.oraclePrices);
+        if (tokenIds && tokenIds.length > 0) {
+          await axn.addScopeRefreshIxs(scopeRefreshConfig.scope, tokenIds, configPubkey);
+        }
+      }
     }
     return axn;
   }
@@ -924,10 +929,15 @@ export class KaminoAction {
         ...(axn.preLoadedDepositReservesSameTx ? axn.preLoadedDepositReservesSameTx : []),
       ]),
     ];
-    const tokenIds = getTokenIdsForScopeRefresh(axn.kaminoMarket, allReserves);
+    const scopeTokensMap = getTokenIdsForScopeRefresh(axn.kaminoMarket, allReserves);
 
-    if (tokenIds.length > 0 && scopeRefreshConfig) {
-      await axn.addScopeRefreshIxs(scopeRefreshConfig.scope, tokenIds, scopeRefreshConfig.scopeFeed);
+    if (scopeTokensMap.size > 0 && scopeRefreshConfig) {
+      for (const [configPubkey, config] of scopeRefreshConfig.scopeConfigurations) {
+        const tokenIds = scopeTokensMap.get(config.oraclePrices);
+        if (tokenIds && tokenIds.length > 0) {
+          await axn.addScopeRefreshIxs(scopeRefreshConfig.scope, tokenIds, configPubkey);
+        }
+      }
     }
     return axn;
   }
@@ -2623,10 +2633,15 @@ export class KaminoAction {
         ...(this.preLoadedDepositReservesSameTx ? this.preLoadedDepositReservesSameTx : []),
       ]),
     ];
-    const tokenIds = getTokenIdsForScopeRefresh(this.kaminoMarket, allReserves);
+    const scopeTokensMap = getTokenIdsForScopeRefresh(this.kaminoMarket, allReserves);
 
-    if (tokenIds.length > 0 && scopeRefreshConfig) {
-      await this.addScopeRefreshIxs(scopeRefreshConfig.scope, tokenIds, scopeRefreshConfig.scopeFeed);
+    if (scopeTokensMap.size > 0 && scopeRefreshConfig) {
+      for (const [configPubkey, config] of scopeRefreshConfig.scopeConfigurations) {
+        const tokenIds = scopeTokensMap.get(config.oraclePrices);
+        if (tokenIds && tokenIds.length > 0) {
+          await this.addScopeRefreshIxs(scopeRefreshConfig.scope, tokenIds, configPubkey);
+        }
+      }
     }
   }
 

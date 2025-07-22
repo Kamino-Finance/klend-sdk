@@ -1502,8 +1502,9 @@ async function main() {
 
   commands
     .command('get-oracle-mappings')
+    .requiredOption('--lending-market <string>', 'Lending Market Address')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ staging }) => {
+    .action(async ({ staging, lendingMarket }) => {
       const env = await initEnv(staging);
       const kaminoManager = new KaminoManager(
         env.c.rpc,
@@ -1511,10 +1512,21 @@ async function main() {
         env.klendProgramId,
         env.kvaultProgramId
       );
+      const market = await KaminoMarket.load(
+        env.c.rpc,
+        address(lendingMarket),
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId
+      );
+      if (!market) {
+        throw Error(`Lending market ${lendingMarket} not found`);
+      }
 
       console.log('Getting  oracle mappings');
-      const oracleConfigs = await kaminoManager.getScopeOracleConfigs();
-      console.log('oracleConfigs', JSON.parse(JSON.stringify(oracleConfigs)));
+      const oracleConfigs = await kaminoManager.getScopeOracleConfigs(market);
+      for (const [oraclePrices, configs] of oracleConfigs.entries()) {
+        console.log(`OraclePrices pubkey: ${oraclePrices}`, 'Configs:', JSON.parse(JSON.stringify(configs)));
+      }
     });
 
   commands

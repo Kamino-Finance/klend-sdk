@@ -7,11 +7,12 @@ import { parseTokenSymbol } from '../classes';
 import { Reserve } from '../lib';
 import { batchFetch } from '@kamino-finance/kliquidity-sdk';
 import BN from 'bn.js';
-import { priceUpdateV2 } from '../@codegen/pyth_rec/accounts/priceUpdateV2';
-import { AggregatorAccountData } from '../@codegen/switchboard_v2/accounts/AggregatorAccountData';
+import { priceUpdateV2 } from '../@codegen/pyth_rec/accounts';
+import { AggregatorAccountData } from '../@codegen/switchboard_v2/accounts';
 import { Buffer } from 'buffer';
 import { getLatestAggregatorValue } from './switchboard';
 import { PROGRAM_ID as SWITCHBOARD_V2_PROGRAM_ID } from '../@codegen/switchboard_v2/programId';
+import { Configuration } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts/Configuration';
 
 // validate price confidence - confidence/price ratio should be less than 2%
 export const MAX_CONFIDENCE_PERCENTAGE: Decimal = new Decimal('2');
@@ -39,7 +40,7 @@ export type CandidatePrice = {
 
 export type ScopePriceRefreshConfig = {
   scope: Scope;
-  scopeFeed: string;
+  scopeConfigurations: [Address, Configuration][];
 };
 
 export function getTokenOracleDataSync(allOracleAccounts: AllOracleAccounts, reserves: Reserve[]) {

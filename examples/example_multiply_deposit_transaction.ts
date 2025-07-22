@@ -93,7 +93,7 @@ import { sendAndConfirmTx } from './utils/tx';
       selectedTokenMint: debtTokenMint, // the token we are using to deposit
       kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
       obligationTypeTagOverride: ObligationTypeTag.Multiply, // or leverage
-      scopeRefreshConfig: { scope, scopeFeed: 'hubble' },
+      scopeRefreshConfig: { scope, scopeConfigurations: await scope.getAllConfigurations() },
       budgetAndPriorityFeeIxs: computeIxs,
       quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
       priceAinB: getPriceAinB,

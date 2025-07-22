@@ -106,7 +106,7 @@ import { sendAndConfirmTx, simulateTx } from './utils/tx';
       slippagePct: new Decimal(slippageBps / 100),
       budgetAndPriorityFeeIxs: computeIxs,
       kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
-      scopeRefreshConfig: { scope, scopeFeed: 'hubble' },
+      scopeRefreshConfig: { scope, scopeConfigurations: await scope.getAllConfigurations() },
       quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
       priceAinB: getPriceAinB,
       isKtoken: async (token: Address): Promise<boolean> => {
@@ -228,7 +228,7 @@ import { sendAndConfirmTx, simulateTx } from './utils/tx';
       slippagePct: new Decimal(slippageBps),
       budgetAndPriorityFeeIxs: computeIxs,
       kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
-      scopeRefreshConfig: { scope, scopeFeed: 'hubble' },
+      scopeRefreshConfig: { scope, scopeConfigurations: await scope.getAllConfigurations() },
       quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
       priceAinB: getPriceAinB,
       isKtoken: async (token: Address): Promise<boolean> => {

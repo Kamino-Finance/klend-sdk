@@ -1676,18 +1676,17 @@ export const getScopeRefreshIx = async (
           ]),
         ]
       : [...new Set<Address>([collReserve.address, debtReserve.address])];
-  const tokenIds = getTokenIdsForScopeRefresh(market, allReserves);
 
   const scopeRefreshIxs: IInstruction[] = [];
-  if (tokenIds.length > 0 && scopeRefreshConfig) {
-    scopeRefreshIxs.push(
-      await scopeRefreshConfig.scope.refreshPriceListIx(
-        {
-          feed: scopeRefreshConfig.scopeFeed,
-        },
-        tokenIds
-      )
-    );
+  const scopeTokensMap = getTokenIdsForScopeRefresh(market, allReserves);
+
+  if (scopeTokensMap.size > 0 && scopeRefreshConfig) {
+    for (const [configPubkey, config] of scopeRefreshConfig.scopeConfigurations) {
+      const tokenIds = scopeTokensMap.get(config.oraclePrices);
+      if (tokenIds && tokenIds.length > 0) {
+        scopeRefreshIxs.push(await scopeRefreshConfig.scope.refreshPriceListIx({ config: configPubkey }, tokenIds));
+      }
+    }
   }
 
   return scopeRefreshIxs;
