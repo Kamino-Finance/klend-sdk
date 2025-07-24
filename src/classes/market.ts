@@ -1609,6 +1609,16 @@ export function getTokenIdsForScopeRefresh(kaminoMarket: KaminoMarket, reserves:
     }
   }
 
+  //TODO: remove code below
+  // - currently Scope program does not allow multiple refreshPricesList instructions in one tx
+  // - temporary fix is to only refresh one scope feed at this time
+  const firstFeed = tokenIds.entries().next();
+  tokenIds.clear();
+  if (!firstFeed.done) {
+    const [key, value] = firstFeed.value;
+    tokenIds.set(key, value);
+  }
+
   return tokenIds;
 }
 
