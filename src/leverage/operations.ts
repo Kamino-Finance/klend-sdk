@@ -1684,7 +1684,10 @@ export const getScopeRefreshIx = async (
     for (const [configPubkey, config] of scopeRefreshConfig.scopeConfigurations) {
       const tokenIds = scopeTokensMap.get(config.oraclePrices);
       if (tokenIds && tokenIds.length > 0) {
-        scopeRefreshIxs.push(await scopeRefreshConfig.scope.refreshPriceListIx({ config: configPubkey }, tokenIds));
+        const refreshIx = await scopeRefreshConfig.scope.refreshPriceListIx({ config: configPubkey }, tokenIds);
+        if (refreshIx) {
+          scopeRefreshIxs.push(refreshIx);
+        }
       }
     }
   }

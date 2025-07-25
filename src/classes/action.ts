@@ -429,15 +429,11 @@ export class KaminoAction {
   }
 
   async addScopeRefreshIxs(scope: Scope, tokens: number[], scopeConfig: Address) {
-    this.setupIxsLabels.unshift(`refreshScopePrices`);
-    this.setupIxs.unshift(
-      await scope.refreshPriceListIx(
-        {
-          config: scopeConfig,
-        },
-        tokens
-      )
-    );
+    const refreshIx = await scope.refreshPriceListIx({ config: scopeConfig }, tokens);
+    if (refreshIx) {
+      this.setupIxsLabels.unshift(`refreshScopePrices`);
+      this.setupIxs.unshift(refreshIx);
+    }
   }
 
   static async buildBorrowTxns(

@@ -45,7 +45,7 @@
     "@kamino-finance/farms-sdk": "^3.1.0",
     "@kamino-finance/klend-sdk": "link:../",
     "@kamino-finance/kswap-sdk": "^1.3.0",
-    "@kamino-finance/scope-sdk": "^10.0.3",
+    "@kamino-finance/scope-sdk": "^10.0.4",
     "@solana/compat": "^2.1.1",
     "@solana/kit": "^2.1.1",
     "@solana/web3.js": "^1.98.2",
