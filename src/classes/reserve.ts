@@ -16,6 +16,7 @@ import {
 } from '@solana/kit';
 import Decimal from 'decimal.js';
 import {
+  AllOracleAccounts,
   DEFAULT_PUBLIC_KEY,
   getTokenOracleData,
   globalConfigPda,
@@ -102,14 +103,15 @@ export class KaminoReserve {
     address: Address,
     rpc: Rpc<KaminoReserveRpcApi>,
     recentSlotDurationMs: number,
-    reserveState?: Reserve
+    reserveState?: Reserve,
+    oracleAccounts?: AllOracleAccounts
   ) {
     const reserve = reserveState ?? (await Reserve.fetch(rpc, address));
     if (reserve === null) {
       throw new Error(`Reserve account ${address} does not exist`);
     }
 
-    const tokenOracleDataWithReserve = await getTokenOracleData(rpc, [reserve]);
+    const tokenOracleDataWithReserve = await getTokenOracleData(rpc, [reserve], oracleAccounts);
     if (!tokenOracleDataWithReserve[0]) {
       throw new Error('Token oracle data not found');
     }

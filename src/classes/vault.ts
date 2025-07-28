@@ -23,6 +23,7 @@ import {
   TransactionSigner,
 } from '@solana/kit';
 import {
+  AllOracleAccounts,
   DEFAULT_PUBLIC_KEY,
   DEFAULT_RECENT_SLOT_DURATION_MS,
   getAssociatedTokenAddress,
@@ -2361,9 +2362,13 @@ export class KaminoVaultClient {
   /**
    * This will load the onchain state for all the reserves that the vaults have allocations for, deduplicating the reserves
    * @param vaults - the vault states to load reserves for
+   * @param oracleAccounts (optional) all reserve oracle accounts, if not supplied will make an additional rpc call to fetch these accounts
    * @returns a hashmap from each reserve pubkey to the reserve state
    */
-  async loadVaultsReserves(vaults: VaultState[]): Promise<Map<Address, KaminoReserve>> {
+  async loadVaultsReserves(
+    vaults: VaultState[],
+    oracleAccounts?: AllOracleAccounts
+  ): Promise<Map<Address, KaminoReserve>> {
     const vaultReservesAddressesSet = new Set<Address>(vaults.flatMap((vault) => this.getVaultReserves(vault)));
     const vaultReservesAddresses = [...vaultReservesAddressesSet];
     const reserveAccounts = await this.getConnection()
@@ -2382,7 +2387,7 @@ export class KaminoVaultClient {
       return reserveAccount;
     });
 
-    const reservesAndOracles = await getTokenOracleData(this.getConnection(), deserializedReserves);
+    const reservesAndOracles = await getTokenOracleData(this.getConnection(), deserializedReserves, oracleAccounts);
 
     const kaminoReserves = new Map<Address, KaminoReserve>();
 
@@ -2409,13 +2414,15 @@ export class KaminoVaultClient {
    * @param [slot] - the slot for which to retrieve the vault collaterals for. Optional. If not provided the function will fetch the current slot
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [kaminoMarkets] - a list of all the kamino markets. Optional. If provided the function will be significantly faster as it will not have to fetch the markets
+   * @param oracleAccounts (optional) all reserve oracle accounts, if not supplied will make an additional rpc call to fetch these accounts
    * @returns a hashmap from each reserve pubkey to the market overview of the collaterals that can be used and the min and max loan to value ratio in that market
    */
   async getVaultCollaterals(
     vaultState: VaultState,
     slot: Slot,
     vaultReservesMap?: Map<Address, KaminoReserve>,
-    kaminoMarkets?: KaminoMarket[]
+    kaminoMarkets?: KaminoMarket[],
+    oracleAccounts?: AllOracleAccounts
   ): Promise<Map<Address, MarketOverview>> {
     const vaultReservesStateMap = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
     const vaultReservesState: KaminoReserve[] = [];
@@ -2439,7 +2446,11 @@ export class KaminoVaultClient {
     const missingReservesStates = (await Reserve.fetchMultiple(this.getConnection(), [...missingReserves])).filter(
       (reserve) => reserve !== null
     );
-    const missingReservesAndOracles = await getTokenOracleData(this.getConnection(), missingReservesStates);
+    const missingReservesAndOracles = await getTokenOracleData(
+      this.getConnection(),
+      missingReservesStates,
+      oracleAccounts
+    );
     missingReservesAndOracles.forEach(([reserve, oracle], index) => {
       const fetchedReserve = new KaminoReserve(
         reserve,

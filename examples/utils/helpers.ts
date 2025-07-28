@@ -19,6 +19,7 @@ import { aprToApy, KaminoPrices } from '@kamino-finance/kliquidity-sdk';
 import { Address, IInstruction, TransactionSigner } from '@solana/kit';
 import { ConnectionPool } from './connection';
 import { sendAndConfirmTx } from './tx';
+import { OraclePrices } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts/OraclePrices';
 
 /**
  * Get Kamino Lending Market
@@ -62,7 +63,12 @@ export async function getReserveRewardsApy(args: ReserveArgs) {
   const rewardApys: { rewardApy: Decimal; rewardInfo: RewardInfo }[] = [];
 
   const scope = new Scope('mainnet-beta', args.rpc);
-  const prices = await market.getAllScopePrices(scope);
+  const oraclePrices = await scope.getMultipleOraclePrices(Array.from(market.scopeFeeds));
+  const oraclePricesMap = new Map<Address, OraclePrices>();
+  for (const [pubkey, oracle] of oraclePrices) {
+    oraclePricesMap.set(pubkey, oracle);
+  }
+  const prices = await market.getAllScopePrices(scope, oraclePricesMap);
 
   const farmStates = await FarmState.fetchMultiple(args.rpc, [reserve.state.farmDebt, reserve.state.farmCollateral]);
 

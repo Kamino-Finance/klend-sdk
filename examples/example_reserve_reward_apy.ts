@@ -2,6 +2,8 @@ import { loadReserveData } from './utils/helpers';
 import { getConnectionPool } from './utils/connection';
 import { MAIN_MARKET, PYUSD_MINT } from './utils/constants';
 import { Scope } from '@kamino-finance/scope-sdk/dist/Scope';
+import { Address } from '@solana/kit';
+import { OraclePrices } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts/OraclePrices';
 
 (async () => {
   const c = getConnectionPool();
@@ -12,7 +14,12 @@ import { Scope } from '@kamino-finance/scope-sdk/dist/Scope';
     mintPubkey: PYUSD_MINT,
   });
   const scope = new Scope('mainnet-beta', c.rpc);
-  const prices = await market.getAllScopePrices(scope);
+  const oraclePrices = await scope.getMultipleOraclePrices(Array.from(market.scopeFeeds));
+  const oraclePricesMap = new Map<Address, OraclePrices>();
+  for (const [pubkey, oracle] of oraclePrices) {
+    oraclePricesMap.set(pubkey, oracle);
+  }
+  const prices = await market.getAllScopePrices(scope, oraclePricesMap);
   const rewardApys = await reserve.getRewardYields(prices);
   for (const rewardApy of rewardApys) {
     console.log(

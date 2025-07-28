@@ -105,9 +105,10 @@ export function getTokenOracleDataSync(allOracleAccounts: AllOracleAccounts, res
 // TODO: Add freshness of the latest price to match sc logic
 export async function getTokenOracleData(
   rpc: Rpc<GetMultipleAccountsApi>,
-  reserves: Reserve[]
+  reserves: Reserve[],
+  oracleAccounts?: AllOracleAccounts
 ): Promise<Array<[Reserve, TokenOracleData | undefined]>> {
-  const allOracleAccounts = await getAllOracleAccounts(rpc, reserves);
+  const allOracleAccounts = oracleAccounts ?? (await getAllOracleAccounts(rpc, reserves));
   return getTokenOracleDataSync(allOracleAccounts, reserves);
 }
 

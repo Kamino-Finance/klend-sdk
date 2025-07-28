@@ -20,6 +20,7 @@ import { KaminoObligation } from './obligation';
 import { KaminoReserve, KaminoReserveRpcApi } from './reserve';
 import { LendingMarket, Obligation, ReferrerTokenState, Reserve, UserMetadata } from '../@codegen/klend/accounts';
 import {
+  AllOracleAccounts,
   cacheOrGetPythPrices,
   cacheOrGetScopePrice,
   cacheOrGetSwitchboardPrice,
@@ -48,7 +49,7 @@ import { PROGRAM_ID } from '../@codegen/klend/programId';
 import { Scope, U16_MAX } from '@kamino-finance/scope-sdk';
 import { OraclePrices } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts/OraclePrices';
 import { Fraction } from './fraction';
-import { chunks, KaminoPrices, MintToPriceMap } from '@kamino-finance/kliquidity-sdk';
+import { batchFetch, chunks, KaminoPrices, MintToPriceMap } from '@kamino-finance/kliquidity-sdk';
 import { parseTokenSymbol, parseZeroPaddedUtf8 } from './utils';
 import { ObligationZP } from '../@codegen/klend/zero_padding';
 import { checkDefined } from '../utils/validations';
@@ -99,6 +100,10 @@ export class KaminoMarket {
     recentSlotDurationMs: number,
     programId: Address = PROGRAM_ID
   ) {
+    if (recentSlotDurationMs <= 0) {
+      throw new Error('Recent slot duration cannot be 0');
+    }
+
     this.address = marketAddress;
     this.rpc = rpc;
     this.state = state;
@@ -134,10 +139,6 @@ export class KaminoMarket {
       return null;
     }
 
-    if (recentSlotDurationMs <= 0) {
-      throw new Error('Recent slot duration cannot be 0');
-    }
-
     const reserves = withReserves
       ? await getReservesForMarket(marketAddress, rpc, programId, recentSlotDurationMs)
       : new Map<Address, KaminoReserve>();
@@ -154,6 +155,68 @@ export class KaminoMarket {
     programId: Address = PROGRAM_ID
   ) {
     return new KaminoMarket(connection, market, marketAddress, reserves, recentSlotDurationMs, programId);
+  }
+
+  static async loadMultiple(
+    connection: Rpc<KaminoMarketRpcApi>,
+    markets: Address[],
+    recentSlotDurationMs: number,
+    programId: Address = PROGRAM_ID,
+    withReserves: boolean = true,
+    oracleAccounts?: AllOracleAccounts
+  ) {
+    const marketStates = await batchFetch(markets, (market) =>
+      LendingMarket.fetchMultiple(connection, market, programId)
+    );
+    const kaminoMarkets = new Map<Address, KaminoMarket>();
+    for (let i = 0; i < markets.length; i++) {
+      const market = marketStates[i];
+      const marketAddress = markets[i];
+      if (market === null) {
+        throw Error(`Could not fetch LendingMarket account state for market ${marketAddress}`);
+      }
+
+      const marketReserves = withReserves
+        ? await getReservesForMarket(marketAddress, connection, programId, recentSlotDurationMs, oracleAccounts)
+        : new Map<Address, KaminoReserve>();
+
+      kaminoMarkets.set(
+        marketAddress,
+        new KaminoMarket(connection, market, marketAddress, marketReserves, recentSlotDurationMs, programId)
+      );
+    }
+    return kaminoMarkets;
+  }
+
+  static async loadMultipleWithReserves(
+    connection: Rpc<KaminoMarketRpcApi>,
+    markets: Address[],
+    reserves: Map<Address, Map<Address, KaminoReserve>>,
+    recentSlotDurationMs: number,
+    programId: Address = PROGRAM_ID
+  ) {
+    const marketStates = await batchFetch(markets, (market) =>
+      LendingMarket.fetchMultiple(connection, market, programId)
+    );
+    const kaminoMarkets = new Map<Address, KaminoMarket>();
+    for (let i = 0; i < markets.length; i++) {
+      const market = marketStates[i];
+      const marketAddress = markets[i];
+      if (market === null) {
+        throw Error(`Could not fetch LendingMarket account state for market ${marketAddress}`);
+      }
+      const marketReserves = reserves.get(marketAddress);
+      if (!marketReserves) {
+        throw Error(
+          `Could not get reserves for market ${marketAddress} from the reserves map argument supplied to this method`
+        );
+      }
+      kaminoMarkets.set(
+        marketAddress,
+        new KaminoMarket(connection, market, marketAddress, marketReserves, recentSlotDurationMs, programId)
+      );
+    }
+    return kaminoMarkets;
   }
 
   async reload(): Promise<void> {
@@ -395,7 +458,7 @@ export class KaminoMarket {
       : debtReserve.getMaxBorrowAmountWithCollReserve(this, collReserve, slot);
   }
 
-  async loadReserves() {
+  async loadReserves(oracleAccounts?: AllOracleAccounts) {
     const addresses = [...this.reserves.keys()];
     const reserveAccounts = await this.rpc
       .getMultipleAccounts(addresses, { commitment: 'processed', encoding: 'base64' })
@@ -411,7 +474,7 @@ export class KaminoMarket {
       }
       return reserveAccount;
     });
-    const reservesAndOracles = await getTokenOracleData(this.getRpc(), deserializedReserves);
+    const reservesAndOracles = await getTokenOracleData(this.getRpc(), deserializedReserves, oracleAccounts);
     const kaminoReserves = new Map<Address, KaminoReserve>();
     reservesAndOracles.forEach(([reserve, oracle], index) => {
       if (!oracle) {
@@ -881,9 +944,13 @@ export class KaminoMarket {
     return finalObligations;
   }
 
-  async getAllUserObligations(user: Address, commitment: Commitment = 'processed'): Promise<KaminoObligation[]> {
+  async getAllUserObligations(
+    user: Address,
+    commitment: Commitment = 'processed',
+    slot?: bigint
+  ): Promise<KaminoObligation[]> {
     const [currentSlot, obligations] = await Promise.all([
-      this.rpc.getSlot().send(),
+      slot !== undefined ? Promise.resolve(slot) : this.rpc.getSlot().send(),
       this.rpc
         .getProgramAccounts(this.programId, {
           filters: [
@@ -1261,8 +1328,7 @@ export class KaminoMarket {
   /**
    * Get all Scope prices used by all the market reserves
    */
-  async getAllScopePrices(scope: Scope): Promise<KaminoPrices> {
-    const allOraclePrices = await this.getReserveOraclePrices(scope);
+  async getAllScopePrices(scope: Scope, allOraclePrices: Map<Address, OraclePrices>): Promise<KaminoPrices> {
     const spot: MintToPriceMap = {};
     const twaps: MintToPriceMap = {};
     for (const reserve of this.reserves.values()) {
@@ -1271,7 +1337,7 @@ export class KaminoMarket {
       const oracle = reserve.state.config.tokenInfo.scopeConfiguration.priceFeed;
       const chain = reserve.state.config.tokenInfo.scopeConfiguration.priceChain;
       const twapChain = reserve.state.config.tokenInfo.scopeConfiguration.twapChain.filter((x) => x > 0);
-      const oraclePrices = allOraclePrices.get(reserve.address);
+      const oraclePrices = allOraclePrices.get(oracle);
       if (oraclePrices && oracle && isNotNullPubkey(oracle) && chain && Scope.isScopeChainValid(chain)) {
         const spotPrice = await scope.getPriceFromChain(chain, oraclePrices);
         spot[tokenMint] = { price: spotPrice.price, name: tokenName };
@@ -1287,16 +1353,18 @@ export class KaminoMarket {
   /**
    * Get all Scope/Pyth/Switchboard prices used by all the market reserves
    */
-  async getAllPrices(): Promise<KlendPrices> {
+  async getAllPrices(oracleAccounts?: AllOracleAccounts): Promise<KlendPrices> {
     const klendPrices: KlendPrices = {
       scope: { spot: {}, twap: {} },
       pyth: { spot: {}, twap: {} },
       switchboard: { spot: {}, twap: {} },
     };
-    const allOracleAccounts = await getAllOracleAccounts(
-      this.rpc,
-      this.getReserves().map((x) => x.state)
-    );
+    const allOracleAccounts =
+      oracleAccounts ??
+      (await getAllOracleAccounts(
+        this.rpc,
+        this.getReserves().map((x) => x.state)
+      ));
     const pythCache = new Map<Address, PythPrices>();
     const switchboardCache = new Map<Address, CandidatePrice>();
     const scopeCache = new Map<Address, OraclePrices>();
@@ -1506,7 +1574,8 @@ export async function getReservesForMarket(
   marketAddress: Address,
   rpc: Rpc<KaminoReserveRpcApi>,
   programId: Address,
-  recentSlotDurationMs: number
+  recentSlotDurationMs: number,
+  oracleAccounts?: AllOracleAccounts
 ): Promise<Map<Address, KaminoReserve>> {
   const reserves = await rpc
     .getProgramAccounts(programId, {
@@ -1537,7 +1606,7 @@ export async function getReservesForMarket(
     }
     return reserveAccount;
   });
-  const reservesAndOracles = await getTokenOracleData(rpc, deserializedReserves);
+  const reservesAndOracles = await getTokenOracleData(rpc, deserializedReserves, oracleAccounts);
   const reservesByAddress = new Map<Address, KaminoReserve>();
   reservesAndOracles.forEach(([reserve, oracle], index) => {
     if (!oracle) {
@@ -1553,14 +1622,15 @@ export async function getSingleReserve(
   reservePk: Address,
   rpc: Rpc<KaminoReserveRpcApi>,
   recentSlotDurationMs: number,
-  reserveData?: Reserve
+  reserveData?: Reserve,
+  oracleAccounts?: AllOracleAccounts
 ): Promise<KaminoReserve> {
   const reserve = reserveData ?? (await Reserve.fetch(rpc, reservePk));
 
   if (reserve === null) {
     throw new Error(`Reserve account ${reservePk} does not exist`);
   }
-  const reservesAndOracles = await getTokenOracleData(rpc, [reserve]);
+  const reservesAndOracles = await getTokenOracleData(rpc, [reserve], oracleAccounts);
   const [, oracle] = reservesAndOracles[0];
 
   if (!oracle) {
