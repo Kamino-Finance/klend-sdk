@@ -1318,6 +1318,10 @@ async function main() {
       );
 
       console.log('vaultOverview', vaultOverview);
+      vaultOverview.reservesFarmsIncentives.reserveFarmsIncentives.forEach((incentive, reserveAddress) => {
+        console.log('reserve ', reserveAddress);
+        console.log('reserve incentive', incentive);
+      });
     });
 
   commands

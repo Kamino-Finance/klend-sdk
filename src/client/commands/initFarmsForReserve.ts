@@ -1,5 +1,6 @@
 import { Address, generateKeyPairSigner, TransactionSigner } from '@solana/kit';
 import {
+  DEFAULT_RECENT_SLOT_DURATION_MS,
   initFarmsForReserve as initFarmsForReserveIx,
   KaminoMarket,
   lendingMarketAuthPda,
@@ -11,7 +12,6 @@ import { getCreateAccountInstruction, SYSTEM_PROGRAM_ADDRESS } from '@solana-pro
 import { SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 import { CliEnv, SendTxMode } from '../tx/CliEnv';
 import { processTx } from '../tx/processor';
-import { DEFAULT_RECENT_SLOT_DURATION_MS } from '@kamino-finance/klend-sdk';
 
 export async function initFarmsForReserve(
   env: CliEnv,

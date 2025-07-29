@@ -98,8 +98,8 @@ import { SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
 import type { AccountInfoBase, AccountInfoWithJsonData, AccountInfoWithPubkey } from '@solana/rpc-types';
 import { arrayElementConfigItems, ConfigUpdater } from './configItems';
-import { getFarmIncentives, ReserveIncentives } from '@kamino-finance/farms-sdk/dist/utils/apy';
 import { OracleMappings } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts';
+import { getReserveFarmRewardsAPY as getReserveFarmRewardsAPYUtils, ReserveIncentives } from '../utils/farmUtils';
 
 const base58Decoder = getBase58Decoder();
 
@@ -1023,14 +1023,14 @@ export class KaminoManager {
   }
 
   /**
-   * This will return an VaultOverview object that encapsulates all the information about the vault, including the holdings, reserves details, theoretical APY, actual APY, utilization ratio and total borrowed amount
+   * This will return an VaultOverview object that encapsulates all the information about the vault, including the holdings, reserves details, theoretical APY, utilization ratio and total borrowed amount
    * @param vault - the kamino vault to get available liquidity to withdraw for
-   * @param price - the price of the token in the vault (e.g. USDC)
+   * @param vaultTokenPrice - the price of the token in the vault (e.g. USDC)
    * @param [slot] - the slot for which to retrieve the vault overview for. Optional. If not provided the function will fetch the current slot
-   * @param [vaultReserves] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [kaminoMarkets] - a list of all kamino markets. Optional. If provided the function will be significantly faster as it will not have to fetch the markets
    * @param [currentSlot] - the latest confirmed slot. Optional. If provided the function will be  faster as it will not have to fetch the latest slot
-   * @returns an VaultOverview object with details about the tokens available and invested in the vault, denominated in tokens and USD
+   * @returns an VaultOverview object with details about the tokens available and invested in the vault, denominated in tokens and USD, along sie APYs
    */
   async getVaultOverview(
     vault: VaultState,
@@ -1190,82 +1190,48 @@ export class KaminoManager {
    * Read the APY of the farm built on top of the vault (farm in vaultState.vaultFarm)
    * @param vault - the vault to read the farm APY for
    * @param vaultTokenPrice - the price of the vault token in USD (e.g. 1.0 for USDC)
+   * @param [farmsClient] - the farms client to use. Optional. If not provided, the function will create a new one
    * @param [slot] - the slot to read the farm APY for. Optional. If not provided, the function will read the current slot
    * @returns the APY of the farm built on top of the vault
    */
-  async getVaultFarmRewardsAPY(vault: KaminoVault, vaultTokenPrice: Decimal, slot?: Slot): Promise<FarmIncentives> {
-    return this._vaultClient.getVaultRewardsAPY(vault, vaultTokenPrice, slot);
+  async getVaultFarmRewardsAPY(
+    vault: KaminoVault,
+    vaultTokenPrice: Decimal,
+    farmsClient?: Farms,
+    slot?: Slot
+  ): Promise<FarmIncentives> {
+    return this._vaultClient.getVaultRewardsAPY(vault, vaultTokenPrice, farmsClient, slot);
   }
 
   /**
    * This will return the APY of the reserve farms (debt and supply)
    * @param reserve - the reserve to get the farms APY for
    * @param reserveTokenPrice - the price of the reserve token in USD (e.g. 1.0 for USDC)
+   * @param [farmsClient] - the farms client to use. Optional. If not provided, the function will create a new one
+   * @param [slot] - the slot to read the farm APY for. Optional. If not provided, the function will read the current slot
    * @param [reserveState] - the reserve state. Optional. If not provided, the function will fetch the reserve state
-   * @param [kaminoMarket] - the kamino market. Optional. If not provided, the function will fetch the kamino market
+   * @param [cTokenMintDecimals] - the decimals of the cToken mint. Optional. If not provided, the function will fetch the decimals from the mint
    * @returns the APY of the farm built on top of the reserve
    */
   async getReserveFarmRewardsAPY(
     reserve: Address,
     reserveTokenPrice: Decimal,
+    farmsClient?: Farms,
+    slot?: Slot,
     reserveState?: Reserve,
-    kaminoMarket?: KaminoMarket
+    cTokenMintDecimals?: number
   ): Promise<ReserveIncentives> {
-    const reserveIncentives: ReserveIncentives = {
-      collateralFarmIncentives: null,
-      debtFarmIncentives: null,
-    };
-
-    console.log('this._kaminoLendProgramId', this._kaminoLendProgramId.toString());
-    const reserveAccount = reserveState
-      ? reserveState
-      : await Reserve.fetch(this._rpc, reserve, this._kaminoLendProgramId);
-    if (!reserveAccount) {
-      throw new Error(`Reserve ${reserve} not found`);
-    }
-
-    let market = kaminoMarket;
-    if (!market) {
-      const fetckedMarket = await KaminoMarket.load(this._rpc, reserveAccount.lendingMarket, 450);
-      if (!fetckedMarket) {
-        throw new Error(`Market ${reserveAccount.lendingMarket} not found`);
-      }
-      market = fetckedMarket;
-    }
-
-    const kaminoReserve = market.getReserveByAddress(reserve);
-    if (!kaminoReserve) {
-      throw new Error(`Strategy state not found for strategy: ${reserve}`);
-    }
-
-    const farmCollateral = kaminoReserve.state.farmCollateral;
-    const farmDebt = kaminoReserve.state.farmDebt;
-
-    const stakedTokenMintDecimals = kaminoReserve.getMintDecimals();
-    const reserveCtokenPrice = reserveTokenPrice.div(kaminoReserve.getCollateralExchangeRate());
-
-    const farmsClient = new Farms(this._rpc);
-    if (farmCollateral !== DEFAULT_PUBLIC_KEY) {
-      const farmIncentivesCollateral = await getFarmIncentives(
-        farmsClient,
-        farmCollateral,
-        reserveCtokenPrice,
-        6 // all cTokens have 6 decimals
-      );
-      reserveIncentives.collateralFarmIncentives = farmIncentivesCollateral;
-    }
-
-    if (farmDebt !== DEFAULT_PUBLIC_KEY) {
-      const farmIncentivesDebt = await getFarmIncentives(
-        farmsClient,
-        farmDebt,
-        reserveTokenPrice,
-        stakedTokenMintDecimals
-      );
-      reserveIncentives.debtFarmIncentives = farmIncentivesDebt;
-    }
-
-    return reserveIncentives;
+    return getReserveFarmRewardsAPYUtils(
+      this._rpc,
+      this.recentSlotDurationMs,
+      reserve,
+      reserveTokenPrice,
+      this._kaminoLendProgramId,
+      farmsClient ? farmsClient : new Farms(this._rpc),
+      slot ? slot : await this.getRpc().getSlot().send(),
+      reserveState,
+      cTokenMintDecimals
+    );
   }
 
   /**

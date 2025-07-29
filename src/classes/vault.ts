@@ -125,6 +125,7 @@ import { getExtendLookupTableInstruction } from '@solana-program/address-lookup-
 import { Farms } from '@kamino-finance/farms-sdk';
 import { getFarmIncentives } from '@kamino-finance/farms-sdk/dist/utils/apy';
 import { computeReservesAllocation } from '../utils/vaultAllocation';
+import { getReserveFarmRewardsAPY } from '../utils/farmUtils';
 
 export const kaminoVaultId = address('KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd');
 export const kaminoVaultStagingId = address('stKvQfwRsQiKnLtMNVLHKS3exFJmZFsgfzBPWHECUYK');
@@ -2065,19 +2066,21 @@ export class KaminoVaultClient {
 
   /**
    * This method calculates the token per share value. This will always change based on interest earned from the vault, but calculating it requires a bunch of rpc requests. Caching this for a short duration would be optimal
-   * @param vault - vault to calculate tokensPerShare for
+   * @param vaultState - vault state to calculate tokensPerShare for
    * @param [slot] - the slot at which we retrieve the tokens per share. Optional. If not provided, the function will fetch the current slot
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [currentSlot] - the latest confirmed slot. Optional. If provided the function will be  faster as it will not have to fetch the latest slot
    * @returns - token per share value
    */
   async getTokensPerShareSingleVault(
-    vault: KaminoVault,
+    vaultOrState: KaminoVault | VaultState,
     slot?: Slot,
     vaultReservesMap?: Map<Address, KaminoReserve>,
     currentSlot?: Slot
   ): Promise<Decimal> {
-    const vaultState = await vault.getState(this.getConnection());
+    // Determine if we have a KaminoVault or VaultState
+    const vaultState = 'getState' in vaultOrState ? await vaultOrState.getState(this.getConnection()) : vaultOrState;
+
     if (vaultState.sharesIssued.isZero()) {
       return new Decimal(0);
     }
@@ -2649,16 +2652,16 @@ export class KaminoVaultClient {
   /**
    * This will return an VaultOverview object that encapsulates all the information about the vault, including the holdings, reserves details, theoretical APY, utilization ratio and total borrowed amount
    * @param vault - the kamino vault to get available liquidity to withdraw for
-   * @param price - the price of the token in the vault (e.g. USDC)
+   * @param vaultTokenPrice - the price of the token in the vault (e.g. USDC)
    * @param [slot] - the slot for which to retrieve the vault overview for. Optional. If not provided the function will fetch the current slot
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [kaminoMarkets] - a list of all kamino markets. Optional. If provided the function will be significantly faster as it will not have to fetch the markets
    * @param [currentSlot] - the latest confirmed slot. Optional. If provided the function will be  faster as it will not have to fetch the latest slot
-   * @returns an VaultOverview object with details about the tokens available and invested in the vault, denominated in tokens and USD
+   * @returns an VaultOverview object with details about the tokens available and invested in the vault, denominated in tokens and USD, along sie APYs
    */
   async getVaultOverview(
     vault: VaultState,
-    price: Decimal,
+    vaultTokenPrice: Decimal,
     slot?: Slot,
     vaultReservesMap?: Map<Address, KaminoReserve>,
     kaminoMarkets?: KaminoMarket[],
@@ -2666,30 +2669,34 @@ export class KaminoVaultClient {
   ): Promise<VaultOverview> {
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vault);
 
-    const vaultHoldingsWithUSDValuePromise = await this.getVaultHoldingsWithPrice(
+    const vaultHoldingsWithUSDValuePromise = this.getVaultHoldingsWithPrice(
       vault,
-      price,
+      vaultTokenPrice,
       slot,
       vaultReservesState,
       currentSlot
     );
 
     const slotForOverview = slot ? slot : await this.getConnection().getSlot().send();
+    const farmsClient = new Farms(this.getConnection());
 
-    const vaultTheoreticalAPYPromise = await this.getVaultTheoreticalAPY(vault, slotForOverview, vaultReservesState);
-    const vaultActualAPYPromise = await this.getVaultActualAPY(vault, slotForOverview, vaultReservesState);
-    const totalInvestedAndBorrowedPromise = await this.getTotalBorrowedAndInvested(
+    const vaultTheoreticalAPYPromise = this.getVaultTheoreticalAPY(vault, slotForOverview, vaultReservesState);
+    const vaultActualAPYPromise = this.getVaultActualAPY(vault, slotForOverview, vaultReservesState);
+    const totalInvestedAndBorrowedPromise = this.getTotalBorrowedAndInvested(
       vault,
       slotForOverview,
       vaultReservesState
     );
-    const vaultCollateralsPromise = await this.getVaultCollaterals(
+    const vaultCollateralsPromise = this.getVaultCollaterals(vault, slotForOverview, vaultReservesState, kaminoMarkets);
+    const reservesOverviewPromise = this.getVaultReservesDetails(vault, slotForOverview, vaultReservesState);
+    const vaultFarmIncentivesPromise = this.getVaultRewardsAPY(vault, vaultTokenPrice, farmsClient, slotForOverview);
+    const vaultReservesFarmIncentivesPromise = this.getVaultReservesFarmsIncentives(
       vault,
+      vaultTokenPrice,
+      farmsClient,
       slotForOverview,
-      vaultReservesState,
-      kaminoMarkets
+      vaultReservesState
     );
-    const reservesOverviewPromise = await this.getVaultReservesDetails(vault, slotForOverview, vaultReservesState);
 
     // all the async part of the functions above just read the vaultReservesState which is read beforehand, so excepting vaultCollateralsPromise they should do no additional network calls
     const [
@@ -2699,6 +2706,8 @@ export class KaminoVaultClient {
       totalInvestedAndBorrowed,
       vaultCollaterals,
       reservesOverview,
+      vaultFarmIncentives,
+      vaultReservesFarmIncentives,
     ] = await Promise.all([
       vaultHoldingsWithUSDValuePromise,
       vaultTheoreticalAPYPromise,
@@ -2706,6 +2715,8 @@ export class KaminoVaultClient {
       totalInvestedAndBorrowedPromise,
       vaultCollateralsPromise,
       reservesOverviewPromise,
+      vaultFarmIncentivesPromise,
+      vaultReservesFarmIncentivesPromise,
     ]);
 
     return {
@@ -2714,11 +2725,13 @@ export class KaminoVaultClient {
       vaultCollaterals: vaultCollaterals,
       actualSupplyAPY: vaultActualAPYs,
       theoreticalSupplyAPY: vaultTheoreticalAPYs,
+      vaultFarmIncentives: vaultFarmIncentives,
+      reservesFarmsIncentives: vaultReservesFarmIncentives,
       totalBorrowed: totalInvestedAndBorrowed.totalBorrowed,
-      totalBorrowedUSD: totalInvestedAndBorrowed.totalBorrowed.mul(price),
+      totalBorrowedUSD: totalInvestedAndBorrowed.totalBorrowed.mul(vaultTokenPrice),
       utilizationRatio: totalInvestedAndBorrowed.utilizationRatio,
       totalSupplied: totalInvestedAndBorrowed.totalInvested,
-      totalSuppliedUSD: totalInvestedAndBorrowed.totalInvested.mul(price),
+      totalSuppliedUSD: totalInvestedAndBorrowed.totalInvested.mul(vaultTokenPrice),
     };
   }
 
@@ -3032,11 +3045,18 @@ export class KaminoVaultClient {
    * Read the APY of the farm built on top of the vault (farm in vaultState.vaultFarm)
    * @param vault - the vault to read the farm APY for
    * @param vaultTokenPrice - the price of the vault token in USD (e.g. 1.0 for USDC)
+   * @param [farmsClient] - the farms client to use. Optional. If not provided, the function will create a new one
    * @param [slot] - the slot to read the farm APY for. Optional. If not provided, the function will read the current slot
    * @returns the APY of the farm built on top of the vault
    */
-  async getVaultRewardsAPY(vault: KaminoVault, vaultTokenPrice: Decimal, slot?: Slot): Promise<FarmIncentives> {
-    const vaultState = await vault.getState(this.getConnection());
+  async getVaultRewardsAPY(
+    vaultOrState: KaminoVault | VaultState,
+    vaultTokenPrice: Decimal,
+    farmsClient?: Farms,
+    slot?: Slot
+  ): Promise<FarmIncentives> {
+    // Determine if we have a KaminoVault or VaultState
+    const vaultState = 'getState' in vaultOrState ? await vaultOrState.getState(this.getConnection()) : vaultOrState;
     if (vaultState.vaultFarm === DEFAULT_PUBLIC_KEY) {
       return {
         incentivesStats: [],
@@ -3044,12 +3064,74 @@ export class KaminoVaultClient {
       };
     }
 
-    const tokensPerShare = await this.getTokensPerShareSingleVault(vault, slot);
+    const tokensPerShare = await this.getTokensPerShareSingleVault(vaultState, slot);
     const sharePrice = tokensPerShare.mul(vaultTokenPrice);
     const stakedTokenMintDecimals = vaultState.sharesMintDecimals.toNumber();
 
-    const farmsClient = new Farms(this.getConnection());
-    return getFarmIncentives(farmsClient, vaultState.vaultFarm, sharePrice, stakedTokenMintDecimals);
+    const kFarmsClient = farmsClient ? farmsClient : new Farms(this.getConnection());
+    return getFarmIncentives(kFarmsClient, vaultState.vaultFarm, sharePrice, stakedTokenMintDecimals);
+  }
+
+  async getVaultReservesFarmsIncentives(
+    vaultOrState: KaminoVault | VaultState,
+    vaultTokenPrice: Decimal,
+    farmsClient?: Farms,
+    slot?: Slot,
+    vaultReservesMap?: Map<Address, KaminoReserve>
+  ): Promise<VaultReservesFarmsIncentives> {
+    const vaultState = 'getState' in vaultOrState ? await vaultOrState.getState(this.getConnection()) : vaultOrState;
+
+    const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
+    const currentSlot = slot ? slot : await this.getConnection().getSlot({ commitment: 'confirmed' }).send();
+
+    const holdings = await this.getVaultHoldings(vaultState, currentSlot, vaultReservesState);
+
+    const vaultReservesAddresses = vaultState.vaultAllocationStrategy.map(
+      (allocationStrategy) => allocationStrategy.reserve
+    );
+
+    const vaultReservesFarmsIncentives = new Map<Address, FarmIncentives>();
+    let totalIncentivesApy = new Decimal(0);
+
+    const kFarmsClient = farmsClient ? farmsClient : new Farms(this.getConnection());
+    for (const reserveAddress of vaultReservesAddresses) {
+      if (reserveAddress === DEFAULT_PUBLIC_KEY) {
+        continue;
+      }
+
+      const reserveState = vaultReservesState.get(reserveAddress);
+      if (reserveState === undefined) {
+        console.log(`Reserve to read farm incentives for not found: ${reserveAddress}`);
+        vaultReservesFarmsIncentives.set(reserveAddress, {
+          incentivesStats: [],
+          totalIncentivesApy: 0,
+        });
+        continue;
+      }
+
+      const reserveFarmIncentives = await getReserveFarmRewardsAPY(
+        this._rpc,
+        this.recentSlotDurationMs,
+        reserveAddress,
+        vaultTokenPrice,
+        this._kaminoLendProgramId,
+        kFarmsClient,
+        currentSlot,
+        reserveState.state
+      );
+      vaultReservesFarmsIncentives.set(reserveAddress, reserveFarmIncentives.collateralFarmIncentives);
+
+      const investedInReserve = holdings.investedInReserves.get(reserveAddress);
+      const weightedReserveAPY = new Decimal(reserveFarmIncentives.collateralFarmIncentives.totalIncentivesApy)
+        .mul(investedInReserve ?? 0)
+        .div(holdings.totalAUMIncludingFees);
+      totalIncentivesApy = totalIncentivesApy.add(weightedReserveAPY);
+    }
+
+    return {
+      reserveFarmsIncentives: vaultReservesFarmsIncentives,
+      totalIncentivesAPY: totalIncentivesApy,
+    };
   }
 
   private appendRemainingAccountsForVaultReserves(
@@ -3286,11 +3368,18 @@ export type VaultOverview = {
   vaultCollaterals: Map<Address, MarketOverview>;
   theoreticalSupplyAPY: APYs;
   actualSupplyAPY: APYs;
+  vaultFarmIncentives: FarmIncentives;
+  reservesFarmsIncentives: VaultReservesFarmsIncentives;
   totalBorrowed: Decimal;
   totalBorrowedUSD: Decimal;
   totalSupplied: Decimal;
   totalSuppliedUSD: Decimal;
   utilizationRatio: Decimal;
+};
+
+export type VaultReservesFarmsIncentives = {
+  reserveFarmsIncentives: Map<Address, FarmIncentives>;
+  totalIncentivesAPY: Decimal;
 };
 
 export type VaultFeesPct = {
