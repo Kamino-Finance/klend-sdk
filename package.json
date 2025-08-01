@@ -75,7 +75,8 @@
     "commander": "^9.3.0",
     "decimal.js": "^10.4.3",
     "exponential-backoff": "^3.1.1",
-    "zstddec": "^0.1.0"
+    "zstddec": "^0.1.0",
+    "fzstd": "^0.1.1"
   },
   "devDependencies": {
     "@orca-so/sdk": "^1.2.25",

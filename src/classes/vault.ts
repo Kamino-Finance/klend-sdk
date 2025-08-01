@@ -2657,6 +2657,7 @@ export class KaminoVaultClient {
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [kaminoMarkets] - a list of all kamino markets. Optional. If provided the function will be significantly faster as it will not have to fetch the markets
    * @param [currentSlot] - the latest confirmed slot. Optional. If provided the function will be  faster as it will not have to fetch the latest slot
+   * @param [tokensPrices] - a hashmap from a token pubkey to the price of the token in USD. Optional. If some tokens are not in the map, the function will fetch the price
    * @returns an VaultOverview object with details about the tokens available and invested in the vault, denominated in tokens and USD, along sie APYs
    */
   async getVaultOverview(
@@ -2665,7 +2666,8 @@ export class KaminoVaultClient {
     slot?: Slot,
     vaultReservesMap?: Map<Address, KaminoReserve>,
     kaminoMarkets?: KaminoMarket[],
-    currentSlot?: Slot
+    currentSlot?: Slot,
+    tokensPrices?: Map<Address, Decimal>
   ): Promise<VaultOverview> {
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vault);
 
@@ -2689,13 +2691,20 @@ export class KaminoVaultClient {
     );
     const vaultCollateralsPromise = this.getVaultCollaterals(vault, slotForOverview, vaultReservesState, kaminoMarkets);
     const reservesOverviewPromise = this.getVaultReservesDetails(vault, slotForOverview, vaultReservesState);
-    const vaultFarmIncentivesPromise = this.getVaultRewardsAPY(vault, vaultTokenPrice, farmsClient, slotForOverview);
+    const vaultFarmIncentivesPromise = this.getVaultRewardsAPY(
+      vault,
+      vaultTokenPrice,
+      farmsClient,
+      slotForOverview,
+      tokensPrices
+    );
     const vaultReservesFarmIncentivesPromise = this.getVaultReservesFarmsIncentives(
       vault,
       vaultTokenPrice,
       farmsClient,
       slotForOverview,
-      vaultReservesState
+      vaultReservesState,
+      tokensPrices
     );
 
     // all the async part of the functions above just read the vaultReservesState which is read beforehand, so excepting vaultCollateralsPromise they should do no additional network calls
@@ -3053,7 +3062,8 @@ export class KaminoVaultClient {
     vaultOrState: KaminoVault | VaultState,
     vaultTokenPrice: Decimal,
     farmsClient?: Farms,
-    slot?: Slot
+    slot?: Slot,
+    tokensPrices?: Map<Address, Decimal>
   ): Promise<FarmIncentives> {
     // Determine if we have a KaminoVault or VaultState
     const vaultState = 'getState' in vaultOrState ? await vaultOrState.getState(this.getConnection()) : vaultOrState;
@@ -3069,7 +3079,7 @@ export class KaminoVaultClient {
     const stakedTokenMintDecimals = vaultState.sharesMintDecimals.toNumber();
 
     const kFarmsClient = farmsClient ? farmsClient : new Farms(this.getConnection());
-    return getFarmIncentives(kFarmsClient, vaultState.vaultFarm, sharePrice, stakedTokenMintDecimals);
+    return getFarmIncentives(kFarmsClient, vaultState.vaultFarm, sharePrice, stakedTokenMintDecimals, tokensPrices);
   }
 
   async getVaultReservesFarmsIncentives(
@@ -3077,7 +3087,8 @@ export class KaminoVaultClient {
     vaultTokenPrice: Decimal,
     farmsClient?: Farms,
     slot?: Slot,
-    vaultReservesMap?: Map<Address, KaminoReserve>
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    tokensPrices?: Map<Address, Decimal>
   ): Promise<VaultReservesFarmsIncentives> {
     const vaultState = 'getState' in vaultOrState ? await vaultOrState.getState(this.getConnection()) : vaultOrState;
 
@@ -3117,7 +3128,9 @@ export class KaminoVaultClient {
         this._kaminoLendProgramId,
         kFarmsClient,
         currentSlot,
-        reserveState.state
+        reserveState.state,
+        undefined,
+        tokensPrices
       );
       vaultReservesFarmsIncentives.set(reserveAddress, reserveFarmIncentives.collateralFarmIncentives);
 
