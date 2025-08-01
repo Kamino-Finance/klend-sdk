@@ -32,7 +32,12 @@ import { sendAndConfirmTx } from '../utils/tx';
   await sendAndConfirmTx(
     c,
     wallet,
-    [...instructions.createAtaIfNeededIxs, ...instructions.initVaultIxs, instructions.createLUTIx, instructions.initSharesMetadataIx],
+    [
+      ...instructions.createAtaIfNeededIxs,
+      ...instructions.initVaultIxs,
+      instructions.createLUTIx,
+      instructions.initSharesMetadataIx,
+    ],
     [],
     [],
     'InitVault'
