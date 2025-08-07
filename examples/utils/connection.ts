@@ -10,8 +10,9 @@ import {
   SolanaRpcSubscriptionsApi,
 } from '@solana/kit';
 import { getEnvOrThrow } from './env';
-import { LOCALNET_RPC_URL } from '../../tests/runner/env';
 import { Connection } from '@solana/web3.js';
+
+export const LOCALNET_RPC_URL = 'http://localhost:8899';
 
 export type ConnectionPool = {
   rpc: Rpc<SolanaRpcApi>;
