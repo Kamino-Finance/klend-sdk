@@ -1042,7 +1042,15 @@ export class KaminoManager {
     currentSlot?: Slot,
     tokensPrices?: Map<Address, Decimal>
   ): Promise<VaultOverview> {
-    return this._vaultClient.getVaultOverview(vault, price, slot, vaultReserves, kaminoMarkets, currentSlot, tokensPrices);
+    return this._vaultClient.getVaultOverview(
+      vault,
+      price,
+      slot,
+      vaultReserves,
+      kaminoMarkets,
+      currentSlot,
+      tokensPrices
+    );
   }
 
   /**
@@ -1203,6 +1211,21 @@ export class KaminoManager {
     slot?: Slot
   ): Promise<FarmIncentives> {
     return this._vaultClient.getVaultRewardsAPY(vault, vaultTokenPrice, farmsClient, slot);
+  }
+
+  /**
+   * Get all the token mints of the vault, vault farm rewards and the allocation  rewards
+   * @param vaults - the vaults to get the token mints for
+   * @param [vaultReservesMap] - the vault reserves map to get the reserves for; if not provided, the function will fetch the reserves
+   * @param farmsMap - the farms map to get the farms for
+   * @returns a set of token mints
+   */
+  async getAllVaultsTokenMintsIncludingRewards(
+    vaults: KaminoVault[],
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    farmsMap?: Map<Address, FarmState>
+  ) {
+    return this._vaultClient.getAllVaultsTokenMintsIncludingRewards(vaults, vaultReservesMap, farmsMap);
   }
 
   /**

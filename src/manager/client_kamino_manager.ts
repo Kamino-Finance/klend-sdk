@@ -1356,6 +1356,23 @@ async function main() {
     });
 
   commands
+    .command('get-vault-all-mints')
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--vault <string>`, 'Vault address')
+    .action(async ({ staging, vault }) => {
+      const env = await initEnv(staging);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+
+      const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
+
+      const vaultAddress = address(vault);
+      const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kvaultProgramId);
+
+      const allVaultsTokenMints = await kaminoManager.getAllVaultsTokenMintsIncludingRewards([kaminoVault]);
+      console.log('allVaultsTokenMints', allVaultsTokenMints);
+    });
+
+  commands
     .command('get-vault-allocation-distribution')
     .requiredOption('--vault <string>', 'Vault address')
     .option(`--staging`, 'If true, will use the staging programs')

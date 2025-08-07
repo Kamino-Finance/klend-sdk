@@ -3082,6 +3082,106 @@ export class KaminoVaultClient {
     return getFarmIncentives(kFarmsClient, vaultState.vaultFarm, sharePrice, stakedTokenMintDecimals, tokensPrices);
   }
 
+  /**
+   * Get all the token mints of the vault, vault farm rewards and the allocation  rewards
+   * @param vaults - the vaults to get the token mints for
+   * @param [vaultReservesMap] - the vault reserves map to get the reserves for; if not provided, the function will fetch the reserves
+   * @param farmsMap - the farms map to get the farms for
+   * @returns a set of token mints
+   */
+  async getAllVaultsTokenMintsIncludingRewards(
+    vaults: KaminoVault[],
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    farmsMap?: Map<Address, FarmState>
+  ) {
+    const vaultsTokenMints = new Set<Address>();
+
+    const kFarmsMap = farmsMap ? farmsMap : new Map<Address, FarmState>();
+
+    const farmsToFetch = new Set<Address>();
+    const reservesToFetch = new Set<Address>();
+
+    for (const vault of vaults) {
+      const vaultState = await vault.getState(this.getConnection());
+      vaultsTokenMints.add(vaultState.tokenMint);
+      const hasFarm = await vault.hasFarm(this.getConnection());
+      if (hasFarm) {
+        const farmAddress = vaultState.vaultFarm;
+        if (!kFarmsMap.has(farmAddress)) {
+          farmsToFetch.add(farmAddress);
+        } else {
+          const farmState = kFarmsMap.get(farmAddress)!;
+          farmState.rewardInfos.forEach((rewardInfo) => {
+            if (rewardInfo.token.mint !== DEFAULT_PUBLIC_KEY) {
+              vaultsTokenMints.add(rewardInfo.token.mint);
+            }
+          });
+        }
+      }
+
+      const reserves = vaultState.vaultAllocationStrategy.map((allocationStrategy) => allocationStrategy.reserve);
+      reserves.forEach((reserve) => {
+        if (reserve === DEFAULT_PUBLIC_KEY) {
+          return;
+        }
+
+        if (vaultReservesMap && !vaultReservesMap.has(reserve)) {
+          const reserveState = vaultReservesMap.get(reserve)!;
+          const supplyFarm = reserveState.state.farmCollateral;
+          if (supplyFarm !== DEFAULT_PUBLIC_KEY) {
+            if (!kFarmsMap.has(supplyFarm)) {
+              farmsToFetch.add(supplyFarm);
+            } else {
+              const farmState = kFarmsMap.get(supplyFarm)!;
+              farmState.rewardInfos.forEach((rewardInfo) => {
+                if (rewardInfo.token.mint !== DEFAULT_PUBLIC_KEY) {
+                  vaultsTokenMints.add(rewardInfo.token.mint);
+                }
+              });
+            }
+          }
+        } else {
+          reservesToFetch.add(reserve);
+        }
+      });
+    }
+
+    // fetch the reserves first so we can add their farms to farms to be fetched, if needed
+    const missingReservesStates = await Reserve.fetchMultiple(this.getConnection(), Array.from(reservesToFetch));
+
+    missingReservesStates.forEach((reserveState) => {
+      if (reserveState) {
+        const supplyFarm = reserveState.farmCollateral;
+        if (supplyFarm !== DEFAULT_PUBLIC_KEY) {
+          if (!kFarmsMap.has(supplyFarm)) {
+            farmsToFetch.add(supplyFarm);
+          } else {
+            const farmState = kFarmsMap.get(supplyFarm)!;
+            farmState.rewardInfos.forEach((rewardInfo) => {
+              if (rewardInfo.token.mint !== DEFAULT_PUBLIC_KEY) {
+                vaultsTokenMints.add(rewardInfo.token.mint);
+              }
+            });
+          }
+        }
+      }
+    });
+
+    // fetch the missing farms
+    const missingFarmsStates = await FarmState.fetchMultiple(this.getConnection(), Array.from(farmsToFetch));
+    missingFarmsStates.forEach((farmState) => {
+      if (farmState) {
+        farmState.rewardInfos.forEach((rewardInfo) => {
+          if (rewardInfo.token.mint !== DEFAULT_PUBLIC_KEY) {
+            vaultsTokenMints.add(rewardInfo.token.mint);
+          }
+        });
+      }
+    });
+
+    return vaultsTokenMints;
+  }
+
   async getVaultReservesFarmsIncentives(
     vaultOrState: KaminoVault | VaultState,
     vaultTokenPrice: Decimal,
