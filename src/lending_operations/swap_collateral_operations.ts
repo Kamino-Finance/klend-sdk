@@ -164,7 +164,16 @@ export async function getSwapCollIxs<QuoteResponse>(
   //  - To construct 1. (i.e. flash-borrow), we need to know the target collateral swap-out from 4.
 
   // Construct the Klend's own ixs with a fake swap-out (only to learn the klend accounts used):
-  const fakeKlendIxs = await getKlendIxs(args, FAKE_TARGET_COLL_SWAP_OUT_AMOUNT, context);
+
+  const scopeRefreshIx = await getScopeRefreshIx(
+    context.market,
+    context.sourceCollReserve,
+    context.targetCollReserve,
+    context.obligation,
+    context.scopeRefreshConfig
+  );
+
+  const fakeKlendIxs = await getKlendIxs(args, FAKE_TARGET_COLL_SWAP_OUT_AMOUNT, context, scopeRefreshIx);
   const klendAccounts = uniqueAccountsWithProgramIds(listIxs(fakeKlendIxs));
 
   // Construct the external swap ixs (and learn the actual swap-out amount):
@@ -179,7 +188,7 @@ export async function getSwapCollIxs<QuoteResponse>(
       checkResultingObligationValid(args, externalSwapIxs.swapOutAmount, context);
 
       // Construct the Klend's own ixs with an actual swap-out amount:
-      const klendIxs = await getKlendIxs(args, externalSwapIxs.swapOutAmount, context);
+      const klendIxs = await getKlendIxs(args, externalSwapIxs.swapOutAmount, context, scopeRefreshIx);
 
       return {
         ixs: listIxs(klendIxs, externalSwapIxs.ixs),
@@ -275,21 +284,14 @@ type SwapCollKlendIxs = {
 async function getKlendIxs(
   args: SwapCollArgs,
   targetCollSwapOutAmount: Decimal,
-  context: SwapCollContext<any>
+  context: SwapCollContext<any>,
+  scopeRefreshIx: IInstruction[]
 ): Promise<SwapCollKlendIxs> {
   const { ataCreationIxs, targetCollAta } = await getAtaCreationIxs(context);
   const setupIxs = [...context.budgetAndPriorityFeeIxs, ...ataCreationIxs];
 
-  const scopeRefreshIxn = await getScopeRefreshIx(
-    context.market,
-    context.sourceCollReserve,
-    context.targetCollReserve,
-    context.obligation,
-    context.scopeRefreshConfig
-  );
-
-  if (scopeRefreshIxn) {
-    setupIxs.unshift(...scopeRefreshIxn);
+  if (scopeRefreshIx) {
+    setupIxs.unshift(...scopeRefreshIx);
   }
 
   const targetCollFlashBorrowedAmount = calculateTargetCollFlashBorrowedAmount(targetCollSwapOutAmount, context);

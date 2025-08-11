@@ -330,7 +330,7 @@ export class KaminoAction {
     );
 
     if (extraComputeBudget > 0) {
-      axn.addComputeBudgetIxn(extraComputeBudget);
+      axn.addComputeBudgetIx(extraComputeBudget);
     }
 
     await axn.addRefreshObligation(payer);
@@ -363,7 +363,7 @@ export class KaminoAction {
     );
 
     if (extraComputeBudget > 0) {
-      axn.addComputeBudgetIxn(extraComputeBudget);
+      axn.addComputeBudgetIx(extraComputeBudget);
     }
 
     await axn.addRefreshObligation(owner);
@@ -404,7 +404,7 @@ export class KaminoAction {
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
-      axn.addComputeBudgetIxn(extraComputeBudget);
+      axn.addComputeBudgetIx(extraComputeBudget);
     }
 
     await axn.addSupportIxs(
@@ -467,7 +467,7 @@ export class KaminoAction {
     );
     const addInitObligationForFarm = true;
     if (extraComputeBudget > 0) {
-      axn.addComputeBudgetIxn(extraComputeBudget);
+      axn.addComputeBudgetIx(extraComputeBudget);
     }
 
     if (isSome(axn.referrer)) {
@@ -529,7 +529,7 @@ export class KaminoAction {
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
-      axn.addComputeBudgetIxn(extraComputeBudget);
+      axn.addComputeBudgetIx(extraComputeBudget);
     }
 
     await axn.addSupportIxs(
@@ -572,7 +572,7 @@ export class KaminoAction {
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
-      axn.addComputeBudgetIxn(extraComputeBudget);
+      axn.addComputeBudgetIx(extraComputeBudget);
     }
 
     await axn.addSupportIxs(
@@ -620,7 +620,7 @@ export class KaminoAction {
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
-      axn.addComputeBudgetIxn(extraComputeBudget);
+      axn.addComputeBudgetIx(extraComputeBudget);
     }
 
     await axn.addSupportIxs(
@@ -679,7 +679,7 @@ export class KaminoAction {
     const twoTokenAction = true;
 
     if (extraComputeBudget > 0) {
-      axn.addComputeBudgetIxn(extraComputeBudget);
+      axn.addComputeBudgetIx(extraComputeBudget);
     }
 
     if (isSome(axn.referrer)) {
@@ -776,7 +776,7 @@ export class KaminoAction {
     const addInitObligationForFarm = true;
     const twoTokenAction = true;
     if (extraComputeBudget > 0) {
-      axn.addComputeBudgetIxn(extraComputeBudget);
+      axn.addComputeBudgetIx(extraComputeBudget);
     }
 
     await axn.addSupportIxs(
@@ -830,7 +830,7 @@ export class KaminoAction {
     const addInitObligationForFarm = true;
     const twoTokenAction = true;
     if (extraComputeBudget > 0) {
-      axn.addComputeBudgetIxn(extraComputeBudget);
+      axn.addComputeBudgetIx(extraComputeBudget);
     }
 
     await axn.addSupportIxs(
@@ -886,7 +886,7 @@ export class KaminoAction {
     const addInitObligationForFarmForWithdraw = false;
     const twoTokenAction = true;
     if (extraComputeBudget > 0) {
-      axn.addComputeBudgetIxn(extraComputeBudget);
+      axn.addComputeBudgetIx(extraComputeBudget);
     }
 
     await axn.addSupportIxs(
@@ -975,7 +975,7 @@ export class KaminoAction {
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
-      axn.addComputeBudgetIxn(extraComputeBudget);
+      axn.addComputeBudgetIx(extraComputeBudget);
     }
 
     axn.depositReserves.push(...(obligationCustomizations?.addedDepositReserves || []));
@@ -1054,7 +1054,7 @@ export class KaminoAction {
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
-      axn.addComputeBudgetIxn(extraComputeBudget);
+      axn.addComputeBudgetIx(extraComputeBudget);
     }
 
     await axn.addSupportIxs(
@@ -1114,7 +1114,7 @@ export class KaminoAction {
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
-      axn.addComputeBudgetIxn(extraComputeBudget);
+      axn.addComputeBudgetIx(extraComputeBudget);
     }
 
     await axn.addSupportIxs(
@@ -3082,7 +3082,7 @@ export class KaminoAction {
     this.lendingIxsLabels.push(`WithdrawReferrerFeesIx[${this.owner.toString()}]`);
   }
 
-  private addComputeBudgetIxn(units: number) {
+  private addComputeBudgetIx(units: number) {
     this.computeBudgetIxs.push(buildComputeBudgetIx(units));
     this.computeBudgetIxsLabels.push(`AddComputeBudget[${units}]`);
   }

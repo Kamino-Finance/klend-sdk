@@ -1,8 +1,4 @@
-import {
-  getMedianSlotDurationInMsFromLastEpochs,
-  KaminoManager,
-  KaminoVault,
-} from '@kamino-finance/klend-sdk';
+import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';

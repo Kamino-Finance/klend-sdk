@@ -189,6 +189,7 @@ export interface AdjustLeverageSwapInputsProps<QuoteResponse> extends BaseLevera
   priceCollToDebt: Decimal;
   priceDebtToColl: Decimal;
   priceAinB: PriceAinBProvider;
+  withdrawSlotOffset?: number;
 }
 
 export interface AdjustLeverageProps<QuoteResponse> extends AdjustLeverageSwapInputsProps<QuoteResponse> {

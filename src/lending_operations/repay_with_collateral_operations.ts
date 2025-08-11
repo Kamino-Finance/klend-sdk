@@ -120,27 +120,31 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
   const inputAmountLamports = Decimal.min(maxWithdrawableCollLamports, maxCollNeededFromOracle);
 
   // Build the repay & withdraw collateral tx to get the number of accounts
-  const klendIxs: LeverageIxsOutput = await buildRepayWithCollateralIxs(
-    kaminoMarket,
-    debtReserve,
-    collReserve,
-    owner,
-    obligation,
-    referrer,
-    currentSlot,
-    budgetAndPriorityFeeIxs,
-    scopeRefreshConfig,
-    {
-      preActionIxs: [],
-      swapIxs: [],
-      lookupTables: [],
-      quote: {} as SwapQuote<QuoteResponse>,
-    },
-    isClosingPosition,
-    repayAmountLamports,
-    inputAmountLamports,
-    useV2Ixs
-  );
+  const klendIxs: LeverageIxsOutput = (
+    await buildRepayWithCollateralIxs(
+      kaminoMarket,
+      debtReserve,
+      collReserve,
+      owner,
+      obligation,
+      referrer,
+      currentSlot,
+      budgetAndPriorityFeeIxs,
+      scopeRefreshConfig,
+      [
+        {
+          preActionIxs: [],
+          swapIxs: [],
+          lookupTables: [],
+          quote: {} as SwapQuote<QuoteResponse>,
+        },
+      ],
+      isClosingPosition,
+      repayAmountLamports,
+      inputAmountLamports,
+      useV2Ixs
+    )
+  )[0];
   const uniqueKlendAccounts = uniqueAccountsWithProgramIds(klendIxs.instructions);
 
   const swapQuoteInputs: SwapInputs = {
@@ -244,35 +248,33 @@ export async function getRepayWithCollIxs<QuoteResponse>({
 
   const swapResponses = await swapper(swapInputs, initialInputs.klendAccounts, swapQuote);
 
-  return Promise.all(
-    swapResponses.map(async (swapResponse) => {
-      const ixs: LeverageIxsOutput = await buildRepayWithCollateralIxs(
-        kaminoMarket,
-        debtReserve,
-        collReserve,
-        owner,
-        obligation,
-        referrer,
-        currentSlot,
-        budgetAndPriorityFeeIxs,
-        scopeRefreshConfig,
-        swapResponse,
-        isClosingPosition,
-        debtRepayAmountLamports,
-        swapInputs.inputAmountLamports,
-        useV2Ixs
-      );
-
-      return {
-        ixs: ixs.instructions,
-        lookupTables: swapResponse.lookupTables,
-        swapInputs,
-        flashLoanInfo: ixs.flashLoanInfo,
-        initialInputs,
-        quote: swapResponse.quote.quoteResponse,
-      };
-    })
+  const repayWithCollateralIxs = await buildRepayWithCollateralIxs(
+    kaminoMarket,
+    debtReserve,
+    collReserve,
+    owner,
+    obligation,
+    referrer,
+    currentSlot,
+    budgetAndPriorityFeeIxs,
+    scopeRefreshConfig,
+    swapResponses,
+    isClosingPosition,
+    debtRepayAmountLamports,
+    swapInputs.inputAmountLamports,
+    useV2Ixs
   );
+
+  return repayWithCollateralIxs.map((ixs, index) => {
+    return {
+      ixs: ixs.instructions,
+      lookupTables: swapResponses[index].lookupTables,
+      swapInputs,
+      flashLoanInfo: ixs.flashLoanInfo,
+      initialInputs,
+      quote: swapResponses[index].quote.quoteResponse,
+    };
+  });
 }
 
 async function buildRepayWithCollateralIxs<QuoteResponse>(
@@ -285,12 +287,12 @@ async function buildRepayWithCollateralIxs<QuoteResponse>(
   currentSlot: Slot,
   budgetAndPriorityFeeIxs: IInstruction[] | undefined,
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-  swapQuoteIxs: SwapIxs<QuoteResponse>,
+  swapQuoteIxsArray: SwapIxs<QuoteResponse>[],
   isClosingPosition: boolean,
   debtRepayAmountLamports: Decimal,
   collWithdrawLamports: Decimal,
   useV2Ixs: boolean
-): Promise<LeverageIxsOutput> {
+): Promise<LeverageIxsOutput[]> {
   // 1. Create atas & budget txns
   const budgetIxs = budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxs(1_400_000);
 
@@ -369,29 +371,31 @@ async function buildRepayWithCollateralIxs<QuoteResponse>(
   }
 
   // 4. Swap collateral to debt to repay flash loan
-  const { preActionIxs, swapIxs } = swapQuoteIxs;
-  const swapInstructions = removeBudgetIxs(swapIxs);
+  return swapQuoteIxsArray.map((swapQuoteIxs) => {
+    const { preActionIxs, swapIxs } = swapQuoteIxs;
+    const swapInstructions = removeBudgetIxs(swapIxs);
 
-  const ixs = [
-    ...scopeRefreshIx,
-    ...budgetIxs,
-    ...atasAndIxs.map((x) => x.createAtaIx),
-    flashBorrowIx,
-    ...preActionIxs,
-    ...KaminoAction.actionToIxs(repayAndWithdrawAction),
-    ...swapInstructions,
-    flashRepayIx,
-  ];
+    const ixs = [
+      ...scopeRefreshIx,
+      ...budgetIxs,
+      ...atasAndIxs.map((x) => x.createAtaIx),
+      flashBorrowIx,
+      ...preActionIxs,
+      ...KaminoAction.actionToIxs(repayAndWithdrawAction),
+      ...swapInstructions,
+      flashRepayIx,
+    ];
 
-  const res: LeverageIxsOutput = {
-    flashLoanInfo: {
-      flashBorrowReserve: debtReserve.address,
-      flashLoanFee: debtReserve.getFlashLoanFee(),
-    },
-    instructions: ixs,
-  };
+    const res: LeverageIxsOutput = {
+      flashLoanInfo: {
+        flashBorrowReserve: debtReserve.address,
+        flashLoanFee: debtReserve.getFlashLoanFee(),
+      },
+      instructions: ixs,
+    };
 
-  return res;
+    return res;
+  });
 }
 
 export const getMaxWithdrawLtvCheck = (

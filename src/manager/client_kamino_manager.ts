@@ -1743,8 +1743,8 @@ async function main() {
       const ixs = kaminoManager.updateLendingMarketIxs(signer, marketWithAddress, newLendingMarket);
 
       // executing 6 ixs in a txn to make sure they fit
-      for (let ixnIndex = 0; ixnIndex < ixs.length; ixnIndex += 6) {
-        const ixsToExecute = ixs.slice(ixnIndex, ixnIndex + 6);
+      for (let ixIndex = 0; ixIndex < ixs.length; ixIndex += 6) {
+        const ixsToExecute = ixs.slice(ixIndex, ixIndex + 6);
         await processTx(
           env.c,
           signer,
