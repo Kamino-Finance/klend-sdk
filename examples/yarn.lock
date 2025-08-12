@@ -298,6 +298,27 @@
     bn.js "^5.2.1"
     decimal.js "^10.4.3"
 
+"@kamino-finance/farms-sdk@^3.2.12":
+  version "3.2.12"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-3.2.12.tgz#57b3037a808ec9d53aa9d09ecedcaa1ccb9488de"
+  integrity sha512-oQQ5RiQiy9ZDf77DMXG4yeBxQzhcRzvc0nVgPz0phabvJRcwdW3sDQkWx21Tm1VRFGU7+lIFuTYzCkth+R2Epw==
+  dependencies:
+    "@coral-xyz/anchor" "^0.28.0"
+    "@coral-xyz/borsh" "^0.28.0"
+    "@kamino-finance/kliquidity-sdk" "^8.4.0"
+    "@kamino-finance/scope-sdk" "^9.1.0"
+    "@solana-program/address-lookup-table" "^0.7.0"
+    "@solana-program/compute-budget" "^0.8.0"
+    "@solana-program/system" "^0.7.0"
+    "@solana-program/token" "^0.5.1"
+    "@solana-program/token-2022" "^0.4.2"
+    "@solana/compat" "^2.1.1"
+    "@solana/kit" "^2.1.1"
+    "@solana/sysvars" "^2.1.1"
+    "@solana/web3.js" "^1.98.2"
+    bn.js "^5.2.1"
+    decimal.js "^10.4.3"
+
 "@kamino-finance/klend-sdk@link:..":
   version "0.0.0"
   uid ""
@@ -693,7 +714,7 @@
     "@solana/errors" "2.3.0"
     "@solana/nominal-types" "2.3.0"
 
-"@solana/kit@^2.1.1":
+"@solana/kit@^2.1.1", "@solana/kit@^2.3.0":
   version "2.3.0"
   resolved "https://registry.yarnpkg.com/@solana/kit/-/kit-2.3.0.tgz#92deb7c4883293617209aecac9a43d5e41ccf092"
   integrity sha512-sb6PgwoW2LjE5oTFu4lhlS/cGt/NB3YrShEyx7JgWFWysfgLdJnhwWThgwy/4HjNsmtMrQGWVls0yVBHcMvlMQ==

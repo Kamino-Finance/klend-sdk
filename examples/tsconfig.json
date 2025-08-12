@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
+    "module": "CommonJS",
     "target": "ES2022",
-    "module": "commonjs",
     "declaration": true,
     "allowJs": true,
     "isolatedModules": true,
@@ -12,10 +12,7 @@
     "esModuleInterop": true,
     "sourceMap": true,
     "inlineSources": true,
-    "noImplicitAny": false,
-    "paths": {
-      "*": ["./node_modules/*"]
-    }
+    "noImplicitAny": false
   },
   "include": ["./**/*"],
   "exclude": ["dist", "node_modules"]
