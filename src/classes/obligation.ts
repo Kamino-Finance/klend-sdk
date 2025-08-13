@@ -1399,6 +1399,13 @@ export class KaminoObligation {
       throw new Error('Reserve not found');
     }
 
+    const reserveAvailableLiquidity = depositReserve.getLiquidityAvailableAmount();
+    const withdrawalCapRemained = depositReserve
+      .getDepositWithdrawalCapCapacity()
+      .sub(depositReserve.getDepositWithdrawalCapCurrent(slot));
+
+    const reserveWithdrawalLimit = Decimal.min(withdrawalCapRemained, reserveAvailableLiquidity);
+
     const userDepositPosition = this.getDepositByReserve(depositReserve.address);
 
     if (!userDepositPosition) {
@@ -1408,7 +1415,7 @@ export class KaminoObligation {
     const userDepositPositionAmount = userDepositPosition.amount;
 
     if (this.refreshedStats.userTotalBorrowBorrowFactorAdjusted.equals(new Decimal(0))) {
-      return new Decimal(userDepositPositionAmount);
+      return Decimal.max(0, Decimal.min(userDepositPositionAmount, reserveWithdrawalLimit));
     }
 
     const { maxLtv: reserveMaxLtv } = KaminoObligation.getLtvForReserve(
@@ -1436,15 +1443,8 @@ export class KaminoObligation {
     const maxWithdrawAmount = maxWithdrawValue
       .div(depositReserve.getOracleMarketPrice())
       .mul(depositReserve.getMintFactor());
-    const reserveAvailableLiquidity = depositReserve.getLiquidityAvailableAmount();
 
-    const withdrawalCapRemained = depositReserve
-      .getDepositWithdrawalCapCapacity()
-      .sub(depositReserve.getDepositWithdrawalCapCurrent(slot));
-    return Decimal.max(
-      0,
-      Decimal.min(userDepositPositionAmount, maxWithdrawAmount, reserveAvailableLiquidity, withdrawalCapRemained)
-    );
+    return Decimal.max(0, Decimal.min(userDepositPositionAmount, maxWithdrawAmount, reserveWithdrawalLimit));
   }
 
   getObligationLiquidityByReserve(reserveAddress: Address): ObligationLiquidity {
