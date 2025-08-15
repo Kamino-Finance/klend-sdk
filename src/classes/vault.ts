@@ -1545,7 +1545,6 @@ export class KaminoVaultClient {
     vaultReservesMap?: Map<Address, KaminoReserve>,
     createAtaIfNeeded: boolean = true
   ): Promise<IInstruction[]> {
-    console.log('create invest ix for reserve', reserve.address);
     const vaultState = await vault.getState(this.getConnection());
     const cTokenVault = await getCTokenVaultPda(vault.address, reserve.address, this._kaminoVaultProgramId);
     const [lendingMarketAuth] = await lendingMarketAuthPda(reserve.state.lendingMarket, this._kaminoLendProgramId);
