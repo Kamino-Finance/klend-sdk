@@ -1303,7 +1303,8 @@ async function main() {
     .command('get-vault-overview')
     .requiredOption('--vault <string>', 'Vault address')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, staging }) => {
+    .option(`--token-price <number>`, 'Vault token price in USD')
+    .action(async ({ vault, staging, tokenPrice }) => {
       const env = await initEnv(staging);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
@@ -1313,7 +1314,7 @@ async function main() {
       const vaultState = await new KaminoVault(vaultAddress, undefined, env.kvaultProgramId).getState(env.c.rpc);
       const vaultOverview = await kaminoManager.getVaultOverview(
         vaultState,
-        new Decimal(1.0),
+        new Decimal(tokenPrice),
         await env.c.rpc.getSlot({ commitment: 'confirmed' }).send()
       );
 

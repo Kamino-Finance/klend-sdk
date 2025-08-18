@@ -5,7 +5,6 @@ import { getFarmIncentives } from '@kamino-finance/farms-sdk/dist/utils/apy';
 import { DEFAULT_PUBLIC_KEY } from '@kamino-finance/farms-sdk';
 import { Reserve } from '../@codegen/klend/accounts';
 import { KaminoReserve } from '../lib';
-import { getMintDecimals } from '@kamino-finance/kliquidity-sdk';
 
 export interface ReserveIncentives {
   collateralFarmIncentives: FarmIncentives;
@@ -47,15 +46,13 @@ export async function getReserveFarmRewardsAPY(
 
   const stakedTokenMintDecimals = kaminoReserve.getMintDecimals();
   const reserveCtokenPrice = reserveLiquidityTokenPrice.div(kaminoReserve.getEstimatedCollateralExchangeRate(slot, 0));
-  const cTokenMint = kaminoReserve.getCTokenMint();
-  const cTokenDecimals = cTokenMintDecimals ? cTokenMintDecimals : await getMintDecimals(rpc, cTokenMint);
 
   if (farmCollateral !== DEFAULT_PUBLIC_KEY) {
     const farmIncentivesCollateral = await getFarmIncentives(
       farmsClient,
       farmCollateral,
       reserveCtokenPrice,
-      cTokenDecimals,
+      stakedTokenMintDecimals,
       tokensPrices
     );
     reserveIncentives.collateralFarmIncentives = farmIncentivesCollateral;
