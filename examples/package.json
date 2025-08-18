@@ -37,6 +37,7 @@
     "supplied-and-borrowed-token-and-pending-rewards-for-user": "yarn tsx example_read_supplied_and_borrowed_token_and_pending_rewards_for_user.ts",
     "get-obligations-on-reserve-filter": "yarn tsx example_get_obligations_based_on_reserve_filter.ts",
     "change-market-admin": "yarn tsx example_change_market_admin.ts",
+    "extra-farm-reward-apy": "yarn tsx example_extra_farm_reward_apy.ts",
     "kvault:read-vault-holding-and-pending-rewards": "yarn tsx kvault/example_read_vault_holding_and_pending_rewards.ts",
     "build": "rm -rf dist/; tsc",
     "build:ci": "rm -rf dist/; tsc --project tsconfig.ci.json"

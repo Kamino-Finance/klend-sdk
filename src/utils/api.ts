@@ -30,9 +30,8 @@ export async function getMarketsFromApi(
 ): Promise<ConfigType> {
   let unfilteredConfigs: ConfigType = {} as ConfigType;
   if (source === 'CDN') {
-    unfilteredConfigs = (await backOff(() => axios.get(CDN_ENDPOINT), KAMINO_CDN_RETRY)).data[
-      programId.toString()
-    ] as ConfigType;
+    unfilteredConfigs = (await backOff(() => axios.get(`${CDN_ENDPOINT}/kamino_lend_config_v3.json`), KAMINO_CDN_RETRY))
+      .data[programId.toString()] as ConfigType;
   }
 
   if (!unfilteredConfigs || isEmptyObject(unfilteredConfigs)) {

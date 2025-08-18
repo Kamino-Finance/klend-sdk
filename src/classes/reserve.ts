@@ -54,6 +54,7 @@ import { maxBigInt } from '../utils/bigint';
 import { getCreateAccountInstruction, SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
 import { SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 import { noopSigner } from '../utils/signer';
+import { getRewardPerTimeUnitSecond } from './farm_utils';
 
 export type KaminoReserveRpcApi = GetProgramAccountsApi & GetAccountInfoApi & GetMultipleAccountsApi;
 
@@ -831,7 +832,7 @@ export class KaminoReserve {
 
   private calculateRewardYield(prices: KaminoPrices, rewardInfo: RewardInfo, isDebtReward: boolean) {
     const mintAddress = this.getLiquidityMint();
-    const rewardPerTimeUnitSecond = this.getRewardPerTimeUnitSecond(rewardInfo);
+    const rewardPerTimeUnitSecond = getRewardPerTimeUnitSecond(rewardInfo);
     const reserveToken = prices.spot[mintAddress.toString()];
     const rewardToken = prices.spot[rewardInfo.token.mint.toString()];
 
@@ -850,36 +851,6 @@ export class KaminoReserve {
     const rewardsInYearValue = rewardsInYear.mul(rewardToken.price);
     const apr = rewardsInYearValue.div(totalValue);
     return { apy: aprToApy(apr, 365), apr };
-  }
-
-  private getRewardPerTimeUnitSecond(reward: RewardInfo) {
-    const now = new Decimal(new Date().getTime()).div(1000);
-    let rewardPerTimeUnitSecond = new Decimal(0);
-    for (let i = 0; i < reward.rewardScheduleCurve.points.length - 1; i++) {
-      const { tsStart: tsStartThisPoint, rewardPerTimeUnit } = reward.rewardScheduleCurve.points[i];
-      const { tsStart: tsStartNextPoint } = reward.rewardScheduleCurve.points[i + 1];
-
-      const thisPeriodStart = new Decimal(tsStartThisPoint.toString());
-      const thisPeriodEnd = new Decimal(tsStartNextPoint.toString());
-      const rps = new Decimal(rewardPerTimeUnit.toString());
-      if (thisPeriodStart <= now && thisPeriodEnd >= now) {
-        rewardPerTimeUnitSecond = rps;
-        break;
-      } else if (thisPeriodStart > now && thisPeriodEnd > now) {
-        rewardPerTimeUnitSecond = rps;
-        break;
-      }
-    }
-
-    const rewardTokenDecimals = reward.token.decimals.toNumber();
-    const rewardAmountPerUnitDecimals = new Decimal(10).pow(reward.rewardsPerSecondDecimals.toString());
-    const rewardAmountPerUnitLamports = new Decimal(10).pow(rewardTokenDecimals.toString());
-
-    const rpsAdjusted = new Decimal(rewardPerTimeUnitSecond.toString())
-      .div(rewardAmountPerUnitDecimals)
-      .div(rewardAmountPerUnitLamports);
-
-    return rewardPerTimeUnitSecond ? rpsAdjusted : new Decimal(0);
   }
 
   private formatReserveData(parsedData: ReserveFields): ReserveDataType {

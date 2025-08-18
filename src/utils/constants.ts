@@ -27,7 +27,7 @@ export function getApiEndpoint(programId: Address, apiBaseUrl: string = 'https:/
   }
 }
 
-export const CDN_ENDPOINT = 'https://cdn.kamino.finance/kamino_lend_config_v3.json';
+export const CDN_ENDPOINT = 'https://cdn.kamino.finance';
 
 export const ONE_HUNDRED_PCT_IN_BPS = 10_000;
 

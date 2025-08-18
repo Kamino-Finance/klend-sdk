@@ -20,6 +20,7 @@ import { Address, IInstruction, TransactionSigner } from '@solana/kit';
 import { ConnectionPool } from './connection';
 import { sendAndConfirmTx } from './tx';
 import { OraclePrices } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts/OraclePrices';
+import { getKaminoResources } from './kamino_resources';
 
 /**
  * Get Kamino Lending Market
@@ -234,4 +235,9 @@ export function printVaultOverview(vaultOverview: VaultOverview) {
     console.log('    Supply APY:', reserveOverview.supplyAPY.toString());
     console.log('    Lending market:', reserveOverview.market.toString());
   });
+}
+
+export async function getExtraFarms() {
+  const kaminoResources = await getKaminoResources();
+  return kaminoResources.extraFarms;
 }

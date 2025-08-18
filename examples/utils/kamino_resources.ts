@@ -1,3 +1,5 @@
+import { CDN_ENDPOINT } from '../../src/utils/constants';
+
 export interface AllKaminoResources {
   'mainnet-beta': KaminoResources;
   devnet: KaminoResources;
@@ -14,6 +16,7 @@ export interface KaminoResources {
   multiplyLUTsPairs: Record<string, Record<string, string[]>>;
   leverageLUTs: Record<string, string[]>;
   deprecatedAssets: string[];
+  extraFarms: ExtraFarm[];
 }
 
 export type KaminoResourcesTokens = { [key: string]: Token };
@@ -46,6 +49,14 @@ export interface KaminoResourceStrategyMeta {
   tags?: string[];
 }
 
+export interface ExtraFarm {
+  market: string;
+  debtMint: string;
+  collMint: string;
+  farm: string;
+  rewardPayerTokenMint: string;
+}
+
 export interface Token {
   heading: string;
   links: Link[];
@@ -65,7 +76,7 @@ export interface KaminoStatus {
 }
 
 export async function getKaminoResources(): Promise<KaminoResources> {
-  const url = 'https://cdn.kamino.finance/resources.json';
+  const url = `${CDN_ENDPOINT}/resources.json`;
 
   try {
     const response = await fetch(url);
