@@ -55,6 +55,7 @@ import { getCreateAccountInstruction, SYSTEM_PROGRAM_ADDRESS } from '@solana-pro
 import { SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 import { noopSigner } from '../utils/signer';
 import { getRewardPerTimeUnitSecond } from './farm_utils';
+import { Scope, ScopeEntryMetadata } from '@kamino-finance/scope-sdk';
 
 export type KaminoReserveRpcApi = GetProgramAccountsApi & GetAccountInfoApi & GetMultipleAccountsApi;
 
@@ -66,6 +67,7 @@ export class KaminoReserve {
   symbol: string;
 
   tokenOraclePrice: TokenOracleData;
+  scopeChainMetadata?: ScopeEntryMetadata[];
   stats: ReserveDataType;
   private farmData: ReserveFarmInfo = { fetched: false, farmStates: [] };
 
@@ -77,7 +79,8 @@ export class KaminoReserve {
     address: Address,
     tokenOraclePrice: TokenOracleData,
     connection: Rpc<KaminoReserveRpcApi>,
-    recentSlotDurationMs: number
+    recentSlotDurationMs: number,
+    scopeChainMetadata?: ScopeEntryMetadata[]
   ) {
     this.state = state;
     this.address = address;
@@ -86,6 +89,7 @@ export class KaminoReserve {
     this.rpc = connection;
     this.symbol = parseTokenSymbol(state.config.tokenInfo.name);
     this.recentSlotDurationMs = recentSlotDurationMs;
+    this.scopeChainMetadata = scopeChainMetadata;
   }
 
   static initialize(
@@ -117,7 +121,15 @@ export class KaminoReserve {
       throw new Error('Token oracle data not found');
     }
     const tokenOracleData = tokenOracleDataWithReserve[0]![1]!;
-    return new KaminoReserve(reserve, address, tokenOracleData, rpc, recentSlotDurationMs);
+
+    let scopeChainMetadata;
+    if (reserve.config.tokenInfo.scopeConfiguration) {
+      const { priceFeed, priceChain } = reserve.config.tokenInfo.scopeConfiguration;
+      const scope = new Scope('mainnet-beta', rpc as any);
+      scopeChainMetadata = await scope.getScopeChainMetadata({ prices: priceFeed }, priceChain);
+    }
+
+    return new KaminoReserve(reserve, address, tokenOracleData, rpc, recentSlotDurationMs, scopeChainMetadata);
   }
 
   /// GETTERS
@@ -149,6 +161,13 @@ export class KaminoReserve {
    */
   getReserveMarketPrice(): Decimal {
     return new Fraction(this.state.liquidity.marketPriceSf).toDecimal();
+  }
+
+  /**
+   * @returns list of logo names and human readable oracle type descriptions
+   */
+  getOracleDescription(): [string, string][] {
+    return (this.scopeChainMetadata || []).map(chainMetadata => [chainMetadata.provider(), chainMetadata.name]);
   }
 
   /**
