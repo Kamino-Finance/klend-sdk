@@ -446,13 +446,13 @@ export class KaminoMarket {
   /**
    * @returns The max borrowable amount for leverage positions
    */
-  async getMaxLeverageBorrowableAmount(
+  getMaxLeverageBorrowableAmount(
     collReserve: KaminoReserve,
     debtReserve: KaminoReserve,
     slot: Slot,
     requestElevationGroup: boolean,
     obligation?: KaminoObligation
-  ): Promise<Decimal> {
+  ): Decimal {
     return obligation
       ? obligation.getMaxBorrowAmount(this, debtReserve.getLiquidityMint(), slot, requestElevationGroup)
       : debtReserve.getMaxBorrowAmountWithCollReserve(this, collReserve, slot);
