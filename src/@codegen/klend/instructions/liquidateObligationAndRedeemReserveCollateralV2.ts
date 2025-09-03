@@ -78,7 +78,7 @@ export function liquidateObligationAndRedeemReserveCollateralV2(
     },
     { address: accounts.liquidationAccounts.obligation, role: 1 },
     { address: accounts.liquidationAccounts.lendingMarket, role: 0 },
-    { address: accounts.liquidationAccounts.lendingMarketAuthority, role: 0 },
+    { address: accounts.liquidationAccounts.lendingMarketAuthority, role: 1 },
     { address: accounts.liquidationAccounts.repayReserve, role: 1 },
     {
       address: accounts.liquidationAccounts.repayReserveLiquidityMint,

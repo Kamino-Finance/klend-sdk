@@ -2385,7 +2385,7 @@
             },
             {
               "name": "lendingMarketAuthority",
-              "isMut": false,
+              "isMut": true,
               "isSigner": false
             },
             {
