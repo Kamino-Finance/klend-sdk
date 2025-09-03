@@ -2398,7 +2398,11 @@ export class KaminoVaultClient {
 
     reservesAndOracles.forEach(([reserve, oracle], index) => {
       if (!oracle) {
-        throw Error(`Could not find oracle for ${parseTokenSymbol(reserve.config.tokenInfo.name)} reserve`);
+        throw Error(
+          `Could not find oracle for ${parseTokenSymbol(reserve.config.tokenInfo.name)} (${
+            vaultReservesAddresses[index]
+          }) reserve in market ${reserve.lendingMarket}`
+        );
       }
       const kaminoReserve = KaminoReserve.initialize(
         vaultReservesAddresses[index],

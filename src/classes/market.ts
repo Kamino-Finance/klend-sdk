@@ -481,7 +481,11 @@ export class KaminoMarket {
     const kaminoReserves = new Map<Address, KaminoReserve>();
     reservesAndOracles.forEach(([reserve, oracle], index) => {
       if (!oracle) {
-        throw Error(`Could not find oracle for ${parseTokenSymbol(reserve.config.tokenInfo.name)} reserve`);
+        throw Error(
+          `Could not find oracle for ${parseTokenSymbol(reserve.config.tokenInfo.name)} (${
+            addresses[index]
+          }) reserve in market ${reserve.lendingMarket}`
+        );
       }
       const kaminoReserve = KaminoReserve.initialize(
         addresses[index],
@@ -1023,7 +1027,7 @@ export class KaminoMarket {
     obligationAddresses.push(await new VanillaObligation(this.programId).toPda(this.getAddress(), user));
     const targetReserve = new Map<Address, KaminoReserve>(Array.from(this.reserves.entries())).get(reserve);
     if (!targetReserve) {
-      throw Error('Could not find reserve.');
+      throw Error(`Could not find reserve ${reserve}`);
     }
     for (const [key, kaminoReserve] of this.reserves) {
       if (targetReserve.address === key) {
@@ -1090,7 +1094,7 @@ export class KaminoMarket {
     const obligation = await this.getObligationByAddress(vanillaObligationAddress);
 
     if (!obligation) {
-      throw new Error('Could not find vanilla obligation.');
+      throw new Error(`Could not find vanilla obligation ${vanillaObligationAddress}`);
     }
 
     return obligation;
@@ -1616,7 +1620,11 @@ export async function getReservesForMarket(
   const reservesByAddress = new Map<Address, KaminoReserve>();
   reservesAndOracles.forEach(([reserve, oracle], index) => {
     if (!oracle) {
-      throw Error(`Could not find oracle for ${parseTokenSymbol(reserve.config.tokenInfo.name)} reserve`);
+      throw Error(
+        `Could not find oracle for ${parseTokenSymbol(reserve.config.tokenInfo.name)} (${
+          reserves[index].pubkey
+        }) reserve in market ${reserve.lendingMarket}`
+      );
     }
     const kaminoReserve = KaminoReserve.initialize(reserves[index].pubkey, reserve, oracle, rpc, recentSlotDurationMs);
     reservesByAddress.set(kaminoReserve.address, kaminoReserve);
@@ -1640,7 +1648,11 @@ export async function getSingleReserve(
   const [, oracle] = reservesAndOracles[0];
 
   if (!oracle) {
-    throw Error(`Could not find oracle for ${parseTokenSymbol(reserve.config.tokenInfo.name)} reserve`);
+    throw Error(
+      `Could not find oracle for ${parseTokenSymbol(reserve.config.tokenInfo.name)} (${reservePk}) reserve in market ${
+        reserve.lendingMarket
+      }`
+    );
   }
   return KaminoReserve.initialize(reservePk, reserve, oracle, rpc, recentSlotDurationMs);
 }
