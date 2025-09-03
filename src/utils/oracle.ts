@@ -3,7 +3,7 @@ import Decimal from 'decimal.js';
 import { Scope } from '@kamino-finance/scope-sdk';
 import { OraclePrices } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts/OraclePrices';
 import { isNotNullPubkey } from './pubkey';
-import { parseTokenSymbol } from '../classes';
+import { parseTokenSymbol, ReserveWithAddress } from '../classes';
 import { Reserve } from '../lib';
 import { batchFetch } from '@kamino-finance/kliquidity-sdk';
 import BN from 'bn.js';
@@ -43,12 +43,12 @@ export type ScopePriceRefreshConfig = {
   scopeConfigurations: [Address, Configuration][];
 };
 
-export function getTokenOracleDataSync(allOracleAccounts: AllOracleAccounts, reserves: Reserve[]) {
+export function getTokenOracleDataSync(allOracleAccounts: AllOracleAccounts, reserves: ReserveWithAddress[]) {
   const tokenOracleDataForReserves: Array<[Reserve, TokenOracleData | undefined]> = [];
   const pythCache = new Map<Address, PythPrices>();
   const switchboardCache = new Map<Address, CandidatePrice>();
   const scopeCache = new Map<Address, OraclePrices>();
-  for (const reserve of reserves) {
+  for (const { address, state: reserve } of reserves) {
     let currentBest: CandidatePrice | undefined = undefined;
     const oracle = {
       pythAddress: reserve.config.tokenInfo.pythConfiguration.price,
@@ -86,7 +86,10 @@ export function getTokenOracleDataSync(allOracleAccounts: AllOracleAccounts, res
     }
 
     if (!currentBest) {
-      console.error(`No price found for reserve: ${parseTokenSymbol(reserve.config.tokenInfo.name)}`);
+      const reserveSymbol = parseTokenSymbol(reserve.config.tokenInfo.name);
+      console.error(
+        `No price found for reserve: ${reserveSymbol ?? 'unknown'} (${address}) in market: ${reserve.lendingMarket}`
+      );
       tokenOracleDataForReserves.push([reserve, undefined]);
       continue;
     }
@@ -105,10 +108,15 @@ export function getTokenOracleDataSync(allOracleAccounts: AllOracleAccounts, res
 // TODO: Add freshness of the latest price to match sc logic
 export async function getTokenOracleData(
   rpc: Rpc<GetMultipleAccountsApi>,
-  reserves: Reserve[],
+  reserves: ReserveWithAddress[],
   oracleAccounts?: AllOracleAccounts
 ): Promise<Array<[Reserve, TokenOracleData | undefined]>> {
-  const allOracleAccounts = oracleAccounts ?? (await getAllOracleAccounts(rpc, reserves));
+  const allOracleAccounts =
+    oracleAccounts ??
+    (await getAllOracleAccounts(
+      rpc,
+      reserves.map((r) => r.state)
+    ));
   return getTokenOracleDataSync(allOracleAccounts, reserves);
 }
 

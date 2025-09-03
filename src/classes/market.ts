@@ -17,7 +17,7 @@ import {
   Slot,
 } from '@solana/kit';
 import { KaminoObligation } from './obligation';
-import { KaminoReserve, KaminoReserveRpcApi } from './reserve';
+import { KaminoReserve, KaminoReserveRpcApi, ReserveWithAddress } from './reserve';
 import { LendingMarket, Obligation, ReferrerTokenState, Reserve, UserMetadata } from '../@codegen/klend/accounts';
 import {
   AllOracleAccounts,
@@ -463,7 +463,7 @@ export class KaminoMarket {
     const reserveAccounts = await this.rpc
       .getMultipleAccounts(addresses, { commitment: 'processed', encoding: 'base64' })
       .send();
-    const deserializedReserves = reserveAccounts.value.map((reserve, i) => {
+    const deserializedReserves: ReserveWithAddress[] = reserveAccounts.value.map((reserve, i) => {
       if (reserve === null) {
         // maybe reuse old here
         throw new Error(`Reserve account ${addresses[i]} was not found`);
@@ -472,7 +472,10 @@ export class KaminoMarket {
       if (!reserveAccount) {
         throw Error(`Could not parse reserve ${addresses[i]}`);
       }
-      return reserveAccount;
+      return {
+        address: addresses[i],
+        state: reserveAccount,
+      };
     });
     const reservesAndOracles = await getTokenOracleData(this.getRpc(), deserializedReserves, oracleAccounts);
     const kaminoReserves = new Map<Address, KaminoReserve>();
@@ -1594,7 +1597,7 @@ export async function getReservesForMarket(
       encoding: 'base64',
     })
     .send();
-  const deserializedReserves = reserves.map((reserve) => {
+  const deserializedReserves: ReserveWithAddress[] = reserves.map((reserve) => {
     if (reserve.account === null) {
       throw new Error(`Reserve account ${reserve.pubkey} does not exist`);
     }
@@ -1604,7 +1607,10 @@ export async function getReservesForMarket(
     if (!reserveAccount) {
       throw Error(`Could not parse reserve ${reserve.pubkey}`);
     }
-    return reserveAccount;
+    return {
+      address: reserve.pubkey,
+      state: reserveAccount,
+    };
   });
   const reservesAndOracles = await getTokenOracleData(rpc, deserializedReserves, oracleAccounts);
   const reservesByAddress = new Map<Address, KaminoReserve>();
@@ -1630,7 +1636,7 @@ export async function getSingleReserve(
   if (reserve === null) {
     throw new Error(`Reserve account ${reservePk} does not exist`);
   }
-  const reservesAndOracles = await getTokenOracleData(rpc, [reserve], oracleAccounts);
+  const reservesAndOracles = await getTokenOracleData(rpc, [{ address: reservePk, state: reserve }], oracleAccounts);
   const [, oracle] = reservesAndOracles[0];
 
   if (!oracle) {

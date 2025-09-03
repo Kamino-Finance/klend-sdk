@@ -2386,7 +2386,10 @@ export class KaminoVaultClient {
       if (!reserveAccount) {
         throw Error(`Could not parse reserve ${vaultReservesAddresses[i]}`);
       }
-      return reserveAccount;
+      return {
+        address: vaultReservesAddresses[i],
+        state: reserveAccount,
+      };
     });
 
     const reservesAndOracles = await getTokenOracleData(this.getConnection(), deserializedReserves, oracleAccounts);
@@ -2445,9 +2448,18 @@ export class KaminoVaultClient {
     });
 
     // read missing reserves
-    const missingReservesStates = (await Reserve.fetchMultiple(this.getConnection(), [...missingReserves])).filter(
-      (reserve) => reserve !== null
-    );
+    const missingReserveAddresses = [...missingReserves];
+    const missingReservesStates = (await Reserve.fetchMultiple(this.getConnection(), missingReserveAddresses))
+      .map((reserve, index) => {
+        if (!reserve) {
+          return null;
+        }
+        return {
+          address: missingReserveAddresses[index],
+          state: reserve,
+        };
+      })
+      .filter((state) => state !== null);
     const missingReservesAndOracles = await getTokenOracleData(
       this.getConnection(),
       missingReservesStates,
@@ -2456,7 +2468,7 @@ export class KaminoVaultClient {
     missingReservesAndOracles.forEach(([reserve, oracle], index) => {
       const fetchedReserve = new KaminoReserve(
         reserve,
-        [...missingReserves][index]!, // Set maintains order
+        missingReserveAddresses[index]!, // Set maintains order
         oracle!,
         this.getConnection(),
         this.recentSlotDurationMs

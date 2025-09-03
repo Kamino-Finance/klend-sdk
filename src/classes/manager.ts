@@ -823,13 +823,21 @@ export class KaminoManager {
     // Get all oracle accounts
     const allOracleAccounts = await getAllOracleAccounts(this.getRpc(), allReserves);
     // Group reserves by market
-    const marketToReserve = new Map<Address, [Address, Reserve][]>();
+    const marketToReserve = new Map<Address, ReserveWithAddress[]>();
     for (const [reserveAddress, reserveState] of reservePairs) {
       const marketAddress = reserveState.lendingMarket;
       if (!marketToReserve.has(marketAddress)) {
-        marketToReserve.set(marketAddress, [[reserveAddress, reserveState]]);
+        marketToReserve.set(marketAddress, [
+          {
+            address: reserveAddress,
+            state: reserveState,
+          },
+        ]);
       } else {
-        marketToReserve.get(marketAddress)?.push([reserveAddress, reserveState]);
+        marketToReserve.get(marketAddress)?.push({
+          address: reserveAddress,
+          state: reserveState,
+        });
       }
     }
 
@@ -839,17 +847,17 @@ export class KaminoManager {
       if (!reserves) {
         console.log(`Market ${pubkey.toString()} ${parseTokenSymbol(market.name)} has no reserves`);
       } else {
-        const allReserves = reserves.map(([, reserve]) => reserve);
-        const reservesAndOracles = getTokenOracleDataSync(allOracleAccounts, allReserves);
+        const reservesAndOracles = getTokenOracleDataSync(allOracleAccounts, reserves);
         reservesAndOracles.forEach(([reserve, oracle], index) => {
           if (!oracle) {
             console.log('Manager > getAllMarkets: oracle not found for reserve', reserve.config.tokenInfo.name);
             return;
           }
 
+          const { address, state } = reserves[index];
           const kaminoReserve = KaminoReserve.initialize(
-            reserves[index][0],
-            reserves[index][1],
+            address,
+            state,
             oracle,
             this.getRpc(),
             this.recentSlotDurationMs

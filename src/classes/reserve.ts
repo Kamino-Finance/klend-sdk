@@ -112,7 +112,11 @@ export class KaminoReserve {
       throw new Error(`Reserve account ${address} does not exist`);
     }
 
-    const tokenOracleDataWithReserve = await getTokenOracleData(rpc, [reserve], oracleAccounts);
+    const tokenOracleDataWithReserve = await getTokenOracleData(
+      rpc,
+      [{ address: address, state: reserve }],
+      oracleAccounts
+    );
     if (!tokenOracleDataWithReserve[0]) {
       throw new Error('Token oracle data not found');
     }
