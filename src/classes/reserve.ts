@@ -1,7 +1,7 @@
 /* eslint-disable max-classes-per-file */
 import {
   Address,
-  IInstruction,
+  Instruction,
   Slot,
   TransactionSigner,
   Rpc,
@@ -1151,7 +1151,7 @@ export async function createReserveIxs(
   liquidityMintTokenProgram: Address,
   reserveAddress: TransactionSigner,
   programId: Address
-): Promise<IInstruction[]> {
+): Promise<Instruction[]> {
   const size = BigInt(Reserve.layout.span + 8);
   const createReserveIx = getCreateAccountInstruction({
     payer: owner,
@@ -1185,7 +1185,7 @@ export async function createReserveIxs(
     rent: SYSVAR_RENT_ADDRESS,
   };
 
-  const initReserveIx = initReserve(accounts, programId);
+  const initReserveIx = initReserve(accounts, undefined, programId);
 
   return [createReserveIx, initReserveIx];
 }
@@ -1198,7 +1198,7 @@ export async function updateReserveConfigIx(
   value: Uint8Array,
   programId: Address,
   skipConfigIntegrityValidation: boolean = false
-): Promise<IInstruction> {
+): Promise<Instruction> {
   const args: UpdateReserveConfigArgs = {
     mode,
     value,
@@ -1213,7 +1213,7 @@ export async function updateReserveConfigIx(
     globalConfig,
   };
 
-  return updateReserveConfig(args, accounts, programId);
+  return updateReserveConfig(args, accounts, undefined, programId);
 }
 
 export const RESERVE_CONFIG_UPDATER = new ConfigUpdater(UpdateConfigMode.fromDecoded, ReserveConfig, (config) => ({
@@ -1282,7 +1282,7 @@ export async function updateEntireReserveConfigIx(
   reserveAddress: Address,
   reserveConfig: ReserveConfig,
   programId: Address
-): Promise<IInstruction> {
+): Promise<Instruction> {
   const args: UpdateReserveConfigArgs = {
     mode: new UpdateConfigMode.UpdateEntireReserveConfig(),
     value: encodeUsingLayout(ReserveConfig.layout(), reserveConfig),
@@ -1297,7 +1297,7 @@ export async function updateEntireReserveConfigIx(
     globalConfig,
   };
 
-  const ix = updateReserveConfig(args, accounts, programId);
+  const ix = updateReserveConfig(args, accounts, undefined, programId);
 
   return ix;
 }
@@ -1309,7 +1309,7 @@ export function parseForChangesReserveConfigAndGetIxs(
   reserveConfig: ReserveConfig,
   programId: Address,
   lendingMarketOwner: TransactionSigner = noopSigner(marketWithAddress.state.lendingMarketOwner)
-): Promise<IInstruction[]> {
+): Promise<Instruction[]> {
   const encodedConfigUpdates = RESERVE_CONFIG_UPDATER.encodeAllUpdates(reserve?.config, reserveConfig);
   encodedConfigUpdates.sort((left, right) => priorityOf(left.mode) - priorityOf(right.mode));
   return Promise.all(

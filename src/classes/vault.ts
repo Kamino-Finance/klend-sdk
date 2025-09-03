@@ -13,8 +13,8 @@ import {
   GetProgramAccountsDatasizeFilter,
   GetProgramAccountsMemcmpFilter,
   getProgramDerivedAddress,
-  IAccountMeta,
-  IInstruction,
+  AccountMeta,
+  Instruction,
   lamports,
   ProgramDerivedAddress,
   Rpc,
@@ -243,8 +243,8 @@ export class KaminoVaultClient {
     ]);
 
     let adminTokenAccount: Address;
-    const prerequisiteIxs: IInstruction[] = [];
-    const cleanupIxs: IInstruction[] = [];
+    const prerequisiteIxs: Instruction[] = [];
+    const cleanupIxs: Instruction[] = [];
     if (vaultConfig.tokenMint === WRAPPED_SOL_MINT) {
       const { wsolAta, createAtaIxs, closeAtaIxs } = await createWsolAtaIfMissing(
         this.getConnection(),
@@ -278,7 +278,7 @@ export class KaminoVaultClient {
       sharesTokenProgram: TOKEN_PROGRAM_ADDRESS,
       adminTokenAccount,
     };
-    const initVaultIx = initVault(initVaultAccounts, this._kaminoVaultProgramId);
+    const initVaultIx = initVault(initVaultAccounts, undefined, this._kaminoVaultProgramId);
 
     // create and set up the vault lookup table
     const [createLUTIx, lut] = await initLookupTableIx(vaultConfig.admin, slot);
@@ -432,6 +432,7 @@ export class KaminoVaultClient {
     const updateReserveAllocationIx = updateReserveAllocation(
       updateReserveAllocationArgs,
       updateReserveAllocationAccounts,
+      undefined,
       this._kaminoVaultProgramId
     );
 
@@ -477,7 +478,7 @@ export class KaminoVaultClient {
     const unallocatedWeightToUse = unallocatedWeight ? unallocatedWeight : vaultState.unallocatedWeight;
     const unallocatedCapToUse = unallocatedCap ? unallocatedCap : vaultState.unallocatedTokensCap;
 
-    const ixs: IInstruction[] = [];
+    const ixs: Instruction[] = [];
 
     if (!unallocatedWeightToUse.eq(vaultState.unallocatedWeight)) {
       const updateVaultUnallocatedWeightIx = await this.updateVaultConfigIxs(
@@ -657,7 +658,7 @@ export class KaminoVaultClient {
     vault: KaminoVault,
     reserve: Address,
     vaultAdminAuthority?: TransactionSigner
-  ): Promise<IInstruction | undefined> {
+  ): Promise<Instruction | undefined> {
     const vaultState = await vault.getState(this.getConnection());
     const vaultAdmin = parseVaultAdmin(vaultState, vaultAdminAuthority);
 
@@ -729,6 +730,7 @@ export class KaminoVaultClient {
     let updateVaultConfigIx = updateVaultConfig(
       updateVaultConfigArgs,
       updateVaultConfigAccs,
+      undefined,
       this._kaminoVaultProgramId
     );
     updateVaultConfigIx = this.appendRemainingAccountsForVaultReserves(
@@ -737,7 +739,7 @@ export class KaminoVaultClient {
       vaultReservesState
     );
 
-    const updateLUTIxs: IInstruction[] = [];
+    const updateLUTIxs: Instruction[] = [];
 
     if (mode.kind === new VaultConfigField.PendingVaultAdmin().kind) {
       const newPubkey = address(value);
@@ -807,7 +809,7 @@ export class KaminoVaultClient {
     vault: Address,
     mode: VaultConfigFieldKind,
     value: string
-  ): IInstruction {
+  ): Instruction {
     const updateVaultConfigAccs: UpdateVaultConfigAccounts = {
       vaultAdminAuthority: admin,
       vaultState: vault,
@@ -836,6 +838,7 @@ export class KaminoVaultClient {
     const updateVaultConfigIx = updateVaultConfig(
       updateVaultConfigArgs,
       updateVaultConfigAccs,
+      undefined,
       this._kaminoVaultProgramId
     );
 
@@ -860,14 +863,14 @@ export class KaminoVaultClient {
       vaultState: vault.address,
     };
 
-    const acceptVaultOwnershipIx = updateAdmin(acceptOwneshipAccounts, this._kaminoVaultProgramId);
+    const acceptVaultOwnershipIx = updateAdmin(acceptOwneshipAccounts, undefined, this._kaminoVaultProgramId);
 
     // read the current LUT and create a new one for the new admin and backfill it
     const accountsInExistentLUT = (await getAccountsInLut(this.getConnection(), vaultState.vaultLookupTable)).filter(
       (account) => account !== vaultState.vaultAdminAuthority
     );
 
-    const lutIxs: IInstruction[] = [];
+    const lutIxs: Instruction[] = [];
     const [initNewLutIx, newLut] = await initLookupTableIx(
       signer,
       await this.getConnection().getSlot({ commitment: 'finalized' }).send()
@@ -906,7 +909,7 @@ export class KaminoVaultClient {
     vault: KaminoVault,
     maxAmountToGiveUp: Decimal,
     vaultAdminAuthority?: TransactionSigner
-  ): Promise<IInstruction> {
+  ): Promise<Instruction> {
     const vaultState: VaultState = await vault.getState(this.getConnection());
     const vaultAdmin = parseVaultAdmin(vaultState, vaultAdminAuthority);
 
@@ -924,7 +927,7 @@ export class KaminoVaultClient {
       maxAmountToGiveUp: new BN(maxAmountToGiveUpLamports.toString()),
     };
 
-    return giveUpPendingFees(giveUpPendingFeesArgs, giveUpPendingFeesAccounts, this._kaminoVaultProgramId);
+    return giveUpPendingFees(giveUpPendingFeesArgs, giveUpPendingFeesAccounts, undefined, this._kaminoVaultProgramId);
   }
 
   /**
@@ -941,7 +944,7 @@ export class KaminoVaultClient {
     slot: Slot,
     vaultReservesMap?: Map<Address, KaminoReserve>,
     vaultAdminAuthority?: TransactionSigner
-  ): Promise<IInstruction[]> {
+  ): Promise<Instruction[]> {
     const vaultState: VaultState = await vault.getState(this.getConnection());
     const vaultAdmin = parseVaultAdmin(vaultState, vaultAdminAuthority);
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
@@ -985,7 +988,7 @@ export class KaminoVaultClient {
       reservesToWithdraw,
       this._kaminoLendProgramId
     );
-    const withdrawIxs: IInstruction[] = await Promise.all(
+    const withdrawIxs: Instruction[] = await Promise.all(
       reservesToWithdraw.map(async (reserve, index) => {
         if (reserveStates[index] === null) {
           throw new Error(`Reserve ${reserve} not found`);
@@ -1008,7 +1011,7 @@ export class KaminoVaultClient {
     return [createAtaIx, ...withdrawIxs];
   }
 
-  // async closeVaultIx(vault: KaminoVault): Promise<IInstruction> {
+  // async closeVaultIx(vault: KaminoVault): Promise<Instruction> {
   //   const vaultState: VaultState = await vault.getState(this.getConnection());
 
   //   const closeVaultAccounts: CloseVaultAccounts = {
@@ -1039,8 +1042,8 @@ export class KaminoVaultClient {
 
     const tokenProgramID = vaultState.tokenProgram;
     const userTokenAta = await getAssociatedTokenAddress(vaultState.tokenMint, user.address, tokenProgramID);
-    const createAtasIxs: IInstruction[] = [];
-    const closeAtasIxs: IInstruction[] = [];
+    const createAtasIxs: Instruction[] = [];
+    const closeAtasIxs: Instruction[] = [];
     if (vaultState.tokenMint === WRAPPED_SOL_MINT) {
       const [{ ata: wsolAta, createAtaIx: createWsolAtaIxn }] = await createAtasIdempotent(user, [
         {
@@ -1090,7 +1093,7 @@ export class KaminoVaultClient {
       ),
     };
 
-    let depositIx = deposit(depositArgs, depositAccounts, this._kaminoVaultProgramId);
+    let depositIx = deposit(depositArgs, depositAccounts, undefined, this._kaminoVaultProgramId);
 
     const vaultReserves = this.getVaultReserves(vaultState);
 
@@ -1126,7 +1129,7 @@ export class KaminoVaultClient {
     vault: KaminoVault,
     sharesAmount?: Decimal,
     farmState?: FarmState
-  ): Promise<IInstruction[]> {
+  ): Promise<Instruction[]> {
     const vaultState = await vault.getState(this.getConnection());
 
     let sharesToStakeLamports = new Decimal(U64_MAX);
@@ -1287,7 +1290,7 @@ export class KaminoVaultClient {
     user: TransactionSigner,
     vault: KaminoVault,
     shareAmount: Decimal
-  ): Promise<IInstruction[]> {
+  ): Promise<Instruction[]> {
     const vaultState = await vault.getState(this.getConnection());
     const kaminoVault = new KaminoVault(vault.address, vaultState, vault.programId);
 
@@ -1319,7 +1322,7 @@ export class KaminoVaultClient {
     allUserShares: Decimal,
     slot: Slot,
     vaultReservesMap?: Map<Address, KaminoReserve>
-  ): Promise<IInstruction[]> {
+  ): Promise<Instruction[]> {
     const vaultState = await vault.getState(this.getConnection());
 
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
@@ -1395,7 +1398,7 @@ export class KaminoVaultClient {
       });
     }
 
-    const withdrawIxs: IInstruction[] = [];
+    const withdrawIxs: Instruction[] = [];
     withdrawIxs.push(createAtaIx);
     for (let reserveIndex = 0; reserveIndex < reserveWithSharesAmountToWithdraw.length; reserveIndex++) {
       const reserveWithTokens = reserveWithSharesAmountToWithdraw[reserveIndex];
@@ -1435,7 +1438,7 @@ export class KaminoVaultClient {
    * @param vault - vault to invest from
    * @returns - an array of invest instructions for each invest action required for the vault reserves
    */
-  async investAllReservesIxs(payer: TransactionSigner, vault: KaminoVault): Promise<IInstruction[]> {
+  async investAllReservesIxs(payer: TransactionSigner, vault: KaminoVault): Promise<Instruction[]> {
     const vaultState = await vault.getState(this.getConnection());
     const minInvestAmount = vaultState.minInvestAmount;
     const allReserves = this.getVaultReserves(vaultState);
@@ -1483,7 +1486,7 @@ export class KaminoVaultClient {
       }
     }
 
-    const investIxsPromises: Promise<IInstruction[]>[] = [];
+    const investIxsPromises: Promise<Instruction[]>[] = [];
     // invest first the reserves from which we disinvest, then the other ones
     for (const reserve of reservesToDisinvestFrom) {
       const reserveState = allReservesStateMap.get(reserve);
@@ -1521,7 +1524,7 @@ export class KaminoVaultClient {
       investIxsPromises.push(investIxsPromise);
     }
 
-    let investIxs: IInstruction[] = [];
+    let investIxs: Instruction[] = [];
     investIxs.push(createAtaIx);
     investIxs = await Promise.all(investIxsPromises).then((ixs) => ixs.flat());
 
@@ -1544,12 +1547,12 @@ export class KaminoVaultClient {
     reserve: ReserveWithAddress,
     vaultReservesMap?: Map<Address, KaminoReserve>,
     createAtaIfNeeded: boolean = true
-  ): Promise<IInstruction[]> {
+  ): Promise<Instruction[]> {
     const vaultState = await vault.getState(this.getConnection());
     const cTokenVault = await getCTokenVaultPda(vault.address, reserve.address, this._kaminoVaultProgramId);
     const [lendingMarketAuth] = await lendingMarketAuthPda(reserve.state.lendingMarket, this._kaminoLendProgramId);
 
-    const ixs: IInstruction[] = [];
+    const ixs: Instruction[] = [];
 
     const tokenProgram = await getAccountOwner(this.getConnection(), vaultState.tokenMint);
     const [{ ata: payerTokenAta, createAtaIx }] = await createAtasIdempotent(payer, [
@@ -1579,7 +1582,7 @@ export class KaminoVaultClient {
       reserveCollateralTokenProgram: TOKEN_PROGRAM_ADDRESS,
     };
 
-    let investIx = invest(investAccounts, this._kaminoVaultProgramId);
+    let investIx = invest(investAccounts, undefined, this._kaminoVaultProgramId);
 
     const vaultReserves = this.getVaultReserves(vaultState);
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
@@ -1610,7 +1613,7 @@ export class KaminoVaultClient {
     userTokenAta: Address,
     shareAmountLamports: Decimal,
     vaultReservesState: Map<Address, KaminoReserve>
-  ): Promise<IInstruction> {
+  ): Promise<Instruction> {
     const [lendingMarketAuth] = await lendingMarketAuthPda(marketAddress, this._kaminoLendProgramId);
 
     const eventAuthority = await getEventAuthorityPda(this._kaminoVaultProgramId);
@@ -1649,7 +1652,7 @@ export class KaminoVaultClient {
       sharesAmount: new BN(shareAmountLamports.floor().toString()),
     };
 
-    let withdrawIxn = withdraw(withdrawArgs, withdrawAccounts, this._kaminoVaultProgramId);
+    let withdrawIxn = withdraw(withdrawArgs, withdrawAccounts, undefined, this._kaminoVaultProgramId);
 
     const vaultReserves = this.getVaultReserves(vaultState);
     withdrawIxn = this.appendRemainingAccountsForVaultReserves(withdrawIxn, vaultReserves, vaultReservesState);
@@ -1664,7 +1667,7 @@ export class KaminoVaultClient {
     userSharesAta: Address,
     userTokenAta: Address,
     shareAmountLamports: Decimal
-  ): Promise<IInstruction> {
+  ): Promise<Instruction> {
     const eventAuthority = await getEventAuthorityPda(this._kaminoVaultProgramId);
     const withdrawFromAvailableAccounts: WithdrawFromAvailableAccounts = {
       user,
@@ -1686,7 +1689,7 @@ export class KaminoVaultClient {
       sharesAmount: new BN(shareAmountLamports.floor().toString()),
     };
 
-    return withdrawFromAvailable(withdrawFromAvailableArgs, withdrawFromAvailableAccounts, this._kaminoVaultProgramId);
+    return withdrawFromAvailable(withdrawFromAvailableArgs, withdrawFromAvailableAccounts, undefined, this._kaminoVaultProgramId);
   }
 
   private async withdrawPendingFeesIx(
@@ -1696,7 +1699,7 @@ export class KaminoVaultClient {
     marketAddress: Address,
     reserve: ReserveWithAddress,
     adminTokenAta: Address
-  ): Promise<IInstruction> {
+  ): Promise<Instruction> {
     const [lendingMarketAuth] = await lendingMarketAuthPda(marketAddress, this._kaminoLendProgramId);
 
     const withdrawPendingFeesAccounts: WithdrawPendingFeesAccounts = {
@@ -1719,7 +1722,7 @@ export class KaminoVaultClient {
       reserveCollateralTokenProgram: TOKEN_PROGRAM_ADDRESS,
     };
 
-    let withdrawPendingFeesIxn = withdrawPendingFees(withdrawPendingFeesAccounts, this._kaminoVaultProgramId);
+    let withdrawPendingFeesIxn = withdrawPendingFees(withdrawPendingFeesAccounts, undefined, this._kaminoVaultProgramId);
 
     const vaultReserves = this.getVaultReserves(vaultState);
     const vaultReservesState = await this.loadVaultReserves(vaultState);
@@ -1788,7 +1791,7 @@ export class KaminoVaultClient {
       allAccountsToBeInserted.push(vaultState.vaultFarm);
     }
 
-    const setupLUTIfNeededIxs: IInstruction[] = [];
+    const setupLUTIfNeededIxs: Instruction[] = [];
     let lut = vaultState.vaultLookupTable;
     if (lut === DEFAULT_PUBLIC_KEY) {
       const recentSlot = await this.getConnection().getSlot({ commitment: 'confirmed' }).send();
@@ -1805,7 +1808,7 @@ export class KaminoVaultClient {
       setupLUTIfNeededIxs.push(updateVaultConfigIxs.updateVaultConfigIx);
     }
 
-    const ixs: IInstruction[] = [];
+    const ixs: Instruction[] = [];
     let overriddenExistentAccounts: Address[] | undefined = undefined;
     if (vaultState.vaultLookupTable === DEFAULT_PUBLIC_KEY) {
       overriddenExistentAccounts = [];
@@ -1846,7 +1849,7 @@ export class KaminoVaultClient {
     lookupTable: Address,
     keys: Address[],
     accountsInLut?: Address[]
-  ): Promise<IInstruction[]> {
+  ): Promise<Instruction[]> {
     let lutContentsList = accountsInLut;
     if (!accountsInLut) {
       lutContentsList = await getAccountsInLut(this.getConnection(), lookupTable);
@@ -1861,7 +1864,7 @@ export class KaminoVaultClient {
     const missingAccountsList = [...new Set<Address>(missingAccounts)];
 
     const chunkSize = 10;
-    const ixs: IInstruction[] = [];
+    const ixs: Instruction[] = [];
 
     for (let i = 0; i < missingAccountsList.length; i += chunkSize) {
       const chunk = missingAccountsList.slice(i, i + chunkSize);
@@ -3263,12 +3266,12 @@ export class KaminoVaultClient {
   }
 
   private appendRemainingAccountsForVaultReserves(
-    ix: IInstruction,
+    ix: Instruction,
     vaultReserves: Address[],
     vaultReservesState: Map<Address, KaminoReserve>
-  ): IInstruction {
-    let vaultReservesAccountMetas: IAccountMeta[] = [];
-    let vaultReservesLendingMarkets: IAccountMeta[] = [];
+  ): Instruction {
+    let vaultReservesAccountMetas: AccountMeta[] = [];
+    let vaultReservesLendingMarkets: AccountMeta[] = [];
     vaultReserves.forEach((reserve) => {
       const reserveState = vaultReservesState.get(reserve);
       if (reserveState === undefined) {

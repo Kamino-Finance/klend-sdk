@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,8 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([138, 245, 71, 225, 153, 4, 3, 43])
 
 export interface InitReserveAccounts {
   lendingMarketOwner: TransactionSigner
@@ -34,9 +36,10 @@ export interface InitReserveAccounts {
 
 export function initReserve(
   accounts: InitReserveAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     {
       address: accounts.lendingMarketOwner.address,
       role: 3,
@@ -55,9 +58,9 @@ export function initReserve(
     { address: accounts.liquidityTokenProgram, role: 0 },
     { address: accounts.collateralTokenProgram, role: 0 },
     { address: accounts.systemProgram, role: 0 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([138, 245, 71, 225, 153, 4, 3, 43])
-  const data = identifier
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = DISCRIMINATOR
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

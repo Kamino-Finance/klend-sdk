@@ -1,4 +1,4 @@
-import { Address, GetAccountInfoApi, GetSlotApi, IInstruction, Rpc, Slot, TransactionSigner } from '@solana/kit';
+import { Address, GetAccountInfoApi, GetSlotApi, Instruction, Rpc, Slot, TransactionSigner } from '@solana/kit';
 import {
   fetchAddressLookupTable,
   findAddressLookupTablePda,
@@ -22,7 +22,7 @@ export async function printAddressLookupTable(rpc: Rpc<GetAccountInfoApi>, looku
 export async function createLookupTableIx(
   connection: Rpc<GetSlotApi>,
   authority: TransactionSigner
-): Promise<[IInstruction, Address]> {
+): Promise<[Instruction, Address]> {
   const recentSlot = await connection.getSlot({ commitment: 'finalized' }).send();
   return initLookupTableIx(authority, recentSlot);
 }
@@ -32,7 +32,7 @@ export function extendLookupTableChunkIx(
   lookupTablePk: Address,
   keys: Address[],
   payer: TransactionSigner = authority
-): IInstruction {
+): Instruction {
   return getExtendLookupTableInstruction({
     authority,
     payer,
@@ -46,9 +46,9 @@ export const extendLookupTableIxs = (
   table: Address,
   keys: Address[],
   payer: TransactionSigner = authority
-): IInstruction[] => {
+): Instruction[] => {
   const chunkSize = 25;
-  const extendLookupIxs: IInstruction[] = [];
+  const extendLookupIxs: Instruction[] = [];
   for (let i = 0; i < keys.length; i += chunkSize) {
     const chunk = keys.slice(i, i + chunkSize);
     extendLookupIxs.push(extendLookupTableChunkIx(authority, table, chunk, payer));
@@ -65,7 +65,7 @@ export const extendLookupTableIxs = (
 export async function initLookupTableIx(
   authority: TransactionSigner,
   recentSlot: Slot
-): Promise<[IInstruction, Address]> {
+): Promise<[Instruction, Address]> {
   const address = await findAddressLookupTablePda({ authority: authority.address, recentSlot });
   const createLookupTableIx = getCreateLookupTableInstruction({
     authority,
@@ -82,7 +82,7 @@ export async function initLookupTableIx(
  * @param lookupTable - the lookup table to deactivate
  * @returns - the instruction to deactivate the lookup table
  */
-export function deactivateLookupTableIx(authority: TransactionSigner, lookupTable: Address): IInstruction {
+export function deactivateLookupTableIx(authority: TransactionSigner, lookupTable: Address): Instruction {
   return getDeactivateLookupTableInstruction({
     authority,
     address: lookupTable,
@@ -96,7 +96,7 @@ export function deactivateLookupTableIx(authority: TransactionSigner, lookupTabl
  * @returns - the instruction to close the lookup table
  */
 /// this require the LUT to be deactivated at least 500 blocks before
-export function closeLookupTableIx(authority: TransactionSigner, lookupTable: Address): IInstruction {
+export function closeLookupTableIx(authority: TransactionSigner, lookupTable: Address): Instruction {
   return getCloseLookupTableInstruction({
     authority,
     address: lookupTable,

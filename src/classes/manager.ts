@@ -1,6 +1,6 @@
 import {
   Address,
-  IInstruction,
+  Instruction,
   generateKeyPairSigner,
   TransactionSigner,
   Slot,
@@ -145,11 +145,11 @@ export class KaminoManager {
    * @returns market keypair - keypair used for market account creation -> to be signed with when executing the transaction
    * @returns ixs - an array of ixs for creating and initializing the market account
    */
-  async createMarketIxs(params: CreateKaminoMarketParams): Promise<{ market: TransactionSigner; ixs: IInstruction[] }> {
+  async createMarketIxs(params: CreateKaminoMarketParams): Promise<{ market: TransactionSigner; ixs: Instruction[] }> {
     const marketAccount = await generateKeyPairSigner();
     const size = BigInt(LendingMarket.layout.span + 8);
     const [lendingMarketAuthority] = await lendingMarketAuthPda(marketAccount.address, this._kaminoLendProgramId);
-    const createMarketIxs: IInstruction[] = [];
+    const createMarketIxs: Instruction[] = [];
 
     createMarketIxs.push(
       getCreateAccountInstruction({
@@ -173,7 +173,7 @@ export class KaminoManager {
       quoteCurrency: Array(32).fill(0),
     };
 
-    createMarketIxs.push(initLendingMarket(args, accounts, this._kaminoLendProgramId));
+    createMarketIxs.push(initLendingMarket(args, accounts, undefined, this._kaminoLendProgramId));
 
     return { market: marketAccount, ixs: createMarketIxs };
   }
@@ -188,7 +188,7 @@ export class KaminoManager {
    */
   async addAssetToMarketIxs(
     params: AddAssetToMarketParams
-  ): Promise<{ reserve: TransactionSigner; txnIxs: IInstruction[][] }> {
+  ): Promise<{ reserve: TransactionSigner; txnIxs: Instruction[][] }> {
     const market = await LendingMarket.fetch(this._rpc, params.marketAddress, this._kaminoLendProgramId);
     if (!market) {
       throw new Error('Market not found');
@@ -217,7 +217,7 @@ export class KaminoManager {
       false
     );
 
-    const txnIxs: IInstruction[][] = [];
+    const txnIxs: Instruction[][] = [];
     txnIxs.push(createReserveInstructions);
     txnIxs.push(updateReserveInstructions);
 
@@ -284,7 +284,7 @@ export class KaminoManager {
     vaultAdminAuthority?: TransactionSigner,
     unallocatedWeight?: BN,
     unallocatedCap?: BN
-  ): Promise<IInstruction[]> {
+  ): Promise<Instruction[]> {
     return this._vaultClient.updateVaultUnallocatedWeightAndCapIxs(
       vault,
       vaultAdminAuthority,
@@ -304,7 +304,7 @@ export class KaminoManager {
     vault: KaminoVault,
     reserve: Address,
     vaultAdminAuthority?: TransactionSigner
-  ): Promise<IInstruction | undefined> {
+  ): Promise<Instruction | undefined> {
     return this._vaultClient.removeReserveFromAllocationIx(vault, reserve, vaultAdminAuthority);
   }
 
@@ -321,7 +321,7 @@ export class KaminoManager {
     kaminoVault: KaminoVault,
     reserveAddress: Address,
     reserveState?: Reserve
-  ): Promise<IInstruction[]> {
+  ): Promise<Instruction[]> {
     const connection = this.getRpc();
     const vaultState = await kaminoVault.getState(connection);
 
@@ -453,7 +453,7 @@ export class KaminoManager {
     scopeOracleConfig: ScopeOracleConfig,
     scopeTwapConfig?: ScopeOracleConfig,
     maxAgeBufferSeconds: number = 20
-  ): Promise<IInstruction[]> {
+  ): Promise<Instruction[]> {
     const reserveConfig = reserve.state.config;
 
     let scopeTwapId = U16_MAX;
@@ -504,11 +504,11 @@ export class KaminoManager {
     config: ReserveConfig,
     reserveStateOverride?: Reserve,
     updateEntireConfig: boolean = false
-  ): Promise<IInstruction[]> {
+  ): Promise<Instruction[]> {
     const reserveState = reserveStateOverride
       ? reserveStateOverride
       : (await Reserve.fetch(this._rpc, reserve, this._kaminoLendProgramId))!;
-    const ixs: IInstruction[] = [];
+    const ixs: Instruction[] = [];
 
     if (!reserveState || updateEntireConfig) {
       ixs.push(
@@ -568,7 +568,7 @@ export class KaminoManager {
     vault: KaminoVault,
     sharesAmount?: Decimal,
     farmState?: FarmState
-  ): Promise<IInstruction[]> {
+  ): Promise<Instruction[]> {
     return this._vaultClient.stakeSharesIxs(user, vault, sharesAmount, farmState);
   }
 
@@ -633,7 +633,7 @@ export class KaminoManager {
     vault: KaminoVault,
     maxAmountToGiveUp: Decimal,
     vaultAdminAuthority?: TransactionSigner
-  ): Promise<IInstruction> {
+  ): Promise<Instruction> {
     return this._vaultClient.giveUpPendingFeesIx(vault, maxAmountToGiveUp, vaultAdminAuthority);
   }
 
@@ -669,7 +669,7 @@ export class KaminoManager {
     vault: KaminoVault,
     slot: Slot,
     vaultAdminAuthority?: TransactionSigner
-  ): Promise<IInstruction[]> {
+  ): Promise<Instruction[]> {
     return this._vaultClient.withdrawPendingFeesIxs(vault, slot, undefined, vaultAdminAuthority);
   }
 
@@ -686,7 +686,7 @@ export class KaminoManager {
     lut: Address,
     keys: Address[],
     accountsInLUT?: Address[]
-  ): Promise<IInstruction[]> {
+  ): Promise<Instruction[]> {
     return this._vaultClient.insertIntoLookupTableIxs(payer, lut, keys, accountsInLUT);
   }
 
@@ -1315,7 +1315,7 @@ export class KaminoManager {
    * @param kaminoVault - vault to invest from
    * @returns - an array of invest instructions for each invest action required for the vault reserves
    */
-  async investAllReservesIxs(payer: TransactionSigner, kaminoVault: KaminoVault): Promise<IInstruction[]> {
+  async investAllReservesIxs(payer: TransactionSigner, kaminoVault: KaminoVault): Promise<Instruction[]> {
     return this._vaultClient.investAllReservesIxs(payer, kaminoVault);
   }
 
@@ -1332,7 +1332,7 @@ export class KaminoManager {
     kaminoVault: KaminoVault,
     reserveWithAddress: ReserveWithAddress,
     vaultReservesMap?: Map<Address, KaminoReserve>
-  ): Promise<IInstruction[]> {
+  ): Promise<Instruction[]> {
     return this._vaultClient.investSingleReserveIxs(payer, kaminoVault, reserveWithAddress, vaultReservesMap);
   }
 
@@ -1440,7 +1440,7 @@ export class KaminoManager {
     lendingMarketOwner: TransactionSigner,
     marketWithAddress: MarketWithAddress,
     newMarket: LendingMarket
-  ): IInstruction[] {
+  ): Instruction[] {
     return parseForChangesMarketConfigAndGetIxs(
       lendingMarketOwner,
       marketWithAddress,
@@ -1460,7 +1460,7 @@ export class KaminoManager {
     currentAdmin: TransactionSigner,
     marketWithAddress: MarketWithAddress,
     newAdmin: Address
-  ): IInstruction[] {
+  ): Instruction[] {
     const newMarket = new LendingMarket({ ...marketWithAddress.state, lendingMarketOwnerCached: newAdmin });
     return this.updateLendingMarketIxs(currentAdmin, marketWithAddress, newMarket);
   }
@@ -1474,12 +1474,12 @@ export class KaminoManager {
   updateLendingMarketOwnerIxs(
     marketWithAddress: MarketWithAddress,
     lendingMarketOwnerCached: TransactionSigner = noopSigner(marketWithAddress.state.lendingMarketOwnerCached)
-  ): IInstruction {
+  ): Instruction {
     const accounts: UpdateLendingMarketOwnerAccounts = {
       lendingMarketOwnerCached,
       lendingMarket: marketWithAddress.address,
     };
-    return updateLendingMarketOwner(accounts, this._kaminoLendProgramId);
+    return updateLendingMarketOwner(accounts, undefined, this._kaminoLendProgramId);
   }
 
   /**
@@ -1574,7 +1574,7 @@ function parseForChangesMarketConfigAndGetIxs(
   marketWithAddress: MarketWithAddress,
   newMarket: LendingMarket,
   programId: Address
-): IInstruction[] {
+): Instruction[] {
   const encodedMarketUpdates = MARKET_UPDATER.encodeAllUpdates(marketWithAddress.state, newMarket);
   return encodedMarketUpdates.map((encodedMarketUpdate) =>
     updateMarketConfigIx(
@@ -1593,7 +1593,7 @@ function updateMarketConfigIx(
   mode: UpdateLendingMarketModeKind,
   value: Uint8Array,
   programId: Address
-): IInstruction {
+): Instruction {
   const accounts: UpdateLendingMarketAccounts = {
     lendingMarketOwner,
     lendingMarket: marketWithAddress.address,
@@ -1606,7 +1606,7 @@ function updateMarketConfigIx(
     value: [...value, ...Array(72 - value.length).fill(0)],
   };
 
-  const ix = updateLendingMarket(args, accounts, programId);
+  const ix = updateLendingMarket(args, accounts, undefined, programId);
 
   return ix;
 }

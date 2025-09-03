@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,8 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([216, 87, 65, 125, 113, 110, 185, 120])
 
 export interface SetPoolConfigArgs {
   params: types.SetPoolConfigParamsFields
@@ -25,19 +27,22 @@ export interface SetPoolConfigAccounts {
   pool: Address
 }
 
-export const layout = borsh.struct([types.SetPoolConfigParams.layout("params")])
+export const layout = borsh.struct<SetPoolConfigArgs>([
+  types.SetPoolConfigParams.layout("params"),
+])
 
 export function setPoolConfig(
   args: SetPoolConfigArgs,
   accounts: SetPoolConfigAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.admin.address, role: 2, signer: accounts.admin },
     { address: accounts.perpetuals, role: 0 },
     { address: accounts.pool, role: 1 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([216, 87, 65, 125, 113, 110, 185, 120])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -45,7 +50,7 @@ export function setPoolConfig(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

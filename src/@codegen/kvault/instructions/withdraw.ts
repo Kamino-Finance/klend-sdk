@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,8 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([183, 18, 70, 156, 148, 109, 161, 34])
 
 export interface WithdrawArgs {
   sharesAmount: BN
@@ -50,14 +52,15 @@ export interface WithdrawAccounts {
   program: Address
 }
 
-export const layout = borsh.struct([borsh.u64("sharesAmount")])
+export const layout = borsh.struct<WithdrawArgs>([borsh.u64("sharesAmount")])
 
 export function withdraw(
   args: WithdrawArgs,
   accounts: WithdrawAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     {
       address: accounts.withdrawFromAvailable.user.address,
       role: 3,
@@ -102,8 +105,8 @@ export function withdraw(
     },
     { address: accounts.eventAuthority, role: 0 },
     { address: accounts.program, role: 0 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([183, 18, 70, 156, 148, 109, 161, 34])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -111,7 +114,7 @@ export function withdraw(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

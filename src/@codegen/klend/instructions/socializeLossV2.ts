@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,8 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([238, 95, 98, 220, 187, 40, 204, 154])
 
 export interface SocializeLossV2Args {
   liquidityAmount: BN
@@ -35,14 +37,17 @@ export interface SocializeLossV2Accounts {
   farmsProgram: Address
 }
 
-export const layout = borsh.struct([borsh.u64("liquidityAmount")])
+export const layout = borsh.struct<SocializeLossV2Args>([
+  borsh.u64("liquidityAmount"),
+])
 
 export function socializeLossV2(
   args: SocializeLossV2Args,
   accounts: SocializeLossV2Accounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     {
       address: accounts.socializeLossAccounts.riskCouncil.address,
       role: 2,
@@ -66,8 +71,8 @@ export function socializeLossV2(
       : { address: programAddress, role: 0 },
     { address: accounts.lendingMarketAuthority, role: 0 },
     { address: accounts.farmsProgram, role: 0 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([238, 95, 98, 220, 187, 40, 204, 154])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -75,7 +80,7 @@ export function socializeLossV2(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

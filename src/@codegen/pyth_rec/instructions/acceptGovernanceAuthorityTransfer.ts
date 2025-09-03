@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -15,6 +15,8 @@ import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslin
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
 
+export const DISCRIMINATOR = Buffer.from([254, 39, 222, 79, 64, 217, 205, 127])
+
 export interface AcceptGovernanceAuthorityTransferAccounts {
   payer: TransactionSigner
   config: Address
@@ -22,14 +24,15 @@ export interface AcceptGovernanceAuthorityTransferAccounts {
 
 export function acceptGovernanceAuthorityTransfer(
   accounts: AcceptGovernanceAuthorityTransferAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.payer.address, role: 2, signer: accounts.payer },
     { address: accounts.config, role: 1 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([254, 39, 222, 79, 64, 217, 205, 127])
-  const data = identifier
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = DISCRIMINATOR
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

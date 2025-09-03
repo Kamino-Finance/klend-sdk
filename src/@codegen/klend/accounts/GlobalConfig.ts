@@ -76,7 +76,9 @@ export class GlobalConfig {
       return null
     }
     if (info.programAddress !== programId) {
-      throw new Error("account doesn't belong to this program")
+      throw new Error(
+        `GlobalConfigFields account ${address} belongs to wrong program ${info.programAddress}, expected ${programId}`
+      )
     }
 
     return this.decode(Buffer.from(info.data))
@@ -94,7 +96,9 @@ export class GlobalConfig {
         return null
       }
       if (info.programAddress !== programId) {
-        throw new Error("account doesn't belong to this program")
+        throw new Error(
+          `GlobalConfigFields account ${info.address} belongs to wrong program ${info.programAddress}, expected ${programId}`
+        )
       }
 
       return this.decode(Buffer.from(info.data))

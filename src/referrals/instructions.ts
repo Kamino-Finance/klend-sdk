@@ -1,4 +1,4 @@
-import { Address, IInstruction, Rpc, SolanaRpcApi, TransactionSigner } from '@solana/kit';
+import { Address, Instruction, Rpc, SolanaRpcApi, TransactionSigner } from '@solana/kit';
 import { KaminoMarket } from '../classes';
 import { DEFAULT_PUBLIC_KEY, referrerStatePda, referrerTokenStatePda, shortUrlPda, userMetadataPda } from '../utils';
 import {
@@ -26,7 +26,7 @@ export const getInitAllReferrerTokenStateIxs = async ({
 
   await kaminoMarket.loadReserves();
 
-  const initReferrerTokenStateIxs: IInstruction[] = [];
+  const initReferrerTokenStateIxs: Instruction[] = [];
 
   const tokenStatesToCreate: [Address, Address][] = [];
   const reserves = kaminoMarket.getReserves();
@@ -54,6 +54,7 @@ export const getInitAllReferrerTokenStateIxs = async ({
         rent: SYSVAR_RENT_ADDRESS,
         systemProgram: SYSTEM_PROGRAM_ADDRESS,
       },
+      undefined,
       kaminoMarket.programId
     );
 
@@ -90,6 +91,7 @@ export const getInitReferrerStateAndShortUrlIxs = async ({
       rent: SYSVAR_RENT_ADDRESS,
       systemProgram: SYSTEM_PROGRAM_ADDRESS,
     },
+    undefined,
     programId
   );
 
@@ -105,7 +107,7 @@ export const getDeleteReferrerStateAndShortUrlIxs = async ({
   referrer: TransactionSigner;
   rpc: Rpc<SolanaRpcApi>;
   programId: Address;
-}): Promise<IInstruction> => {
+}): Promise<Instruction> => {
   const [referrerStateAddress] = await referrerStatePda(referrer.address, programId);
   const referrerState = await ReferrerState.fetch(rpc, referrerStateAddress, programId);
 
@@ -117,6 +119,7 @@ export const getDeleteReferrerStateAndShortUrlIxs = async ({
       rent: SYSVAR_RENT_ADDRESS,
       systemProgram: SYSTEM_PROGRAM_ADDRESS,
     },
+    undefined,
     programId
   );
 };

@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -15,6 +15,8 @@ import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslin
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
 
+export const DISCRIMINATOR = Buffer.from([80, 72, 21, 191, 29, 121, 45, 111])
+
 export interface SetPerpetualsConfigArgs {
   params: types.SetPerpetualsConfigParamsFields
 }
@@ -24,20 +26,21 @@ export interface SetPerpetualsConfigAccounts {
   perpetuals: Address
 }
 
-export const layout = borsh.struct([
+export const layout = borsh.struct<SetPerpetualsConfigArgs>([
   types.SetPerpetualsConfigParams.layout("params"),
 ])
 
 export function setPerpetualsConfig(
   args: SetPerpetualsConfigArgs,
   accounts: SetPerpetualsConfigAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.admin.address, role: 2, signer: accounts.admin },
     { address: accounts.perpetuals, role: 1 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([80, 72, 21, 191, 29, 121, 45, 111])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -45,7 +48,7 @@ export function setPerpetualsConfig(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

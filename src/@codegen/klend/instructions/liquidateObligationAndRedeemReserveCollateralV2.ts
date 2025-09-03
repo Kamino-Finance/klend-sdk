@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,8 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([162, 161, 35, 143, 30, 187, 185, 103])
 
 export interface LiquidateObligationAndRedeemReserveCollateralV2Args {
   liquidityAmount: BN
@@ -55,18 +57,20 @@ export interface LiquidateObligationAndRedeemReserveCollateralV2Accounts {
   farmsProgram: Address
 }
 
-export const layout = borsh.struct([
-  borsh.u64("liquidityAmount"),
-  borsh.u64("minAcceptableReceivedLiquidityAmount"),
-  borsh.u64("maxAllowedLtvOverridePercent"),
-])
+export const layout =
+  borsh.struct<LiquidateObligationAndRedeemReserveCollateralV2Args>([
+    borsh.u64("liquidityAmount"),
+    borsh.u64("minAcceptableReceivedLiquidityAmount"),
+    borsh.u64("maxAllowedLtvOverridePercent"),
+  ])
 
 export function liquidateObligationAndRedeemReserveCollateralV2(
   args: LiquidateObligationAndRedeemReserveCollateralV2Args,
   accounts: LiquidateObligationAndRedeemReserveCollateralV2Accounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     {
       address: accounts.liquidationAccounts.liquidator.address,
       role: 2,
@@ -144,8 +148,8 @@ export function liquidateObligationAndRedeemReserveCollateralV2(
       ? { address: accounts.debtFarmsAccounts.reserveFarmState.value, role: 1 }
       : { address: programAddress, role: 0 },
     { address: accounts.farmsProgram, role: 0 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([162, 161, 35, 143, 30, 187, 185, 103])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -156,7 +160,7 @@ export function liquidateObligationAndRedeemReserveCollateralV2(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

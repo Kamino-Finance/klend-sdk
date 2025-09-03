@@ -23,7 +23,7 @@ import {
   uniqueAccountsWithProgramIds,
   WRAPPED_SOL_MINT,
 } from '../utils';
-import { Account, Address, IInstruction, isSome, none, Option, Slot, TransactionSigner } from '@solana/kit';
+import { Account, Address, Instruction, isSome, none, Option, Slot, TransactionSigner } from '@solana/kit';
 import Decimal from 'decimal.js';
 import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
 import { AddressLookupTable } from '@solana-program/address-lookup-table';
@@ -69,7 +69,7 @@ export interface SwapCollIxsInputs<QuoteResponse> {
   obligation: KaminoObligation;
   referrer: Option<Address>;
   currentSlot: Slot;
-  budgetAndPriorityFeeIxs?: IInstruction[];
+  budgetAndPriorityFeeIxs?: Instruction[];
   scopeRefreshConfig?: ScopePriceRefreshConfig;
   useV2Ixs: boolean;
   quoter: SwapQuoteProvider<QuoteResponse>;
@@ -84,7 +84,7 @@ export interface SwapCollIxsOutputs<QuoteResponse> {
   /**
    * Instructions for on-chain execution.
    */
-  ixs: IInstruction[];
+  ixs: Instruction[];
 
   /**
    * Required LUTs.
@@ -217,7 +217,7 @@ type SwapCollArgs = {
 };
 
 type SwapCollContext<QuoteResponse> = {
-  budgetAndPriorityFeeIxs: IInstruction[];
+  budgetAndPriorityFeeIxs: Instruction[];
   market: KaminoMarket;
   sourceCollReserve: KaminoReserve;
   targetCollReserve: KaminoReserve;
@@ -269,12 +269,12 @@ function extractArgsAndContext<QuoteResponse>(
 const FAKE_TARGET_COLL_SWAP_OUT_AMOUNT = new Decimal(1); // see the lengthy `getSwapCollIxs()` impl comment
 
 type SwapCollKlendIxs = {
-  setupIxs: IInstruction[];
-  targetCollFlashBorrowIx: IInstruction;
-  depositTargetCollIxs: IInstruction[];
-  withdrawSourceCollIxs: IInstruction[];
-  targetCollFlashRepayIx: IInstruction;
-  cleanupIxs: IInstruction[];
+  setupIxs: Instruction[];
+  targetCollFlashBorrowIx: Instruction;
+  depositTargetCollIxs: Instruction[];
+  withdrawSourceCollIxs: Instruction[];
+  targetCollFlashRepayIx: Instruction;
+  cleanupIxs: Instruction[];
   flashLoanInfo: FlashLoanInfo;
   simulationDetails: {
     targetCollFlashBorrowedAmount: Decimal;
@@ -285,7 +285,7 @@ async function getKlendIxs(
   args: SwapCollArgs,
   targetCollSwapOutAmount: Decimal,
   context: SwapCollContext<any>,
-  scopeRefreshIx: IInstruction[]
+  scopeRefreshIx: Instruction[]
 ): Promise<SwapCollKlendIxs> {
   const { ataCreationIxs, targetCollAta } = await getAtaCreationIxs(context);
   const setupIxs = [...context.budgetAndPriorityFeeIxs, ...ataCreationIxs];
@@ -361,7 +361,7 @@ async function getAtaCreationIxs(context: SwapCollContext<any>) {
 }
 
 async function getAtaCloseIxs(context: SwapCollContext<any>) {
-  const ataCloseIxs: IInstruction[] = [];
+  const ataCloseIxs: Instruction[] = [];
   if (
     context.sourceCollReserve.getLiquidityMint() === WRAPPED_SOL_MINT ||
     context.targetCollReserve.getLiquidityMint() === WRAPPED_SOL_MINT
@@ -402,7 +402,7 @@ async function getTargetCollFlashLoanIxs(
 
 type DepositTargetCollIxs = {
   removesElevationGroup: boolean;
-  ixs: IInstruction[];
+  ixs: Instruction[];
 };
 
 async function getDepositTargetCollIxs(
@@ -454,7 +454,7 @@ async function getWithdrawSourceCollIxs(
   args: SwapCollArgs,
   depositRemovedElevationGroup: boolean,
   context: SwapCollContext<any>
-): Promise<IInstruction[]> {
+): Promise<Instruction[]> {
   const withdrawnSourceCollLamports = args.isClosingSourceColl
     ? U64_MAX
     : args.sourceCollSwapAmount.mul(context.sourceCollReserve.getMintFactor()).toString();
@@ -513,7 +513,7 @@ function elevationGroupIdToRequestAfterWithdraw(
 
 type ExternalSwapIxs<QuoteResponse> = {
   swapOutAmount: Decimal;
-  ixs: IInstruction[];
+  ixs: Instruction[];
   luts: Account<AddressLookupTable>[];
   simulationDetails: {
     quoteResponse?: QuoteResponse;
@@ -617,7 +617,7 @@ function checkResultingObligationValid(
   }
 }
 
-function listIxs(klendIxs: SwapCollKlendIxs, externalSwapIxs?: IInstruction[]): IInstruction[] {
+function listIxs(klendIxs: SwapCollKlendIxs, externalSwapIxs?: Instruction[]): Instruction[] {
   return [
     ...klendIxs.setupIxs,
     klendIxs.targetCollFlashBorrowIx,

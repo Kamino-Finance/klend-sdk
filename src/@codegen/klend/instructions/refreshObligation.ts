@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -15,6 +15,8 @@ import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslin
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
 
+export const DISCRIMINATOR = Buffer.from([33, 132, 147, 228, 151, 192, 72, 89])
+
 export interface RefreshObligationAccounts {
   lendingMarket: Address
   obligation: Address
@@ -22,14 +24,15 @@ export interface RefreshObligationAccounts {
 
 export function refreshObligation(
   accounts: RefreshObligationAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.lendingMarket, role: 0 },
     { address: accounts.obligation, role: 1 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([33, 132, 147, 228, 151, 192, 72, 89])
-  const data = identifier
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = DISCRIMINATOR
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

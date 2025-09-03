@@ -6,11 +6,11 @@ import {
   SwapIxsProvider,
   SwapQuoteProvider,
 } from '@kamino-finance/klend-sdk';
-import { Account, address, Address, GetMultipleAccountsApi, IInstruction, Rpc, SolanaRpcApi } from '@solana/kit';
+import { Account, address, Address, GetMultipleAccountsApi, Instruction, Rpc, SolanaRpcApi } from '@solana/kit';
 import axios from 'axios';
 import {
   createJupiterApiClient,
-  Instruction,
+  Instruction as JupInstruction,
   QuoteGetRequest,
   QuoteResponse,
   ResponseError,
@@ -50,9 +50,9 @@ export type SwapResponse = {
 };
 
 export type SwapTxs = {
-  setupIxs: IInstruction[];
-  swapIxs: IInstruction[];
-  cleanupIxs: IInstruction[];
+  setupIxs: Instruction[];
+  swapIxs: Instruction[];
+  cleanupIxs: Instruction[];
 };
 
 export async function getJupiterPrice(inputMint: Address | string, outputMint: Address | string): Promise<number> {
@@ -316,7 +316,7 @@ export const getLookupTableAccountsFromKeys = async (
   return lookupTableAccounts;
 };
 
-export function transformResponseIx(ix: Instruction): IInstruction {
+export function transformResponseIx(ix: JupInstruction): Instruction {
   return {
     data: ix.data ? Buffer.from(ix.data, 'base64') : undefined,
     programAddress: address(ix.programId),
@@ -327,6 +327,6 @@ export function transformResponseIx(ix: Instruction): IInstruction {
   };
 }
 
-export function transformResponseIxs(ixs: Instruction[]): IInstruction[] {
+export function transformResponseIxs(ixs: JupInstruction[]): Instruction[] {
   return ixs.map((ix) => transformResponseIx(ix));
 }

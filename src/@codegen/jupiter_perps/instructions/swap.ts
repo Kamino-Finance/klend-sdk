@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,10 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([
+  248, 198, 158, 145, 225, 117, 135, 200,
+])
 
 export interface SwapArgs {
   params: types.SwapParamsFields
@@ -37,14 +41,17 @@ export interface SwapAccounts {
   program: Address
 }
 
-export const layout = borsh.struct([types.SwapParams.layout("params")])
+export const layout = borsh.struct<SwapArgs>([
+  types.SwapParams.layout("params"),
+])
 
 export function swap(
   args: SwapArgs,
   accounts: SwapAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.owner.address, role: 3, signer: accounts.owner },
     { address: accounts.fundingAccount, role: 1 },
     { address: accounts.receivingAccount, role: 1 },
@@ -60,8 +67,8 @@ export function swap(
     { address: accounts.tokenProgram, role: 0 },
     { address: accounts.eventAuthority, role: 0 },
     { address: accounts.program, role: 0 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([248, 198, 158, 145, 225, 117, 135, 200])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -69,7 +76,7 @@ export function swap(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

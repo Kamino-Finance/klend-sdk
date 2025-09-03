@@ -1,4 +1,4 @@
-import { Address, IInstruction, Slot, Option, none, TransactionSigner, lamports } from '@solana/kit';
+import { Address, Instruction, Slot, Option, none, TransactionSigner, lamports } from '@solana/kit';
 import Decimal from 'decimal.js';
 import {
   KaminoAction,
@@ -431,7 +431,7 @@ async function buildDepositWithLeverageIxs<QuoteResponse>(
   depositTokenIsSol: boolean,
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
   calcs: DepositLeverageCalcsResult,
-  budgetAndPriorityFeeIxs: IInstruction[] | undefined,
+  budgetAndPriorityFeeIxs: Instruction[] | undefined,
   swapQuoteIxsArray: SwapIxs<QuoteResponse>[],
   strategy: StrategyWithAddress | undefined,
   collIsKtoken: boolean,
@@ -468,7 +468,7 @@ async function buildDepositWithLeverageIxs<QuoteResponse>(
     budgetAndPriorityFeeIxs
   );
 
-  const fillWsolAtaIxs: IInstruction[] = [];
+  const fillWsolAtaIxs: Instruction[] = [];
   if (depositTokenIsSol) {
     fillWsolAtaIxs.push(
       ...getTransferWsolIxs(
@@ -816,7 +816,7 @@ export async function buildWithdrawWithLeverageIxs<QuoteResponse>(
   depositTokenIsSol: boolean,
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
   calcs: WithdrawLeverageCalcsResult,
-  budgetAndPriorityFeeIxs: IInstruction[] | undefined,
+  budgetAndPriorityFeeIxs: Instruction[] | undefined,
   swapQuoteIxsArray: SwapIxs<QuoteResponse>[],
   strategy: StrategyWithAddress | undefined,
   collIsKtoken: boolean,
@@ -845,7 +845,7 @@ export async function buildWithdrawWithLeverageIxs<QuoteResponse>(
     budgetAndPriorityFeeIxs
   );
 
-  const closeWsolAtaIxs: IInstruction[] = [];
+  const closeWsolAtaIxs: Instruction[] = [];
   if (depositTokenIsSol || debtTokenMint === WRAPPED_SOL_MINT) {
     const wsolAta = await getAssociatedTokenAddress(WRAPPED_SOL_MINT, owner.address);
     closeWsolAtaIxs.push(
@@ -862,7 +862,7 @@ export async function buildWithdrawWithLeverageIxs<QuoteResponse>(
 
   // TODO: Mihai/Marius check if we can improve this logic and not convert any SOL
   // This is here so that we have enough wsol to repay in case the kAB swapped to sol after estimates is not enough
-  const fillWsolAtaIxs: IInstruction[] = [];
+  const fillWsolAtaIxs: Instruction[] = [];
   if (debtTokenMint === WRAPPED_SOL_MINT) {
     const halfSolBalance =
       Number.parseInt((await market.getRpc().getBalance(owner.address).send()).value.toString()) / LAMPORTS_PER_SOL / 2;
@@ -1390,7 +1390,7 @@ async function buildIncreaseLeverageIxs<QuoteResponse>(
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
   collIsKtoken: boolean,
   swapQuoteIxsArray: SwapIxs<QuoteResponse>[],
-  budgetAndPriorityFeeIxs: IInstruction[] | undefined,
+  budgetAndPriorityFeeIxs: Instruction[] | undefined,
   useV2Ixs: boolean
 ): Promise<LeverageIxsOutput[]> {
   const collReserve = kaminoMarket.getExistingReserveByMint(collTokenMint);
@@ -1510,7 +1510,7 @@ async function buildDecreaseLeverageIxs<QuoteResponse>(
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
   collIsKtoken: boolean,
   swapQuoteIxsArray: SwapIxs<QuoteResponse>[],
-  budgetAndPriorityFeeIxs: IInstruction[] | undefined,
+  budgetAndPriorityFeeIxs: Instruction[] | undefined,
   useV2Ixs: boolean,
   withdrawSlotOffset: number = WITHDRAW_SLOT_OFFSET
 ): Promise<LeverageIxsOutput[]> {
@@ -1539,8 +1539,8 @@ async function buildDecreaseLeverageIxs<QuoteResponse>(
 
   // TODO: Mihai/Marius check if we can improve this logic and not convert any SOL
   // This is here so that we have enough wsol to repay in case the kAB swapped to sol after estimates is not enough
-  const closeWsolAtaIxs: IInstruction[] = [];
-  const fillWsolAtaIxs: IInstruction[] = [];
+  const closeWsolAtaIxs: Instruction[] = [];
+  const fillWsolAtaIxs: Instruction[] = [];
   if (debtTokenMint === WRAPPED_SOL_MINT) {
     const wsolAta = await getAssociatedTokenAddress(WRAPPED_SOL_MINT, owner.address);
 
@@ -1660,7 +1660,7 @@ export const getSetupIxs = async (
   debtReserve: KaminoReserve,
   strategy: StrategyWithAddress | undefined,
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-  budgetAndPriorityFeeIxs: IInstruction[] | undefined
+  budgetAndPriorityFeeIxs: Instruction[] | undefined
 ) => {
   const budgetIxs = budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxs(3000000);
 
@@ -1696,7 +1696,7 @@ export const getScopeRefreshIx = async (
   debtReserve: KaminoReserve,
   obligation: KaminoObligation | ObligationType | undefined,
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined
-): Promise<IInstruction[]> => {
+): Promise<Instruction[]> => {
   const allReserves =
     obligation && isKaminoObligation(obligation)
       ? [
@@ -1709,7 +1709,7 @@ export const getScopeRefreshIx = async (
         ]
       : [...new Set<Address>([collReserve.address, debtReserve.address])];
 
-  const scopeRefreshIxs: IInstruction[] = [];
+  const scopeRefreshIxs: Instruction[] = [];
   const scopeTokensMap = getTokenIdsForScopeRefresh(market, allReserves);
 
   if (scopeTokensMap.size > 0 && scopeRefreshConfig) {

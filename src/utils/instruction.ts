@@ -1,12 +1,12 @@
 import Decimal from 'decimal.js';
 
-import { Address, IInstruction, Rpc, GetMultipleAccountsApi, Account, isAddress } from '@solana/kit';
+import { Address, Instruction, Rpc, GetMultipleAccountsApi, Account, isAddress } from '@solana/kit';
 import { batchFetch } from '@kamino-finance/kliquidity-sdk';
 import { getSetComputeUnitLimitInstruction, getSetComputeUnitPriceInstruction } from '@solana-program/compute-budget';
 import { AddressLookupTable, fetchAllAddressLookupTable } from '@solana-program/address-lookup-table';
 import { COMPUTE_BUDGET_PROGRAM_ID } from './pubkey';
 
-export function buildComputeBudgetIx(units: number): IInstruction {
+export function buildComputeBudgetIx(units: number): Instruction {
   return getSetComputeUnitLimitInstruction({ units });
 }
 
@@ -17,8 +17,8 @@ export async function getLookupTableAccounts(
   return batchFetch(addresses, (batch) => fetchAllAddressLookupTable(rpc, batch));
 }
 
-export const getComputeBudgetAndPriorityFeeIxs = (units: number, priorityFeeLamports?: Decimal): IInstruction[] => {
-  const ixs: IInstruction[] = [];
+export const getComputeBudgetAndPriorityFeeIxs = (units: number, priorityFeeLamports?: Decimal): Instruction[] => {
+  const ixs: Instruction[] = [];
   ixs.push(getSetComputeUnitLimitInstruction({ units }));
 
   if (priorityFeeLamports && priorityFeeLamports.gt(0)) {
@@ -41,7 +41,7 @@ export function notEmpty<TValue>(value: TValue | null | undefined): value is TVa
 }
 
 export function uniqueAccountsWithProgramIds(
-  ixs: IInstruction[],
+  ixs: Instruction[],
   addressLookupTables: Address[] | Account<AddressLookupTable>[] = []
 ): Array<Address> {
   let luts: Address[];
@@ -66,7 +66,7 @@ export function uniqueAccountsWithProgramIds(
   return [...uniqueAccounts];
 }
 
-export function removeBudgetIxs(ixs: IInstruction[]): IInstruction[] {
+export function removeBudgetIxs(ixs: Instruction[]): Instruction[] {
   return ixs.filter(({ programAddress }) => {
     return programAddress !== COMPUTE_BUDGET_PROGRAM_ID;
   });

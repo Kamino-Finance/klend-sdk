@@ -16,7 +16,7 @@ import Decimal from 'decimal.js';
 import { DEFAULT_PUBLIC_KEY, FarmState, RewardInfo } from '@kamino-finance/farms-sdk';
 import { Scope } from '@kamino-finance/scope-sdk';
 import { aprToApy, KaminoPrices } from '@kamino-finance/kliquidity-sdk';
-import { Address, IInstruction, TransactionSigner } from '@solana/kit';
+import { Address, Instruction, TransactionSigner } from '@solana/kit';
 import { ConnectionPool } from './connection';
 import { sendAndConfirmTx } from './tx';
 import { OraclePrices } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts/OraclePrices';
@@ -146,7 +146,7 @@ function getRewardPerTimeUnitSecond(reward: RewardInfo) {
 export async function executeUserSetupLutsTransactions(
   connection: ConnectionPool,
   wallet: TransactionSigner,
-  setupIxs: Array<Array<IInstruction>>
+  setupIxs: Array<Array<Instruction>>
 ) {
   for (const setupIxsGroup of setupIxs) {
     if (setupIxsGroup.length === 0) {

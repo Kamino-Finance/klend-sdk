@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -15,6 +15,10 @@ import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslin
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
 
+export const DISCRIMINATOR = Buffer.from([
+  242, 231, 177, 251, 126, 145, 159, 104,
+])
+
 export interface SetTestTimeArgs {
   params: types.SetTestTimeParamsFields
 }
@@ -24,18 +28,21 @@ export interface SetTestTimeAccounts {
   perpetuals: Address
 }
 
-export const layout = borsh.struct([types.SetTestTimeParams.layout("params")])
+export const layout = borsh.struct<SetTestTimeArgs>([
+  types.SetTestTimeParams.layout("params"),
+])
 
 export function setTestTime(
   args: SetTestTimeArgs,
   accounts: SetTestTimeAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.admin.address, role: 2, signer: accounts.admin },
     { address: accounts.perpetuals, role: 1 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([242, 231, 177, 251, 126, 145, 159, 104])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -43,7 +50,7 @@ export function setTestTime(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

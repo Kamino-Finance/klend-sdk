@@ -204,7 +204,9 @@ export class UserState {
       return null
     }
     if (info.programAddress !== programId) {
-      throw new Error("account doesn't belong to this program")
+      throw new Error(
+        `UserStateFields account ${address} belongs to wrong program ${info.programAddress}, expected ${programId}`
+      )
     }
 
     return this.decode(Buffer.from(info.data))
@@ -222,7 +224,9 @@ export class UserState {
         return null
       }
       if (info.programAddress !== programId) {
-        throw new Error("account doesn't belong to this program")
+        throw new Error(
+          `UserStateFields account ${info.address} belongs to wrong program ${info.programAddress}, expected ${programId}`
+        )
       }
 
       return this.decode(Buffer.from(info.data))

@@ -19,12 +19,12 @@ import {
   uniqueAccountsWithProgramIds,
 } from '../utils';
 import { AddressLookupTable } from '@solana-program/address-lookup-table';
-import { Account, Address, IInstruction, none, Option, Slot, TransactionSigner } from '@solana/kit';
+import { Account, Address, Instruction, none, Option, Slot, TransactionSigner } from '@solana/kit';
 import Decimal from 'decimal.js';
 import { calcMaxWithdrawCollateral, calcRepayAmountWithSlippage } from './repay_with_collateral_calcs';
 
 export type RepayWithCollIxsResponse<QuoteResponse> = {
-  ixs: IInstruction[];
+  ixs: Instruction[];
   lookupTables: Account<AddressLookupTable>[];
   flashLoanInfo: FlashLoanInfo;
   swapInputs: SwapInputs;
@@ -57,7 +57,7 @@ interface RepayWithCollSwapInputsProps<QuoteResponse> {
   currentSlot: Slot;
   repayAmount: Decimal;
   isClosingPosition: boolean;
-  budgetAndPriorityFeeIxs?: IInstruction[];
+  budgetAndPriorityFeeIxs?: Instruction[];
   scopeRefreshConfig?: ScopePriceRefreshConfig;
   useV2Ixs: boolean;
   quoter: SwapQuoteProvider<QuoteResponse>;
@@ -285,7 +285,7 @@ async function buildRepayWithCollateralIxs<QuoteResponse>(
   obligation: KaminoObligation,
   referrer: Option<Address>,
   currentSlot: Slot,
-  budgetAndPriorityFeeIxs: IInstruction[] | undefined,
+  budgetAndPriorityFeeIxs: Instruction[] | undefined,
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
   swapQuoteIxsArray: SwapIxs<QuoteResponse>[],
   isClosingPosition: boolean,

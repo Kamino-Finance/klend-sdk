@@ -4,7 +4,7 @@ import {
   GetAccountInfoApi,
   GetMultipleAccountsApi,
   GetTokenAccountBalanceApi,
-  IInstruction,
+  Instruction,
   Lamports,
   MaybeAccount,
   Rpc,
@@ -41,7 +41,7 @@ export async function createAssociatedTokenAccountIdempotentInstruction(
   owner: Address = payer.address,
   tokenProgram: Address = TOKEN_PROGRAM_ADDRESS,
   ata?: Address
-): Promise<[Address, IInstruction]> {
+): Promise<[Address, Instruction]> {
   let ataAddress = ata;
   if (!ataAddress) {
     ataAddress = await getAssociatedTokenAddress(mint, owner, tokenProgram, ASSOCIATED_TOKEN_PROGRAM_ADDRESS);
@@ -82,12 +82,12 @@ export const getAtasWithCreateIxsIfMissing = async (
   rpc: Rpc<GetMultipleAccountsApi>,
   user: TransactionSigner,
   mints: Array<{ mint: Address; tokenProgram: Address }>
-): Promise<{ atas: Address[]; createAtaIxs: IInstruction[] }> => {
+): Promise<{ atas: Address[]; createAtaIxs: Instruction[] }> => {
   const atas: Array<Address> = await Promise.all(
     mints.map(async (x) => getAssociatedTokenAddress(x.mint, user.address, x.tokenProgram))
   );
   const accountInfos = await rpc.getMultipleAccounts(atas).send();
-  const createAtaIxs: IInstruction[] = [];
+  const createAtaIxs: Instruction[] = [];
   for (let i = 0; i < atas.length; i++) {
     if (accountInfos.value[i] === null) {
       const { mint, tokenProgram } = mints[i];
@@ -110,8 +110,8 @@ export const getAtasWithCreateIxsIfMissing = async (
 export async function createAtasIdempotent(
   user: TransactionSigner,
   mints: Array<{ mint: Address; tokenProgram: Address }>
-): Promise<Array<{ ata: Address; createAtaIx: IInstruction }>> {
-  const res: Array<{ ata: Address; createAtaIx: IInstruction }> = [];
+): Promise<Array<{ ata: Address; createAtaIx: Instruction }>> {
+  const res: Array<{ ata: Address; createAtaIx: Instruction }> = [];
   for (const mint of mints) {
     const [ata, createAtaIx] = await createAssociatedTokenAccountIdempotentInstruction(
       user,
@@ -128,7 +128,7 @@ export async function createAtasIdempotent(
 }
 
 export function getTransferWsolIxs(owner: TransactionSigner, ata: Address, amountLamports: Lamports) {
-  const ixs: IInstruction[] = [];
+  const ixs: Instruction[] = [];
 
   ixs.push(
     getTransferSolInstruction({
@@ -177,8 +177,8 @@ export async function getTokenAccountBalanceDecimal(
 
 export type CreateWsolAtaIxs = {
   wsolAta: Address;
-  createAtaIxs: IInstruction[];
-  closeAtaIxs: IInstruction[];
+  createAtaIxs: Instruction[];
+  closeAtaIxs: Instruction[];
 };
 
 /**
@@ -193,8 +193,8 @@ export const createWsolAtaIfMissing = async (
   amount: Decimal,
   owner: TransactionSigner
 ): Promise<CreateWsolAtaIxs> => {
-  const createIxs: IInstruction[] = [];
-  const closeIxs: IInstruction[] = [];
+  const createIxs: Instruction[] = [];
+  const closeIxs: Instruction[] = [];
 
   const wsolAta: Address = await getAssociatedTokenAddress(WRAPPED_SOL_MINT, owner.address, TOKEN_PROGRAM_ADDRESS);
 

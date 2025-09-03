@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,8 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([146, 21, 51, 121, 187, 208, 7, 69])
 
 export interface CreateDecreasePositionRequestArgs {
   params: types.CreateDecreasePositionRequestParamsFields
@@ -46,9 +48,10 @@ export const layout = borsh.struct([
 export function createDecreasePositionRequest(
   args: CreateDecreasePositionRequestArgs,
   accounts: CreateDecreasePositionRequestAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.owner.address, role: 3, signer: accounts.owner },
     { address: accounts.receivingAccount, role: 1 },
     { address: accounts.perpetuals, role: 0 },
@@ -68,8 +71,8 @@ export function createDecreasePositionRequest(
     { address: accounts.systemProgram, role: 0 },
     { address: accounts.eventAuthority, role: 0 },
     { address: accounts.program, role: 0 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([146, 21, 51, 121, 187, 208, 7, 69])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -79,7 +82,7 @@ export function createDecreasePositionRequest(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

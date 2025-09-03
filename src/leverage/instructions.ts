@@ -90,7 +90,7 @@ export const getBorrowFlashLoanInstruction = ({
     tokenProgram: reserve.getLiquidityTokenProgram(),
   };
 
-  return flashBorrowReserveLiquidity(args, accounts, programId);
+  return flashBorrowReserveLiquidity(args, accounts, undefined, programId);
 };
 
 export const getRepayFlashLoanInstruction = ({
@@ -136,5 +136,5 @@ export const getRepayFlashLoanInstruction = ({
     tokenProgram: reserve.getLiquidityTokenProgram(),
   };
 
-  return flashRepayReserveLiquidity(args, accounts, programId);
+  return flashRepayReserveLiquidity(args, accounts, undefined, programId);
 };

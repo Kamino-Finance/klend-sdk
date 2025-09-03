@@ -1,5 +1,5 @@
 import {
-  IInstruction,
+  Instruction,
   pipe,
   createTransactionMessage,
   setTransactionMessageFeePayer,
@@ -28,7 +28,7 @@ export const INVALID_BUT_SUFFICIENT_FOR_COMPILATION_BLOCKHASH: BlockhashWithHeig
 export async function printSimulateTx(
   c: ManagerConnectionPool,
   payer: TransactionSigner,
-  ixs: IInstruction[],
+  ixs: Instruction[],
   luts: Account<AddressLookupTable>[] = []
 ) {
   const lutsByAddress: AddressesByLookupTableAddress = {};

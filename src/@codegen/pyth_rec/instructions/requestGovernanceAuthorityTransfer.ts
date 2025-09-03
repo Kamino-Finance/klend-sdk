@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -15,6 +15,8 @@ import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslin
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
 
+export const DISCRIMINATOR = Buffer.from([92, 18, 67, 156, 27, 151, 183, 224])
+
 export interface RequestGovernanceAuthorityTransferArgs {
   targetGovernanceAuthority: Address
 }
@@ -24,18 +26,21 @@ export interface RequestGovernanceAuthorityTransferAccounts {
   config: Address
 }
 
-export const layout = borsh.struct([borshAddress("targetGovernanceAuthority")])
+export const layout = borsh.struct<RequestGovernanceAuthorityTransferArgs>([
+  borshAddress("targetGovernanceAuthority"),
+])
 
 export function requestGovernanceAuthorityTransfer(
   args: RequestGovernanceAuthorityTransferArgs,
   accounts: RequestGovernanceAuthorityTransferAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.payer.address, role: 2, signer: accounts.payer },
     { address: accounts.config, role: 1 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([92, 18, 67, 156, 27, 151, 183, 224])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -43,7 +48,7 @@ export function requestGovernanceAuthorityTransfer(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

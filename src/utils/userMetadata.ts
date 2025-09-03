@@ -1,6 +1,6 @@
 import {
   Address,
-  IInstruction,
+  Instruction,
   none,
   some,
   Rpc,
@@ -46,9 +46,9 @@ export const getUserLutAddressAndSetupIxs = async (
   leverageMints: { coll: Address; debt: Address }[] = [],
   repayWithCollObligation: KaminoObligation | undefined = undefined,
   payer: TransactionSigner = user
-): Promise<[Address, IInstruction[][]]> => {
+): Promise<[Address, Instruction[][]]> => {
   const [userMetadataAddress, userMetadataState] = await kaminoMarket.getUserMetadata(user.address);
-  const initUserMetadataIxs: IInstruction[] = [];
+  const initUserMetadataIxs: Instruction[] = [];
   let userLookupTableAddress: Address;
 
   if (userMetadataState === null) {
@@ -72,6 +72,7 @@ export const getUserLutAddressAndSetupIxs = async (
           rent: SYSVAR_RENT_ADDRESS,
           systemProgram: SYSTEM_PROGRAM_ADDRESS,
         },
+        undefined,
         kaminoMarket.programId
       )
     );

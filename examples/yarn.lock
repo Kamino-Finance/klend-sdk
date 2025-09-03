@@ -323,7 +323,7 @@
   version "0.0.0"
   uid ""
 
-"@kamino-finance/kliquidity-sdk@^8.4.0", "@kamino-finance/kliquidity-sdk@^8.4.5":
+"@kamino-finance/kliquidity-sdk@^8.4.0":
   version "8.4.5"
   resolved "https://registry.yarnpkg.com/@kamino-finance/kliquidity-sdk/-/kliquidity-sdk-8.4.5.tgz#d569fae5ffde843cde9c9c22aa9467b68b3dd3bc"
   integrity sha512-D7iYYLe4zJB2jfsX2aXbCqOqUXVX4CeKt488/3lvIrASY3lLHMe8bPdb5aVrNdgz+DcsN+HgfsM4hUD5iyZXYA==
@@ -346,6 +346,35 @@
     "@solana/kit" "^2.1.1"
     "@solana/sysvars" "^2.1.1"
     "@solana/web3.js" "^1.98.2"
+    axios "^1.8.4"
+    bn.js "^5.2.1"
+    bs58 "^6.0.0"
+    buffer-layout "^1.2.2"
+    decimal.js "^10.3.1"
+    fzstd "^0.1.1"
+
+"@kamino-finance/kliquidity-sdk@^8.4.7":
+  version "8.4.7"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/kliquidity-sdk/-/kliquidity-sdk-8.4.7.tgz#38e8eba4e6bd5bc0e0076572cf1bc6c23e7cc393"
+  integrity sha512-d7ET6p2trDXDKGB7yKtz97lSQwfKaf3uis2qClvUd9giZE81MvMmyh1YfCJ9JvkWWNb1VIx2jbSXWhjTubSQSA==
+  dependencies:
+    "@coral-xyz/anchor" "^0.29.0"
+    "@coral-xyz/borsh" "^0.30.1"
+    "@hubbleprotocol/hubble-config" "^5.0.0"
+    "@jup-ag/api" "6.0.39"
+    "@kamino-finance/scope-sdk" "^9.1.0"
+    "@orca-so/common-sdk" "^0.6.11"
+    "@orca-so/whirlpools" "^2.0.0"
+    "@orca-so/whirlpools-core" "^2.0.0"
+    "@raydium-io/raydium-sdk-v2" "^0.1.126-alpha"
+    "@solana-program/address-lookup-table" "^0.7.0"
+    "@solana-program/compute-budget" "^0.7.0"
+    "@solana-program/system" "^0.7.0"
+    "@solana-program/token" "^0.5.1"
+    "@solana-program/token-2022" "^0.4.1"
+    "@solana/compat" "^2.1.1"
+    "@solana/kit" "^2.1.1"
+    "@solana/sysvars" "^2.1.1"
     axios "^1.8.4"
     bn.js "^5.2.1"
     bs58 "^6.0.0"
@@ -492,6 +521,11 @@
   resolved "https://registry.yarnpkg.com/@solana-program/address-lookup-table/-/address-lookup-table-0.7.0.tgz#6651657308547fefb59ce2e20b1871270e93d48d"
   integrity sha512-dzCeIO5LtiK3bIg0AwO+TPeGURjSG2BKt0c4FRx7105AgLy7uzTktpUzUj6NXAK9SzbirI8HyvHUvw1uvL8O9A==
 
+"@solana-program/address-lookup-table@^0.8.0":
+  version "0.8.0"
+  resolved "https://registry.yarnpkg.com/@solana-program/address-lookup-table/-/address-lookup-table-0.8.0.tgz#21e5630db4e2c9af99d8039fcc5814b7d2121330"
+  integrity sha512-ZTSlGj+4hPM6ssBquc8eOeqHR12/DkTDFoqvZqpikLKNHRPgBMFdat56CDBb5G1MCmviPWJ7ij4BUE3fzBz4MA==
+
 "@solana-program/compute-budget@^0.7.0":
   version "0.7.0"
   resolved "https://registry.yarnpkg.com/@solana-program/compute-budget/-/compute-budget-0.7.0.tgz#a9e30b2bb4f9d11b8b8eef926b1ce258c6382431"
@@ -512,15 +546,30 @@
   resolved "https://registry.yarnpkg.com/@solana-program/system/-/system-0.7.0.tgz#3e21c9fb31d3795eb65ba5cb663947c19b305bad"
   integrity sha512-FKTBsKHpvHHNc1ATRm7SlC5nF/VdJtOSjldhcyfMN9R7xo712Mo2jHIzvBgn8zQO5Kg0DcWuKB7268Kv1ocicw==
 
+"@solana-program/system@^0.8.0":
+  version "0.8.0"
+  resolved "https://registry.yarnpkg.com/@solana-program/system/-/system-0.8.0.tgz#8d08affc5188d0e434586c33126e407a21e19087"
+  integrity sha512-/VJZjFoI+FMrsO5gPgktRIo6Sf/2pMEkkpA6grLtm4Xx52bQDo4fBvhA33FL+3pSf25yHcMcXwrKwqDk6/O1fw==
+
 "@solana-program/token-2022@^0.4.0", "@solana-program/token-2022@^0.4.1", "@solana-program/token-2022@^0.4.2":
   version "0.4.2"
   resolved "https://registry.yarnpkg.com/@solana-program/token-2022/-/token-2022-0.4.2.tgz#f90a638de82acb7933a114e884a24ac4be8ef635"
   integrity sha512-zIpR5t4s9qEU3hZKupzIBxJ6nUV5/UVyIT400tu9vT1HMs5JHxaTTsb5GUhYjiiTvNwU0MQavbwc4Dl29L0Xvw==
 
+"@solana-program/token-2022@^0.5.0":
+  version "0.5.0"
+  resolved "https://registry.yarnpkg.com/@solana-program/token-2022/-/token-2022-0.5.0.tgz#350a4433e50a2808560682c0c0fdef4079e5ef54"
+  integrity sha512-CJcFU2bXeXh2da7GAsBRBbmYbmMCBb7uQye0ePsv9pKbWm7r4sqMLoNEi5B+bHRIx9urTKAbmYlGnvWxC9htNg==
+
 "@solana-program/token@^0.5.1":
   version "0.5.1"
   resolved "https://registry.yarnpkg.com/@solana-program/token/-/token-0.5.1.tgz#10e327df23f05a7f892fd33a9b6418f17dd62296"
   integrity sha512-bJvynW5q9SFuVOZ5vqGVkmaPGA0MCC+m9jgJj1nk5m20I389/ms69ASnhWGoOPNcie7S9OwBX0gTj2fiyWpfag==
+
+"@solana-program/token@^0.6.0":
+  version "0.6.0"
+  resolved "https://registry.yarnpkg.com/@solana-program/token/-/token-0.6.0.tgz#474f7a657991ced5016d1e1d58789c9d5ea41176"
+  integrity sha512-omkZh4Tt9rre4wzWHNOhOEHyenXQku3xyc/UrKvShexA/Qlhza67q7uRwmwEDUs4QqoDBidSZPooOmepnA/jig==
 
 "@solana/accounts@2.3.0":
   version "2.3.0"
@@ -657,7 +706,7 @@
     "@solana/codecs-strings" "2.3.0"
     "@solana/options" "2.3.0"
 
-"@solana/compat@^2.1.1":
+"@solana/compat@^2.1.1", "@solana/compat@^2.3.0":
   version "2.3.0"
   resolved "https://registry.yarnpkg.com/@solana/compat/-/compat-2.3.0.tgz#2c3c7deac67ed252035ef1444c1fc9e0915b41be"
   integrity sha512-3dbkQ0eymj1Il7KFAhA6X6LSI4d3uoHcp/WWoE7EIz9NS0ZZ8u27QmfYe5b0IcO2OFkmfReG79RVAm1xYY+7rA==
@@ -957,7 +1006,7 @@
   dependencies:
     "@solana/errors" "2.3.0"
 
-"@solana/sysvars@2.3.0", "@solana/sysvars@^2.1.0", "@solana/sysvars@^2.1.1":
+"@solana/sysvars@2.3.0", "@solana/sysvars@^2.1.0", "@solana/sysvars@^2.1.1", "@solana/sysvars@^2.3.0":
   version "2.3.0"
   resolved "https://registry.yarnpkg.com/@solana/sysvars/-/sysvars-2.3.0.tgz#eeea82f89716682014e801de5870344ddd02becd"
   integrity sha512-LvjADZrpZ+CnhlHqfI5cmsRzX9Rpyb1Ox2dMHnbsRNzeKAMhu9w4ZBIaeTdO322zsTr509G1B+k2ABD3whvUBA==

@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,10 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([
+  234, 117, 181, 125, 185, 142, 220, 29,
+])
 
 export interface RedeemReserveCollateralArgs {
   collateralAmount: BN
@@ -34,14 +38,17 @@ export interface RedeemReserveCollateralAccounts {
   instructionSysvarAccount: Address
 }
 
-export const layout = borsh.struct([borsh.u64("collateralAmount")])
+export const layout = borsh.struct<RedeemReserveCollateralArgs>([
+  borsh.u64("collateralAmount"),
+])
 
 export function redeemReserveCollateral(
   args: RedeemReserveCollateralArgs,
   accounts: RedeemReserveCollateralAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.owner.address, role: 2, signer: accounts.owner },
     { address: accounts.lendingMarket, role: 0 },
     { address: accounts.reserve, role: 1 },
@@ -54,8 +61,8 @@ export function redeemReserveCollateral(
     { address: accounts.collateralTokenProgram, role: 0 },
     { address: accounts.liquidityTokenProgram, role: 0 },
     { address: accounts.instructionSysvarAccount, role: 0 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([234, 117, 181, 125, 185, 142, 220, 29])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -63,7 +70,7 @@ export function redeemReserveCollateral(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

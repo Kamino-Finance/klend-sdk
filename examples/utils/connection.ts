@@ -21,7 +21,7 @@ export type ConnectionPool = {
 };
 
 export function getConnectionPool(): ConnectionPool {
-  const RPC_ENDPOINT = getEnvOrThrow('RPC_ENDPOINT');
+  const RPC_ENDPOINT = getEnvOrThrow('RPC');
   console.log('RPC_ENDPOINT:', RPC_ENDPOINT);
 
   const rpcUrl = new URL(RPC_ENDPOINT);

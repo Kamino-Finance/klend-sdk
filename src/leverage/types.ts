@@ -1,4 +1,4 @@
-import { Account, Address, IInstruction, Option, Slot, TransactionSigner } from '@solana/kit';
+import { Account, Address, Instruction, Option, Slot, TransactionSigner } from '@solana/kit';
 import Decimal from 'decimal.js';
 import { KaminoMarket, KaminoObligation } from '../classes';
 import { Kamino, StrategyWithAddress } from '@kamino-finance/kliquidity-sdk';
@@ -22,8 +22,8 @@ export type SwapQuote<QuoteResponse> = {
 };
 
 export type SwapIxs<QuoteResponse> = {
-  preActionIxs: IInstruction[];
-  swapIxs: IInstruction[];
+  preActionIxs: Instruction[];
+  swapIxs: Instruction[];
   lookupTables: Account<AddressLookupTable>[];
   quote: SwapQuote<QuoteResponse>;
 };
@@ -38,7 +38,7 @@ export type FlashLoanInfo = {
 };
 
 export type LeverageIxsOutput = {
-  instructions: IInstruction[];
+  instructions: Instruction[];
   flashLoanInfo: FlashLoanInfo;
 };
 
@@ -51,7 +51,7 @@ export type SwapInputs = {
 };
 
 export type BaseLeverageIxsResponse<QuoteResponse> = {
-  ixs: IInstruction[];
+  ixs: Instruction[];
   lookupTables: Account<AddressLookupTable>[];
   swapInputs: SwapInputs;
   flashLoanInfo: FlashLoanInfo;
@@ -76,7 +76,7 @@ export interface BaseLeverageSwapInputsProps<QuoteResponse> {
   referrer: Option<Address>;
   currentSlot: Slot;
   slippagePct: Decimal;
-  budgetAndPriorityFeeIxs?: IInstruction[];
+  budgetAndPriorityFeeIxs?: Instruction[];
   kamino: Kamino | undefined;
   scopeRefreshConfig?: ScopePriceRefreshConfig;
   quoteBufferBps: Decimal;

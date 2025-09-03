@@ -6,7 +6,7 @@ import {
   createTransactionMessage,
   getBase58Decoder,
   getCompiledTransactionMessageEncoder,
-  IInstruction,
+  Instruction,
   pipe,
   setTransactionMessageFeePayer,
   setTransactionMessageLifetimeUsingBlockhash,
@@ -20,7 +20,7 @@ const base58Decoder = getBase58Decoder();
 
 export async function printMultisigTx(
   payer: TransactionSigner,
-  ixs: IInstruction[],
+  ixs: Instruction[],
   luts: Account<AddressLookupTable>[] = []
 ) {
   const lutsByAddress: AddressesByLookupTableAddress = {};

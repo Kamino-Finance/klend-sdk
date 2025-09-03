@@ -1,4 +1,4 @@
-import { Account, AccountRole, IInstruction, lamports, none, some } from '@solana/kit';
+import { Account, AccountRole, Instruction, lamports, none, some } from '@solana/kit';
 import { AddressLookupTableAccount, TransactionInstruction } from '@solana/web3.js';
 import { fromLegacyPublicKey, fromLegacyTransactionInstruction } from '@solana/compat';
 import { ADDRESS_LOOKUP_TABLE_PROGRAM_ADDRESS, AddressLookupTable } from '@solana-program/address-lookup-table';
@@ -26,7 +26,7 @@ function fromLegacyLookupTable(lut: AddressLookupTableAccount): Account<AddressL
   };
 }
 
-export function fromLegacyInstructions(...legacy: TransactionInstruction[]): IInstruction[] {
+export function fromLegacyInstructions(...legacy: TransactionInstruction[]): Instruction[] {
   return legacy.map(fromLegacyTransactionInstruction);
 }
 

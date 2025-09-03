@@ -1,5 +1,5 @@
 import { CliConnectionPool } from './CliConnectionPool';
-import { Account, IInstruction, TransactionSigner } from '@solana/kit';
+import { Account, Instruction, TransactionSigner } from '@solana/kit';
 import { sendAndConfirmTx } from './tx';
 import { printSimulateTx } from './simulate';
 import { printMultisigTx } from './multisig';
@@ -9,7 +9,7 @@ import { AddressLookupTable } from '@solana-program/address-lookup-table';
 export async function processTx(
   c: CliConnectionPool,
   payer: TransactionSigner,
-  ixs: IInstruction[],
+  ixs: Instruction[],
   mode: SendTxMode,
   luts: Account<AddressLookupTable>[] = []
 ): Promise<void> {

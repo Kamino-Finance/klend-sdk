@@ -74,7 +74,9 @@ export class Perpetuals {
       return null
     }
     if (info.programAddress !== programId) {
-      throw new Error("account doesn't belong to this program")
+      throw new Error(
+        `PerpetualsFields account ${address} belongs to wrong program ${info.programAddress}, expected ${programId}`
+      )
     }
 
     return this.decode(Buffer.from(info.data))
@@ -92,7 +94,9 @@ export class Perpetuals {
         return null
       }
       if (info.programAddress !== programId) {
-        throw new Error("account doesn't belong to this program")
+        throw new Error(
+          `PerpetualsFields account ${info.address} belongs to wrong program ${info.programAddress}, expected ${programId}`
+        )
       }
 
       return this.decode(Buffer.from(info.data))

@@ -14,7 +14,7 @@ import {
   Address,
   fetchEncodedAccount,
   generateKeyPairSigner,
-  IInstruction,
+  Instruction,
   Rpc,
   SolanaRpcApi,
   TransactionSigner,
@@ -31,7 +31,7 @@ export async function getFarmStakeIxs(
   lamportsToStake: Decimal,
   farmAddress: Address,
   fetchedFarmState?: FarmState
-): Promise<IInstruction[]> {
+): Promise<Instruction[]> {
   const farmState = fetchedFarmState ? fetchedFarmState : await FarmState.fetch(rpc, farmAddress);
   if (!farmState) {
     throw new Error(`Farm state not found for ${farmAddress}`);
@@ -40,7 +40,7 @@ export async function getFarmStakeIxs(
   const farmClient = new Farms(rpc);
   const scopePricesArg = getScopePricesFromFarm(farmState);
 
-  const stakeIxs: IInstruction[] = [];
+  const stakeIxs: Instruction[] = [];
   const userState = await getUserStatePDA(farmClient.getProgramID(), farmAddress, user.address);
   const userStateExists = await fetchEncodedAccount(rpc, userState);
   if (!userStateExists.exists) {
@@ -65,7 +65,7 @@ export async function getFarmUnstakeIx(
   lamportsToUnstake: Decimal,
   farmAddress: Address,
   fetchedFarmState?: FarmState
-): Promise<IInstruction> {
+): Promise<Instruction> {
   const farmState = fetchedFarmState ? fetchedFarmState : await FarmState.fetch(rpc, farmAddress);
   if (!farmState) {
     throw new Error(`Farm state not found for ${farmAddress}`);
@@ -83,7 +83,7 @@ export async function getFarmWithdrawUnstakedDepositIx(
   user: TransactionSigner,
   farm: Address,
   stakeTokenMint: Address
-): Promise<IInstruction> {
+): Promise<Instruction> {
   const farmClient = new Farms(rpc);
   const userState = await getUserStatePDA(farmClient.getProgramID(), farm, user.address);
   return farmClient.withdrawUnstakedDepositIx(user, userState, farm, stakeTokenMint);
@@ -148,7 +148,7 @@ export async function setVaultIdForFarmIx(
   farmAdmin: TransactionSigner,
   farm: Address,
   vault: Address
-): Promise<IInstruction> {
+): Promise<Instruction> {
   const farmClient = new Farms(rpc);
   return farmClient.updateFarmConfigIx(
     farmAdmin,
@@ -165,12 +165,12 @@ export function getSharesInFarmUserPosition(userState: UserState, tokenDecimals:
 
 export type SetupFarmIxsWithFarm = {
   farm: TransactionSigner;
-  setupFarmIxs: IInstruction[];
+  setupFarmIxs: Instruction[];
 };
 
 export type UnstakeAndWithdrawFromFarmIxs = {
-  unstakeIx: IInstruction;
-  withdrawIx: IInstruction;
+  unstakeIx: Instruction;
+  withdrawIx: Instruction;
 };
 
 export function getRewardPerTimeUnitSecond(reward: RewardInfo) {

@@ -8,7 +8,7 @@ import {
   UpdateSharesMetadataAccounts,
   UpdateSharesMetadataArgs,
 } from '../lib';
-import { Address, IInstruction, TransactionSigner } from '@solana/kit';
+import { Address, Instruction, TransactionSigner } from '@solana/kit';
 import { SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
 import { SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 
@@ -61,7 +61,7 @@ export async function getInitializeKVaultSharesMetadataIx(
   name: string,
   symbol: string,
   uri: string
-): Promise<IInstruction> {
+): Promise<Instruction> {
   const [sharesMintMetadata] = await getKVaultSharesMetadataPda(sharesMint);
 
   const args: InitializeSharesMetadataArgs = {
@@ -93,7 +93,7 @@ export async function getUpdateSharesMetadataIx(
   name: string,
   symbol: string,
   uri: string
-): Promise<IInstruction> {
+): Promise<Instruction> {
   const [sharesMintMetadata] = await getKVaultSharesMetadataPda(sharesMint);
 
   const args: UpdateSharesMetadataArgs = {

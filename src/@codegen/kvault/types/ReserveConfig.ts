@@ -17,7 +17,7 @@ export interface ReserveConfigFields {
    * - Reward points multiplier per obligation type
    * Can be re-used after making sure all underlying production account data is zeroed.
    */
-  reserved2: Array<number>
+  reserved1: Array<number>
   /** Cut of the order execution bonus that the protocol receives, as a percentage */
   protocolOrderExecutionFeePct: number
   /** Protocol take rate is the amount borrowed interest protocol receives, as a percentage */
@@ -76,7 +76,14 @@ export interface ReserveConfigFields {
    * obligations) is NOT affected by this flag.
    */
   autodeleverageEnabled: number
-  reserved1: Array<number>
+  /**
+   * Boolean flag indicating whether the reserve is locked for the proposer authority.
+   *
+   * Once the proposer have finished preparing the reserve, it must be locked to prevent
+   * further changes to the reserve configuration allowing review and voting on the proposal
+   * without alteration during the voting period.
+   */
+  proposerAuthorityLocked: number
   /**
    * Maximum amount liquidity of this reserve borrowed outside all elevation groups
    * - u64::MAX for inf
@@ -95,6 +102,12 @@ export interface ReserveConfigFields {
    * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
    */
   deleveragingBonusIncreaseBpsPerDay: BN
+  /**
+   * The timestamp at which all [Obligation::borrows] using this reserve become liquidatable
+   * (on the same terms as reserve-wide deleveraging).
+   * Inactive when zeroed (i.e. debt never matures).
+   */
+  debtMaturityTimestamp: BN
 }
 
 export interface ReserveConfigJSON {
@@ -110,7 +123,7 @@ export interface ReserveConfigJSON {
    * - Reward points multiplier per obligation type
    * Can be re-used after making sure all underlying production account data is zeroed.
    */
-  reserved2: Array<number>
+  reserved1: Array<number>
   /** Cut of the order execution bonus that the protocol receives, as a percentage */
   protocolOrderExecutionFeePct: number
   /** Protocol take rate is the amount borrowed interest protocol receives, as a percentage */
@@ -169,7 +182,14 @@ export interface ReserveConfigJSON {
    * obligations) is NOT affected by this flag.
    */
   autodeleverageEnabled: number
-  reserved1: Array<number>
+  /**
+   * Boolean flag indicating whether the reserve is locked for the proposer authority.
+   *
+   * Once the proposer have finished preparing the reserve, it must be locked to prevent
+   * further changes to the reserve configuration allowing review and voting on the proposal
+   * without alteration during the voting period.
+   */
+  proposerAuthorityLocked: number
   /**
    * Maximum amount liquidity of this reserve borrowed outside all elevation groups
    * - u64::MAX for inf
@@ -188,6 +208,12 @@ export interface ReserveConfigJSON {
    * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
    */
   deleveragingBonusIncreaseBpsPerDay: string
+  /**
+   * The timestamp at which all [Obligation::borrows] using this reserve become liquidatable
+   * (on the same terms as reserve-wide deleveraging).
+   * Inactive when zeroed (i.e. debt never matures).
+   */
+  debtMaturityTimestamp: string
 }
 
 /** Reserve configuration values */
@@ -204,7 +230,7 @@ export class ReserveConfig {
    * - Reward points multiplier per obligation type
    * Can be re-used after making sure all underlying production account data is zeroed.
    */
-  readonly reserved2: Array<number>
+  readonly reserved1: Array<number>
   /** Cut of the order execution bonus that the protocol receives, as a percentage */
   readonly protocolOrderExecutionFeePct: number
   /** Protocol take rate is the amount borrowed interest protocol receives, as a percentage */
@@ -263,7 +289,14 @@ export class ReserveConfig {
    * obligations) is NOT affected by this flag.
    */
   readonly autodeleverageEnabled: number
-  readonly reserved1: Array<number>
+  /**
+   * Boolean flag indicating whether the reserve is locked for the proposer authority.
+   *
+   * Once the proposer have finished preparing the reserve, it must be locked to prevent
+   * further changes to the reserve configuration allowing review and voting on the proposal
+   * without alteration during the voting period.
+   */
+  readonly proposerAuthorityLocked: number
   /**
    * Maximum amount liquidity of this reserve borrowed outside all elevation groups
    * - u64::MAX for inf
@@ -282,12 +315,18 @@ export class ReserveConfig {
    * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
    */
   readonly deleveragingBonusIncreaseBpsPerDay: BN
+  /**
+   * The timestamp at which all [Obligation::borrows] using this reserve become liquidatable
+   * (on the same terms as reserve-wide deleveraging).
+   * Inactive when zeroed (i.e. debt never matures).
+   */
+  readonly debtMaturityTimestamp: BN
 
   constructor(fields: ReserveConfigFields) {
     this.status = fields.status
     this.assetTier = fields.assetTier
     this.hostFixedInterestRateBps = fields.hostFixedInterestRateBps
-    this.reserved2 = fields.reserved2
+    this.reserved1 = fields.reserved1
     this.protocolOrderExecutionFeePct = fields.protocolOrderExecutionFeePct
     this.protocolTakeRatePct = fields.protocolTakeRatePct
     this.protocolLiquidationFeePct = fields.protocolLiquidationFeePct
@@ -319,13 +358,14 @@ export class ReserveConfig {
     this.utilizationLimitBlockBorrowingAbovePct =
       fields.utilizationLimitBlockBorrowingAbovePct
     this.autodeleverageEnabled = fields.autodeleverageEnabled
-    this.reserved1 = fields.reserved1
+    this.proposerAuthorityLocked = fields.proposerAuthorityLocked
     this.borrowLimitOutsideElevationGroup =
       fields.borrowLimitOutsideElevationGroup
     this.borrowLimitAgainstThisCollateralInElevationGroup =
       fields.borrowLimitAgainstThisCollateralInElevationGroup
     this.deleveragingBonusIncreaseBpsPerDay =
       fields.deleveragingBonusIncreaseBpsPerDay
+    this.debtMaturityTimestamp = fields.debtMaturityTimestamp
   }
 
   static layout(property?: string) {
@@ -334,7 +374,7 @@ export class ReserveConfig {
         borsh.u8("status"),
         borsh.u8("assetTier"),
         borsh.u16("hostFixedInterestRateBps"),
-        borsh.array(borsh.u8(), 9, "reserved2"),
+        borsh.array(borsh.u8(), 9, "reserved1"),
         borsh.u8("protocolOrderExecutionFeePct"),
         borsh.u8("protocolTakeRatePct"),
         borsh.u8("protocolLiquidationFeePct"),
@@ -357,7 +397,7 @@ export class ReserveConfig {
         borsh.u8("disableUsageAsCollOutsideEmode"),
         borsh.u8("utilizationLimitBlockBorrowingAbovePct"),
         borsh.u8("autodeleverageEnabled"),
-        borsh.array(borsh.u8(), 1, "reserved1"),
+        borsh.u8("proposerAuthorityLocked"),
         borsh.u64("borrowLimitOutsideElevationGroup"),
         borsh.array(
           borsh.u64(),
@@ -365,6 +405,7 @@ export class ReserveConfig {
           "borrowLimitAgainstThisCollateralInElevationGroup"
         ),
         borsh.u64("deleveragingBonusIncreaseBpsPerDay"),
+        borsh.u64("debtMaturityTimestamp"),
       ],
       property
     )
@@ -376,7 +417,7 @@ export class ReserveConfig {
       status: obj.status,
       assetTier: obj.assetTier,
       hostFixedInterestRateBps: obj.hostFixedInterestRateBps,
-      reserved2: obj.reserved2,
+      reserved1: obj.reserved1,
       protocolOrderExecutionFeePct: obj.protocolOrderExecutionFeePct,
       protocolTakeRatePct: obj.protocolTakeRatePct,
       protocolLiquidationFeePct: obj.protocolLiquidationFeePct,
@@ -405,12 +446,13 @@ export class ReserveConfig {
       utilizationLimitBlockBorrowingAbovePct:
         obj.utilizationLimitBlockBorrowingAbovePct,
       autodeleverageEnabled: obj.autodeleverageEnabled,
-      reserved1: obj.reserved1,
+      proposerAuthorityLocked: obj.proposerAuthorityLocked,
       borrowLimitOutsideElevationGroup: obj.borrowLimitOutsideElevationGroup,
       borrowLimitAgainstThisCollateralInElevationGroup:
         obj.borrowLimitAgainstThisCollateralInElevationGroup,
       deleveragingBonusIncreaseBpsPerDay:
         obj.deleveragingBonusIncreaseBpsPerDay,
+      debtMaturityTimestamp: obj.debtMaturityTimestamp,
     })
   }
 
@@ -419,7 +461,7 @@ export class ReserveConfig {
       status: fields.status,
       assetTier: fields.assetTier,
       hostFixedInterestRateBps: fields.hostFixedInterestRateBps,
-      reserved2: fields.reserved2,
+      reserved1: fields.reserved1,
       protocolOrderExecutionFeePct: fields.protocolOrderExecutionFeePct,
       protocolTakeRatePct: fields.protocolTakeRatePct,
       protocolLiquidationFeePct: fields.protocolLiquidationFeePct,
@@ -450,12 +492,13 @@ export class ReserveConfig {
       utilizationLimitBlockBorrowingAbovePct:
         fields.utilizationLimitBlockBorrowingAbovePct,
       autodeleverageEnabled: fields.autodeleverageEnabled,
-      reserved1: fields.reserved1,
+      proposerAuthorityLocked: fields.proposerAuthorityLocked,
       borrowLimitOutsideElevationGroup: fields.borrowLimitOutsideElevationGroup,
       borrowLimitAgainstThisCollateralInElevationGroup:
         fields.borrowLimitAgainstThisCollateralInElevationGroup,
       deleveragingBonusIncreaseBpsPerDay:
         fields.deleveragingBonusIncreaseBpsPerDay,
+      debtMaturityTimestamp: fields.debtMaturityTimestamp,
     }
   }
 
@@ -464,7 +507,7 @@ export class ReserveConfig {
       status: this.status,
       assetTier: this.assetTier,
       hostFixedInterestRateBps: this.hostFixedInterestRateBps,
-      reserved2: this.reserved2,
+      reserved1: this.reserved1,
       protocolOrderExecutionFeePct: this.protocolOrderExecutionFeePct,
       protocolTakeRatePct: this.protocolTakeRatePct,
       protocolLiquidationFeePct: this.protocolLiquidationFeePct,
@@ -490,7 +533,7 @@ export class ReserveConfig {
       utilizationLimitBlockBorrowingAbovePct:
         this.utilizationLimitBlockBorrowingAbovePct,
       autodeleverageEnabled: this.autodeleverageEnabled,
-      reserved1: this.reserved1,
+      proposerAuthorityLocked: this.proposerAuthorityLocked,
       borrowLimitOutsideElevationGroup:
         this.borrowLimitOutsideElevationGroup.toString(),
       borrowLimitAgainstThisCollateralInElevationGroup:
@@ -499,6 +542,7 @@ export class ReserveConfig {
         ),
       deleveragingBonusIncreaseBpsPerDay:
         this.deleveragingBonusIncreaseBpsPerDay.toString(),
+      debtMaturityTimestamp: this.debtMaturityTimestamp.toString(),
     }
   }
 
@@ -507,7 +551,7 @@ export class ReserveConfig {
       status: obj.status,
       assetTier: obj.assetTier,
       hostFixedInterestRateBps: obj.hostFixedInterestRateBps,
-      reserved2: obj.reserved2,
+      reserved1: obj.reserved1,
       protocolOrderExecutionFeePct: obj.protocolOrderExecutionFeePct,
       protocolTakeRatePct: obj.protocolTakeRatePct,
       protocolLiquidationFeePct: obj.protocolLiquidationFeePct,
@@ -537,7 +581,7 @@ export class ReserveConfig {
       utilizationLimitBlockBorrowingAbovePct:
         obj.utilizationLimitBlockBorrowingAbovePct,
       autodeleverageEnabled: obj.autodeleverageEnabled,
-      reserved1: obj.reserved1,
+      proposerAuthorityLocked: obj.proposerAuthorityLocked,
       borrowLimitOutsideElevationGroup: new BN(
         obj.borrowLimitOutsideElevationGroup
       ),
@@ -548,6 +592,7 @@ export class ReserveConfig {
       deleveragingBonusIncreaseBpsPerDay: new BN(
         obj.deleveragingBonusIncreaseBpsPerDay
       ),
+      debtMaturityTimestamp: new BN(obj.debtMaturityTimestamp),
     })
   }
 

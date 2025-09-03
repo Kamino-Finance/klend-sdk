@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,8 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([253, 234, 128, 104, 192, 188, 45, 91])
 
 export interface IncreasePositionArgs {
   params: types.IncreasePositionParamsFields
@@ -36,16 +38,17 @@ export interface IncreasePositionAccounts {
   program: Address
 }
 
-export const layout = borsh.struct([
+export const layout = borsh.struct<IncreasePositionArgs>([
   types.IncreasePositionParams.layout("params"),
 ])
 
 export function increasePosition(
   args: IncreasePositionArgs,
   accounts: IncreasePositionAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.keeper.address, role: 2, signer: accounts.keeper },
     { address: accounts.perpetuals, role: 0 },
     { address: accounts.pool, role: 1 },
@@ -60,8 +63,8 @@ export function increasePosition(
     { address: accounts.tokenProgram, role: 0 },
     { address: accounts.eventAuthority, role: 0 },
     { address: accounts.program, role: 0 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([253, 234, 128, 104, 192, 188, 45, 91])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -69,7 +72,7 @@ export function increasePosition(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

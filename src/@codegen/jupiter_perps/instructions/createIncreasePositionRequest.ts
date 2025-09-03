@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,8 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([8, 160, 201, 226, 217, 74, 228, 137])
 
 export interface CreateIncreasePositionRequestArgs {
   params: types.CreateIncreasePositionRequestParamsFields
@@ -46,9 +48,10 @@ export const layout = borsh.struct([
 export function createIncreasePositionRequest(
   args: CreateIncreasePositionRequestArgs,
   accounts: CreateIncreasePositionRequestAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.owner.address, role: 3, signer: accounts.owner },
     { address: accounts.fundingAccount, role: 1 },
     { address: accounts.perpetuals, role: 0 },
@@ -68,8 +71,8 @@ export function createIncreasePositionRequest(
     { address: accounts.systemProgram, role: 0 },
     { address: accounts.eventAuthority, role: 0 },
     { address: accounts.program, role: 0 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([8, 160, 201, 226, 217, 74, 228, 137])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -79,7 +82,7 @@ export function createIncreasePositionRequest(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

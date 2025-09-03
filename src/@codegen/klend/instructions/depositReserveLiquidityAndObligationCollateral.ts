@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,8 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([129, 199, 4, 2, 222, 39, 26, 46])
 
 export interface DepositReserveLiquidityAndObligationCollateralArgs {
   liquidityAmount: BN
@@ -36,14 +38,18 @@ export interface DepositReserveLiquidityAndObligationCollateralAccounts {
   instructionSysvarAccount: Address
 }
 
-export const layout = borsh.struct([borsh.u64("liquidityAmount")])
+export const layout =
+  borsh.struct<DepositReserveLiquidityAndObligationCollateralArgs>([
+    borsh.u64("liquidityAmount"),
+  ])
 
 export function depositReserveLiquidityAndObligationCollateral(
   args: DepositReserveLiquidityAndObligationCollateralArgs,
   accounts: DepositReserveLiquidityAndObligationCollateralAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.owner.address, role: 3, signer: accounts.owner },
     { address: accounts.obligation, role: 1 },
     { address: accounts.lendingMarket, role: 0 },
@@ -63,8 +69,8 @@ export function depositReserveLiquidityAndObligationCollateral(
     { address: accounts.collateralTokenProgram, role: 0 },
     { address: accounts.liquidityTokenProgram, role: 0 },
     { address: accounts.instructionSysvarAccount, role: 0 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([129, 199, 4, 2, 222, 39, 26, 46])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -72,7 +78,7 @@ export function depositReserveLiquidityAndObligationCollateral(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

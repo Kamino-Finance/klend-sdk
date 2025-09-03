@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import { Command } from 'commander';
-import { Address, address, IInstruction } from '@solana/kit';
+import { Address, address, Instruction } from '@solana/kit';
 import {
   AssetReserveConfigCli,
   calculateAPYFromAPR,
@@ -1184,7 +1184,7 @@ async function main() {
       const instructions = await kaminoManager.investAllReservesIxs(payer, kaminoVault);
 
       for (let i = 0; i < instructions.length; i++) {
-        const txInstructions: IInstruction[] = [];
+        const txInstructions: Instruction[] = [];
         txInstructions.push();
         await processTx(
           env.c,
@@ -1425,6 +1425,8 @@ async function main() {
 
       const walletAddress = address(wallet);
       const userShares = await kaminoManager.getUserSharesBalanceAllVaults(walletAddress);
+
+      console.log(`${userShares.size} positions for wallet ${walletAddress}`);
       userShares.forEach((userShares, vaultAddress) => {
         console.log(
           `User shares for vault ${vaultAddress}: staked shares ${userShares.stakedShares} unstaked shares ${userShares.unstakedShares} total shares ${userShares.totalShares}`
@@ -2168,7 +2170,7 @@ async function createUpdateReserveConfigLutIxs(
   env: ManagerEnv,
   lendingMarketAddress: Address,
   reserveAddress: Address
-): Promise<[Address, IInstruction[]]> {
+): Promise<[Address, Instruction[]]> {
   const globalConfigAddress = await globalConfigPda(env.klendProgramId);
   const contents = [globalConfigAddress, lendingMarketAddress, reserveAddress];
   const signer = await env.getSigner();

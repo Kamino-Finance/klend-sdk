@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,8 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([235, 52, 119, 152, 149, 197, 20, 7])
 
 export interface WithdrawObligationCollateralAndRedeemReserveCollateralV2Args {
   collateralAmount: BN
@@ -43,14 +45,18 @@ export interface WithdrawObligationCollateralAndRedeemReserveCollateralV2Account
   farmsProgram: Address
 }
 
-export const layout = borsh.struct([borsh.u64("collateralAmount")])
+export const layout =
+  borsh.struct<WithdrawObligationCollateralAndRedeemReserveCollateralV2Args>([
+    borsh.u64("collateralAmount"),
+  ])
 
 export function withdrawObligationCollateralAndRedeemReserveCollateralV2(
   args: WithdrawObligationCollateralAndRedeemReserveCollateralV2Args,
   accounts: WithdrawObligationCollateralAndRedeemReserveCollateralV2Accounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     {
       address: accounts.withdrawAccounts.owner.address,
       role: 3,
@@ -86,8 +92,8 @@ export function withdrawObligationCollateralAndRedeemReserveCollateralV2(
       ? { address: accounts.farmsAccounts.reserveFarmState.value, role: 1 }
       : { address: programAddress, role: 0 },
     { address: accounts.farmsProgram, role: 0 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([235, 52, 119, 152, 149, 197, 20, 7])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -95,7 +101,7 @@ export function withdrawObligationCollateralAndRedeemReserveCollateralV2(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

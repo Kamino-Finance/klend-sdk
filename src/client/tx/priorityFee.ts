@@ -1,4 +1,4 @@
-import { IInstruction } from '@solana/kit';
+import { Instruction } from '@solana/kit';
 import {
   COMPUTE_BUDGET_PROGRAM_ADDRESS,
   getSetComputeUnitLimitInstruction,
@@ -13,7 +13,7 @@ export function getPriorityFeeAndCuIxs({
 }: {
   priorityFeeMultiplier: number;
   computeUnits?: number;
-}): IInstruction[] {
+}): Instruction[] {
   const microLamportsPrioritizationFee = microLamport / computeUnits;
   return [
     getSetComputeUnitLimitInstruction({ units: computeUnits }),
@@ -23,7 +23,7 @@ export function getPriorityFeeAndCuIxs({
   ];
 }
 
-export function removeComputeBudgetProgramInstructions(ixs: IInstruction[]): IInstruction[] {
+export function removeComputeBudgetProgramInstructions(ixs: Instruction[]): Instruction[] {
   const filteredIxs = ixs.filter((ix) => {
     if (ix.programAddress === COMPUTE_BUDGET_PROGRAM_ADDRESS) {
       return false;

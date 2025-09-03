@@ -11,7 +11,7 @@ import {
   GetLatestBlockhashApi,
   getSignatureFromTransaction,
   GetSignatureStatusesApi,
-  IInstruction,
+  Instruction,
   pipe,
   RpcSubscriptions,
   sendAndConfirmTransactionFactory,
@@ -32,7 +32,7 @@ import { ManagerConnectionPool } from './ManagerConnectionPool';
 export async function sendAndConfirmTx(
   c: ManagerConnectionPool,
   payer: TransactionSigner,
-  ixs: IInstruction[],
+  ixs: Instruction[],
   luts: Account<AddressLookupTable>[] = []
 ): Promise<Signature> {
   const blockhash = await fetchBlockhash(c.rpc);

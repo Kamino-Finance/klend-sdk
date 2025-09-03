@@ -1,6 +1,6 @@
-import { Address, IInstruction } from '@solana/kit';
+import { Address, Instruction } from '@solana/kit';
 
-export async function getAccountsFromIxs(ixs: IInstruction[]): Promise<Address[]> {
+export async function getAccountsFromIxs(ixs: Instruction[]): Promise<Address[]> {
   return [
     ...new Set<Address>(
       ixs

@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,8 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([133, 97, 130, 143, 215, 229, 36, 176])
 
 export interface SetCustodyConfigArgs {
   params: types.SetCustodyConfigParamsFields
@@ -32,14 +34,15 @@ export const layout = borsh.struct([
 export function setCustodyConfig(
   args: SetCustodyConfigArgs,
   accounts: SetCustodyConfigAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.admin.address, role: 3, signer: accounts.admin },
     { address: accounts.perpetuals, role: 0 },
     { address: accounts.custody, role: 1 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([133, 97, 130, 143, 215, 229, 36, 176])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -47,7 +50,7 @@ export function setCustodyConfig(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

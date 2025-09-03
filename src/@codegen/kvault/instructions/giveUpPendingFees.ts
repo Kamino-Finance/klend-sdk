@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,10 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([
+  177, 200, 120, 134, 110, 217, 147, 81,
+])
 
 export interface GiveUpPendingFeesArgs {
   maxAmountToGiveUp: BN
@@ -25,14 +29,17 @@ export interface GiveUpPendingFeesAccounts {
   klendProgram: Address
 }
 
-export const layout = borsh.struct([borsh.u64("maxAmountToGiveUp")])
+export const layout = borsh.struct<GiveUpPendingFeesArgs>([
+  borsh.u64("maxAmountToGiveUp"),
+])
 
 export function giveUpPendingFees(
   args: GiveUpPendingFeesArgs,
   accounts: GiveUpPendingFeesAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     {
       address: accounts.vaultAdminAuthority.address,
       role: 3,
@@ -40,8 +47,8 @@ export function giveUpPendingFees(
     },
     { address: accounts.vaultState, role: 1 },
     { address: accounts.klendProgram, role: 0 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([177, 200, 120, 134, 110, 217, 147, 81])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -49,7 +56,7 @@ export function giveUpPendingFees(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

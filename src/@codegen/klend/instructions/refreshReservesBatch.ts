@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -15,18 +15,24 @@ import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslin
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
 
+export const DISCRIMINATOR = Buffer.from([
+  144, 110, 26, 103, 162, 204, 252, 147,
+])
+
 export interface RefreshReservesBatchArgs {
   skipPriceUpdates: boolean
 }
 
-export const layout = borsh.struct([borsh.bool("skipPriceUpdates")])
+export const layout = borsh.struct<RefreshReservesBatchArgs>([
+  borsh.bool("skipPriceUpdates"),
+])
 
 export function refreshReservesBatch(
   args: RefreshReservesBatchArgs,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = []
-  const identifier = Buffer.from([144, 110, 26, 103, 162, 204, 252, 147])
+  const keys: Array<AccountMeta | AccountSignerMeta> = [...remainingAccounts]
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -34,7 +40,7 @@ export function refreshReservesBatch(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

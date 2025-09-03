@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,8 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([75, 246, 208, 7, 203, 66, 106, 91])
 
 export interface DecreasePositionPostSwapArgs {
   params: types.DecreasePositionPostSwapParamsFields
@@ -27,23 +29,24 @@ export interface DecreasePositionPostSwapAccounts {
   program: Address
 }
 
-export const layout = borsh.struct([
+export const layout = borsh.struct<DecreasePositionPostSwapArgs>([
   types.DecreasePositionPostSwapParams.layout("params"),
 ])
 
 export function decreasePositionPostSwap(
   args: DecreasePositionPostSwapArgs,
   accounts: DecreasePositionPostSwapAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.keeper.address, role: 2, signer: accounts.keeper },
     { address: accounts.positionRequest, role: 0 },
     { address: accounts.positionRequestAta, role: 0 },
     { address: accounts.eventAuthority, role: 0 },
     { address: accounts.program, role: 0 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([75, 246, 208, 7, 203, 66, 106, 91])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -51,7 +54,7 @@ export function decreasePositionPostSwap(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

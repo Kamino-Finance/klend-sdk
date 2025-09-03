@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,8 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([130, 80, 38, 153, 80, 212, 182, 253])
 
 export interface IdlMissingTypesArgs {
   reserveFarmKind: types.ReserveFarmKindKind
@@ -45,15 +47,16 @@ export const layout = borsh.struct([
 export function idlMissingTypes(
   args: IdlMissingTypesArgs,
   accounts: IdlMissingTypesAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.signer.address, role: 2, signer: accounts.signer },
     { address: accounts.globalConfig, role: 0 },
     { address: accounts.lendingMarket, role: 0 },
     { address: accounts.reserve, role: 1 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([130, 80, 38, 153, 80, 212, 182, 253])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -69,7 +72,7 @@ export function idlMissingTypes(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

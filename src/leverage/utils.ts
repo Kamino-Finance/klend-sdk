@@ -2,7 +2,7 @@ import { Kamino, StrategyWithAddress } from '@kamino-finance/kliquidity-sdk';
 import { KaminoMarket, KaminoReserve, lamportsToNumberDecimal } from '../classes';
 import {
   Address,
-  IInstruction,
+  Instruction,
   GetAccountInfoApi,
   Rpc,
   GetTokenAccountBalanceApi,
@@ -22,7 +22,7 @@ export interface KaminoSwapperIxBuilder {
     owner: TransactionSigner,
     slippage: Decimal,
     allKeys: Address[]
-  ): Promise<[IInstruction[], Address[]]>;
+  ): Promise<[Instruction[], Address[]]>;
 }
 
 export interface DepositAmountsForSwap {
@@ -286,7 +286,7 @@ export function swapProviderToKaminoSwapProvider<QuoteResponse>(
     _owner: TransactionSigner,
     _slippage: Decimal,
     _allKeys: Address[]
-  ): Promise<[IInstruction[], Address[]]> => {
+  ): Promise<[Instruction[], Address[]]> => {
     if (input.tokenBToSwapAmount.lt(0)) {
       const swapperIxsArray = await swapper(
         {

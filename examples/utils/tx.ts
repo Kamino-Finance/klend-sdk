@@ -14,7 +14,7 @@ import {
   GetMultipleAccountsApi,
   getSignatureFromTransaction,
   IAccountSignerMeta,
-  IInstruction,
+  Instruction,
   pipe,
   Rpc,
   sendAndConfirmTransactionFactory,
@@ -40,7 +40,7 @@ export const INVALID_BUT_SUFFICIENT_FOR_COMPILATION_BLOCKHASH: BlockhashWithHeig
 export async function sendAndConfirmTx(
   { rpc, wsRpc }: ConnectionPool,
   payer: TransactionSigner,
-  ixs: IInstruction[],
+  ixs: Instruction[],
   signers: TransactionSigner[] = [],
   luts: Address[] = [],
   withDescription: string = ''
@@ -100,7 +100,7 @@ export type BlockhashWithHeight = { blockhash: Blockhash; lastValidBlockHeight: 
 export async function simulateTx(
   rpc: Rpc<GetMultipleAccountsApi & SimulateTransactionApi>,
   payer: Address,
-  ixs: IInstruction[],
+  ixs: Instruction[],
   luts: Account<AddressLookupTable>[]
 ): Promise<SimulationResponse> {
   const lutsByAddress: AddressesByLookupTableAddress = {};

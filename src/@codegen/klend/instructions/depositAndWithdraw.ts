@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,8 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([141, 153, 39, 15, 64, 61, 88, 84])
 
 export interface DepositAndWithdrawArgs {
   liquidityAmount: BN
@@ -64,7 +66,7 @@ export interface DepositAndWithdrawAccounts {
   farmsProgram: Address
 }
 
-export const layout = borsh.struct([
+export const layout = borsh.struct<DepositAndWithdrawArgs>([
   borsh.u64("liquidityAmount"),
   borsh.u64("withdrawCollateralAmount"),
 ])
@@ -72,9 +74,10 @@ export const layout = borsh.struct([
 export function depositAndWithdraw(
   args: DepositAndWithdrawArgs,
   accounts: DepositAndWithdrawAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     {
       address: accounts.depositAccounts.owner.address,
       role: 3,
@@ -152,8 +155,8 @@ export function depositAndWithdraw(
         }
       : { address: programAddress, role: 0 },
     { address: accounts.farmsProgram, role: 0 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([141, 153, 39, 15, 64, 61, 88, 84])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -162,7 +165,7 @@ export function depositAndWithdraw(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

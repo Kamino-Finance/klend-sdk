@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -14,6 +14,8 @@ import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-esl
 import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([2, 218, 138, 235, 79, 201, 25, 102])
 
 export interface RefreshReserveAccounts {
   reserve: Address
@@ -26,9 +28,10 @@ export interface RefreshReserveAccounts {
 
 export function refreshReserve(
   accounts: RefreshReserveAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.reserve, role: 1 },
     { address: accounts.lendingMarket, role: 0 },
     isSome(accounts.pythOracle)
@@ -43,9 +46,9 @@ export function refreshReserve(
     isSome(accounts.scopePrices)
       ? { address: accounts.scopePrices.value, role: 0 }
       : { address: programAddress, role: 0 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([2, 218, 138, 235, 79, 201, 25, 102])
-  const data = identifier
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = DISCRIMINATOR
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

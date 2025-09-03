@@ -2,9 +2,9 @@
 import {
   Address,
   isSome,
-  IAccountMeta,
-  IAccountSignerMeta,
-  IInstruction,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
   Option,
   TransactionSigner,
 } from "@solana/kit"
@@ -15,6 +15,8 @@ import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslin
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
 
+export const DISCRIMINATOR = Buffer.from([94, 82, 154, 177, 193, 205, 141, 76])
+
 export interface SetCustodyGlobalLimitArgs {
   params: types.SetCustodyGlobalLimitParamsFields
 }
@@ -24,20 +26,21 @@ export interface SetCustodyGlobalLimitAccounts {
   custody: Address
 }
 
-export const layout = borsh.struct([
+export const layout = borsh.struct<SetCustodyGlobalLimitArgs>([
   types.SetCustodyGlobalLimitParams.layout("params"),
 ])
 
 export function setCustodyGlobalLimit(
   args: SetCustodyGlobalLimitArgs,
   accounts: SetCustodyGlobalLimitAccounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
-  const keys: Array<IAccountMeta | IAccountSignerMeta> = [
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.keeper.address, role: 2, signer: accounts.keeper },
     { address: accounts.custody, role: 1 },
+    ...remainingAccounts,
   ]
-  const identifier = Buffer.from([94, 82, 154, 177, 193, 205, 141, 76])
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
@@ -45,7 +48,7 @@ export function setCustodyGlobalLimit(
     },
     buffer
   )
-  const data = Buffer.concat([identifier, buffer]).slice(0, 8 + len)
-  const ix: IInstruction = { accounts: keys, programAddress, data }
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }
