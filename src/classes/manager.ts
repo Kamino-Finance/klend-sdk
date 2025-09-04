@@ -45,6 +45,7 @@ import {
   initLendingMarket,
   InitLendingMarketAccounts,
   InitLendingMarketArgs,
+  insertIntoLookupTableIxs,
   KaminoMarket,
   KaminoReserve,
   LendingMarket,
@@ -686,7 +687,7 @@ export class KaminoManager {
     keys: Address[],
     accountsInLUT?: Address[]
   ): Promise<Instruction[]> {
-    return this._vaultClient.insertIntoLookupTableIxs(payer, lut, keys, accountsInLUT);
+    return insertIntoLookupTableIxs(this._vaultClient.getConnection(), payer, lut, keys, accountsInLUT);
   }
 
   /**

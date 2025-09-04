@@ -8,6 +8,7 @@ export * from './@codegen/kvault/instructions';
 export * from './@codegen/kvault/accounts/VaultState';
 export * from './@codegen/kvault/types';
 export { PROGRAM_ID as KVAULTS_PROGRAM_ID } from './@codegen/kvault/programId';
+export { PROGRAM_ID as UNSTAKING_POOL_ID } from './@codegen/unstaking_pool/programId';
 
 export * from './classes';
 export * from './utils';

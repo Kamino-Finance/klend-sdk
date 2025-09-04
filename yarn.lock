@@ -1669,6 +1669,19 @@
     "@solana/transaction-messages" "2.3.0"
     "@solana/transactions" "2.3.0"
 
+"@solana/spl-stake-pool@^1.1.8":
+  version "1.1.8"
+  resolved "https://registry.yarnpkg.com/@solana/spl-stake-pool/-/spl-stake-pool-1.1.8.tgz#5769f44997d7a05c18daacf2fb3de7e5a6831a10"
+  integrity sha512-g/d8pFPI9NI1QWObSCkzMz4QpEUepWRLSERGV3gaAwfxWb3mG5I0KQqDW5UgZ8iT9srhzg7me+gG4ad9toQsNg==
+  dependencies:
+    "@solana/buffer-layout" "^4.0.1"
+    "@solana/spl-token" "0.4.9"
+    "@solana/web3.js" "^1.95.3"
+    bn.js "^5.2.0"
+    buffer "^6.0.3"
+    buffer-layout "^1.2.2"
+    superstruct "^2.0.2"
+
 "@solana/spl-token-group@^0.0.7":
   version "0.0.7"
   resolved "https://registry.yarnpkg.com/@solana/spl-token-group/-/spl-token-group-0.0.7.tgz#83c00f0cd0bda33115468cd28b89d94f8ec1fee4"
@@ -1691,6 +1704,17 @@
     "@solana/buffer-layout" "^4.0.0"
     "@solana/web3.js" "^1.42.0"
     bn.js "^5.1.3"
+
+"@solana/spl-token@0.4.9":
+  version "0.4.9"
+  resolved "https://registry.yarnpkg.com/@solana/spl-token/-/spl-token-0.4.9.tgz#24d032d2935f237925c3b058ba6bb1e1ece5428c"
+  integrity sha512-g3wbj4F4gq82YQlwqhPB0gHFXfgsC6UmyGMxtSLf/BozT/oKd59465DbnlUK8L8EcimKMavxsVAMoLcEdeCicg==
+  dependencies:
+    "@solana/buffer-layout" "^4.0.0"
+    "@solana/buffer-layout-utils" "^0.2.0"
+    "@solana/spl-token-group" "^0.0.7"
+    "@solana/spl-token-metadata" "^0.1.6"
+    buffer "^6.0.3"
 
 "@solana/spl-token@^0.1.5", "@solana/spl-token@^0.1.6", "@solana/spl-token@^0.1.8":
   version "0.1.8"

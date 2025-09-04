@@ -2084,7 +2084,7 @@ export class KaminoAction {
         farmsAccounts: debtFarmsAccounts,
         farmsProgram: FARMS_PROGRAM_ID,
       },
-    undefined,
+      [],
       this.kaminoMarket.programId
     );
 
@@ -2185,7 +2185,7 @@ export class KaminoAction {
         withdrawLiquidityTokenProgram: this.outflowReserve.getLiquidityTokenProgram(),
         instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
       },
-    undefined,
+      [],
       this.kaminoMarket.programId
     );
     liquidateIx = {
@@ -2257,7 +2257,7 @@ export class KaminoAction {
         collateralFarmsAccounts,
         farmsProgram: FARMS_PROGRAM_ID,
       },
-    undefined,
+      [],
       this.kaminoMarket.programId
     );
     liquidateIx = {
@@ -2907,7 +2907,12 @@ export class KaminoAction {
         rent: SYSVAR_RENT_ADDRESS,
         systemProgram: SYSTEM_PROGRAM_ADDRESS,
       };
-      const refreshFarmForObligationix = refreshObligationFarmsForReserve(args, accounts, undefined, this.kaminoMarket.programId);
+      const refreshFarmForObligationix = refreshObligationFarmsForReserve(
+        args,
+        accounts,
+        [],
+        this.kaminoMarket.programId
+      );
 
       if (addAsSupportIx === 'setup') {
         this.setupIxs.push(refreshFarmForObligationix);
@@ -2995,7 +3000,7 @@ export class KaminoAction {
         rent: SYSVAR_RENT_ADDRESS,
         systemProgram: SYSTEM_PROGRAM_ADDRESS,
       };
-      const initObligationForFarm = initObligationFarmsForReserve(args, accounts, undefined, this.kaminoMarket.programId);
+      const initObligationForFarm = initObligationFarmsForReserve(args, accounts, [], this.kaminoMarket.programId);
       if (addAsSupportIx === 'setup') {
         this.setupIxs.push(initObligationForFarm);
         this.setupIxsLabels.push(

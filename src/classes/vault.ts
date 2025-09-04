@@ -102,7 +102,7 @@ import {
 import { batchFetch, collToLamportsDecimal, ZERO } from '@kamino-finance/kliquidity-sdk';
 import { FullBPSDecimal } from '@kamino-finance/kliquidity-sdk/dist/utils/CreationParameters';
 import { FarmIncentives, FarmState } from '@kamino-finance/farms-sdk/dist';
-import { getAccountsInLut, initLookupTableIx } from '../utils/lookupTable';
+import { getAccountsInLut, initLookupTableIx, insertIntoLookupTableIxs } from '../utils/lookupTable';
 import {
   getFarmStakeIxs,
   getFarmUnstakeAndWithdrawIxs,
@@ -121,7 +121,6 @@ import {
 import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
 import { SYSVAR_INSTRUCTIONS_ADDRESS, SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 import { noopSigner } from '../utils/signer';
-import { getExtendLookupTableInstruction } from '@solana-program/address-lookup-table';
 import { Farms } from '@kamino-finance/farms-sdk';
 import { getFarmIncentives } from '@kamino-finance/farms-sdk/dist/utils/apy';
 import { computeReservesAllocation } from '../utils/vaultAllocation';
@@ -296,7 +295,13 @@ export class KaminoVaultClient {
       this._kaminoLendProgramId,
       SYSVAR_INSTRUCTIONS_ADDRESS,
     ];
-    const insertIntoLUTIxs = await this.insertIntoLookupTableIxs(vaultConfig.admin, lut, accountsToBeInserted, []);
+    const insertIntoLUTIxs = await insertIntoLookupTableIxs(
+      this.getConnection(),
+      vaultConfig.admin,
+      lut,
+      accountsToBeInserted,
+      []
+    );
 
     const setLUTIx = this.updateUninitialisedVaultConfigIx(
       vaultConfig.admin,
@@ -445,7 +450,8 @@ export class KaminoVaultClient {
     const [lendingMarketAuth] = await lendingMarketAuthPda(reserveState.lendingMarket, this._kaminoLendProgramId);
     accountsToAddToLut.push(lendingMarketAuth);
 
-    const insertIntoLutIxs = await this.insertIntoLookupTableIxs(
+    const insertIntoLutIxs = await insertIntoLookupTableIxs(
+      this.getConnection(),
       vaultAdmin,
       vaultState.vaultLookupTable,
       accountsToAddToLut
@@ -743,7 +749,12 @@ export class KaminoVaultClient {
 
     if (mode.kind === new VaultConfigField.PendingVaultAdmin().kind) {
       const newPubkey = address(value);
-      const insertIntoLutIxs = await this.insertIntoLookupTableIxs(admin, vaultState.vaultLookupTable, [newPubkey]);
+      const insertIntoLutIxs = await insertIntoLookupTableIxs(
+        this.getConnection(),
+        admin,
+        vaultState.vaultLookupTable,
+        [newPubkey]
+      );
       updateLUTIxs.push(...insertIntoLutIxs);
     } else if (mode.kind === new VaultConfigField.Farm().kind) {
       const keysToAddToLUT = [address(value)];
@@ -757,7 +768,8 @@ export class KaminoVaultClient {
           farmState!.scopePrices,
           farmState!.globalConfig
         );
-        const insertIntoLutIxs = await this.insertIntoLookupTableIxs(
+        const insertIntoLutIxs = await insertIntoLookupTableIxs(
+          this.getConnection(),
           admin,
           vaultState.vaultLookupTable,
           keysToAddToLUT
@@ -876,7 +888,13 @@ export class KaminoVaultClient {
       await this.getConnection().getSlot({ commitment: 'finalized' }).send()
     );
 
-    const insertIntoLUTIxs = await this.insertIntoLookupTableIxs(signer, newLut, accountsInExistentLUT, []);
+    const insertIntoLUTIxs = await insertIntoLookupTableIxs(
+      this.getConnection(),
+      signer,
+      newLut,
+      accountsInExistentLUT,
+      []
+    );
 
     lutIxs.push(...insertIntoLUTIxs);
 
@@ -1689,7 +1707,12 @@ export class KaminoVaultClient {
       sharesAmount: new BN(shareAmountLamports.floor().toString()),
     };
 
-    return withdrawFromAvailable(withdrawFromAvailableArgs, withdrawFromAvailableAccounts, undefined, this._kaminoVaultProgramId);
+    return withdrawFromAvailable(
+      withdrawFromAvailableArgs,
+      withdrawFromAvailableAccounts,
+      undefined,
+      this._kaminoVaultProgramId
+    );
   }
 
   private async withdrawPendingFeesIx(
@@ -1722,7 +1745,11 @@ export class KaminoVaultClient {
       reserveCollateralTokenProgram: TOKEN_PROGRAM_ADDRESS,
     };
 
-    let withdrawPendingFeesIxn = withdrawPendingFees(withdrawPendingFeesAccounts, undefined, this._kaminoVaultProgramId);
+    let withdrawPendingFeesIxn = withdrawPendingFees(
+      withdrawPendingFeesAccounts,
+      undefined,
+      this._kaminoVaultProgramId
+    );
 
     const vaultReserves = this.getVaultReserves(vaultState);
     const vaultReservesState = await this.loadVaultReserves(vaultState);
@@ -1814,7 +1841,13 @@ export class KaminoVaultClient {
       overriddenExistentAccounts = [];
     }
     ixs.push(
-      ...(await this.insertIntoLookupTableIxs(authority, lut, allAccountsToBeInserted, overriddenExistentAccounts))
+      ...(await insertIntoLookupTableIxs(
+        this.getConnection(),
+        authority,
+        lut,
+        allAccountsToBeInserted,
+        overriddenExistentAccounts
+      ))
     );
 
     return {
@@ -1834,52 +1867,6 @@ export class KaminoVaultClient {
       reserveState.collateral.mintPubkey,
       reserveState.collateral.supplyVault,
     ];
-  }
-
-  /**
-   * This method inserts the missing keys from the provided keys into an existent lookup table
-   * @param authority - payer wallet pubkey
-   * @param lookupTable - lookup table to insert the keys into
-   * @param keys - keys to insert into the lookup table
-   * @param [accountsInLut] - the existent accounts in the lookup table. Optional. If provided, the function will not fetch the accounts in the lookup table
-   * @returns - an array of instructions to insert the missing keys into the lookup table
-   */
-  async insertIntoLookupTableIxs(
-    authority: TransactionSigner,
-    lookupTable: Address,
-    keys: Address[],
-    accountsInLut?: Address[]
-  ): Promise<Instruction[]> {
-    let lutContentsList = accountsInLut;
-    if (!accountsInLut) {
-      lutContentsList = await getAccountsInLut(this.getConnection(), lookupTable);
-    } else {
-      lutContentsList = accountsInLut;
-    }
-
-    const lutContents = new Set<Address>(lutContentsList);
-
-    const missingAccounts = keys.filter((key) => !lutContents.has(key) && key !== DEFAULT_PUBLIC_KEY);
-    // deduplicate missing accounts and remove default accounts and convert it back to an array
-    const missingAccountsList = [...new Set<Address>(missingAccounts)];
-
-    const chunkSize = 10;
-    const ixs: Instruction[] = [];
-
-    for (let i = 0; i < missingAccountsList.length; i += chunkSize) {
-      const chunk = missingAccountsList.slice(i, i + chunkSize);
-      ixs.push(
-        getExtendLookupTableInstruction({
-          payer: authority,
-          authority,
-          address: lookupTable,
-          systemProgram: SYSTEM_PROGRAM_ADDRESS,
-          addresses: chunk,
-        })
-      );
-    }
-
-    return ixs;
   }
 
   /** Read the total holdings of a vault and the reserve weights and returns a map from each reserve to how many tokens should be deposited.

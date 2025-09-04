@@ -7,6 +7,8 @@ import {
   getDeactivateLookupTableInstruction,
   getExtendLookupTableInstruction,
 } from '@solana-program/address-lookup-table';
+import { DEFAULT_PUBLIC_KEY } from './pubkey';
+import { SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
 
 export async function printAddressLookupTable(rpc: Rpc<GetAccountInfoApi>, lookupTablePk: Address): Promise<void> {
   const lookupTableAccount = (await fetchAddressLookupTable(rpc, lookupTablePk)).data;
@@ -113,4 +115,50 @@ export function closeLookupTableIx(authority: TransactionSigner, lookupTable: Ad
 export async function getAccountsInLut(rpc: Rpc<GetAccountInfoApi>, lookupTable: Address): Promise<Address[]> {
   const lutState = await fetchAddressLookupTable(rpc, lookupTable);
   return lutState.data.addresses;
+}
+/**
+ * This method inserts the missing keys from the provided keys into an existent lookup table
+ * @param authority - payer wallet pubkey
+ * @param lookupTable - lookup table to insert the keys into
+ * @param keys - keys to insert into the lookup table
+ * @param [accountsInLut] - the existent accounts in the lookup table. Optional. If provided, the function will not fetch the accounts in the lookup table
+ * @returns - an array of instructions to insert the missing keys into the lookup table
+ */
+export async function insertIntoLookupTableIxs(
+  rpc: Rpc<GetAccountInfoApi>,
+  authority: TransactionSigner,
+  lookupTable: Address,
+  keys: Address[],
+  accountsInLut?: Address[]
+): Promise<Instruction[]> {
+  let lutContentsList = accountsInLut;
+  if (!accountsInLut) {
+    lutContentsList = await getAccountsInLut(rpc, lookupTable);
+  } else {
+    lutContentsList = accountsInLut;
+  }
+
+  const lutContents = new Set<Address>(lutContentsList);
+
+  const missingAccounts = keys.filter((key) => !lutContents.has(key) && key !== DEFAULT_PUBLIC_KEY);
+  // deduplicate missing accounts and remove default accounts and convert it back to an array
+  const missingAccountsList = [...new Set<Address>(missingAccounts)];
+
+  const chunkSize = 20;
+  const ixs: Instruction[] = [];
+
+  for (let i = 0; i < missingAccountsList.length; i += chunkSize) {
+    const chunk = missingAccountsList.slice(i, i + chunkSize);
+    ixs.push(
+      getExtendLookupTableInstruction({
+        payer: authority,
+        authority,
+        address: lookupTable,
+        systemProgram: SYSTEM_PROGRAM_ADDRESS,
+        addresses: chunk,
+      })
+    );
+  }
+
+  return ixs;
 }

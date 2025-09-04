@@ -1,0 +1,662 @@
+{
+  "version": "0.1.0",
+  "name": "unstaking_pool",
+  "instructions": [
+    {
+      "name": "initializePool",
+      "accounts": [
+        {
+          "name": "admin",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "unstakingSolMint",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "wsolMint",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "basePoolAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "wsolVault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "rent",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "changeTicketAuthority",
+      "accounts": [
+        {
+          "name": "user",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "newAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "unstakeTicket",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "updatePoolConfig",
+      "accounts": [
+        {
+          "name": "admin",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "entry",
+          "type": {
+            "defined": "PoolConfigField"
+          }
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "mint",
+      "accounts": [
+        {
+          "name": "user",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "unstakeTicket",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "actionAuthority",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "userStakedSolToken",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "userUnstakingSolToken",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "stakedSolMint",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "unstakingSolMint",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "basePoolAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "unstakingTicketAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "unstakingSolTokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "stakedSolTokenProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "stakedSolToDeposit",
+          "type": "u64"
+        },
+        {
+          "name": "minSharesToReceive",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "burn",
+      "accounts": [
+        {
+          "name": "user",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "userWsolToken",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "userUnstakingSolToken",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "wsolVault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "wsolMint",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "unstakeTicket",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "unstakingSolMint",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "basePoolAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "sharesToBurn",
+          "type": "u64"
+        },
+        {
+          "name": "minWsolToReceive",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "collect",
+      "accounts": [
+        {
+          "name": "payer",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "stakeAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "basePoolAuthority",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "wsolVault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "wsolMint",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "clockProgramId",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "stakeProgramId",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "stakeHistoryProgramId",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "updateAdmin",
+      "accounts": [
+        {
+          "name": "pendingAdmin",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "splitTicket",
+      "accounts": [
+        {
+          "name": "authority",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "rentDestination",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "sourceTicket",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "destinationTicket",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "newAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "usolToSplit",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "PoolState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "publicKey"
+          },
+          {
+            "name": "pendingAdmin",
+            "type": "publicKey"
+          },
+          {
+            "name": "basePoolAuthority",
+            "type": "publicKey"
+          },
+          {
+            "name": "basePoolAuthorityBump",
+            "type": "u64"
+          },
+          {
+            "name": "unstakingSolMint",
+            "type": "publicKey"
+          },
+          {
+            "name": "wsolVault",
+            "type": "publicKey"
+          },
+          {
+            "name": "actionAuthority",
+            "type": "publicKey"
+          },
+          {
+            "name": "poolLookupTable",
+            "type": "publicKey"
+          },
+          {
+            "name": "sharesIssued",
+            "type": "u64"
+          },
+          {
+            "name": "wsolUnstaking",
+            "type": "u64"
+          },
+          {
+            "name": "wsolInVault",
+            "type": "u64"
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u128",
+                256
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "UnstakeTicket",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "publicKey"
+          },
+          {
+            "name": "poolState",
+            "type": "publicKey"
+          },
+          {
+            "name": "obligationMetadata",
+            "type": "publicKey"
+          },
+          {
+            "name": "initialUsol",
+            "type": "u64"
+          },
+          {
+            "name": "remainingUsol",
+            "type": "u64"
+          },
+          {
+            "name": "minimumEpochToBurn",
+            "type": "u64"
+          },
+          {
+            "name": "padding0",
+            "type": {
+              "array": [
+                "u64",
+                1
+              ]
+            }
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u128",
+                16
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "PoolConfigField",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "ActionAuthority"
+          },
+          {
+            "name": "LookupTable"
+          },
+          {
+            "name": "PendingAdmin"
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    {
+      "code": 8000,
+      "name": "IntegerOverflow",
+      "msg": "IntegerOverflow"
+    },
+    {
+      "code": 8001,
+      "name": "ConversionFailed",
+      "msg": "ConversionFailed"
+    },
+    {
+      "code": 8002,
+      "name": "StakePoolError",
+      "msg": "Stake pool specific error"
+    },
+    {
+      "code": 8003,
+      "name": "InvalidStakePoolAccounts",
+      "msg": "Passed stake pool accounts are not valid"
+    },
+    {
+      "code": 8004,
+      "name": "StakePoolDeserializeError",
+      "msg": "Stake pool deserialization error"
+    },
+    {
+      "code": 8005,
+      "name": "InvalidStakePoolProgram",
+      "msg": "Stake pool invalid program"
+    },
+    {
+      "code": 8006,
+      "name": "InvalidStakePoolSize",
+      "msg": "Stake pool invalid size"
+    },
+    {
+      "code": 8007,
+      "name": "InvalidStakeAccountProgram",
+      "msg": "Stake account invalid program"
+    },
+    {
+      "code": 8008,
+      "name": "InvalidStakeAccountSize",
+      "msg": "Stake account invalid size"
+    },
+    {
+      "code": 8009,
+      "name": "InvalidStakeAccountCandidate",
+      "msg": "Stake account candidates should be uninitialized accounts"
+    },
+    {
+      "code": 8010,
+      "name": "UnexpectedSolToDestake",
+      "msg": "Simulation and actual cpi call have different results for withdrawing sol from stake pool"
+    },
+    {
+      "code": 8011,
+      "name": "UnexpectedSolToCollect",
+      "msg": "Simulation and actual cpi call have different results for collecting sol from stake account"
+    },
+    {
+      "code": 8012,
+      "name": "InvalidStakedSolProgram",
+      "msg": "Staked sol program not support"
+    },
+    {
+      "code": 8013,
+      "name": "CannotDepositZeroStakedSol",
+      "msg": "Cannot deposit 0 staked sol"
+    },
+    {
+      "code": 8014,
+      "name": "CannotMintZeroShares",
+      "msg": "Cannot mint 0 shares"
+    },
+    {
+      "code": 8015,
+      "name": "CannotBurnZeroShares",
+      "msg": "Cannot burn 0 shares"
+    },
+    {
+      "code": 8016,
+      "name": "CannotCollectZeroSol",
+      "msg": "Cannot collect 0"
+    },
+    {
+      "code": 8017,
+      "name": "NotEnoughWsol",
+      "msg": "Not enough wsol in vault"
+    },
+    {
+      "code": 8018,
+      "name": "NotEnoughSharesIssued",
+      "msg": "Not enough shares issued"
+    },
+    {
+      "code": 8019,
+      "name": "NotEnoughSharesInTicket",
+      "msg": "Not enough shares left for ticket"
+    },
+    {
+      "code": 8020,
+      "name": "NotEnoughStakedSolToDeposit",
+      "msg": "Not enough staked sol to deposit (must be at least equivalent to minimum pool delegation)"
+    },
+    {
+      "code": 8021,
+      "name": "PoolFeeCannotBe100Percent",
+      "msg": "We cannot compute the inverse with fee when value is 100%"
+    },
+    {
+      "code": 8022,
+      "name": "LessSharesThanExpected",
+      "msg": "Received less shares than minimum expected"
+    },
+    {
+      "code": 8023,
+      "name": "LessWsolThanExpected",
+      "msg": "Received less wsol than minimum expected"
+    },
+    {
+      "code": 8024,
+      "name": "InvalidFeeAccount",
+      "msg": "Manager fee account passed is not valid (wrong token program / account not initialized / wrong mint)"
+    },
+    {
+      "code": 8025,
+      "name": "UnsupportedFeeAccountExtension",
+      "msg": "Manager fee account passed has unsupported extensions by standard stake pool"
+    },
+    {
+      "code": 8026,
+      "name": "CannotBurnBeforeTicketAllows",
+      "msg": "Cannot burn shares before unstake ticket allows"
+    },
+    {
+      "code": 8027,
+      "name": "WrongTicketAuthority",
+      "msg": "Cannot burn shares from a ticket if user is not the burn authority"
+    },
+    {
+      "code": 8028,
+      "name": "InvalidPendingAdmin",
+      "msg": "Invalid pending admin"
+    },
+    {
+      "code": 8029,
+      "name": "CollectingMoreThanUnstaking",
+      "msg": "We are trying to collect more SOL than there is unstaking"
+    },
+    {
+      "code": 8030,
+      "name": "CannotSplitZeroShares",
+      "msg": "Cannot split 0 shares"
+    },
+    {
+      "code": 8031,
+      "name": "WrongTicketPoolState",
+      "msg": "Cannot burn shares from a ticket if it's not linked to the pool"
+    }
+  ]
+}
