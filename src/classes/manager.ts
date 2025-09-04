@@ -40,7 +40,6 @@ import {
   getAllLendingMarketAccounts,
   getAllOracleAccounts,
   getAllReserveAccounts,
-  getMedianSlotDurationInMsFromLastEpochs,
   getReserveOracleConfigs,
   getTokenOracleDataSync,
   initLendingMarket,
@@ -805,7 +804,6 @@ export class KaminoManager {
   async getAllMarkets(programId: Address = PROGRAM_ID): Promise<KaminoMarket[]> {
     // Get all lending markets
     const marketGenerator = getAllLendingMarketAccounts(this.getRpc(), programId);
-    const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
     const lendingMarketPairs: [Address, LendingMarket][] = [];
     for await (const pair of marketGenerator) {
@@ -866,7 +864,7 @@ export class KaminoManager {
         });
       }
 
-      return KaminoMarket.loadWithReserves(this.getRpc(), market, reservesByAddress, pubkey, slotDuration);
+      return KaminoMarket.loadWithReserves(this.getRpc(), market, reservesByAddress, pubkey, this.recentSlotDurationMs);
     });
 
     return combinedMarkets;
