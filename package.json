@@ -1,6 +1,6 @@
 {
   "name": "@kamino-finance/klend-sdk",
-  "version": "7.1.1",
+  "version": "7.1.2",
   "description": "Typescript SDK for interacting with the Kamino Lending (klend) protocol",
   "repository": {
     "type": "git",
@@ -68,9 +68,9 @@
     "@solana/buffer-layout": "^4.0.1",
     "@solana/compat": "^2.3.0",
     "@solana/kit": "^2.3.0",
+    "@solana/spl-stake-pool": "^1.1.8",
     "@solana/sysvars": "^2.3.0",
     "@solana/web3.js": "^1.98.2",
-    "@solana/spl-stake-pool": "^1.1.8",
     "axios": "^1.6.8",
     "bn.js": "^5.2.1",
     "buffer": "^6.0.3",
