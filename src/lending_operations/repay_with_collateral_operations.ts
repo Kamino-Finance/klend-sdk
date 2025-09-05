@@ -151,7 +151,6 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
     inputAmountLamports,
     inputMint: collTokenMint,
     outputMint: debtTokenMint,
-    amountDebtAtaBalance: undefined, // only used for kTokens
   };
 
   const swapQuote = await quoter(swapQuoteInputs, uniqueKlendAccounts);
@@ -169,7 +168,6 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
       minOutAmountLamports: flashRepayAmountLamports,
       inputMint: collTokenMint,
       outputMint: debtTokenMint,
-      amountDebtAtaBalance: undefined, // only used for kTokens
     },
     flashLoanInfo: klendIxs.flashLoanInfo,
     initialInputs: {

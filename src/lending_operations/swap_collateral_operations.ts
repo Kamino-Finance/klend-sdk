@@ -529,7 +529,6 @@ async function getExternalSwapIxs<QuoteResponse>(
     inputAmountLamports: args.sourceCollSwapAmount.mul(context.sourceCollReserve.getMintFactor()),
     inputMint: context.sourceCollReserve.getLiquidityMint(),
     outputMint: context.targetCollReserve.getLiquidityMint(),
-    amountDebtAtaBalance: undefined, // only used for kTokens
   };
   const externalSwapQuote = await context.quoter(externalSwapInputs, klendAccounts);
   const externalSwapIxsAndLuts = await context.swapper(externalSwapInputs, klendAccounts, externalSwapQuote);

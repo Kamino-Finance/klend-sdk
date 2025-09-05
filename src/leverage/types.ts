@@ -1,7 +1,6 @@
 import { Account, Address, Instruction, Option, Slot, TransactionSigner } from '@solana/kit';
 import Decimal from 'decimal.js';
 import { KaminoMarket, KaminoObligation } from '../classes';
-import { Kamino, StrategyWithAddress } from '@kamino-finance/kliquidity-sdk';
 import { ObligationType, ObligationTypeTag, ScopePriceRefreshConfig } from '../utils';
 import { AddressLookupTable } from '@solana-program/address-lookup-table';
 
@@ -30,8 +29,6 @@ export type SwapIxs<QuoteResponse> = {
 
 export type PriceAinBProvider = (mintA: Address, mintB: Address) => Promise<Decimal>;
 
-export type IsKtokenProvider = (token: Address) => Promise<boolean>;
-
 export type FlashLoanInfo = {
   flashBorrowReserve: Address;
   flashLoanFee: Decimal;
@@ -47,7 +44,6 @@ export type SwapInputs = {
   minOutAmountLamports?: Decimal;
   inputMint: Address;
   outputMint: Address;
-  amountDebtAtaBalance: Decimal | undefined;
 };
 
 export type BaseLeverageIxsResponse<QuoteResponse> = {
@@ -63,9 +59,7 @@ export type LeverageInitialInputs<LeverageCalcsResult, QuoteResponse> = {
   swapQuote: SwapQuote<QuoteResponse>;
   currentSlot: Slot;
   klendAccounts: Array<Address>;
-  collIsKtoken: boolean;
   obligation: KaminoObligation | ObligationType | undefined;
-  strategy: StrategyWithAddress | undefined;
 };
 
 export interface BaseLeverageSwapInputsProps<QuoteResponse> {
@@ -77,10 +71,8 @@ export interface BaseLeverageSwapInputsProps<QuoteResponse> {
   currentSlot: Slot;
   slippagePct: Decimal;
   budgetAndPriorityFeeIxs?: Instruction[];
-  kamino: Kamino | undefined;
   scopeRefreshConfig?: ScopePriceRefreshConfig;
   quoteBufferBps: Decimal;
-  isKtoken: IsKtokenProvider;
   quoter: SwapQuoteProvider<QuoteResponse>;
   useV2Ixs: boolean;
 }
@@ -94,9 +86,7 @@ export type DepositLeverageInitialInputs<QuoteResponse> = {
   swapQuote: SwapQuote<QuoteResponse>;
   currentSlot: Slot;
   klendAccounts: Array<Address>;
-  collIsKtoken: boolean;
   obligation: KaminoObligation | ObligationType | undefined;
-  strategy: StrategyWithAddress | undefined;
 };
 
 export interface DepositWithLeverageSwapInputsProps<QuoteResponse> extends BaseLeverageSwapInputsProps<QuoteResponse> {
@@ -106,7 +96,6 @@ export interface DepositWithLeverageSwapInputsProps<QuoteResponse> extends BaseL
   priceDebtToColl: Decimal;
   targetLeverage: Decimal;
   selectedTokenMint: Address;
-  priceAinB: PriceAinBProvider;
   // currently only used to disable requesting elevation group when this value is 0
   // to be implemented properly in the future
   elevationGroupOverride?: number;
@@ -123,9 +112,6 @@ export type DepositLeverageCalcsResult = {
   collTokenToDeposit: Decimal;
   swapDebtTokenIn: Decimal;
   swapCollTokenExpectedOut: Decimal;
-  flashBorrowInDebtTokenKtokenOnly: Decimal;
-  singleSidedDepositKtokenOnly: Decimal;
-  requiredCollateralKtokenOnly: Decimal;
 };
 
 export type WithdrawLeverageIxsResponse<QuoteResponse> = BaseLeverageIxsResponse<QuoteResponse> & {
@@ -137,9 +123,7 @@ export type WithdrawLeverageInitialInputs<QuoteResponse> = {
   swapQuote: SwapQuote<QuoteResponse>;
   currentSlot: Slot;
   klendAccounts: Array<Address>;
-  collIsKtoken: boolean;
   obligation: KaminoObligation | ObligationType | undefined;
-  strategy: StrategyWithAddress | undefined;
 };
 
 export interface WithdrawWithLeverageSwapInputsProps<QuoteResponse> extends BaseLeverageSwapInputsProps<QuoteResponse> {
@@ -176,9 +160,7 @@ export type AdjustLeverageInitialInputs<QuoteResponse> = {
   currentSlot: Slot;
   klendAccounts: Array<Address>;
   isDeposit: boolean;
-  collIsKtoken: boolean;
   obligation: KaminoObligation | ObligationType | undefined;
-  strategy: StrategyWithAddress | undefined;
 };
 
 export interface AdjustLeverageSwapInputsProps<QuoteResponse> extends BaseLeverageSwapInputsProps<QuoteResponse> {
@@ -188,7 +170,6 @@ export interface AdjustLeverageSwapInputsProps<QuoteResponse> extends BaseLevera
   targetLeverage: Decimal;
   priceCollToDebt: Decimal;
   priceDebtToColl: Decimal;
-  priceAinB: PriceAinBProvider;
   withdrawSlotOffset?: number;
 }
 
@@ -201,6 +182,5 @@ export type AdjustLeverageCalcsResult = {
   adjustBorrowPosition: Decimal;
   amountToFlashBorrowDebt: Decimal;
   borrowAmount: Decimal;
-  expectedDebtTokenAtaBalance: Decimal;
   withdrawAmountWithSlippageAndFlashLoanFee: Decimal;
 };

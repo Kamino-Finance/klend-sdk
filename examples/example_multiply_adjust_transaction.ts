@@ -104,13 +104,8 @@ import { sendAndConfirmTx } from './utils/tx';
       priceDebtToColl,
       slippagePct: new Decimal(slippagePct),
       budgetAndPriorityFeeIxs: computeIxs,
-      kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
       scopeRefreshConfig: { scope, scopeConfigurations: await scope.getAllConfigurations() },
       quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
-      priceAinB: getPriceAinB,
-      isKtoken: async (token: Address): Promise<boolean> => {
-        return false;
-      }, // should return true if the token is a ktoken which is currently not supported
       quoter: getJupiterQuoter(slippagePct * 100, collTokenReserve!, debtTokenReserve!), // IMPORTANT!: For adjust DOWN the input mint is the coll token and the output mint is the debt token
       swapper: getJupiterSwapper(c.rpc, wallet.address),
       useV2Ixs: true,
@@ -147,13 +142,8 @@ import { sendAndConfirmTx } from './utils/tx';
         priceDebtToColl,
         slippagePct: new Decimal(slippagePct),
         budgetAndPriorityFeeIxs: computeIxs,
-        kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
         scopeRefreshConfig: { scope, scopeConfigurations: await scope.getAllConfigurations() },
         quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
-        priceAinB: getPriceAinB,
-        isKtoken: async (token: Address): Promise<boolean> => {
-          return false;
-        }, // should return true if the token is a ktoken which is currently not supported
         quoter: getJupiterQuoter(slippagePct * 100, debtTokenReserve!, collTokenReserve!), // IMPORTANT!: For adjust UP the input mint is the debt token and the output mint is the coll token
         swapper: getJupiterSwapper(c.rpc, wallet.address),
         useV2Ixs: true,

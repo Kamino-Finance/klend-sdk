@@ -105,13 +105,8 @@ import { sendAndConfirmTx, simulateTx } from './utils/tx';
       priceDebtToColl,
       slippagePct: new Decimal(slippageBps / 100),
       budgetAndPriorityFeeIxs: computeIxs,
-      kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
       scopeRefreshConfig: { scope, scopeConfigurations: await scope.getAllConfigurations() },
       quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
-      priceAinB: getPriceAinB,
-      isKtoken: async (token: Address): Promise<boolean> => {
-        return false;
-      }, // should return true if the token is a ktoken which is currently not supported
       quoter: getKswapQuoter(
         kswapSdk,
         wallet.address,
@@ -227,13 +222,8 @@ import { sendAndConfirmTx, simulateTx } from './utils/tx';
       priceDebtToColl,
       slippagePct: new Decimal(slippageBps),
       budgetAndPriorityFeeIxs: computeIxs,
-      kamino: undefined, // this is only used for kamino liquidity tokens which is currently not supported
       scopeRefreshConfig: { scope, scopeConfigurations: await scope.getAllConfigurations() },
       quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
-      priceAinB: getPriceAinB,
-      isKtoken: async (token: Address): Promise<boolean> => {
-        return false;
-      }, // should return true if the token is a ktoken which is currently not supported
       quoter: getKswapQuoter(
         kswapSdk,
         wallet.address,
