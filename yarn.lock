@@ -835,10 +835,10 @@
   resolved "https://registry.yarnpkg.com/@jup-ag/api/-/api-6.0.39.tgz#540c898c1ee74291450a71d8f4a5d36bb7e1287d"
   integrity sha512-cejW4IWf3dKM5ucmqu5jWtlPZ46LJJOCrx3s5vKmEIB+0X9ykSZsKkcIHFBCOqf3/lSbGyU7THZqXuxjKK9//g==
 
-"@kamino-finance/farms-sdk@^3.2.12":
-  version "3.2.12"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-3.2.12.tgz#57b3037a808ec9d53aa9d09ecedcaa1ccb9488de"
-  integrity sha512-oQQ5RiQiy9ZDf77DMXG4yeBxQzhcRzvc0nVgPz0phabvJRcwdW3sDQkWx21Tm1VRFGU7+lIFuTYzCkth+R2Epw==
+"@kamino-finance/farms-sdk@3.2.13":
+  version "3.2.13"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-3.2.13.tgz#40cc7ac8c75f1e660eada9be59d6946d4c0cf43e"
+  integrity sha512-oaS/qgI3fdointOj81Ov57TvrSYRiW/LgHrPb/UAe089K8h1N9yUSI5Q1oZOVQB4x906SIbgCv3rhkQO9TSGLA==
   dependencies:
     "@coral-xyz/anchor" "^0.28.0"
     "@coral-xyz/borsh" "^0.28.0"
