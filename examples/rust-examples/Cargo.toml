@@ -1,0 +1,25 @@
+[package]
+name = "klend-client-examples"
+version = "0.1.0"
+edition = "2021"
+description = "Examples to create transactions for Klend user operations"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+kamino_lending = { git = "https://github.com/Kamino-Finance/klend.git", tag = "release/v1.12.2", features = [
+    "no-entrypoint",
+] }
+anyhow = "1.0.99"
+solana-sdk = "~1.17.18"
+anchor-lang = "0.29.0"
+anchor-spl = { version = "0.29.0", features = ["dex", "token", "token_2022"] }
+
+[dev-dependencies]
+spl-token-2022 = "1.0.0"
+solana-client = "~1.17.18"
+spl-associated-token-account = { version = "1.1.3", features = ["no-entrypoint"] }
+base64 = "0.21.0"
+
+[patch.crates-io]
+pythnet-sdk = { git = "https://github.com/Kamino-Finance/pyth-crosschain.git", branch = "fix/anchor_idl-build_compat" }
+spl-token-2022 = { git = "https://github.com/Kamino-Finance/solana-program-library.git", branch = "spl-token-2022-v0.9.0-patched" }
