@@ -21,6 +21,9 @@ import {
   Slot,
   SolanaRpcApi,
   TransactionSigner,
+  AccountInfoWithPubkey,
+  AccountInfoBase,
+  AccountInfoWithJsonData,
 } from '@solana/kit';
 import {
   AllOracleAccounts,
@@ -77,7 +80,10 @@ import { Fraction } from './fraction';
 import {
   createAtasIdempotent,
   createWsolAtaIfMissing,
+  getAllStandardTokenProgramTokenAccounts,
   getKVaultSharesMetadataPda,
+  getTokenAccountAmount,
+  getTokenAccountMint,
   lendingMarketAuthPda,
   SECONDS_PER_YEAR,
   U64_MAX,
@@ -112,12 +118,7 @@ import {
 import { getCreateAccountInstruction, SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
 import { getInitializeKVaultSharesMetadataIx, getUpdateSharesMetadataIx, resolveMetadata } from '../utils/metadata';
 import { decodeVaultState } from '../utils/vault';
-import {
-  fetchAllMaybeToken,
-  fetchMaybeToken,
-  findAssociatedTokenPda,
-  getCloseAccountInstruction,
-} from '@solana-program/token-2022';
+import { fetchMaybeToken, findAssociatedTokenPda, getCloseAccountInstruction } from '@solana-program/token-2022';
 import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
 import { SYSVAR_INSTRUCTIONS_ADDRESS, SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 import { noopSigner } from '../utils/signer';
@@ -1937,15 +1938,22 @@ export class KaminoVaultClient {
       stakedShares: new Decimal(0),
       totalShares: new Decimal(0),
     };
-    const userSharesAta = await getAssociatedTokenAddress(vaultState.sharesMint, user);
-    const userSharesAccountInfo = await fetchMaybeToken(this.getConnection(), userSharesAta);
-    if (userSharesAccountInfo.exists) {
-      const userSharesAccount = userSharesAccountInfo.data;
 
-      userShares.unstakedShares = new Decimal(userSharesAccount.amount.toString()).div(
-        new Decimal(10).pow(vaultState.sharesMintDecimals.toString())
-      );
-    }
+    const userSharesTokenAccounts = await getAllStandardTokenProgramTokenAccounts(this.getConnection(), user);
+
+    const userSharesTokenAccount = userSharesTokenAccounts.filter((tokenAccount) => {
+      const accountData = tokenAccount.account.data;
+      const mint = getTokenAccountMint(accountData);
+      return mint === vaultState.sharesMint;
+    });
+    userShares.unstakedShares = userSharesTokenAccount.reduce((acc, tokenAccount) => {
+      const accountData = tokenAccount.account.data;
+      const amount = getTokenAccountAmount(accountData);
+      if (amount !== null) {
+        return acc.add(new Decimal(amount));
+      }
+      return acc;
+    }, new Decimal(0));
 
     if (await vault.hasFarm(this.getConnection())) {
       const userSharesInFarm = await getUserSharesInTokensStakedInFarm(
@@ -1984,14 +1992,23 @@ export class KaminoVaultClient {
     // stores vault address for each userSharesAta
     const vaultUserShareBalance = new Map<Address, UserSharesForVault>();
 
-    const userSharesAtaArray: Address[] = [];
+    const allUserTokenAccounts = await getAllStandardTokenProgramTokenAccounts(this.getConnection(), user);
+    const userSharesTokenAccountsPerVault = new Map<
+      Address,
+      AccountInfoWithPubkey<AccountInfoBase & AccountInfoWithJsonData>[]
+    >();
     vaults.forEach(async (vault) => {
       const state = vault.state;
       if (!state) {
         throw new Error(`Vault ${vault.address} not fetched`);
       }
-      const userSharesAta = await getAssociatedTokenAddress(state.sharesMint, user);
-      userSharesAtaArray.push(userSharesAta);
+
+      const userSharesTokenAccounts = allUserTokenAccounts.filter((tokenAccount) => {
+        const accountData = tokenAccount.account.data;
+        const mint = getTokenAccountMint(accountData);
+        return mint === state.sharesMint;
+      });
+      userSharesTokenAccountsPerVault.set(vault.address, userSharesTokenAccounts);
 
       if (await vault.hasFarm(this.getConnection())) {
         const userFarmState = allUserFarmStatesMap.get(state.vaultFarm);
@@ -2015,27 +2032,29 @@ export class KaminoVaultClient {
       }
     });
 
-    const userSharesAtaAccounts = await fetchAllMaybeToken(this.getConnection(), userSharesAtaArray);
+    userSharesTokenAccountsPerVault.forEach((userSharesTokenAccounts, vaultAddress) => {
+      userSharesTokenAccounts.forEach((userSharesTokenAccount) => {
+        let userSharesForVault = vaultUserShareBalance.get(vaultAddress);
+        if (!userSharesForVault) {
+          userSharesForVault = {
+            unstakedShares: new Decimal(0),
+            stakedShares: new Decimal(0),
+            totalShares: new Decimal(0),
+          };
+        }
 
-    userSharesAtaAccounts.forEach((userShareAtaAccount, index) => {
-      let userSharesForVault = vaultUserShareBalance.get(vaults[index].address);
-      if (!userSharesForVault) {
-        userSharesForVault = {
-          unstakedShares: new Decimal(0),
-          stakedShares: new Decimal(0),
-          totalShares: new Decimal(0),
-        };
-      }
-
-      if (!userShareAtaAccount.exists) {
-        vaultUserShareBalance.set(vaults[index].address, userSharesForVault);
-      } else {
-        userSharesForVault.unstakedShares = new Decimal(userShareAtaAccount.data.amount.toString()).div(
-          new Decimal(10).pow(vaults[index].state!.sharesMintDecimals.toString())
-        );
-        userSharesForVault.totalShares = userSharesForVault.unstakedShares.add(userSharesForVault.stakedShares);
-        vaultUserShareBalance.set(vaults[index].address, userSharesForVault);
-      }
+        if (!userSharesTokenAccount) {
+          vaultUserShareBalance.set(vaultAddress, userSharesForVault);
+        } else {
+          const accountData = userSharesTokenAccount.account.data;
+          const amount = getTokenAccountAmount(accountData);
+          if (amount !== null) {
+            userSharesForVault.unstakedShares = new Decimal(amount);
+            userSharesForVault.totalShares = userSharesForVault.unstakedShares.add(userSharesForVault.stakedShares);
+            vaultUserShareBalance.set(vaultAddress, userSharesForVault);
+          }
+        }
+      });
     });
 
     return vaultUserShareBalance;
@@ -2849,7 +2868,7 @@ export class KaminoVaultClient {
   }
 
   /**
-   * This will return the APY of the vault under the assumption that all the available tokens in the vault are all the time invested in the reserves as ratio; for percentage it needs multiplication by 100
+   * This will return the APY of the vault under the assumption that all the available tokens in the vault are all the time invested in the reserves as requested by the weights; for percentage it needs multiplication by 100
    * @param vault - the kamino vault to get APY for
    * @param slot - current slot
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves

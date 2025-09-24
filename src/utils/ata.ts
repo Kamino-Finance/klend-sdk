@@ -1,5 +1,9 @@
 import {
+  AccountInfoBase,
+  AccountInfoWithJsonData,
+  AccountInfoWithPubkey,
   Address,
+  Base58EncodedBytes,
   fetchEncodedAccount,
   GetAccountInfoApi,
   GetMultipleAccountsApi,
@@ -8,6 +12,7 @@ import {
   Lamports,
   MaybeAccount,
   Rpc,
+  SolanaRpcApi,
   TransactionSigner,
 } from '@solana/kit';
 import Decimal from 'decimal.js';
@@ -262,3 +267,77 @@ export const createWsolAtaIfMissing = async (
     closeAtaIxs: closeIxs,
   };
 };
+
+/**
+ * Get all standard token accounts for tokens using old Token Program, not Token 2022 for a given wallet
+ * @param rpc - Solana RPC rpc (read)
+ * @param wallet - wallet to get the token accounts for
+ * @returns an array of all token accounts for the given wallet
+ */
+export async function getAllStandardTokenProgramTokenAccounts(
+  rpc: Rpc<SolanaRpcApi>,
+  wallet: Address
+): Promise<AccountInfoWithPubkey<AccountInfoBase & AccountInfoWithJsonData>[]> {
+  return rpc
+    .getProgramAccounts(TOKEN_PROGRAM_ADDRESS, {
+      filters: [
+        { dataSize: 165n },
+        { memcmp: { offset: 32n, bytes: wallet.toString() as Base58EncodedBytes, encoding: 'base58' } },
+      ],
+      encoding: 'jsonParsed',
+    })
+    .send();
+}
+
+// Type definitions for parsed token account data
+interface ParsedTokenAccountInfo {
+  mint: string;
+  owner: string;
+  tokenAmount: {
+    amount: string;
+    decimals: number;
+    uiAmount: number | null;
+    uiAmountString: string;
+  };
+}
+
+interface ParsedTokenAccountData {
+  parsed: {
+    info: ParsedTokenAccountInfo;
+    type: string;
+  };
+  program: string;
+  space: bigint;
+}
+
+// Type guard to check if account data is parsed
+function isParsedTokenAccountData(data: any): data is ParsedTokenAccountData {
+  return (
+    data &&
+    typeof data === 'object' &&
+    'parsed' in data &&
+    data.parsed &&
+    typeof data.parsed === 'object' &&
+    'info' in data.parsed &&
+    data.parsed.info &&
+    typeof data.parsed.info === 'object' &&
+    'mint' in data.parsed.info &&
+    'tokenAmount' in data.parsed.info
+  );
+}
+
+// Helper function to safely get mint from parsed token account
+export function getTokenAccountMint(accountData: any): string | null {
+  if (isParsedTokenAccountData(accountData)) {
+    return accountData.parsed.info.mint;
+  }
+  return null;
+}
+
+// Helper function to safely get token amount from parsed token account
+export function getTokenAccountAmount(accountData: any): number | null {
+  if (isParsedTokenAccountData(accountData)) {
+    return accountData.parsed.info.tokenAmount.uiAmount;
+  }
+  return null;
+}

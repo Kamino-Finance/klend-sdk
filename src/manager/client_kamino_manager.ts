@@ -763,7 +763,7 @@ async function main() {
         vaultState,
         useVaultPendingAdmin: true,
       });
-      const instructions = await kaminoManager.acceptVaultOwnershipIxs(kaminoVault);
+      const instructions = await kaminoManager.acceptVaultOwnershipIxs(kaminoVault, pendingAdmin);
 
       await processTx(
         env.c,
@@ -1470,7 +1470,6 @@ async function main() {
       const slot = await env.c.rpc.getSlot({ commitment: 'confirmed' }).send();
       const tokensPerShare = await kaminoManager.getTokensPerShareSingleVault(kaminoVault, slot);
       const holdings = await kaminoManager.getVaultHoldings(kaminoVault.state!, slot);
-
       const vaultState = kaminoVault.state!;
 
       const sharesIssued = lamportsToDecimal(
