@@ -5,6 +5,7 @@ import {
   getComputeBudgetAndPriorityFeeIxs,
   getDepositWithLeverageIxs,
   getUserLutAddressAndSetupIxs,
+  getScopeRefreshIxForObligationAndReserves,
 } from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from './utils/connection';
 import { getKeypair } from './utils/keypair';
@@ -67,6 +68,19 @@ import { sendAndConfirmTx, simulateTx } from './utils/tx';
 
   const currentSlot = await c.rpc.getSlot().send();
 
+  const collTokenReserve = market.getReserveByMint(collTokenMint)!;
+  const debtTokenReserve = market.getReserveByMint(debtTokenMint)!;
+  const obligation = await market.getObligationByAddress(obligationAddress)!;
+
+  const scopeConfiguration = { scope, scopeConfigurations: await scope.getAllConfigurations() };
+  const scopeRefreshIx = await getScopeRefreshIxForObligationAndReserves(
+    market,
+    collTokenReserve!,
+    debtTokenReserve!,
+    obligation!,
+    scopeConfiguration
+  );
+
   // Price A in B callback can be defined in different ways. Here we use jupiter price API
   const getPriceAinB = async (tokenAMint: Address, tokenBMint: Address): Promise<Decimal> => {
     const price = await getTokenPriceFromJupWithFallback(kswapSdk, tokenAMint, tokenBMint);
@@ -93,7 +107,7 @@ import { sendAndConfirmTx, simulateTx } from './utils/tx';
     targetLeverage: new Decimal(leverage),
     selectedTokenMint: debtTokenMint, // the token we are using to deposit
     obligationTypeTagOverride: ObligationTypeTag.Multiply, // or leverage
-    scopeRefreshConfig: { scope, scopeConfigurations: await scope.getAllConfigurations() },
+    scopeRefreshIx,
     budgetAndPriorityFeeIxs: computeIxs,
     quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
     quoter: getKswapQuoter(

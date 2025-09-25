@@ -1,7 +1,7 @@
 import { Account, Address, Instruction, Option, Slot, TransactionSigner } from '@solana/kit';
 import Decimal from 'decimal.js';
 import { KaminoMarket, KaminoObligation } from '../classes';
-import { ObligationType, ObligationTypeTag, ScopePriceRefreshConfig } from '../utils';
+import { ObligationType, ObligationTypeTag } from '../utils';
 import { AddressLookupTable } from '@solana-program/address-lookup-table';
 
 export type SwapQuoteProvider<QuoteResponse> = (
@@ -71,7 +71,7 @@ export interface BaseLeverageSwapInputsProps<QuoteResponse> {
   currentSlot: Slot;
   slippagePct: Decimal;
   budgetAndPriorityFeeIxs?: Instruction[];
-  scopeRefreshConfig?: ScopePriceRefreshConfig;
+  scopeRefreshIx: Instruction[]; // no longer optional as we always pass an array (can be empty)
   quoteBufferBps: Decimal;
   quoter: SwapQuoteProvider<QuoteResponse>;
   useV2Ixs: boolean;
@@ -134,6 +134,7 @@ export interface WithdrawWithLeverageSwapInputsProps<QuoteResponse> extends Base
   priceCollToDebt: Decimal;
   isClosingPosition: boolean;
   selectedTokenMint: Address;
+  userSolBalanceLamports: number;
 }
 
 export interface WithdrawWithLeverageProps<QuoteResponse> extends WithdrawWithLeverageSwapInputsProps<QuoteResponse> {
@@ -171,6 +172,7 @@ export interface AdjustLeverageSwapInputsProps<QuoteResponse> extends BaseLevera
   priceCollToDebt: Decimal;
   priceDebtToColl: Decimal;
   withdrawSlotOffset?: number;
+  userSolBalanceLamports: number;
 }
 
 export interface AdjustLeverageProps<QuoteResponse> extends AdjustLeverageSwapInputsProps<QuoteResponse> {

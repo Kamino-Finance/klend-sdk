@@ -4,6 +4,7 @@ import {
   getAdjustLeverageIxs,
   getComputeBudgetAndPriorityFeeIxs,
   getUserLutAddressAndSetupIxs,
+  getScopeRefreshIxForObligationAndReserves,
 } from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from './utils/connection';
 import { getKeypair } from './utils/keypair';
@@ -61,18 +62,26 @@ import { sendAndConfirmTx, simulateTx } from './utils/tx';
     leverageMints
   );
 
-  const debtTokenReserve = market.getReserveByMint(debtTokenMint);
-  const collTokenReserve = market.getReserveByMint(collTokenMint);
+  const debtTokenReserve = market.getReserveByMint(debtTokenMint)!;
+  const collTokenReserve = market.getReserveByMint(collTokenMint)!;
 
   await executeUserSetupLutsTransactions(c, wallet, txsIxs);
 
   const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, PROGRAM_ID); // new LeverageObligation(collTokenMint, debtTokenMint, PROGRAM_ID); for leverage
   const obligationAddress = await obligationType.toPda(market.getAddress(), wallet.address);
-  const obligation = await market.getObligationByAddress(obligationAddress);
+  const obligation = await market.getObligationByAddress(obligationAddress)!;
   const depositedLamports = obligation!.getDepositByMint(collTokenMint)!.amount;
   const borrowedLamports = obligation!.getBorrowByMint(debtTokenMint)!.amount;
 
   const currentSlot = await c.rpc.getSlot().send();
+  const scopeConfiguration = { scope, scopeConfigurations: await scope.getAllConfigurations() };
+  const scopeRefreshIx = await getScopeRefreshIxForObligationAndReserves(
+    market,
+    collTokenReserve,
+    debtTokenReserve,
+    obligation!,
+    scopeConfiguration
+  );
 
   // Price A in B callback can be defined in different ways. Here we use jupiter price API
   const getPriceAinB = async (tokenAMint: Address, tokenBMint: Address): Promise<Decimal> => {
@@ -87,6 +96,10 @@ import { sendAndConfirmTx, simulateTx } from './utils/tx';
   console.log('Price debt to coll', priceDebtToColl.toString());
 
   // First adjust down to 2x leverage
+
+  const userSolBalanceLamports = Number.parseInt(
+    (await market.getRpc().getBalance(wallet.address).send()).value.toString()
+  );
 
   const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
   {
@@ -105,7 +118,7 @@ import { sendAndConfirmTx, simulateTx } from './utils/tx';
       priceDebtToColl,
       slippagePct: new Decimal(slippageBps / 100),
       budgetAndPriorityFeeIxs: computeIxs,
-      scopeRefreshConfig: { scope, scopeConfigurations: await scope.getAllConfigurations() },
+      scopeRefreshIx,
       quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
       quoter: getKswapQuoter(
         kswapSdk,
@@ -116,6 +129,7 @@ import { sendAndConfirmTx, simulateTx } from './utils/tx';
       ), // IMPORTANT!: For deposit the input mint is the debt token mint and the output mint is the collateral token
       swapper: getKswapSwapper(kswapSdk, wallet.address, slippageBps),
       useV2Ixs: true,
+      userSolBalanceLamports,
     });
     const klendLookupTableKeys: Address[] = [];
     klendLookupTableKeys.push(userLookupTable);
@@ -205,6 +219,9 @@ import { sendAndConfirmTx, simulateTx } from './utils/tx';
   // Now adjust back to 3x leverage
 
   {
+    const userSolBalanceLamports = Number.parseInt(
+      (await market.getRpc().getBalance(wallet.address).send()).value.toString()
+    );
     const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
 
     const adjustDownWithLeverageRoutes = await getAdjustLeverageIxs<RouteOutput>({
@@ -222,7 +239,7 @@ import { sendAndConfirmTx, simulateTx } from './utils/tx';
       priceDebtToColl,
       slippagePct: new Decimal(slippageBps),
       budgetAndPriorityFeeIxs: computeIxs,
-      scopeRefreshConfig: { scope, scopeConfigurations: await scope.getAllConfigurations() },
+      scopeRefreshIx,
       quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
       quoter: getKswapQuoter(
         kswapSdk,
@@ -233,6 +250,7 @@ import { sendAndConfirmTx, simulateTx } from './utils/tx';
       ), // IMPORTANT!: For deposit the input mint is the debt token mint and the output mint is the collateral token
       swapper: getKswapSwapper(kswapSdk, wallet.address, slippageBps),
       useV2Ixs: true,
+      userSolBalanceLamports,
     });
 
     const klendLookupTableKeys: Address[] = [];

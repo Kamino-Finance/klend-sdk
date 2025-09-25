@@ -525,14 +525,14 @@ export function withdrawLeverageCalcs(
   };
 }
 
-export async function adjustDepositLeverageCalcs(
+export function adjustDepositLeverageCalcs(
   debtReserve: KaminoReserve,
   adjustDepositPosition: Decimal,
   adjustBorrowPosition: Decimal,
   priceDebtToColl: Decimal,
   flashLoanFee: Decimal,
   slippagePct: Decimal
-): Promise<AdjustLeverageCalcsResult> {
+): AdjustLeverageCalcsResult {
   const amountToFlashBorrowDebt = adjustDepositPosition
     .div(priceDebtToColl)
     .mul(new Decimal(new Decimal(1).add(slippagePct.div(100))))

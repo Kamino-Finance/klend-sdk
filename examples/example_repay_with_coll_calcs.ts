@@ -41,6 +41,7 @@ import { noopSigner } from '@kamino-finance/klend-sdk/dist/utils/signer';
     collTokenMint: collTokenMint,
     quoter: getJupiterQuoter(slippagePct * 100, collTokenReserve!, debtTokenReserve!),
     useV2Ixs: true,
+    scopeRefreshIx: [],
   });
   console.log('estimatedStats', estimatedStats);
 })().catch(async (e) => {

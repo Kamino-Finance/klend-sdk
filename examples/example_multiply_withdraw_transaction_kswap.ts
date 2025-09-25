@@ -5,6 +5,7 @@ import {
   getUserLutAddressAndSetupIxs,
   getWithdrawWithLeverageIxs,
   lamportsToNumberDecimal,
+  getScopeRefreshIxForObligationAndReserves,
 } from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from './utils/connection';
 import { getKeypair } from './utils/keypair';
@@ -82,6 +83,18 @@ import { sendAndConfirmTx, simulateTx } from './utils/tx';
 
   const currentSlot = await c.rpc.getSlot().send();
 
+  const scopeConfiguration = { scope, scopeConfigurations: await scope.getAllConfigurations() };
+  const scopeRefreshIx = await getScopeRefreshIxForObligationAndReserves(
+    market,
+    collTokenReserve!,
+    debtTokenReserve!,
+    obligation!,
+    scopeConfiguration
+  );
+  const userSolBalanceLamports = Number.parseInt(
+    (await market.getRpc().getBalance(wallet.address).send()).value.toString()
+  );
+
   // Price A in B callback can be defined in different ways. Here we use jupiter price API
   const getPriceAinB = async (tokenAMint: Address, tokenBMint: Address): Promise<Decimal> => {
     const price = await getTokenPriceFromJupWithFallback(kswapSdk, tokenAMint, tokenBMint);
@@ -110,7 +123,7 @@ import { sendAndConfirmTx, simulateTx } from './utils/tx';
     isClosingPosition: true, // if true, withdraws all the collateral and closes the position
     selectedTokenMint: debtTokenMint, // the token we are withdrawing into
     budgetAndPriorityFeeIxs: computeIxs,
-    scopeRefreshConfig: { scope, scopeConfigurations: await scope.getAllConfigurations() },
+    scopeRefreshIx,
     quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
     quoter: getKswapQuoter(
       kswapSdk,
@@ -121,6 +134,7 @@ import { sendAndConfirmTx, simulateTx } from './utils/tx';
     ), // IMPORTANT!: For deposit the input mint is the debt token mint and the output mint is the collateral token
     swapper: getKswapSwapper(kswapSdk, wallet.address, slippageBps),
     useV2Ixs: true,
+    userSolBalanceLamports,
   });
 
   const klendLookupTableKeys: Address[] = [];

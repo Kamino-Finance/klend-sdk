@@ -6,19 +6,12 @@ import {
   KaminoObligation,
   KaminoReserve,
 } from '../classes';
-import {
-  FlashLoanInfo,
-  getFlashLoanInstructions,
-  getScopeRefreshIx,
-  SwapIxsProvider,
-  SwapQuoteProvider,
-} from '../leverage';
+import { FlashLoanInfo, getFlashLoanInstructions, SwapIxsProvider, SwapQuoteProvider } from '../leverage';
 import {
   createAtasIdempotent,
   DEFAULT_MAX_COMPUTE_UNITS,
   getAssociatedTokenAddress,
   getComputeBudgetAndPriorityFeeIxs,
-  ScopePriceRefreshConfig,
   U64_MAX,
   uniqueAccountsWithProgramIds,
   WRAPPED_SOL_MINT,
@@ -70,7 +63,7 @@ export interface SwapCollIxsInputs<QuoteResponse> {
   referrer: Option<Address>;
   currentSlot: Slot;
   budgetAndPriorityFeeIxs?: Instruction[];
-  scopeRefreshConfig?: ScopePriceRefreshConfig;
+  scopeRefreshIx: Instruction[];
   useV2Ixs: boolean;
   quoter: SwapQuoteProvider<QuoteResponse>;
   swapper: SwapIxsProvider<QuoteResponse>;
@@ -165,15 +158,7 @@ export async function getSwapCollIxs<QuoteResponse>(
 
   // Construct the Klend's own ixs with a fake swap-out (only to learn the klend accounts used):
 
-  const scopeRefreshIx = await getScopeRefreshIx(
-    context.market,
-    context.sourceCollReserve,
-    context.targetCollReserve,
-    context.obligation,
-    context.scopeRefreshConfig
-  );
-
-  const fakeKlendIxs = await getKlendIxs(args, FAKE_TARGET_COLL_SWAP_OUT_AMOUNT, context, scopeRefreshIx);
+  const fakeKlendIxs = await getKlendIxs(args, FAKE_TARGET_COLL_SWAP_OUT_AMOUNT, context, inputs.scopeRefreshIx);
   const klendAccounts = uniqueAccountsWithProgramIds(listIxs(fakeKlendIxs));
 
   // Construct the external swap ixs (and learn the actual swap-out amount):
@@ -188,7 +173,7 @@ export async function getSwapCollIxs<QuoteResponse>(
       checkResultingObligationValid(args, externalSwapIxs.swapOutAmount, context);
 
       // Construct the Klend's own ixs with an actual swap-out amount:
-      const klendIxs = await getKlendIxs(args, externalSwapIxs.swapOutAmount, context, scopeRefreshIx);
+      const klendIxs = await getKlendIxs(args, externalSwapIxs.swapOutAmount, context, inputs.scopeRefreshIx);
 
       return {
         ixs: listIxs(klendIxs, externalSwapIxs.ixs),
@@ -228,7 +213,7 @@ type SwapCollContext<QuoteResponse> = {
   referrer: Option<Address>;
   currentSlot: Slot;
   useV2Ixs: boolean;
-  scopeRefreshConfig: ScopePriceRefreshConfig | undefined;
+  scopeRefreshIx: Instruction[];
   logger: (msg: string, ...extra: any[]) => void;
 };
 
@@ -259,7 +244,7 @@ function extractArgsAndContext<QuoteResponse>(
       quoter: inputs.quoter,
       swapper: inputs.swapper,
       referrer: inputs.referrer,
-      scopeRefreshConfig: inputs.scopeRefreshConfig,
+      scopeRefreshIx: inputs.scopeRefreshIx,
       currentSlot: inputs.currentSlot,
       useV2Ixs: inputs.useV2Ixs,
     },

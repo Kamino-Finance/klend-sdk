@@ -6,7 +6,6 @@ import {
   SwapIxs,
   SwapIxsProvider,
   SwapQuoteProvider,
-  getScopeRefreshIx,
   LeverageIxsOutput,
   FlashLoanInfo,
 } from '../leverage';
@@ -14,7 +13,6 @@ import {
   createAtasIdempotent,
   getComputeBudgetAndPriorityFeeIxs,
   removeBudgetIxs,
-  ScopePriceRefreshConfig,
   U64_MAX,
   uniqueAccountsWithProgramIds,
 } from '../utils';
@@ -58,7 +56,7 @@ interface RepayWithCollSwapInputsProps<QuoteResponse> {
   repayAmount: Decimal;
   isClosingPosition: boolean;
   budgetAndPriorityFeeIxs?: Instruction[];
-  scopeRefreshConfig?: ScopePriceRefreshConfig;
+  scopeRefreshIx: Instruction[]; // no longer optional, can be empty
   useV2Ixs: boolean;
   quoter: SwapQuoteProvider<QuoteResponse>;
 }
@@ -80,7 +78,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
   repayAmount,
   isClosingPosition,
   budgetAndPriorityFeeIxs,
-  scopeRefreshConfig,
+  scopeRefreshIx,
   useV2Ixs,
 }: RepayWithCollSwapInputsProps<QuoteResponse>): Promise<{
   swapInputs: SwapInputs;
@@ -130,7 +128,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
       referrer,
       currentSlot,
       budgetAndPriorityFeeIxs,
-      scopeRefreshConfig,
+      scopeRefreshIx,
       [
         {
           preActionIxs: [],
@@ -199,7 +197,7 @@ export async function getRepayWithCollIxs<QuoteResponse>({
   quoter,
   swapper,
   referrer,
-  scopeRefreshConfig,
+  scopeRefreshIx,
   useV2Ixs,
   logger = console.log,
 }: RepayWithCollIxsProps<QuoteResponse>): Promise<Array<RepayWithCollIxsResponse<QuoteResponse>>> {
@@ -215,7 +213,7 @@ export async function getRepayWithCollIxs<QuoteResponse>({
     repayAmount,
     isClosingPosition,
     budgetAndPriorityFeeIxs,
-    scopeRefreshConfig,
+    scopeRefreshIx,
     useV2Ixs,
   });
   const { debtRepayAmountLamports, flashRepayAmountLamports, maxCollateralWithdrawLamports, swapQuote } = initialInputs;
@@ -255,7 +253,7 @@ export async function getRepayWithCollIxs<QuoteResponse>({
     referrer,
     currentSlot,
     budgetAndPriorityFeeIxs,
-    scopeRefreshConfig,
+    scopeRefreshIx,
     swapResponses,
     isClosingPosition,
     debtRepayAmountLamports,
@@ -284,7 +282,7 @@ async function buildRepayWithCollateralIxs<QuoteResponse>(
   referrer: Option<Address>,
   currentSlot: Slot,
   budgetAndPriorityFeeIxs: Instruction[] | undefined,
-  scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+  scopeRefreshIx: Instruction[],
   swapQuoteIxsArray: SwapIxs<QuoteResponse>[],
   isClosingPosition: boolean,
   debtRepayAmountLamports: Decimal,
@@ -301,8 +299,6 @@ async function buildRepayWithCollateralIxs<QuoteResponse>(
 
   const atasAndIxs = await createAtasIdempotent(owner, atas);
   const [, { ata: debtTokenAta }] = atasAndIxs;
-
-  const scopeRefreshIx = await getScopeRefreshIx(market, collReserve, debtReserve, obligation, scopeRefreshConfig);
 
   // 2. Flash borrow & repay the debt to repay amount needed
   const { flashBorrowIx, flashRepayIx } = getFlashLoanInstructions({

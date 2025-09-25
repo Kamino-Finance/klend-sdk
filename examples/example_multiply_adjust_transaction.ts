@@ -4,6 +4,7 @@ import {
   getAdjustLeverageIxs,
   getComputeBudgetAndPriorityFeeIxs,
   getUserLutAddressAndSetupIxs,
+  getScopeRefreshIxForObligationAndReserves,
 } from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from './utils/connection';
 import { getKeypair } from './utils/keypair';
@@ -70,6 +71,15 @@ import { sendAndConfirmTx } from './utils/tx';
   const depositedLamports = obligation!.getDepositByMint(collTokenMint)!.amount;
   const borrowedLamports = obligation!.getBorrowByMint(debtTokenMint)!.amount;
 
+  const scopeConfiguration = { scope, scopeConfigurations: await scope.getAllConfigurations() };
+  const scopeRefreshIx = await getScopeRefreshIxForObligationAndReserves(
+    market,
+    collTokenReserve!,
+    debtTokenReserve!,
+    obligation!,
+    scopeConfiguration
+  );
+
   const currentSlot = await c.rpc.getSlot().send();
 
   // Price A in B callback can be defined in different ways. Here we use jupiter price API
@@ -85,7 +95,9 @@ import { sendAndConfirmTx } from './utils/tx';
   console.log('Price debt to coll', priceDebtToColl.toString());
 
   // First adjust down to 2x leverage
-
+  const userSolBalanceLamports = Number.parseInt(
+    (await market.getRpc().getBalance(wallet.address).send()).value.toString()
+  );
   const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
 
   const { ixs, lookupTables, swapInputs } = (
@@ -104,11 +116,12 @@ import { sendAndConfirmTx } from './utils/tx';
       priceDebtToColl,
       slippagePct: new Decimal(slippagePct),
       budgetAndPriorityFeeIxs: computeIxs,
-      scopeRefreshConfig: { scope, scopeConfigurations: await scope.getAllConfigurations() },
+      scopeRefreshIx,
       quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
       quoter: getJupiterQuoter(slippagePct * 100, collTokenReserve!, debtTokenReserve!), // IMPORTANT!: For adjust DOWN the input mint is the coll token and the output mint is the debt token
       swapper: getJupiterSwapper(c.rpc, wallet.address),
       useV2Ixs: true,
+      userSolBalanceLamports,
     })
   )[0];
 
@@ -124,6 +137,9 @@ import { sendAndConfirmTx } from './utils/tx';
   // Now adjust back to 3x leverage
 
   {
+    const userSolBalanceLamports = Number.parseInt(
+      (await market.getRpc().getBalance(wallet.address).send()).value.toString()
+    );
     const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
 
     const { ixs, lookupTables } = (
@@ -142,11 +158,12 @@ import { sendAndConfirmTx } from './utils/tx';
         priceDebtToColl,
         slippagePct: new Decimal(slippagePct),
         budgetAndPriorityFeeIxs: computeIxs,
-        scopeRefreshConfig: { scope, scopeConfigurations: await scope.getAllConfigurations() },
+        scopeRefreshIx,
         quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
         quoter: getJupiterQuoter(slippagePct * 100, debtTokenReserve!, collTokenReserve!), // IMPORTANT!: For adjust UP the input mint is the debt token and the output mint is the coll token
         swapper: getJupiterSwapper(c.rpc, wallet.address),
         useV2Ixs: true,
+        userSolBalanceLamports,
       })
     )[0];
 

@@ -79,7 +79,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
   targetLeverage,
   selectedTokenMint,
   obligationTypeTagOverride,
-  scopeRefreshConfig,
+  scopeRefreshIx,
   budgetAndPriorityFeeIxs,
   quoteBufferBps,
   quoter,
@@ -123,7 +123,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
       referrer,
       currentSlot,
       depositTokenIsSol,
-      scopeRefreshConfig,
+      scopeRefreshIx,
       calcs,
       budgetAndPriorityFeeIxs,
       [
@@ -198,7 +198,7 @@ export async function getDepositWithLeverageIxs<QuoteResponse>({
   targetLeverage,
   selectedTokenMint,
   obligationTypeTagOverride,
-  scopeRefreshConfig,
+  scopeRefreshIx,
   budgetAndPriorityFeeIxs,
   quoteBufferBps,
   quoter,
@@ -220,7 +220,7 @@ export async function getDepositWithLeverageIxs<QuoteResponse>({
     targetLeverage,
     selectedTokenMint,
     obligationTypeTagOverride,
-    scopeRefreshConfig,
+    scopeRefreshIx,
     budgetAndPriorityFeeIxs,
     quoteBufferBps,
     quoter,
@@ -247,7 +247,7 @@ export async function getDepositWithLeverageIxs<QuoteResponse>({
     referrer,
     currentSlot,
     depositTokenIsSol,
-    scopeRefreshConfig,
+    scopeRefreshIx,
     initialInputs.calcs,
     budgetAndPriorityFeeIxs,
     swapsArray.map((swap) => {
@@ -283,7 +283,7 @@ async function buildDepositWithLeverageIxs<QuoteResponse>(
   referrer: Option<Address>,
   currentSlot: Slot,
   depositTokenIsSol: boolean,
-  scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+  scopeRefreshIx: Instruction[],
   calcs: DepositLeverageCalcsResult,
   budgetAndPriorityFeeIxs: Instruction[] | undefined,
   swapQuoteIxsArray: SwapIxs<QuoteResponse>[],
@@ -301,15 +301,12 @@ async function buildDepositWithLeverageIxs<QuoteResponse>(
   ]);
 
   // 1. Create atas & budget ixs
-  const { budgetIxs, createAtasIxs, scopeRefreshIx } = await getSetupIxs(
+  const { budgetIxs, createAtasIxs } = await getSetupIxs(
     owner,
-    market,
-    obligation,
     collTokenMint,
     collReserve,
     debtTokenMint,
     debtReserve,
-    scopeRefreshConfig,
     budgetAndPriorityFeeIxs
   );
 
@@ -402,10 +399,11 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
   isClosingPosition,
   selectedTokenMint,
   budgetAndPriorityFeeIxs,
-  scopeRefreshConfig,
+  scopeRefreshIx,
   quoteBufferBps,
   quoter,
   useV2Ixs,
+  userSolBalanceLamports,
 }: WithdrawWithLeverageSwapInputsProps<QuoteResponse>): Promise<{
   swapInputs: SwapInputs;
   flashLoanInfo: FlashLoanInfo;
@@ -446,7 +444,7 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
       currentSlot,
       isClosingPosition,
       inputTokenIsSol,
-      scopeRefreshConfig,
+      scopeRefreshIx,
       calcs,
       budgetAndPriorityFeeIxs,
       [
@@ -460,7 +458,8 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
           },
         },
       ],
-      useV2Ixs
+      useV2Ixs,
+      userSolBalanceLamports
     )
   )[0];
 
@@ -529,11 +528,12 @@ export async function getWithdrawWithLeverageIxs<QuoteResponse>({
   isClosingPosition,
   selectedTokenMint,
   budgetAndPriorityFeeIxs,
-  scopeRefreshConfig,
+  scopeRefreshIx,
   quoteBufferBps,
   quoter,
   swapper,
   useV2Ixs,
+  userSolBalanceLamports,
 }: WithdrawWithLeverageProps<QuoteResponse>): Promise<Array<WithdrawLeverageIxsResponse<QuoteResponse>>> {
   const collReserve = kaminoMarket.getReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getReserveByMint(debtTokenMint);
@@ -555,10 +555,11 @@ export async function getWithdrawWithLeverageIxs<QuoteResponse>({
     isClosingPosition,
     selectedTokenMint,
     budgetAndPriorityFeeIxs,
-    scopeRefreshConfig,
+    scopeRefreshIx,
     quoteBufferBps,
     quoter,
     useV2Ixs,
+    userSolBalanceLamports,
   });
 
   const withdrawSwapper: SwapIxsProvider<QuoteResponse> = swapper;
@@ -577,7 +578,7 @@ export async function getWithdrawWithLeverageIxs<QuoteResponse>({
     currentSlot,
     isClosingPosition,
     inputTokenIsSol,
-    scopeRefreshConfig,
+    scopeRefreshIx,
     initialInputs.calcs,
     budgetAndPriorityFeeIxs,
     swapsArray.map((swap) => {
@@ -588,7 +589,8 @@ export async function getWithdrawWithLeverageIxs<QuoteResponse>({
         quote: swap.quote,
       };
     }),
-    useV2Ixs
+    useV2Ixs,
+    userSolBalanceLamports
   );
 
   // Send ixs and lookup tables
@@ -614,11 +616,12 @@ export async function buildWithdrawWithLeverageIxs<QuoteResponse>(
   currentSlot: Slot,
   isClosingPosition: boolean,
   depositTokenIsSol: boolean,
-  scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+  scopeRefreshIx: Instruction[],
   calcs: WithdrawLeverageCalcsResult,
   budgetAndPriorityFeeIxs: Instruction[] | undefined,
   swapQuoteIxsArray: SwapIxs<QuoteResponse>[],
-  useV2Ixs: boolean
+  useV2Ixs: boolean,
+  userSolBalanceLamports: number
 ): Promise<LeverageIxsOutput[]> {
   const collTokenMint = collReserve.getLiquidityMint();
   const debtTokenMint = debtReserve.getLiquidityMint();
@@ -629,15 +632,12 @@ export async function buildWithdrawWithLeverageIxs<QuoteResponse>(
   );
   // 1. Create atas & budget txns & user metadata
 
-  const { budgetIxs, createAtasIxs, scopeRefreshIx } = await getSetupIxs(
+  const { budgetIxs, createAtasIxs } = await getSetupIxs(
     owner,
-    market,
-    obligation,
     collTokenMint,
     collReserve,
     debtTokenMint,
     debtReserve,
-    scopeRefreshConfig,
     budgetAndPriorityFeeIxs
   );
 
@@ -660,8 +660,7 @@ export async function buildWithdrawWithLeverageIxs<QuoteResponse>(
   // This is here so that we have enough wsol to repay in case the kAB swapped to sol after estimates is not enough
   const fillWsolAtaIxs: Instruction[] = [];
   if (debtTokenMint === WRAPPED_SOL_MINT) {
-    const halfSolBalance =
-      Number.parseInt((await market.getRpc().getBalance(owner.address).send()).value.toString()) / LAMPORTS_PER_SOL / 2;
+    const halfSolBalance = userSolBalanceLamports / LAMPORTS_PER_SOL / 2;
     const balanceToWrap = halfSolBalance < 0.1 ? halfSolBalance : 0.1;
     fillWsolAtaIxs.push(
       ...getTransferWsolIxs(
@@ -684,7 +683,6 @@ export async function buildWithdrawWithLeverageIxs<QuoteResponse>(
     reserve: debtReserve!,
     amountLamports: toLamports(calcs.repayAmount, debtReserve!.stats.decimals),
     destinationAta: debtTokenAta,
-    // TODO(referrals): once we support referrals, we will have to replace the placeholder args below:
     referrerAccount: none(),
     referrerTokenState: none(),
     programId: market.programId,
@@ -749,11 +747,12 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
   priceDebtToColl,
   slippagePct,
   budgetAndPriorityFeeIxs,
-  scopeRefreshConfig,
+  scopeRefreshIx,
   quoteBufferBps,
   quoter,
   useV2Ixs,
   withdrawSlotOffset,
+  userSolBalanceLamports,
 }: AdjustLeverageSwapInputsProps<QuoteResponse>): Promise<{
   swapInputs: SwapInputs;
   flashLoanInfo: FlashLoanInfo;
@@ -788,7 +787,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
   }
 
   if (isDeposit) {
-    const calcs = await adjustDepositLeverageCalcs(
+    const calcs = adjustDepositLeverageCalcs(
       debtReserve!,
       adjustDepositPosition,
       adjustBorrowPosition,
@@ -808,7 +807,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         referrer,
         currentSlot,
         calcs,
-        scopeRefreshConfig,
+        scopeRefreshIx,
         [
           {
             preActionIxs: [],
@@ -848,7 +847,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
       flashLoanFee: new Decimal(flashLoanFee),
     });
 
-    const calcsQuotePrice = await adjustDepositLeverageCalcs(
+    const calcsQuotePrice = adjustDepositLeverageCalcs(
       debtReserve,
       adjustDepositPositionQuotePrice,
       adjustBorrowPositionQuotePrice,
@@ -889,7 +888,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         referrer,
         currentSlot,
         calcs,
-        scopeRefreshConfig,
+        scopeRefreshIx,
         [
           {
             preActionIxs: [],
@@ -903,7 +902,8 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         ],
         budgetAndPriorityFeeIxs,
         useV2Ixs,
-        withdrawSlotOffset
+        withdrawSlotOffset,
+        userSolBalanceLamports
       )
     )[0];
 
@@ -980,12 +980,13 @@ export async function getAdjustLeverageIxs<QuoteResponse>({
   priceDebtToColl,
   slippagePct,
   budgetAndPriorityFeeIxs,
-  scopeRefreshConfig,
+  scopeRefreshIx,
   quoteBufferBps,
   quoter,
   swapper,
   useV2Ixs,
   withdrawSlotOffset,
+  userSolBalanceLamports,
 }: AdjustLeverageProps<QuoteResponse>): Promise<Array<AdjustLeverageIxsResponse<QuoteResponse>>> {
   const { swapInputs, initialInputs } = await getAdjustLeverageSwapInputs({
     owner,
@@ -1002,10 +1003,11 @@ export async function getAdjustLeverageIxs<QuoteResponse>({
     priceDebtToColl,
     slippagePct,
     budgetAndPriorityFeeIxs,
-    scopeRefreshConfig,
+    scopeRefreshIx,
     quoteBufferBps,
     quoter,
     useV2Ixs,
+    userSolBalanceLamports,
   });
 
   // leverage increased so we need to deposit and borrow more
@@ -1023,7 +1025,7 @@ export async function getAdjustLeverageIxs<QuoteResponse>({
       referrer,
       currentSlot,
       initialInputs.calcs,
-      scopeRefreshConfig,
+      scopeRefreshIx,
       swapsArray.map((swap) => {
         return {
           preActionIxs: [],
@@ -1062,7 +1064,7 @@ export async function getAdjustLeverageIxs<QuoteResponse>({
       referrer,
       currentSlot,
       initialInputs.calcs,
-      scopeRefreshConfig,
+      scopeRefreshIx,
       swapsArray.map((swap) => {
         return {
           preActionIxs: [],
@@ -1073,7 +1075,8 @@ export async function getAdjustLeverageIxs<QuoteResponse>({
       }),
       budgetAndPriorityFeeIxs,
       useV2Ixs,
-      withdrawSlotOffset
+      withdrawSlotOffset,
+      userSolBalanceLamports
     );
 
     return decreaseLeverageIxs.map((ixs, index) => {
@@ -1101,7 +1104,7 @@ async function buildIncreaseLeverageIxs<QuoteResponse>(
   referrer: Option<Address>,
   currentSlot: Slot,
   calcs: AdjustLeverageCalcsResult,
-  scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+  scopeRefreshIx: Instruction[],
   swapQuoteIxsArray: SwapIxs<QuoteResponse>[],
   budgetAndPriorityFeeIxs: Instruction[] | undefined,
   useV2Ixs: boolean
@@ -1115,15 +1118,12 @@ async function buildIncreaseLeverageIxs<QuoteResponse>(
   );
 
   // 1. Create atas & budget txns
-  const { budgetIxs, createAtasIxs, scopeRefreshIx } = await getSetupIxs(
+  const { budgetIxs, createAtasIxs } = await getSetupIxs(
     owner,
-    kaminoMarket,
-    obligation,
     collTokenMint,
     collReserve,
     debtTokenMint,
     debtReserve,
-    scopeRefreshConfig,
     budgetAndPriorityFeeIxs
   );
 
@@ -1214,11 +1214,12 @@ async function buildDecreaseLeverageIxs<QuoteResponse>(
   referrer: Option<Address>,
   currentSlot: Slot,
   calcs: AdjustLeverageCalcsResult,
-  scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+  scopeRefreshIx: Instruction[],
   swapQuoteIxsArray: SwapIxs<QuoteResponse>[],
   budgetAndPriorityFeeIxs: Instruction[] | undefined,
   useV2Ixs: boolean,
-  withdrawSlotOffset: number = WITHDRAW_SLOT_OFFSET
+  withdrawSlotOffset: number = WITHDRAW_SLOT_OFFSET,
+  userSolBalanceLamports: number
 ): Promise<LeverageIxsOutput[]> {
   const collReserve = kaminoMarket.getExistingReserveByMint(collTokenMint);
   const debtReserve = kaminoMarket.getExistingReserveByMint(debtTokenMint);
@@ -1229,15 +1230,12 @@ async function buildDecreaseLeverageIxs<QuoteResponse>(
   });
 
   // 1. Create atas & budget txns
-  const { budgetIxs, createAtasIxs, scopeRefreshIx } = await getSetupIxs(
+  const { budgetIxs, createAtasIxs } = await getSetupIxs(
     owner,
-    kaminoMarket,
-    obligation,
     collTokenMint,
     collReserve,
     debtTokenMint,
     debtReserve,
-    scopeRefreshConfig,
     budgetAndPriorityFeeIxs
   );
 
@@ -1259,10 +1257,7 @@ async function buildDecreaseLeverageIxs<QuoteResponse>(
       )
     );
 
-    const halfSolBalance =
-      Number.parseInt((await kaminoMarket.getRpc().getBalance(owner.address).send()).value.toString()) /
-      LAMPORTS_PER_SOL /
-      2;
+    const halfSolBalance = userSolBalanceLamports / LAMPORTS_PER_SOL / 2;
     const balanceToWrap = halfSolBalance < 0.1 ? halfSolBalance : 0.1;
     fillWsolAtaIxs.push(
       ...getTransferWsolIxs(
@@ -1355,13 +1350,10 @@ async function buildDecreaseLeverageIxs<QuoteResponse>(
 
 export const getSetupIxs = async (
   owner: TransactionSigner,
-  kaminoMarket: KaminoMarket,
-  obligation: KaminoObligation | ObligationType | undefined,
   collTokenMint: Address,
   collReserve: KaminoReserve,
   debtTokenMint: Address,
   debtReserve: KaminoReserve,
-  scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
   budgetAndPriorityFeeIxs: Instruction[] | undefined
 ) => {
   const budgetIxs = budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxs(3000000);
@@ -1370,22 +1362,13 @@ export const getSetupIxs = async (
 
   const createAtasIxs = (await createAtasIdempotent(owner, mintsWithTokenPrograms)).map((x) => x.createAtaIx);
 
-  const scopeRefreshIx = await getScopeRefreshIx(
-    kaminoMarket,
-    collReserve,
-    debtReserve,
-    obligation,
-    scopeRefreshConfig
-  );
-
   return {
     budgetIxs,
     createAtasIxs,
-    scopeRefreshIx,
   };
 };
 
-export const getScopeRefreshIx = async (
+export const getScopeRefreshIxForObligationAndReserves = async (
   market: KaminoMarket,
   collReserve: KaminoReserve,
   debtReserve: KaminoReserve,
