@@ -2370,23 +2370,11 @@ export class KaminoVaultClient {
     return this.loadVaultsReserves([vaultState]);
   }
 
-  /**
-   * This will load the onchain state for all the reserves that the vaults have allocations for, deduplicating the reserves
-   * @param vaults - the vault states to load reserves for
-   * @param oracleAccounts (optional) all reserve oracle accounts, if not supplied will make an additional rpc call to fetch these accounts
-   * @returns a hashmap from each reserve pubkey to the reserve state
-   */
-  async loadVaultsReserves(
-    vaults: VaultState[],
-    oracleAccounts?: AllOracleAccounts
-  ): Promise<Map<Address, KaminoReserve>> {
-    const vaultReservesAddressesSet = new Set<Address>(vaults.flatMap((vault) => this.getVaultReserves(vault)));
-    const vaultReservesAddresses = [...vaultReservesAddressesSet];
+  private async loadReserializedReserves(vaultReservesAddresses: Address[]) {
     const reserveAccounts = await this.getConnection()
       .getMultipleAccounts(vaultReservesAddresses, { commitment: 'processed' })
       .send();
-
-    const deserializedReserves = reserveAccounts.value.map((reserve, i) => {
+    return reserveAccounts.value.map((reserve, i) => {
       if (reserve === null) {
         // maybe reuse old here
         throw new Error(`Reserve account ${vaultReservesAddresses[i]} was not found`);
@@ -2400,11 +2388,25 @@ export class KaminoVaultClient {
         state: reserveAccount,
       };
     });
+  }
 
+  /**
+   * This will load the onchain state for all the reserves that the vaults have allocations for, deduplicating the reserves
+   * @param vaults - the vault states to load reserves for
+   * @param oracleAccounts (optional) all reserve oracle accounts, if not supplied will make an additional rpc call to fetch these accounts
+   * @returns a hashmap from each reserve pubkey to the reserve state
+   */
+  async loadVaultsReserves(
+    vaults: VaultState[],
+    oracleAccounts?: AllOracleAccounts
+  ): Promise<Map<Address, KaminoReserve>> {
+    const vaultReservesAddressesSet = new Set<Address>(vaults.flatMap((vault) => this.getVaultReserves(vault)));
+    const vaultReservesAddresses = [...vaultReservesAddressesSet];
+    const deserializedReserves = await batchFetch(vaultReservesAddresses, (chunk) =>
+      this.loadReserializedReserves(chunk)
+    );
     const reservesAndOracles = await getTokenOracleData(this.getConnection(), deserializedReserves, oracleAccounts);
-
     const kaminoReserves = new Map<Address, KaminoReserve>();
-
     reservesAndOracles.forEach(([reserve, oracle], index) => {
       if (!oracle) {
         throw Error(

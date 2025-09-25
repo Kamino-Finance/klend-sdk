@@ -33,6 +33,7 @@ import {
 } from './vault';
 import {
   AddAssetToMarketParams,
+  AllOracleAccounts,
   CreateKaminoMarketParams,
   createReserveIxs,
   DEFAULT_PUBLIC_KEY,
@@ -1278,10 +1279,14 @@ export class KaminoManager {
   /**
    * This will load the onchain state for all the reserves that the vaults have allocations for, deduplicating the reserves
    * @param vaults - the vault states to load reserves for
+   * @param oracleAccounts (optional) all reserve oracle accounts, if not supplied will make an additional rpc call to fetch these accounts
    * @returns a hashmap from each reserve pubkey to the reserve state
    */
-  async loadVaultsReserves(vaults: VaultState[]): Promise<Map<Address, KaminoReserve>> {
-    return this._vaultClient.loadVaultsReserves(vaults);
+  async loadVaultsReserves(
+    vaults: VaultState[],
+    oracleAccounts?: AllOracleAccounts
+  ): Promise<Map<Address, KaminoReserve>> {
+    return this._vaultClient.loadVaultsReserves(vaults, oracleAccounts);
   }
 
   /**
