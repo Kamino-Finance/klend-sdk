@@ -78,6 +78,7 @@ export const getUserLutAddressAndSetupIxs = async (
     );
   } else {
     userLookupTableAddress = userMetadataState.userLookupTable;
+    referrer = userMetadataState.referrer === DEFAULT_PUBLIC_KEY ? none() : some(userMetadataState.referrer);
   }
 
   const setupUserMetadataIxs = [initUserMetadataIxs];
