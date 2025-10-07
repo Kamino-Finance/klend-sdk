@@ -970,7 +970,7 @@ export class KaminoVaultClient {
     const [{ ata: adminTokenAta, createAtaIx }] = await createAtasIdempotent(vaultAdmin, [
       {
         mint: vaultState.tokenMint,
-        tokenProgram: TOKEN_PROGRAM_ADDRESS,
+        tokenProgram: vaultState.tokenProgram,
       },
     ]);
 
@@ -1744,7 +1744,7 @@ export class KaminoVaultClient {
       baseVaultAuthority: vaultState.baseVaultAuthority,
       tokenAta: adminTokenAta,
       tokenMint: vaultState.tokenMint,
-      tokenProgram: TOKEN_PROGRAM_ADDRESS,
+      tokenProgram: vaultState.tokenProgram,
       /** CPI accounts */
       lendingMarket: marketAddress,
       lendingMarketAuthority: lendingMarketAuth,
