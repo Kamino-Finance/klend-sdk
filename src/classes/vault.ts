@@ -595,7 +595,7 @@ export class KaminoVaultClient {
     }
 
     const investPayer = payer ? payer : noopSigner(vaultState.vaultAdminAuthority);
-    const investIxs = await this.investAllReservesIxs(investPayer, vault);
+    const investIxs = await this.investAllReservesIxs(investPayer, vault, true);
     withdrawAndBlockReserveIxs.investIxs = investIxs;
 
     return withdrawAndBlockReserveIxs;
@@ -648,7 +648,7 @@ export class KaminoVaultClient {
     }
 
     const investPayer = payer ? payer : noopSigner(vaultState.vaultAdminAuthority);
-    const investIxs = await this.investAllReservesIxs(investPayer, vault);
+    const investIxs = await this.investAllReservesIxs(investPayer, vault, true);
     disinvestAllReservesIxs.investIxs = investIxs;
 
     return disinvestAllReservesIxs;
@@ -1455,10 +1455,15 @@ export class KaminoVaultClient {
    * This will trigger invest by balancing, based on weights, the reserve allocations of the vault. It can either withdraw or deposit into reserves to balance them. This is a function that should be cranked
    * @param payer wallet that pays the tx
    * @param vault - vault to invest from
+   * @param skipComputationChecks - if true, the function will skip the computation checks and will invest all the reserves; it is useful for txs where we update reserve allocations and invest atomically
    * @returns - an array of invest instructions for each invest action required for the vault reserves
    */
-  async investAllReservesIxs(payer: TransactionSigner, vault: KaminoVault): Promise<Instruction[]> {
-    const vaultState = await vault.getState(this.getConnection());
+  async investAllReservesIxs(
+    payer: TransactionSigner,
+    vault: KaminoVault,
+    skipComputationChecks: boolean = false
+  ): Promise<Instruction[]> {
+    const vaultState = await vault.reloadState(this.getConnection());
     const minInvestAmount = vaultState.minInvestAmount;
     const allReserves = this.getVaultReserves(vaultState);
     if (allReserves.length === 0) {
@@ -1490,9 +1495,13 @@ export class KaminoVaultClient {
 
       const diffInReserveTokens = computedAllocation.sub(reserveAllocationLiquidityAmount);
       const diffInReserveLamports = collToLamportsDecimal(diffInReserveTokens, vaultState.tokenMintDecimals.toNumber());
+      // it is possible that the tokens to invest are > minInvestAmountLamports but the ctokens it represent are 0, which will make an invest move 0 tokens
+      const diffInCtokenLamports = reserveCollExchangeRate.mul(diffInReserveLamports.abs());
+      const actualDiffInLamports = diffInCtokenLamports.floor().div(reserveCollExchangeRate).floor();
+
       // if the diff for the reserve is smaller than the min invest amount, we do not need to invest or disinvest
       const minInvestAmountLamports = new Decimal(minInvestAmount.toString());
-      if (diffInReserveLamports.abs().gt(minInvestAmountLamports)) {
+      if (actualDiffInLamports.gt(minInvestAmountLamports) || skipComputationChecks) {
         if (computedAllocation.lt(reserveAllocationLiquidityAmount)) {
           reservesToDisinvestFrom.push(reservePubkey);
         } else {

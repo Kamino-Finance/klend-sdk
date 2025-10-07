@@ -76,7 +76,7 @@ export class ManagerEnv {
       if (useVaultPendingAdmin) {
         return matchesAdmin(this.signerConfig, vaultState.pendingAdmin)
           ? this.signerConfig.admin!
-          : noopSigner(vaultState.vaultAdminAuthority);
+          : noopSigner(vaultState.pendingAdmin);
       } else {
         return matchesAdmin(this.signerConfig, vaultState.vaultAdminAuthority)
           ? this.signerConfig.admin!

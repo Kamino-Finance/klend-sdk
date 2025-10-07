@@ -1317,10 +1317,11 @@ export class KaminoManager {
    * This will trigger invest by balancing, based on weights, the reserve allocations of the vault. It can either withdraw or deposit into reserves to balance them. This is a function that should be cranked
    * @param payer
    * @param kaminoVault - vault to invest from
+   * @param skipComputationChecks - if true, the function will skip the computation checks and will invest all the reserves
    * @returns - an array of invest instructions for each invest action required for the vault reserves
    */
-  async investAllReservesIxs(payer: TransactionSigner, kaminoVault: KaminoVault): Promise<Instruction[]> {
-    return this._vaultClient.investAllReservesIxs(payer, kaminoVault);
+  async investAllReservesIxs(payer: TransactionSigner, kaminoVault: KaminoVault, skipComputationChecks: boolean = false): Promise<Instruction[]> {
+    return this._vaultClient.investAllReservesIxs(payer, kaminoVault, skipComputationChecks);
   }
 
   /**
