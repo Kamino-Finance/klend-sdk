@@ -324,8 +324,7 @@ async function buildDepositWithLeverageIxs<QuoteResponse>(
   // 2. Flash borrow & repay the collateral amount needed for given leverage
   // if user deposits coll, then we borrow the diff, else we borrow the entire amount
   const { flashBorrowIx, flashRepayIx } = getFlashLoanInstructions({
-    borrowIxIndex:
-      budgetIxs.length + createAtasIxs.length + fillWsolAtaIxs.length + (scopeRefreshIx.length > 0 ? 1 : 0),
+    borrowIxIndex: createAtasIxs.length + fillWsolAtaIxs.length + (scopeRefreshIx.length > 0 ? 1 : 0),
     userTransferAuthority: owner,
     lendingMarketAuthority: await market.getLendingMarketAuthority(),
     lendingMarketAddress: market.getAddress(),
@@ -371,13 +370,13 @@ async function buildDepositWithLeverageIxs<QuoteResponse>(
       flashLoanInfo,
       instructions: [
         ...scopeRefreshIx,
-        ...budgetIxs,
         ...createAtasIxs,
         ...fillWsolAtaIxs,
         ...[flashBorrowIx],
         ...KaminoAction.actionToIxs(kaminoDepositAndBorrowAction),
         ...swapInstructions,
         ...[flashRepayIx],
+        ...budgetIxs,
       ],
     };
   });
@@ -675,8 +674,7 @@ export async function buildWithdrawWithLeverageIxs<QuoteResponse>(
   // We borrow exactly how much we need to repay
   // and repay that + flash amount fee
   const { flashBorrowIx, flashRepayIx } = getFlashLoanInstructions({
-    borrowIxIndex:
-      budgetIxs.length + createAtasIxs.length + fillWsolAtaIxs.length + (scopeRefreshIx.length > 0 ? 1 : 0),
+    borrowIxIndex: createAtasIxs.length + fillWsolAtaIxs.length + (scopeRefreshIx.length > 0 ? 1 : 0),
     userTransferAuthority: owner,
     lendingMarketAuthority: await market.getLendingMarketAuthority(),
     lendingMarketAddress: market.getAddress(),
@@ -719,7 +717,6 @@ export async function buildWithdrawWithLeverageIxs<QuoteResponse>(
       },
       instructions: [
         ...scopeRefreshIx,
-        ...budgetIxs,
         ...createAtasIxs,
         ...fillWsolAtaIxs,
         ...[flashBorrowIx],
@@ -727,6 +724,7 @@ export async function buildWithdrawWithLeverageIxs<QuoteResponse>(
         ...swapInstructions,
         ...[flashRepayIx],
         ...closeWsolAtaIxs,
+        ...budgetIxs,
       ],
     };
   });
@@ -1129,7 +1127,7 @@ async function buildIncreaseLeverageIxs<QuoteResponse>(
 
   // 2. Create borrow flash loan instruction
   const { flashBorrowIx, flashRepayIx } = getFlashLoanInstructions({
-    borrowIxIndex: budgetIxs.length + createAtasIxs.length + (scopeRefreshIx.length > 0 ? 1 : 0), // TODO: how about user metadata ixs
+    borrowIxIndex: createAtasIxs.length + (scopeRefreshIx.length > 0 ? 1 : 0), // TODO: how about user metadata ixs
     userTransferAuthority: owner,
     lendingMarketAuthority: await kaminoMarket.getLendingMarketAuthority(),
     lendingMarketAddress: kaminoMarket.getAddress(),
@@ -1180,13 +1178,13 @@ async function buildIncreaseLeverageIxs<QuoteResponse>(
 
     const ixs = [
       ...scopeRefreshIx,
-      ...budgetIxs,
       ...createAtasIxs,
       ...[flashBorrowIx],
       ...KaminoAction.actionToIxs(depositAction),
       ...KaminoAction.actionToIxs(borrowAction),
       ...swapInstructions,
       ...[flashRepayIx],
+      ...budgetIxs,
     ];
 
     const flashBorrowReserve = collReserve!;
@@ -1270,8 +1268,7 @@ async function buildDecreaseLeverageIxs<QuoteResponse>(
 
   // 3. Flash borrow & repay amount to repay (debt)
   const { flashBorrowIx, flashRepayIx } = getFlashLoanInstructions({
-    borrowIxIndex:
-      budgetIxs.length + createAtasIxs.length + fillWsolAtaIxs.length + (scopeRefreshIx.length > 0 ? 1 : 0),
+    borrowIxIndex: createAtasIxs.length + fillWsolAtaIxs.length + (scopeRefreshIx.length > 0 ? 1 : 0),
     userTransferAuthority: owner,
     lendingMarketAuthority: await kaminoMarket.getLendingMarketAuthority(),
     lendingMarketAddress: kaminoMarket.getAddress(),
@@ -1325,7 +1322,6 @@ async function buildDecreaseLeverageIxs<QuoteResponse>(
 
     const ixs = [
       ...scopeRefreshIx,
-      ...budgetIxs,
       ...createAtasIxs,
       ...fillWsolAtaIxs,
       ...[flashBorrowIx],
@@ -1334,6 +1330,7 @@ async function buildDecreaseLeverageIxs<QuoteResponse>(
       ...swapInstructions,
       ...[flashRepayIx],
       ...closeWsolAtaIxs,
+      ...budgetIxs,
     ];
 
     const res: LeverageIxsOutput = {

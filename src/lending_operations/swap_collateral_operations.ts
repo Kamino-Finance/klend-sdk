@@ -273,7 +273,7 @@ async function getKlendIxs(
   scopeRefreshIx: Instruction[]
 ): Promise<SwapCollKlendIxs> {
   const { ataCreationIxs, targetCollAta } = await getAtaCreationIxs(context);
-  const setupIxs = [...context.budgetAndPriorityFeeIxs, ...ataCreationIxs];
+  const setupIxs = [...ataCreationIxs];
 
   if (scopeRefreshIx) {
     setupIxs.unshift(...scopeRefreshIx);
@@ -294,7 +294,7 @@ async function getKlendIxs(
     context
   );
 
-  const cleanupIxs = await getAtaCloseIxs(context);
+  const cleanupIxs = [...(await getAtaCloseIxs(context)), ...context.budgetAndPriorityFeeIxs];
 
   return {
     setupIxs,

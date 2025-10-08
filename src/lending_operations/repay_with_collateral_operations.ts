@@ -302,7 +302,7 @@ async function buildRepayWithCollateralIxs<QuoteResponse>(
 
   // 2. Flash borrow & repay the debt to repay amount needed
   const { flashBorrowIx, flashRepayIx } = getFlashLoanInstructions({
-    borrowIxIndex: budgetIxs.length + atasAndIxs.length + (scopeRefreshIx.length > 0 ? 1 : 0),
+    borrowIxIndex: atasAndIxs.length + (scopeRefreshIx.length > 0 ? 1 : 0),
     userTransferAuthority: owner,
     lendingMarketAuthority: await market.getLendingMarketAuthority(),
     lendingMarketAddress: market.getAddress(),
@@ -371,13 +371,13 @@ async function buildRepayWithCollateralIxs<QuoteResponse>(
 
     const ixs = [
       ...scopeRefreshIx,
-      ...budgetIxs,
       ...atasAndIxs.map((x) => x.createAtaIx),
       flashBorrowIx,
       ...preActionIxs,
       ...KaminoAction.actionToIxs(repayAndWithdrawAction),
       ...swapInstructions,
       flashRepayIx,
+      ...budgetIxs,
     ];
 
     const res: LeverageIxsOutput = {
