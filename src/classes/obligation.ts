@@ -39,6 +39,11 @@ export type Position = {
   marketValueRefreshed: Decimal;
 };
 
+export type PositionChange = {
+  reserveAddress: Address;
+  amountChangeLamports: Decimal;
+};
+
 export type ObligationStats = {
   userTotalDeposit: Decimal;
   userTotalCollateralDeposit: Decimal;
@@ -491,19 +496,20 @@ export class KaminoObligation {
 
   simulateDepositChange(
     obligationDeposits: ObligationCollateral[],
-    changeInLamports: number,
-    changeReserve: Address,
+    depositChange: PositionChange,
     collateralExchangeRates: Map<Address, Decimal>
   ): ObligationCollateral[] {
     const newDeposits: ObligationCollateral[] = [];
-    const depositIndex = obligationDeposits.findIndex((deposit) => deposit.depositReserve === changeReserve);
+    const depositIndex = obligationDeposits.findIndex(
+      (deposit) => deposit.depositReserve === depositChange.reserveAddress
+    );
 
     // Always copy the previous deposits and modify the changeReserve one if it exists
     for (let i = 0; i < obligationDeposits.length; i++) {
-      if (obligationDeposits[i].depositReserve === changeReserve) {
+      if (obligationDeposits[i].depositReserve === depositChange.reserveAddress) {
         const coll: ObligationCollateralFields = { ...obligationDeposits[i] };
-        const exchangeRate = collateralExchangeRates.get(changeReserve)!;
-        const changeInCollateral = new Decimal(changeInLamports).mul(exchangeRate).toFixed(0);
+        const exchangeRate = collateralExchangeRates.get(depositChange.reserveAddress)!;
+        const changeInCollateral = new Decimal(depositChange.amountChangeLamports).mul(exchangeRate).toFixed(0);
         const updatedDeposit = new Decimal(obligationDeposits[i].depositedAmount.toNumber()).add(changeInCollateral);
         coll.depositedAmount = new BN(positiveOrZero(updatedDeposit).toString());
         newDeposits.push(new ObligationCollateral(coll));
@@ -523,10 +529,10 @@ export class KaminoObligation {
       }
 
       const coll: ObligationCollateralFields = { ...obligationDeposits[firstBorrowIndexAvailable] };
-      const exchangeRate = collateralExchangeRates.get(changeReserve)!;
-      const changeInCollateral = new Decimal(changeInLamports).mul(exchangeRate).toFixed(0);
+      const exchangeRate = collateralExchangeRates.get(depositChange.reserveAddress)!;
+      const changeInCollateral = new Decimal(depositChange.amountChangeLamports).mul(exchangeRate).toFixed(0);
       coll.depositedAmount = new BN(positiveOrZero(new Decimal(changeInCollateral)).toString());
-      coll.depositReserve = changeReserve;
+      coll.depositReserve = depositChange.reserveAddress;
 
       newDeposits[firstBorrowIndexAvailable] = new ObligationCollateral(coll);
     }
@@ -536,18 +542,19 @@ export class KaminoObligation {
 
   simulateBorrowChange(
     obligationBorrows: ObligationLiquidity[],
-    changeInLamports: number,
-    changeReserve: Address,
+    borrowChange: PositionChange,
     cumulativeBorrowRate: Decimal
   ): ObligationLiquidity[] {
     const newBorrows: ObligationLiquidity[] = [];
-    const borrowIndex = obligationBorrows.findIndex((borrow) => borrow.borrowReserve === changeReserve);
+    const borrowIndex = obligationBorrows.findIndex((borrow) => borrow.borrowReserve === borrowChange.reserveAddress);
 
     // Always copy the previous borrows and modify the changeReserve one if it exists
     for (let i = 0; i < obligationBorrows.length; i++) {
-      if (obligationBorrows[i].borrowReserve === changeReserve) {
+      if (obligationBorrows[i].borrowReserve === borrowChange.reserveAddress) {
         const borrow: ObligationLiquidityFields = { ...obligationBorrows[borrowIndex] };
-        const newBorrowedAmount: Decimal = new Fraction(borrow.borrowedAmountSf).toDecimal().add(changeInLamports);
+        const newBorrowedAmount: Decimal = new Fraction(borrow.borrowedAmountSf)
+          .toDecimal()
+          .add(borrowChange.amountChangeLamports);
         const newBorrowedAmountSf = Fraction.fromDecimal(positiveOrZero(newBorrowedAmount)).getValue();
         borrow.borrowedAmountSf = newBorrowedAmountSf;
 
@@ -568,8 +575,8 @@ export class KaminoObligation {
       }
 
       const borrow: ObligationLiquidityFields = { ...obligationBorrows[firstBorrowIndexAvailable] };
-      borrow.borrowedAmountSf = Fraction.fromDecimal(new Decimal(changeInLamports)).getValue();
-      borrow.borrowReserve = changeReserve;
+      borrow.borrowedAmountSf = Fraction.fromDecimal(new Decimal(borrowChange.amountChangeLamports)).getValue();
+      borrow.borrowReserve = borrowChange.reserveAddress;
       borrow.cumulativeBorrowRateBsf = {
         padding: [],
         value: [Fraction.fromDecimal(cumulativeBorrowRate).getValue(), new BN(0), new BN(0), new BN(0)],
@@ -643,8 +650,10 @@ export class KaminoObligation {
         }
         newObligationDeposits = this.simulateDepositChange(
           this.state.deposits,
-          amountCollateral.toNumber(),
-          collateralReservePk!,
+          {
+            reserveAddress: collateralReservePk!,
+            amountChangeLamports: amountCollateral,
+          },
           collateralExchangeRates
         );
         break;
@@ -656,8 +665,10 @@ export class KaminoObligation {
 
         newObligationBorrows = this.simulateBorrowChange(
           this.state.borrows,
-          amountDebt.toNumber(),
-          debtReservePk!,
+          {
+            reserveAddress: debtReservePk!,
+            amountChangeLamports: amountDebt,
+          },
           debtReserveCumulativeBorrowRate!
         );
         break;
@@ -669,8 +680,10 @@ export class KaminoObligation {
 
         newObligationBorrows = this.simulateBorrowChange(
           this.state.borrows,
-          amountDebt.neg().toNumber(),
-          debtReservePk!,
+          {
+            reserveAddress: debtReservePk!,
+            amountChangeLamports: amountDebt.neg(),
+          },
           debtReserveCumulativeBorrowRate!
         );
 
@@ -683,8 +696,10 @@ export class KaminoObligation {
         }
         newObligationDeposits = this.simulateDepositChange(
           this.state.deposits,
-          amountCollateral.neg().toNumber(),
-          collateralReservePk!,
+          {
+            reserveAddress: collateralReservePk!,
+            amountChangeLamports: amountCollateral.neg(),
+          },
           collateralExchangeRates
         );
         break;
@@ -700,15 +715,19 @@ export class KaminoObligation {
         }
         newObligationDeposits = this.simulateDepositChange(
           this.state.deposits,
-          amountCollateral.toNumber(),
-          collateralReservePk!,
+          {
+            reserveAddress: collateralReservePk!,
+            amountChangeLamports: amountCollateral,
+          },
           collateralExchangeRates
         );
 
         newObligationBorrows = this.simulateBorrowChange(
           this.state.borrows,
-          amountDebt.toNumber(),
-          debtReservePk!,
+          {
+            reserveAddress: debtReservePk!,
+            amountChangeLamports: amountDebt,
+          },
           debtReserveCumulativeBorrowRate!
         );
         break;
@@ -724,14 +743,18 @@ export class KaminoObligation {
         }
         newObligationDeposits = this.simulateDepositChange(
           this.state.deposits,
-          amountCollateral.neg().toNumber(),
-          collateralReservePk!,
+          {
+            reserveAddress: collateralReservePk!,
+            amountChangeLamports: amountCollateral.neg(),
+          },
           collateralExchangeRates
         );
         newObligationBorrows = this.simulateBorrowChange(
           this.state.borrows,
-          amountDebt.neg().toNumber(),
-          debtReservePk!,
+          {
+            reserveAddress: debtReservePk!,
+            amountChangeLamports: amountDebt.neg(),
+          },
           debtReserveCumulativeBorrowRate!
         );
         break;
@@ -803,14 +826,18 @@ export class KaminoObligation {
     let newObligationDeposits = this.state.deposits;
     newObligationDeposits = this.simulateDepositChange(
       newObligationDeposits,
-      withdrawAmountLamports.neg().toNumber(),
-      withdrawReserveAddress,
+      {
+        reserveAddress: withdrawReserveAddress,
+        amountChangeLamports: withdrawAmountLamports.neg(),
+      },
       collateralExchangeRates
     );
     newObligationDeposits = this.simulateDepositChange(
       newObligationDeposits,
-      depositAmountLamports.toNumber(),
-      depositReserveAddress,
+      {
+        reserveAddress: depositReserveAddress,
+        amountChangeLamports: depositAmountLamports,
+      },
       collateralExchangeRates
     );
 
@@ -947,6 +974,7 @@ export class KaminoObligation {
       } else {
         exchangeRate = reserve.getCollateralExchangeRate();
       }
+
       const supplyAmount = new Decimal(deposit.depositedAmount.toString()).div(exchangeRate);
 
       const depositValueUsd = supplyAmount.mul(getPx(reserve)).div(reserve.getMintFactor());
@@ -1074,6 +1102,73 @@ export class KaminoObligation {
     return borrowLimit.div(userTotalCollateralDeposit);
   }
 
+  /**
+   * Creates a new KaminoObligation with simulated position changes applied.
+   * This allows you to model what the obligation would look like with deposits/borrows
+   * without actually executing those transactions.
+   *
+   * @param market - The KaminoMarket instance
+   * @param slot - The slot number for rate calculations
+   * @param depositChanges - Optional array of deposit changes to apply
+   * @param borrowChanges - Optional array of borrow changes to apply
+   * @returns A new KaminoObligation instance with the changes applied
+   */
+  withPositionChanges(
+    market: KaminoMarket,
+    slot: Slot,
+    depositChanges?: PositionChange[],
+    borrowChanges?: PositionChange[]
+  ): KaminoObligation {
+    const reservesToRefresh: Address[] = [];
+
+    if (depositChanges) {
+      reservesToRefresh.push(...depositChanges.map((change) => change.reserveAddress));
+    }
+    if (borrowChanges) {
+      reservesToRefresh.push(...borrowChanges.map((change) => change.reserveAddress));
+    }
+
+    const { collateralExchangeRates, cumulativeBorrowRates } = KaminoObligation.getRatesForObligation(
+      market,
+      this.state,
+      slot,
+      reservesToRefresh
+    );
+
+    let newDeposits: ObligationCollateral[] = this.state.deposits;
+    if (depositChanges) {
+      for (const depositChange of depositChanges) {
+        newDeposits = this.simulateDepositChange(newDeposits, depositChange, collateralExchangeRates);
+      }
+    }
+
+    let newBorrows: ObligationLiquidity[] = this.state.borrows;
+    if (borrowChanges) {
+      for (const borrowChange of borrowChanges) {
+        const reserve = market.getReserveByAddress(borrowChange.reserveAddress);
+        if (!reserve) {
+          throw new Error(`Reserve not found: ${borrowChange.reserveAddress}`);
+        }
+        newBorrows = this.simulateBorrowChange(newBorrows, borrowChange, reserve.getCumulativeBorrowRate());
+      }
+    }
+
+    // Create a deep copy of the obligation state and override deposits/borrows
+    const newObligationState = new Obligation({
+      ...this.state,
+      deposits: newDeposits,
+      borrows: newBorrows,
+    });
+
+    return new KaminoObligation(
+      market,
+      this.obligationAddress,
+      newObligationState,
+      collateralExchangeRates,
+      cumulativeBorrowRates
+    );
+  }
+
   /*
     How much of a given token can a user borrow extra given an elevation group,
     regardless of caps and liquidity or assuming infinite liquidity and infinite caps,
@@ -1194,6 +1289,36 @@ export class KaminoObligation {
       const liquidityAvailablePostMigration = Decimal.max(0, liquidityAvailable.minus(debtThisReserve));
       return Decimal.min(maxBorrowAmount, liquidityAvailablePostMigration);
     }
+  }
+
+  /*
+    Same as getMaxBorrowAmountV2 but assumes a deposit is made first, calculating
+    the new borrow power after the deposit, without overriding the obligation itself.
+
+    * @param market - The KaminoMarket instance.
+    * @param liquidityMint - The liquidity mint Address.
+    * @param slot - The slot number.
+    * @param elevationGroup - The elevation group number (default: this.state.elevationGroup).
+    * @returns The maximum borrow amount as a Decimal.
+    * @throws Error if the reserve is not found.
+  */
+  getMaxBorrowAmountV2WithDeposit(
+    market: KaminoMarket,
+    liquidityMint: Address,
+    slot: Slot,
+    elevationGroup: number = this.state.elevationGroup,
+    depositAmountLamports: Decimal,
+    depositReserveAddress: Address
+  ): Decimal {
+    const depositChanges = [
+      {
+        reserveAddress: depositReserveAddress,
+        amountChangeLamports: depositAmountLamports,
+      },
+    ];
+    const obligationWithDeposit = this.withPositionChanges(market, slot, depositChanges);
+
+    return obligationWithDeposit.getMaxBorrowAmountV2(market, liquidityMint, slot, elevationGroup);
   }
 
   /*
@@ -1445,6 +1570,44 @@ export class KaminoObligation {
       .mul(depositReserve.getMintFactor());
 
     return Decimal.max(0, Decimal.min(userDepositPositionAmount, maxWithdrawAmount, reserveWithdrawalLimit));
+  }
+
+  /**
+   * Same as getMaxWithdrawAmount but assumes a repay is made first, calculating
+   * the new withdraw power after the repay, without overriding the obligation itself.
+   *
+   * @param market - The KaminoMarket instance.
+   * @param tokenMint - The liquidity mint Address.
+   * @param slot - The slot number.
+   * @param repayAmountLamports - The amount to repay in lamports (use U64_MAX for full repay).
+   * @param repayReserveAddress - The reserve address of the borrow being repaid.
+   * @returns The maximum withdraw amount as a Decimal.
+   * @throws Error if the reserve is not found.
+   */
+  getMaxWithdrawAmountWithRepay(
+    market: KaminoMarket,
+    tokenMint: Address,
+    slot: Slot,
+    repayAmountLamports: Decimal,
+    repayReserveAddress: Address
+  ): Decimal {
+    const repayReserve = market.getReserveByAddress(repayReserveAddress);
+    if (!repayReserve) {
+      throw new Error('Reserve not found');
+    }
+
+    const repayAmount = repayAmountLamports.equals(U64_MAX)
+      ? this.getBorrowAmountByReserve(repayReserve)
+      : repayAmountLamports;
+    const borrowChanges = [
+      {
+        reserveAddress: repayReserveAddress,
+        amountChangeLamports: repayAmount.neg(), // as it's a repay
+      },
+    ];
+    const obligationWithRepay = this.withPositionChanges(market, slot, undefined, borrowChanges);
+
+    return obligationWithRepay.getMaxWithdrawAmount(market, tokenMint, slot);
   }
 
   getObligationLiquidityByReserve(reserveAddress: Address): ObligationLiquidity {
