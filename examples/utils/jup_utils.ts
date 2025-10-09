@@ -25,7 +25,7 @@ import { getAccountRole } from './compat';
 
 const DEFAULT_MAX_ACCOUNTS_BUFFER = 2;
 const MAX_LOCKED_ACCOUNTS = 64;
-const JUPITER_PRICE_API = 'https://lite-api.jup.ag/price/v2';
+const JUPITER_PRICE_API = 'https://lite-api.jup.ag/price/v3';
 const JUPITER_SWAP_API = 'https://lite-api.jup.ag/swap/v1';
 
 const swapApiClient = createJupiterApiClient({
@@ -62,7 +62,7 @@ export async function getJupiterPrice(inputMint: Address | string, outputMint: A
   };
 
   const res = await axios.get(JUPITER_PRICE_API, { params });
-  return res.data.data[inputMint.toString()]?.price || 0;
+  return res.data[inputMint.toString()]?.usdPrice || 0;
 }
 
 export type SwapConfig = {
