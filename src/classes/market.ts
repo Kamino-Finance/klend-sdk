@@ -21,6 +21,7 @@ import { KaminoReserve, KaminoReserveRpcApi, ReserveWithAddress } from './reserv
 import { LendingMarket, Obligation, ReferrerTokenState, Reserve, UserMetadata } from '../@codegen/klend/accounts';
 import {
   AllOracleAccounts,
+  BORROWS_LIMIT,
   cacheOrGetPythPrices,
   cacheOrGetScopePrice,
   cacheOrGetSwitchboardPrice,
@@ -882,6 +883,18 @@ export class KaminoMarket {
     });
   }
 
+  /**
+   * Retrieves all obligations that have deposited into the specified reserve.
+   *
+   * Iterates through all possible deposit slots up to DEPOSITS_LIMIT, applying filters to fetch obligations
+   * from the program accounts where the deposited reserve matches the provided address. For each matching
+   * obligation, it decodes the account data, validates ownership, and constructs KaminoObligation instances
+   * with calculated rates.
+   *
+   * @param {Address} reserve - The address of the reserve to filter deposited obligations by.
+   * @returns {Promise<KaminoObligation[]>} A promise that resolves to an array of KaminoObligation objects representing all obligations that have deposited into the specified reserve.
+   * @throws {Error} If an account is invalid or does not belong to this program, or if obligation parsing fails.
+   */
   async getAllObligationsByDepositedReserve(reserve: Address) {
     const finalObligations: KaminoObligation[] = [];
     for (let i = 0; i < DEPOSITS_LIMIT; i++) {
@@ -895,7 +908,7 @@ export class KaminoMarket {
               },
               {
                 memcmp: {
-                  offset: 96n + 136n * BigInt(i),
+                  offset: 96n + 136n * BigInt(i), // the offset for the borrows array in the obligation account
                   bytes: reserve.toString() as Base58EncodedBytes,
                   encoding: 'base58',
                 },
@@ -903,6 +916,88 @@ export class KaminoMarket {
               {
                 memcmp: {
                   offset: 32n,
+                  bytes: this.address.toString() as Base58EncodedBytes,
+                  encoding: 'base58',
+                },
+              },
+            ],
+            encoding: 'base64',
+          })
+          .send(),
+      ]);
+
+      const collateralExchangeRates = new Map<Address, Decimal>();
+      const cumulativeBorrowRates = new Map<Address, Decimal>();
+
+      const obligationsBatch = obligations.map((obligation) => {
+        if (obligation.account === null) {
+          throw new Error('Invalid account');
+        }
+        if (obligation.account.owner !== this.programId) {
+          throw new Error("account doesn't belong to this program");
+        }
+
+        const obligationAccount = Obligation.decode(Buffer.from(obligation.account.data[0], 'base64'));
+
+        if (!obligationAccount) {
+          throw Error('Could not parse obligation.');
+        }
+
+        KaminoObligation.addRatesForObligation(
+          this,
+          obligationAccount,
+          collateralExchangeRates,
+          cumulativeBorrowRates,
+          slot
+        );
+
+        return new KaminoObligation(
+          this,
+          obligation.pubkey,
+          obligationAccount,
+          collateralExchangeRates,
+          cumulativeBorrowRates
+        );
+      });
+      finalObligations.push(...obligationsBatch);
+    }
+    return finalObligations;
+  }
+
+  /**
+   * Retrieves all obligations that have borrowed from the specified reserve.
+   *
+   * Iterates through all possible borrow slots up to BORROWS_LIMIT, applying filters to fetch obligations
+   * from the program accounts where the borrowed reserve matches the provided address. For each matching
+   * obligation, it decodes the account data, validates ownership, and constructs KaminoObligation instances
+   * with calculated rates.
+   *
+   * @param {Address} reserve - The address of the reserve to filter borrowed obligations by.
+   * @returns {Promise<KaminoObligation[]>} A promise that resolves to an array of KaminoObligation objects
+   *   representing all obligations that have borrowed from the specified reserve.
+   * @throws {Error} If an account is invalid or does not belong to this program, or if obligation parsing fails.
+   */
+  async getAllObligationsByBorrowedReserve(reserve: Address) {
+    const finalObligations: KaminoObligation[] = [];
+    for (let i = 0; i < BORROWS_LIMIT; i++) {
+      const [slot, obligations] = await Promise.all([
+        this.rpc.getSlot().send(),
+        this.rpc
+          .getProgramAccounts(this.programId, {
+            filters: [
+              {
+                dataSize: BigInt(Obligation.layout.span + 8),
+              },
+              {
+                memcmp: {
+                  offset: 96n + 136n * 8n + 24n + 200n * BigInt(i), // the offset for the borrows array in the obligation account
+                  bytes: reserve.toString() as Base58EncodedBytes,
+                  encoding: 'base58',
+                },
+              },
+              {
+                memcmp: {
+                  offset: 32n, // lendingMarket address
                   bytes: this.address.toString() as Base58EncodedBytes,
                   encoding: 'base58',
                 },
