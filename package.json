@@ -60,7 +60,7 @@
     "@coral-xyz/borsh": "^0.28.0",
     "@kamino-finance/farms-sdk": "3.2.13",
     "@kamino-finance/kliquidity-sdk": "^8.4.7",
-    "@kamino-finance/scope-sdk": "^10.0.4",
+    "@kamino-finance/scope-sdk": "^10.0.5",
     "@solana-program/address-lookup-table": "^0.8.0",
     "@solana-program/system": "^0.8.0",
     "@solana-program/token": "^0.6.0",
