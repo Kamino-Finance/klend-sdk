@@ -1083,23 +1083,31 @@ export class KaminoObligation {
     };
   }
 
-  getMaxLoanLtvGivenElevationGroup(market: KaminoMarket, elevationGroup: number, slot: Slot): Decimal {
+  getMaxLoanLtvAndLiquidationLtvGivenElevationGroup(
+    market: KaminoMarket,
+    elevationGroup: number,
+    slot: Slot
+  ): { maxLtv: Decimal; liquidationLtv: Decimal } {
     const getOraclePx = (reserve: KaminoReserve) => reserve.getOracleMarketPrice();
     const { collateralExchangeRates } = KaminoObligation.getRatesForObligation(market, this.state, slot);
 
-    const { borrowLimit, userTotalCollateralDeposit } = KaminoObligation.calculateObligationDeposits(
-      market,
-      this.state.deposits,
-      collateralExchangeRates,
-      elevationGroup,
-      getOraclePx
-    );
+    const { borrowLimit, userTotalCollateralDeposit, borrowLiquidationLimit } =
+      KaminoObligation.calculateObligationDeposits(
+        market,
+        this.state.deposits,
+        collateralExchangeRates,
+        elevationGroup,
+        getOraclePx
+      );
 
-    if (borrowLimit.eq(0) || userTotalCollateralDeposit.eq(0)) {
-      return new Decimal(0);
+    if (userTotalCollateralDeposit.eq(0)) {
+      return { maxLtv: new Decimal(0), liquidationLtv: new Decimal(0) };
     }
 
-    return borrowLimit.div(userTotalCollateralDeposit);
+    return {
+      maxLtv: borrowLimit.div(userTotalCollateralDeposit),
+      liquidationLtv: borrowLiquidationLimit.div(userTotalCollateralDeposit),
+    };
   }
 
   /**
