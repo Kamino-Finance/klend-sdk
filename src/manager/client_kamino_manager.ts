@@ -1129,6 +1129,12 @@ async function main() {
       );
 
       const kaminoVault = new KaminoVault(vaultAddress, undefined, env.kvaultProgramId);
+      const vaultState = await kaminoVault.getState(env.c.rpc);
+      const lookupTableAddresses = [];
+      if (vaultState.vaultLookupTable !== DEFAULT_PUBLIC_KEY) {
+        lookupTableAddresses.push(vaultState.vaultLookupTable);
+      }
+      const lookupTables = await fetchAllAddressLookupTable(env.c.rpc, lookupTableAddresses);
       const withdrawIxs = await kaminoManager.withdrawFromVaultIxs(
         signer,
         kaminoVault,
@@ -1149,7 +1155,7 @@ async function main() {
           }),
         ],
         mode,
-        []
+        lookupTables
       );
 
       mode === 'execute' && console.log('User withdrew');

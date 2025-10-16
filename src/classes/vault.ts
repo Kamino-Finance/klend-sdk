@@ -1289,7 +1289,7 @@ export class KaminoVaultClient {
     }
 
     // if we burn all of user's shares close its shares ATA
-    const burnAllUserShares = sharesToWithdraw.gt(userSharesAtaBalance);
+    const burnAllUserShares = sharesToWithdraw.gt(totalUserShares);
     if (burnAllUserShares) {
       const closeAtaIx = getCloseAccountInstruction(
         {
