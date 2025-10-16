@@ -13,6 +13,7 @@ import {
   GetProgramAccountsApi,
   GetAccountInfoApi,
   GetMultipleAccountsApi,
+  SolanaRpcApiMainnet,
 } from '@solana/kit';
 import Decimal from 'decimal.js';
 import {
@@ -55,6 +56,7 @@ import { getCreateAccountInstruction, SYSTEM_PROGRAM_ADDRESS } from '@solana-pro
 import { SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 import { noopSigner } from '../utils/signer';
 import { getRewardPerTimeUnitSecond } from './farm_utils';
+import { Scope, ScopeEntryMetadata } from '@kamino-finance/scope-sdk';
 
 export type KaminoReserveRpcApi = GetProgramAccountsApi & GetAccountInfoApi & GetMultipleAccountsApi;
 
@@ -71,6 +73,8 @@ export class KaminoReserve {
 
   private rpc: Rpc<KaminoReserveRpcApi>;
   private readonly recentSlotDurationMs: number;
+
+  private metadata?: ScopeEntryMetadata[];
 
   constructor(
     state: Reserve,
@@ -131,6 +135,19 @@ export class KaminoReserve {
    */
   getTokenSymbol(): string {
     return parseTokenSymbol(this.state.config.tokenInfo.name);
+  }
+
+  /**
+   * @returns list of logo names and human readable oracle descriptions
+   */
+  async getOracleMetadata(): Promise<[string, string][]> {
+    if (!this.metadata) {
+      const scope = new Scope('mainnet-beta', this.rpc as Rpc<SolanaRpcApiMainnet>);
+      const { priceFeed, priceChain } = this.state.config.tokenInfo.scopeConfiguration;
+      this.metadata = await scope.getChainMetadata({ prices: priceFeed }, priceChain);
+    }
+
+    return this.metadata.map((m) => [m.provider, m.name]);
   }
 
   /**

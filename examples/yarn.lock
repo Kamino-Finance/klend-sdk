@@ -417,10 +417,10 @@
     decimal.js "^10.4.3"
     dotenv "^10.0.0"
 
-"@kamino-finance/scope-sdk@^10.0.5":
-  version "10.0.5"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/scope-sdk/-/scope-sdk-10.0.5.tgz#d58e3a04eab6acfd63abfa2e7d6f46e35d6c4b93"
-  integrity sha512-tCKw3PmROfAwRxTJDYp4TOTUPGMhlUq0Q/CzcNb7cJciP6x0CBryeMe4UmFlBlV4HwDLi/GptdzyLf+WGGr84Q==
+"@kamino-finance/scope-sdk@^10.1.0":
+  version "10.1.0"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/scope-sdk/-/scope-sdk-10.1.0.tgz#ee309530030d3f17430a1c8db53404bf711a55c8"
+  integrity sha512-FYUYCXavHUfbIX2DhVccacytxYYelFtUkBsLWkUZ5mIOWJ6foWT7uG66LTj80J1GQQ0iXJzj2i09iak8oanvQA==
   dependencies:
     "@coral-xyz/anchor" "^0.29.0"
     "@coral-xyz/borsh" "^0.29.0"
