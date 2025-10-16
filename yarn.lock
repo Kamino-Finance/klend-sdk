@@ -886,28 +886,28 @@
     decimal.js "^10.3.1"
     fzstd "^0.1.1"
 
-"@kamino-finance/kliquidity-sdk@^8.4.7":
-  version "8.4.7"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/kliquidity-sdk/-/kliquidity-sdk-8.4.7.tgz#38e8eba4e6bd5bc0e0076572cf1bc6c23e7cc393"
-  integrity sha512-d7ET6p2trDXDKGB7yKtz97lSQwfKaf3uis2qClvUd9giZE81MvMmyh1YfCJ9JvkWWNb1VIx2jbSXWhjTubSQSA==
+"@kamino-finance/kliquidity-sdk@^8.5.3":
+  version "8.5.3"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/kliquidity-sdk/-/kliquidity-sdk-8.5.3.tgz#2d7e2e213d38e8a21a17774883bd1afb808e873f"
+  integrity sha512-vw1Kp0lCwV5uLcyFpUE7HkXLN73xk2+OdCAoU1qXMor1bdaBLQVQp5OLi0qD1SVsgqGugbwb0v5oTvpHkEhbEg==
   dependencies:
     "@coral-xyz/anchor" "^0.29.0"
     "@coral-xyz/borsh" "^0.30.1"
     "@hubbleprotocol/hubble-config" "^5.0.0"
     "@jup-ag/api" "6.0.39"
-    "@kamino-finance/scope-sdk" "^9.1.0"
+    "@kamino-finance/scope-sdk" "^10.1.0"
     "@orca-so/common-sdk" "^0.6.11"
     "@orca-so/whirlpools" "^2.0.0"
     "@orca-so/whirlpools-core" "^2.0.0"
     "@raydium-io/raydium-sdk-v2" "^0.1.126-alpha"
-    "@solana-program/address-lookup-table" "^0.7.0"
-    "@solana-program/compute-budget" "^0.7.0"
-    "@solana-program/system" "^0.7.0"
-    "@solana-program/token" "^0.5.1"
-    "@solana-program/token-2022" "^0.4.1"
-    "@solana/compat" "^2.1.1"
-    "@solana/kit" "^2.1.1"
-    "@solana/sysvars" "^2.1.1"
+    "@solana-program/address-lookup-table" "^0.8.0"
+    "@solana-program/compute-budget" "^0.9.0"
+    "@solana-program/system" "^0.8.0"
+    "@solana-program/token" "^0.6.0"
+    "@solana-program/token-2022" "^0.5.0"
+    "@solana/compat" "^2.3.0"
+    "@solana/kit" "^2.3.0"
+    "@solana/sysvars" "^2.3.0"
     axios "^1.8.4"
     bn.js "^5.2.1"
     bs58 "^6.0.0"
@@ -919,6 +919,20 @@
   version "10.0.5"
   resolved "https://registry.yarnpkg.com/@kamino-finance/scope-sdk/-/scope-sdk-10.0.5.tgz#d58e3a04eab6acfd63abfa2e7d6f46e35d6c4b93"
   integrity sha512-tCKw3PmROfAwRxTJDYp4TOTUPGMhlUq0Q/CzcNb7cJciP6x0CBryeMe4UmFlBlV4HwDLi/GptdzyLf+WGGr84Q==
+  dependencies:
+    "@coral-xyz/anchor" "^0.29.0"
+    "@coral-xyz/borsh" "^0.29.0"
+    "@solana-program/system" "^0.7.0"
+    "@solana/kit" "^2.1.1"
+    "@solana/sysvars" "^2.1.1"
+    bn.js "^5.2.1"
+    buffer-layout "^1.2.2"
+    decimal.js "^10.3.1"
+
+"@kamino-finance/scope-sdk@^10.1.0":
+  version "10.1.0"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/scope-sdk/-/scope-sdk-10.1.0.tgz#ee309530030d3f17430a1c8db53404bf711a55c8"
+  integrity sha512-FYUYCXavHUfbIX2DhVccacytxYYelFtUkBsLWkUZ5mIOWJ6foWT7uG66LTj80J1GQQ0iXJzj2i09iak8oanvQA==
   dependencies:
     "@coral-xyz/anchor" "^0.29.0"
     "@coral-xyz/borsh" "^0.29.0"
@@ -1230,6 +1244,11 @@
   version "0.8.0"
   resolved "https://registry.yarnpkg.com/@solana-program/compute-budget/-/compute-budget-0.8.0.tgz#0930aca4de1170ed607d64d89375074930aa8b93"
   integrity sha512-qPKxdxaEsFxebZ4K5RPuy7VQIm/tfJLa1+Nlt3KNA8EYQkz9Xm8htdoEaXVrer9kpgzzp9R3I3Bh6omwCM06tQ==
+
+"@solana-program/compute-budget@^0.9.0":
+  version "0.9.0"
+  resolved "https://registry.yarnpkg.com/@solana-program/compute-budget/-/compute-budget-0.9.0.tgz#4afd35525f9f6ed9692438548863b736dad8337e"
+  integrity sha512-on7Cs1V48X9E2x1yVmfM6N6Xv0r4oGruXPcWnI50D3D3CIsHNWJ4gsvL4qZ4iey7zAP73FdM21K2CZBi1a/jzg==
 
 "@solana-program/memo@^0.7.0":
   version "0.7.0"
