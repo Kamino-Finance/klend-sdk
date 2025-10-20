@@ -25,8 +25,8 @@ export const getKaminoAllPricesAPI = 'https://api.hubbleprotocol.io/prices?env=m
 
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
 
-  const vault = new KaminoVault(vaultAddress);
-  const vaultState = await vault.getState(c.rpc); // this reads the vault state from the chain and set is, if not set it will fetch it from the chain any time we use it
+  const vault = new KaminoVault(c.rpc, vaultAddress);
+  const vaultState = await vault.getState(); // this reads the vault state from the chain and set is, if not set it will fetch it from the chain any time we use it
 
   // get how many shares the user has
   const userShares = await kaminoManager.getUserSharesBalanceSingleVault(vaultHolder, vault);

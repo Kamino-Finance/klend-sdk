@@ -16,7 +16,7 @@ import { generateKeyPairSigner } from '@solana/kit';
   const user = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
-  const kaminoVault = new KaminoVault(EXAMPLE_USDC_VAULT);
+  const kaminoVault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
 
   // update min invest amount (numerical value)
   const minInvestAmount = new Decimal(100_000);
@@ -27,7 +27,7 @@ import { generateKeyPairSigner } from '@solana/kit';
   );
 
   // read the vault state so we can use the LUT in the tx
-  const vaultState = await kaminoVault.getState(c.rpc);
+  const vaultState = await kaminoVault.getState();
 
   await sendAndConfirmTx(
     c,

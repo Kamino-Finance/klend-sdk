@@ -37,6 +37,7 @@ import {
   CreateKaminoMarketParams,
   createReserveIxs,
   DEFAULT_PUBLIC_KEY,
+  DEFAULT_RECENT_SLOT_DURATION_MS,
   ENV,
   getAllLendingMarketAccounts,
   getAllOracleAccounts,
@@ -116,12 +117,12 @@ export class KaminoManager {
 
   constructor(
     rpc: Rpc<SolanaRpcApi>,
-    recentSlotDurationMs: number,
+    recentSlotDurationMs?: number,
     kaminoLendProgramId?: Address,
     kaminoVaultProgramId?: Address
   ) {
     this._rpc = rpc;
-    this.recentSlotDurationMs = recentSlotDurationMs;
+    this.recentSlotDurationMs = recentSlotDurationMs ?? DEFAULT_RECENT_SLOT_DURATION_MS;
     this._kaminoVaultProgramId = kaminoVaultProgramId ? kaminoVaultProgramId : kaminoVaultId;
     this._kaminoLendProgramId = kaminoLendProgramId ? kaminoLendProgramId : PROGRAM_ID;
     this._vaultClient = new KaminoVaultClient(
@@ -245,7 +246,7 @@ export class KaminoManager {
    * @returns - an instruction to set the shares metadata for the vault
    */
   async getSetSharesMetadataIx(authority: TransactionSigner, vault: KaminoVault, tokenName: string, extraName: string) {
-    const vaultState = await vault.getState(this._rpc);
+    const vaultState = await vault.getState();
     return this._vaultClient.getSetSharesMetadataIx(
       this._rpc,
       authority,
@@ -324,7 +325,7 @@ export class KaminoManager {
     reserveState?: Reserve
   ): Promise<Instruction[]> {
     const connection = this.getRpc();
-    const vaultState = await kaminoVault.getState(connection);
+    const vaultState = await kaminoVault.getState();
 
     const allocations = this.getVaultReserves(vaultState);
     if (!allocations.includes(reserveAddress)) {
@@ -907,7 +908,7 @@ export class KaminoManager {
         throw Error(`kaminoVault with pubkey ${kaminoVault.address} could not be decoded`);
       }
 
-      return new KaminoVault(kaminoVault.address, kaminoVaultAccount, this._kaminoVaultProgramId);
+      return KaminoVault.loadWithClientAndState(this._vaultClient, kaminoVault.address, kaminoVaultAccount);
     });
   }
 
@@ -950,7 +951,7 @@ export class KaminoManager {
   async getVaultTokenAccounts(
     vault: KaminoVault
   ): Promise<AccountInfoWithPubkey<AccountInfoBase & AccountInfoWithJsonData>[]> {
-    const vaultState = await vault.getState(this._rpc);
+    const vaultState = await vault.getState();
     return this.getShareTokenAccounts(vaultState.sharesMint);
   }
 
@@ -960,7 +961,7 @@ export class KaminoManager {
    * @returns an array of all vault holders with their pubkeys and amounts
    */
   getVaultHolders = async (vault: KaminoVault): Promise<VaultHolder[]> => {
-    await vault.getState(this._rpc);
+    await vault.getState();
     const tokenAccounts = await this.getVaultTokenAccounts(vault);
     const result: VaultHolder[] = [];
     for (const tokenAccount of tokenAccounts) {
@@ -1320,7 +1321,11 @@ export class KaminoManager {
    * @param skipComputationChecks - if true, the function will skip the computation checks and will invest all the reserves
    * @returns - an array of invest instructions for each invest action required for the vault reserves
    */
-  async investAllReservesIxs(payer: TransactionSigner, kaminoVault: KaminoVault, skipComputationChecks: boolean = false): Promise<Instruction[]> {
+  async investAllReservesIxs(
+    payer: TransactionSigner,
+    kaminoVault: KaminoVault,
+    skipComputationChecks: boolean = false
+  ): Promise<Instruction[]> {
     return this._vaultClient.investAllReservesIxs(payer, kaminoVault, skipComputationChecks);
   }
 

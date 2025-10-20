@@ -11,10 +11,10 @@ import { sendAndConfirmTx } from '../utils/tx';
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
-  const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
+  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
 
   // read the vault state so we can use the LUT in the tx
-  const vaultState = await vault.getState(c.rpc);
+  const vaultState = await vault.getState();
 
   // withdraw 100 shares from the vault
   const sharesToWithdraw = new Decimal(100.0);

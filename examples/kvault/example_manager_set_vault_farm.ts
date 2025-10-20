@@ -15,7 +15,7 @@ import { sendAndConfirmTx } from '../utils/tx';
   const user = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
-  const kaminoVault = new KaminoVault(EXAMPLE_USDC_VAULT);
+  const kaminoVault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
 
   // update the vault farm (pubkey value)
   const farmKeypair = await generateKeyPairSigner(); // note this is just a pubkey for the example, in a real world scenario this needs to be a real farm

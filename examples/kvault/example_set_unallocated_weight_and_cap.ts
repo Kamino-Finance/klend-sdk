@@ -10,7 +10,7 @@ import BN from 'bn.js';
   const user = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
-  const kaminoVault = new KaminoVault(EXAMPLE_USDC_VAULT);
+  const kaminoVault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
 
   const newUnallocatedWeight = new BN(1999);
   const unallocatedCapLamports = new BN(1000);

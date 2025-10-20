@@ -17,7 +17,7 @@ import { sendAndConfirmTx } from '../utils/tx';
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
 
-  const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
+  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
 
   const usdcJlpMarketReserveState = await Reserve.fetch(c.rpc, USDC_RESERVE_JLP_MARKET);
   if (!usdcJlpMarketReserveState) {
@@ -31,7 +31,7 @@ import { sendAndConfirmTx } from '../utils/tx';
   const investInReserveIxs = await kaminoManager.investSingleReserveIxs(wallet, vault, usdcReserveToInvestWithAddress);
 
   // read the vault state so we can use the LUT in the tx
-  const vaultState = await vault.getState(c.rpc);
+  const vaultState = await vault.getState();
 
   await sendAndConfirmTx(c, wallet, investInReserveIxs, [], [vaultState.vaultLookupTable], 'Invest Single Reserve');
 })().catch(async (e) => {

@@ -34,7 +34,7 @@ import { sendAndConfirmTx } from '../utils/tx';
   });
   const { vault: vaultKp, initVaultIxs: instructions } = await kaminoManager.createVaultIxs(kaminoVaultConfig);
 
-  const vault = new KaminoVault(vaultKp.address);
+  const vault = new KaminoVault(c.rpc,vaultKp.address);
 
   // initialize vault, lookup table for the vault and shares metadata
   await sendAndConfirmTx(

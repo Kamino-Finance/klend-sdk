@@ -1,12 +1,7 @@
 import { getConnectionPool } from '../utils/connection';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
 import Decimal from 'decimal.js/decimal';
-import {
-  getMedianSlotDurationInMsFromLastEpochs,
-  KaminoManager,
-  KaminoVault,
-  printHoldings,
-} from '@kamino-finance/klend-sdk';
+import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } from '@kamino-finance/klend-sdk';
 import {
   printHoldingsWithUSDValue,
   printVaultOverview,
@@ -23,8 +18,8 @@ import {
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
 
   // print vault state as it is on chain
-  const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
-  const vaultState = await vault.getState(c.rpc);
+  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
+  const vaultState = await vault.getState();
 
   // read how many tokens represents 1 share
   const tokensPerShare = await kaminoManager.getTokensPerShareSingleVault(vault);
@@ -41,7 +36,7 @@ import {
 
   // read vault holdings (total balance, available, invested)
   const holdings = await kaminoManager.getVaultHoldings(vaultState);
-  printHoldings(holdings);
+  holdings.print();
 
   // read vault holdings (total balance, available, invested) in dollars
   const tokenPrice = new Decimal(0.1); // hardcoded, this has to be the real price for the token of the vault
@@ -84,7 +79,7 @@ import {
     undefined,
     futureSlot
   );
-  printHoldings(holdingsWithInterest.holdings);
+  holdingsWithInterest.holdings.print();
   console.log('Simuated earned interest', holdingsWithInterest.earnedInterest.toString());
 
   // read the list of all reserves that are part of the vault allocation

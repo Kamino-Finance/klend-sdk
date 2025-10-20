@@ -17,7 +17,7 @@ import { sendAndConfirmTx } from '../utils/tx';
   const user = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
-  const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
+  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
 
   const newAdmin = await getKeypair();
 

@@ -10,13 +10,13 @@ import { sendAndConfirmTx } from '../utils/tx';
   const user = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
-  const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
+  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
 
   const feesToGiveUp = new Decimal(0.01);
   const giveUpFeesIx = await kaminoManager.giveUpPendingFeesIx(vault, feesToGiveUp);
 
   // read the vault state so we can use the LUT in the tx
-  const vaultState = await vault.getState(c.rpc);
+  const vaultState = await vault.getState();
   await sendAndConfirmTx(c, user, [giveUpFeesIx], [], [vaultState.vaultLookupTable], 'GiveUpPendingFees');
 })().catch(async (e) => {
   console.error(e);

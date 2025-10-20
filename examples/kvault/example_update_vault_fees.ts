@@ -14,10 +14,10 @@ import { sendAndConfirmTx } from '../utils/tx';
   const user = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
-  const kaminoVault = new KaminoVault(EXAMPLE_USDC_VAULT);
+  const kaminoVault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
 
   // read the vault state so we can use the LUT in the tx
-  const vaultState = await kaminoVault.getState(c.rpc);
+  const vaultState = await kaminoVault.getState();
 
   // update the performance fee of the vault
   const perfFeeBps = new Decimal(1000);

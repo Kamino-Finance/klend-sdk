@@ -10,8 +10,8 @@ import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } f
 
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
 
-  const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
-  const vaultState = await vault.getState(c.rpc);
+  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
+  const vaultState = await vault.getState();
 
   // read how many shares an user has in a specific vault
   const userShares = await kaminoManager.getUserSharesBalanceSingleVault(user.address, vault);

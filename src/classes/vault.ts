@@ -7,7 +7,6 @@ import {
   Base58EncodedBytes,
   fetchEncodedAccount,
   generateKeyPairSigner,
-  GetAccountInfoApi,
   getAddressEncoder,
   getBase58Decoder,
   GetProgramAccountsDatasizeFilter,
@@ -191,7 +190,7 @@ export class KaminoVaultClient {
       return;
     }
 
-    const kaminoVault = new KaminoVault(vaultPubkey, vault, this._kaminoVaultProgramId);
+    const kaminoVault = KaminoVault.loadWithClientAndState(this, vaultPubkey, vault);
     const vaultName = this.decodeVaultName(vault.name);
     const slot = await this.getConnection().getSlot({ commitment: 'confirmed' }).send();
     const tokensPerShare = await this.getTokensPerShareSingleVault(kaminoVault, slot);
@@ -203,7 +202,7 @@ export class KaminoVaultClient {
 
     console.log('Name: ', vaultName);
     console.log('Shares issued: ', sharesIssued);
-    printHoldings(holdings);
+    holdings.print();
     console.log('Tokens per share: ', tokensPerShare);
   }
 
@@ -408,7 +407,7 @@ export class KaminoVaultClient {
     reserveAllocationConfig: ReserveAllocationConfig,
     vaultAdminAuthority?: TransactionSigner
   ): Promise<UpdateReserveAllocationIxs> {
-    const vaultState: VaultState = await vault.getState(this.getConnection());
+    const vaultState: VaultState = await vault.getState();
     const reserveState: Reserve = reserveAllocationConfig.getReserveState();
 
     const cTokenVault = await getCTokenVaultPda(
@@ -480,7 +479,7 @@ export class KaminoVaultClient {
     unallocatedWeight?: BN,
     unallocatedCap?: BN
   ) {
-    const vaultState = await vault.getState(this.getConnection());
+    const vaultState = await vault.getState();
 
     const unallocatedWeightToUse = unallocatedWeight ? unallocatedWeight : vaultState.unallocatedWeight;
     const unallocatedCapToUse = unallocatedCap ? unallocatedCap : vaultState.unallocatedTokensCap;
@@ -522,7 +521,7 @@ export class KaminoVaultClient {
     reserve: Address,
     vaultAdminAuthority?: TransactionSigner
   ): Promise<WithdrawAndBlockReserveIxs> {
-    const vaultState = await vault.getState(this.getConnection());
+    const vaultState = await vault.getState();
 
     const reserveIsPartOfAllocation = vaultState.vaultAllocationStrategy.some(
       (allocation) => allocation.reserve === reserve
@@ -570,7 +569,7 @@ export class KaminoVaultClient {
     vaultReservesMap?: Map<Address, KaminoReserve>,
     payer?: TransactionSigner
   ): Promise<WithdrawAndBlockReserveIxs> {
-    const vaultState = await vault.getState(this.getConnection());
+    const vaultState = await vault.getState();
 
     const reserves = this.getVaultReserves(vaultState);
     const withdrawAndBlockReserveIxs: WithdrawAndBlockReserveIxs = {
@@ -613,7 +612,7 @@ export class KaminoVaultClient {
     vaultReservesMap?: Map<Address, KaminoReserve>,
     payer?: TransactionSigner
   ): Promise<DisinvestAllReservesIxs> {
-    const vaultState = await vault.getState(this.getConnection());
+    const vaultState = await vault.getState();
 
     const reserves = this.getVaultReserves(vaultState);
     const disinvestAllReservesIxs: DisinvestAllReservesIxs = {
@@ -666,7 +665,7 @@ export class KaminoVaultClient {
     reserve: Address,
     vaultAdminAuthority?: TransactionSigner
   ): Promise<Instruction | undefined> {
-    const vaultState = await vault.getState(this.getConnection());
+    const vaultState = await vault.getState();
     const vaultAdmin = parseVaultAdmin(vaultState, vaultAdminAuthority);
 
     const reserveIsPartOfAllocation = vaultState.vaultAllocationStrategy.some(
@@ -700,7 +699,7 @@ export class KaminoVaultClient {
     value: string,
     vaultAdminAuthority?: TransactionSigner
   ): Promise<UpdateVaultConfigIxs> {
-    const vaultState: VaultState = await vault.getState(this.getConnection());
+    const vaultState: VaultState = await vault.getState();
     const admin = parseVaultAdmin(vaultState, vaultAdminAuthority);
 
     const updateVaultConfigAccs: UpdateVaultConfigAccounts = {
@@ -802,7 +801,7 @@ export class KaminoVaultClient {
     errorOnOverride: boolean = true,
     vaultAdminAuthority?: TransactionSigner
   ): Promise<UpdateVaultConfigIxs> {
-    const vaultHasFarm = await vault.hasFarm(this.getConnection());
+    const vaultHasFarm = await vault.hasFarm();
     if (vaultHasFarm && errorOnOverride) {
       throw new Error('Vault already has a farm, if you want to override it set errorOnOverride to false');
     }
@@ -868,7 +867,7 @@ export class KaminoVaultClient {
     vault: KaminoVault,
     pendingAdmin?: TransactionSigner
   ): Promise<AcceptVaultOwnershipIxs> {
-    const vaultState: VaultState = await vault.getState(this.getConnection());
+    const vaultState: VaultState = await vault.getState();
     const signer = parseVaultPendingAdmin(vaultState, pendingAdmin);
 
     const acceptOwneshipAccounts: UpdateAdminAccounts = {
@@ -929,7 +928,7 @@ export class KaminoVaultClient {
     maxAmountToGiveUp: Decimal,
     vaultAdminAuthority?: TransactionSigner
   ): Promise<Instruction> {
-    const vaultState: VaultState = await vault.getState(this.getConnection());
+    const vaultState: VaultState = await vault.getState();
     const vaultAdmin = parseVaultAdmin(vaultState, vaultAdminAuthority);
 
     const giveUpPendingFeesAccounts: GiveUpPendingFeesAccounts = {
@@ -964,7 +963,7 @@ export class KaminoVaultClient {
     vaultReservesMap?: Map<Address, KaminoReserve>,
     vaultAdminAuthority?: TransactionSigner
   ): Promise<Instruction[]> {
-    const vaultState: VaultState = await vault.getState(this.getConnection());
+    const vaultState: VaultState = await vault.getState();
     const vaultAdmin = parseVaultAdmin(vaultState, vaultAdminAuthority);
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
     const [{ ata: adminTokenAta, createAtaIx }] = await createAtasIdempotent(vaultAdmin, [
@@ -1057,7 +1056,7 @@ export class KaminoVaultClient {
     vaultReservesMap?: Map<Address, KaminoReserve>,
     farmState?: FarmState
   ): Promise<DepositIxs> {
-    const vaultState = await vault.getState(this.getConnection());
+    const vaultState = await vault.getState();
 
     const tokenProgramID = vaultState.tokenProgram;
     const userTokenAta = await getAssociatedTokenAddress(vaultState.tokenMint, user.address, tokenProgramID);
@@ -1125,7 +1124,7 @@ export class KaminoVaultClient {
     };
 
     // if there is no farm, we can return the deposit instructions, otherwise include the stake ix in the response
-    if (!(await vault.hasFarm(this.getConnection()))) {
+    if (!(await vault.hasFarm())) {
       return depositIxs;
     }
 
@@ -1149,7 +1148,7 @@ export class KaminoVaultClient {
     sharesAmount?: Decimal,
     farmState?: FarmState
   ): Promise<Instruction[]> {
-    const vaultState = await vault.getState(this.getConnection());
+    const vaultState = await vault.getState();
 
     let sharesToStakeLamports = new Decimal(U64_MAX);
     if (sharesAmount) {
@@ -1157,7 +1156,7 @@ export class KaminoVaultClient {
     }
 
     // if tokens to be staked are 0 or vault has no farm there is no stake needed
-    if (sharesToStakeLamports.lte(0) || !(await vault.hasFarm(this.getConnection()))) {
+    if (sharesToStakeLamports.lte(0) || !(await vault.hasFarm())) {
       return [];
     }
 
@@ -1183,9 +1182,8 @@ export class KaminoVaultClient {
     vaultReservesMap?: Map<Address, KaminoReserve>,
     farmState?: FarmState
   ): Promise<WithdrawIxs> {
-    const vaultState = await vault.getState(this.getConnection());
-    const kaminoVault = new KaminoVault(vault.address, vaultState, vault.programId);
-    const hasFarm = await vault.hasFarm(this.getConnection());
+    const vaultState = await vault.getState();
+    const hasFarm = await vault.hasFarm();
 
     const withdrawIxs: WithdrawIxs = {
       unstakeFromFarmIfNeededIxs: [],
@@ -1262,7 +1260,7 @@ export class KaminoVaultClient {
     if (vaultAllocation) {
       const withdrawFromVaultIxs = await this.withdrawWithReserveIxs(
         user,
-        kaminoVault,
+        vault,
         sharesToWithdraw,
         totalUserShares,
         slot,
@@ -1270,7 +1268,7 @@ export class KaminoVaultClient {
       );
       withdrawIxs.withdrawIxs = withdrawFromVaultIxs;
     } else {
-      const withdrawFromVaultIxs = await this.withdrawFromAvailableIxs(user, kaminoVault, sharesToWithdraw);
+      const withdrawFromVaultIxs = await this.withdrawFromAvailableIxs(user, vault, sharesToWithdraw);
       withdrawIxs.withdrawIxs = withdrawFromVaultIxs;
     }
 
@@ -1310,8 +1308,7 @@ export class KaminoVaultClient {
     vault: KaminoVault,
     shareAmount: Decimal
   ): Promise<Instruction[]> {
-    const vaultState = await vault.getState(this.getConnection());
-    const kaminoVault = new KaminoVault(vault.address, vaultState, vault.programId);
+    const vaultState = await vault.getState();
 
     const userSharesAta = await getAssociatedTokenAddress(vaultState.sharesMint, user.address);
     const [{ ata: userTokenAta, createAtaIx }] = await createAtasIdempotent(user, [
@@ -1324,7 +1321,7 @@ export class KaminoVaultClient {
     const shareLamportsToWithdraw = collToLamportsDecimal(shareAmount, vaultState.sharesMintDecimals.toNumber());
     const withdrawFromAvailableIxn = await this.withdrawFromAvailableIx(
       user,
-      kaminoVault,
+      vault,
       vaultState,
       userSharesAta,
       userTokenAta,
@@ -1342,7 +1339,7 @@ export class KaminoVaultClient {
     slot: Slot,
     vaultReservesMap?: Map<Address, KaminoReserve>
   ): Promise<Instruction[]> {
-    const vaultState = await vault.getState(this.getConnection());
+    const vaultState = await vault.getState();
 
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
     const userSharesAta = await getAssociatedTokenAddress(vaultState.sharesMint, user.address);
@@ -1463,7 +1460,7 @@ export class KaminoVaultClient {
     vault: KaminoVault,
     skipComputationChecks: boolean = false
   ): Promise<Instruction[]> {
-    const vaultState = await vault.reloadState(this.getConnection());
+    const vaultState = await vault.reloadState();
     const minInvestAmount = vaultState.minInvestAmount;
     const allReserves = this.getVaultReserves(vaultState);
     if (allReserves.length === 0) {
@@ -1576,7 +1573,7 @@ export class KaminoVaultClient {
     vaultReservesMap?: Map<Address, KaminoReserve>,
     createAtaIfNeeded: boolean = true
   ): Promise<Instruction[]> {
-    const vaultState = await vault.getState(this.getConnection());
+    const vaultState = await vault.getState();
     const cTokenVault = await getCTokenVaultPda(vault.address, reserve.address, this._kaminoVaultProgramId);
     const [lendingMarketAuth] = await lendingMarketAuthPda(reserve.state.lendingMarket, this._kaminoLendProgramId);
 
@@ -1784,7 +1781,7 @@ export class KaminoVaultClient {
     vault: KaminoVault,
     vaultReservesMap?: Map<Address, KaminoReserve>
   ): Promise<SyncVaultLUTIxs> {
-    const vaultState = await vault.getState(this.getConnection());
+    const vaultState = await vault.getState();
     const allAccountsToBeInserted = [
       vault.address,
       vaultState.vaultAdminAuthority,
@@ -1940,7 +1937,7 @@ export class KaminoVaultClient {
    * @returns - user share balance in tokens (not lamports)
    */
   async getUserSharesBalanceSingleVault(user: Address, vault: KaminoVault): Promise<UserSharesForVault> {
-    const vaultState = await vault.getState(this.getConnection());
+    const vaultState = await vault.getState();
 
     const userShares: UserSharesForVault = {
       unstakedShares: new Decimal(0),
@@ -1964,7 +1961,7 @@ export class KaminoVaultClient {
       return acc;
     }, new Decimal(0));
 
-    if (await vault.hasFarm(this.getConnection())) {
+    if (await vault.hasFarm()) {
       const userSharesInFarm = await getUserSharesInTokensStakedInFarm(
         this.getConnection(),
         user,
@@ -2019,7 +2016,7 @@ export class KaminoVaultClient {
       });
       userSharesTokenAccountsPerVault.set(vault.address, userSharesTokenAccounts);
 
-      if (await vault.hasFarm(this.getConnection())) {
+      if (await vault.hasFarm()) {
         const userFarmState = allUserFarmStatesMap.get(state.vaultFarm);
         if (userFarmState) {
           console.log('there is a farm state for vault', vault.address);
@@ -2096,7 +2093,7 @@ export class KaminoVaultClient {
     currentSlot?: Slot
   ): Promise<Decimal> {
     // Determine if we have a KaminoVault or VaultState
-    const vaultState = 'getState' in vaultOrState ? await vaultOrState.getState(this.getConnection()) : vaultOrState;
+    const vaultState = 'getState' in vaultOrState ? await vaultOrState.getState() : vaultOrState;
 
     if (vaultState.sharesIssued.isZero()) {
       return new Decimal(0);
@@ -2203,7 +2200,7 @@ export class KaminoVaultClient {
         throw Error(`kaminoVault with pubkey ${kaminoVault.address} could not be decoded`);
       }
 
-      return new KaminoVault(kaminoVault.address, kaminoVaultAccount, this._kaminoVaultProgramId);
+      return KaminoVault.loadWithClientAndState(this, kaminoVault.address, kaminoVaultAccount);
     });
   }
 
@@ -2219,7 +2216,7 @@ export class KaminoVaultClient {
     const vaultStates = await batchFetch(vaults, (chunk) => this.getVaultsStates(chunk));
     return vaults.map((vault, index) => {
       const state = vaultStates[index];
-      return state ? new KaminoVault(vault, state, this._kaminoVaultProgramId) : null;
+      return state ? KaminoVault.loadWithClientAndState(this, vault, state) : null;
     });
   }
 
@@ -2325,7 +2322,7 @@ export class KaminoVaultClient {
     slot: Slot,
     vaultReservesMap: Map<Address, KaminoReserve>
   ): Promise<Map<Address, Decimal>> {
-    const vaultState = await vault.getState(this.getConnection());
+    const vaultState = await vault.getState();
 
     const reserveAllocationAvailableLiquidityToWithdraw = new Map<Address, Decimal>();
     vaultState.vaultAllocationStrategy.forEach((allocationStrategy) => {
@@ -2572,13 +2569,13 @@ export class KaminoVaultClient {
     vaultReserves?: Map<Address, KaminoReserve>,
     currentSlot?: Slot
   ): Promise<VaultHoldings> {
-    const vaultHoldings: VaultHoldings = {
+    const vaultHoldings: VaultHoldings = new VaultHoldings({
       available: new Decimal(vault.tokenAvailable.toString()),
       invested: new Decimal(0),
       investedInReserves: new Map<Address, Decimal>(),
       totalAUMIncludingFees: new Decimal(0),
       pendingFees: new Decimal(0),
-    };
+    });
 
     const currentSlotToUse = currentSlot ?? (await this.getConnection().getSlot({ commitment: 'confirmed' }).send());
     const vaultReservesState = vaultReserves ? vaultReserves : await this.loadVaultReserves(vault);
@@ -2643,13 +2640,13 @@ export class KaminoVaultClient {
     const totalAvailableDecimal = lamportsToDecimal(vaultHoldings.available, decimals);
     const totalInvestedDecimal = lamportsToDecimal(vaultHoldings.invested, decimals);
     const pendingFees = lamportsToDecimal(totalPendingFees, decimals);
-    return {
+    return new VaultHoldings({
       available: totalAvailableDecimal,
       invested: totalInvestedDecimal,
       investedInReserves: vaultHoldings.investedInReserves,
       totalAUMIncludingFees: totalAvailableDecimal.add(totalInvestedDecimal),
       pendingFees: pendingFees,
-    };
+    });
   }
 
   /**
@@ -3101,7 +3098,7 @@ export class KaminoVaultClient {
     tokensPrices?: Map<Address, Decimal>
   ): Promise<FarmIncentives> {
     // Determine if we have a KaminoVault or VaultState
-    const vaultState = 'getState' in vaultOrState ? await vaultOrState.getState(this.getConnection()) : vaultOrState;
+    const vaultState = 'getState' in vaultOrState ? await vaultOrState.getState() : vaultOrState;
     if (vaultState.vaultFarm === DEFAULT_PUBLIC_KEY) {
       return {
         incentivesStats: [],
@@ -3137,9 +3134,9 @@ export class KaminoVaultClient {
     const reservesToFetch = new Set<Address>();
 
     for (const vault of vaults) {
-      const vaultState = await vault.getState(this.getConnection());
+      const vaultState = await vault.getState();
       vaultsTokenMints.add(vaultState.tokenMint);
-      const hasFarm = await vault.hasFarm(this.getConnection());
+      const hasFarm = await vault.hasFarm();
       if (hasFarm) {
         const farmAddress = vaultState.vaultFarm;
         if (!kFarmsMap.has(farmAddress)) {
@@ -3225,10 +3222,10 @@ export class KaminoVaultClient {
     vaultReservesMap?: Map<Address, KaminoReserve>,
     tokensPrices?: Map<Address, Decimal>
   ): Promise<VaultReservesFarmsIncentives> {
-    const vaultState = 'getState' in vaultOrState ? await vaultOrState.getState(this.getConnection()) : vaultOrState;
+    const vaultState = 'getState' in vaultOrState ? await vaultOrState.getState() : vaultOrState;
 
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
-    const currentSlot = slot ? slot : await this.getConnection().getSlot({ commitment: 'confirmed' }).send();
+    const currentSlot = slot ?? (await this.getConnection().getSlot({ commitment: 'confirmed' }).send());
 
     const holdings = await this.getVaultHoldings(vaultState, currentSlot, vaultReservesState);
 
@@ -3310,16 +3307,33 @@ export class KaminoVault {
   readonly address: Address;
   state: VaultState | undefined | null;
   programId: Address;
+  client: KaminoVaultClient;
+  vaultReservesStateCache: Map<Address, KaminoReserve> | undefined;
 
-  constructor(vaultAddress: Address, state?: VaultState, programId: Address = kaminoVaultId) {
+  constructor(
+    rpc: Rpc<SolanaRpcApi>,
+    vaultAddress: Address,
+    state?: VaultState,
+    programId: Address = kaminoVaultId,
+    recentSlotDurationMs: number = DEFAULT_RECENT_SLOT_DURATION_MS
+  ) {
     this.address = vaultAddress;
     this.state = state;
     this.programId = programId;
+    this.client = new KaminoVaultClient(rpc, recentSlotDurationMs);
   }
 
-  async getState(rpc: Rpc<GetAccountInfoApi>): Promise<VaultState> {
+  static loadWithClientAndState(client: KaminoVaultClient, vaultAddress: Address, state: VaultState): KaminoVault {
+    const vault = new KaminoVault(client.getConnection(), vaultAddress);
+    vault.state = state;
+    vault.programId = client.getProgramID();
+    vault.client = client;
+    return vault;
+  }
+
+  async getState(): Promise<VaultState> {
     if (!this.state) {
-      const res = await VaultState.fetch(rpc, this.address, this.programId);
+      const res = await VaultState.fetch(this.client.getConnection(), this.address, this.programId);
       if (!res) {
         throw new Error('Invalid vault');
       }
@@ -3330,17 +3344,140 @@ export class KaminoVault {
     }
   }
 
-  async reloadState(rpc: Rpc<GetAccountInfoApi>): Promise<VaultState> {
-    this.state = await VaultState.fetch(rpc, this.address, this.programId);
+  async reloadVaultReserves(): Promise<void> {
+    this.vaultReservesStateCache = await this.client.loadVaultReserves(this.state!);
+  }
+
+  async reloadState(): Promise<VaultState> {
+    this.state = await VaultState.fetch(this.client.getConnection(), this.address, this.programId);
     if (!this.state) {
       throw new Error('Could not fetch vault');
     }
     return this.state;
   }
 
-  async hasFarm(rpc: Rpc<GetAccountInfoApi>): Promise<boolean> {
-    const state = await this.getState(rpc);
+  async hasFarm(): Promise<boolean> {
+    const state = await this.getState();
     return state.vaultFarm !== DEFAULT_PUBLIC_KEY;
+  }
+
+  /**
+   * This will return an VaultHoldings object which contains the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
+   * @returns an VaultHoldings object representing the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
+   */
+  async getVaultHoldings(): Promise<VaultHoldings> {
+    if (!this.state || !this.vaultReservesStateCache) {
+      await this.reloadState();
+      await this.reloadVaultReserves();
+    }
+
+    return await this.client.getVaultHoldings(this.state!, undefined, this.vaultReservesStateCache!, undefined);
+  }
+
+  /**
+   * This will return the a map between reserve pubkey and the allocation overview for the reserve
+   * @returns a map between reserve pubkey and the allocation overview for the reserve
+   */
+  async getVaultAllocations(): Promise<Map<Address, ReserveAllocationOverview>> {
+    if (!this.state) {
+      await this.reloadState();
+    }
+
+    return this.client.getVaultAllocations(this.state!);
+  }
+
+  /**
+   * This will return the APY of the vault based on the current invested amounts and the theoretical APY if all the available tokens were invested
+   * @returns a struct containing actualAPY and theoreticalAPY for the vault
+   */
+  async getAPYs(slot?: Slot): Promise<VaultAPYs> {
+    if (!this.state || !this.vaultReservesStateCache) {
+      await this.reloadState();
+      await this.reloadVaultReserves();
+    }
+
+    const latestSlot = slot ?? (await this.client.getConnection().getSlot({ commitment: 'confirmed' }).send());
+    const actualApy = await this.client.getVaultActualAPY(this.state!, latestSlot, this.vaultReservesStateCache!);
+    const theoreticalApy = await this.client.getVaultTheoreticalAPY(
+      this.state!,
+      latestSlot,
+      this.vaultReservesStateCache!
+    );
+
+    return {
+      actualAPY: actualApy,
+      theoreticalAPY: theoreticalApy,
+    };
+  }
+
+  /**
+   * This method returns the exchange rate of the vault (tokens per share)
+   * @returns - Decimal representing the exchange rate (tokens per share)
+   */
+  async getExchangeRate(slot?: Slot): Promise<Decimal> {
+    if (!this.state || !this.vaultReservesStateCache) {
+      await this.reloadState();
+      await this.reloadVaultReserves();
+    }
+
+    const latestSlot = slot ?? (await this.client.getConnection().getSlot({ commitment: 'confirmed' }).send());
+    const tokensPerShare = await this.client.getTokensPerShareSingleVault(this.state!, latestSlot);
+    return tokensPerShare;
+  }
+
+  /**
+   * This method returns the user shares balance for a given vault
+   * @param user - user to calculate the shares balance for
+   * @param vault - vault to calculate shares balance for
+   * @returns - a struct of user share balance (staked in vault farm if the vault has a farm and unstaked) in decimal (not lamports)
+   */
+  async getUserShares(user: Address): Promise<UserSharesForVault> {
+    return this.client.getUserSharesBalanceSingleVault(user, this);
+  }
+
+  /**
+   * This function creates instructions to deposit into a vault. It will also create ATA creation instructions for the vault shares that the user receives in return
+   * @param user - user to deposit
+   * @param tokenAmount - token amount to be deposited, in decimals (will be converted in lamports)
+   * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
+   * @returns - an instance of DepositIxs which contains the instructions to deposit in vault and the instructions to stake the shares in the farm if the vault has a farm
+   */
+  async depositIxs(
+    user: TransactionSigner,
+    tokenAmount: Decimal,
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    farmState?: FarmState
+  ): Promise<DepositIxs> {
+    if (vaultReservesMap) {
+      this.vaultReservesStateCache = vaultReservesMap;
+    }
+    return this.client.depositIxs(user, this, tokenAmount, this.vaultReservesStateCache, farmState);
+  }
+
+  /**
+   * This function will return the missing ATA creation instructions, as well as one or multiple withdraw instructions, based on how many reserves it's needed to withdraw from. This might have to be split in multiple transactions
+   * @param user - user to withdraw
+   * @param shareAmount - share amount to withdraw (in tokens, not lamports), in order to withdraw everything, any value > user share amount
+   * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
+   * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
+   * @returns an array of instructions to create missing ATAs if needed and the withdraw instructions
+   */
+  async withdrawIxs(
+    user: TransactionSigner,
+    shareAmount: Decimal,
+    slot?: Slot,
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    farmState?: FarmState
+  ): Promise<WithdrawIxs> {
+    if (vaultReservesMap) {
+      this.vaultReservesStateCache = vaultReservesMap;
+    }
+
+    const currentSlot = slot ?? (await this.client.getConnection().getSlot({ commitment: 'confirmed' }).send());
+
+    return this.client.withdrawIxs(user, this, shareAmount, currentSlot, this.vaultReservesStateCache, farmState);
   }
 }
 
@@ -3456,13 +3593,56 @@ export type VaultHolder = {
   amount: Decimal;
 };
 
-export type VaultHoldings = {
+export type APY = {
+  grossAPY: Decimal;
+  netAPY: Decimal;
+};
+
+export type VaultAPYs = {
+  theoreticalAPY: APY;
+  actualAPY: APY;
+};
+
+export class VaultHoldings {
   available: Decimal;
   invested: Decimal;
   investedInReserves: Map<Address, Decimal>;
   pendingFees: Decimal;
   totalAUMIncludingFees: Decimal;
-};
+
+  constructor(params: {
+    available: Decimal;
+    invested: Decimal;
+    investedInReserves: Map<Address, Decimal>;
+    pendingFees: Decimal;
+    totalAUMIncludingFees: Decimal;
+  }) {
+    this.available = params.available;
+    this.invested = params.invested;
+    this.investedInReserves = params.investedInReserves;
+    this.pendingFees = params.pendingFees;
+    this.totalAUMIncludingFees = params.totalAUMIncludingFees;
+  }
+
+  asJSON() {
+    return {
+      available: this.available.toString(),
+      invested: this.invested.toString(),
+      totalAUMIncludingFees: this.totalAUMIncludingFees.toString(),
+      pendingFees: this.pendingFees.toString(),
+      investedInReserves: pubkeyHashMapToJson(this.investedInReserves),
+    };
+  }
+
+  print() {
+    console.log('Holdings:');
+    console.log('  Available:', this.available.toString());
+    console.log('  Invested:', this.invested.toString());
+    console.log('  Total AUM including fees:', this.totalAUMIncludingFees.toString());
+    console.log('  Pending fees:', this.pendingFees.toString());
+    console.log('  Invested in reserves:', pubkeyHashMapToJson(this.investedInReserves));
+  }
+}
 
 /**
  * earnedInterest represents the interest earned from now until the slot provided in the future
@@ -3544,12 +3724,3 @@ export type VaultCumulativeInterestWithTimestamp = {
   cumulativeInterest: Decimal;
   timestamp: number;
 };
-
-export function printHoldings(holdings: VaultHoldings) {
-  console.log('Holdings:');
-  console.log('  Available:', holdings.available.toString());
-  console.log('  Invested:', holdings.invested.toString());
-  console.log('  Total AUM including fees:', holdings.totalAUMIncludingFees.toString());
-  console.log('  Pending fees:', holdings.pendingFees.toString());
-  console.log('  Invested in reserves:', pubkeyHashMapToJson(holdings.investedInReserves));
-}

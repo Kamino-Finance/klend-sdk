@@ -16,11 +16,11 @@ import { Address } from '@solana/kit';
   const wallet = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
-  const vault = new KaminoVault(EXAMPLE_USDC_VAULT);
+  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
 
   const ixs = await kaminoManager.fullRemoveReserveFromVaultIxs(wallet, vault, USDC_RESERVE_JLP_MARKET);
 
-  const vaultState = await vault.getState(c.rpc);
+  const vaultState = await vault.getState();
   const lookupTableAddresses: Address[] = [];
   if (vaultState.vaultLookupTable !== DEFAULT_PUBLIC_KEY) {
     lookupTableAddresses.push(vaultState.vaultLookupTable);

@@ -60,7 +60,7 @@ import { Scope, ScopeEntryMetadata } from '@kamino-finance/scope-sdk';
 
 export type KaminoReserveRpcApi = GetProgramAccountsApi & GetAccountInfoApi & GetMultipleAccountsApi;
 
-export const DEFAULT_RECENT_SLOT_DURATION_MS = 450;
+export const DEFAULT_RECENT_SLOT_DURATION_MS = 400;
 
 export class KaminoReserve {
   state: Reserve;

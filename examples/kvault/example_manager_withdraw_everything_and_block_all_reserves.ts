@@ -10,7 +10,7 @@ import { address } from '@solana/kit';
   const investor = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
-  const kaminoVault = new KaminoVault(EXAMPLE_USDC_VAULT);
+  const kaminoVault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
   const reserveToDisinvestFrom = address('Ga4rZytCpq1unD4DbEJ5bkHeUz9g3oh9AAFEi6vSauXp');
 
   const withdrawAllAndBlockReserveIxs = await kaminoManager.withdrawEverythingFromAllReservesAndBlockInvest(
