@@ -66,7 +66,7 @@ export function getKswapQuoter(
 
     const routeOutputs = await kswapSdk.getAllRoutes(routeParams);
 
-    const bestRoute = routeOutputs.reduce((best, current) => {
+    const bestRoute = routeOutputs.routes.reduce((best, current) => {
       const inAmountBest = new Decimal(best.amountsExactIn.amountIn.toString()).div(inputMintReserve.getMintFactor());
       const minAmountOutBest = new Decimal(best.amountsExactIn.amountOutGuaranteed.toString()).div(
         outputMintReserve.getMintFactor()
@@ -124,7 +124,7 @@ export function getKswapSwapper(
 
     const routeOutputs = await kswapSdk.getAllRoutes(routeParams);
 
-    return routeOutputs.map((routeOutput) => {
+    return routeOutputs.routes.map((routeOutput) => {
       const inAmount = new Decimal(routeOutput.amountsExactIn.amountIn.toString()).div(routeOutput.inputTokenDecimals!);
       const minAmountOut = new Decimal(routeOutput.amountsExactIn.amountOutGuaranteed.toString()).div(
         routeOutput.outputTokenDecimals!

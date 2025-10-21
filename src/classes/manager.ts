@@ -20,6 +20,7 @@ import {
   KaminoVaultConfig,
   kaminoVaultId,
   MarketOverview,
+  PendingRewardsForUserInVault,
   ReserveAllocationConfig,
   ReserveOverview,
   SimulatedVaultHoldingsWithEarnedInterest,
@@ -1043,7 +1044,7 @@ export class KaminoManager {
    * @returns an VaultOverview object with details about the tokens available and invested in the vault, denominated in tokens and USD, along sie APYs
    */
   async getVaultOverview(
-    vault: VaultState,
+    vault: KaminoVault,
     price: Decimal,
     slot?: Slot,
     vaultReserves?: Map<Address, KaminoReserve>,
@@ -1223,6 +1224,39 @@ export class KaminoManager {
   }
 
   /**
+   * Read the APY of the delegated farm providing incentives for vault depositors
+   * @param vault - the vault to read the farm APY for
+   * @param vaultTokenPrice - the price of the vault token in USD (e.g. 1.0 for USDC)
+   * @param [farmsClient] - the farms client to use. Optional. If not provided, the function will create a new one
+   * @param [slot] - the slot to read the farm APY for. Optional. If not provided, the function will read the current slot
+   * @param [tokensPrices] - the prices of the tokens in USD. Optional. If not provided, the function will fetch the prices
+   * @returns the APY of the delegated farm providing incentives for vault depositors
+   */
+  async getVaultDelegatedFarmRewardsAPY(
+    vault: KaminoVault,
+    vaultTokenPrice: Decimal,
+    farmsClient?: Farms,
+    slot?: Slot
+  ): Promise<FarmIncentives> {
+    return this._vaultClient.getVaultDelegatedFarmRewardsAPY(vault, vaultTokenPrice, farmsClient, slot);
+  }
+
+  /**
+   * This will read the pending rewards for a user in the vault farm, the reserves farms of the vault and the delegated vault farm
+   * @param user - the user address
+   * @param vault - the vault
+   * @param [vaultReservesMap] - the vault reserves map to get the reserves for; if not provided, the function will fetch the reserves
+   * @returns a struct containing the pending rewards in the vault farm, the reserves farms of the vault and the delegated vault farm, and the total pending rewards in lamports
+   */
+  async getAllPendingRewardsForUserInVault(
+    user: Address,
+    vault: KaminoVault,
+    vaultReservesMap?: Map<Address, KaminoReserve>
+  ): Promise<PendingRewardsForUserInVault> {
+    return this._vaultClient.getAllPendingRewardsForUserInVault(user, vault, vaultReservesMap);
+  }
+
+  /**
    * Get all the token mints of the vault, vault farm rewards and the allocation  rewards
    * @param vaults - the vaults to get the token mints for
    * @param [vaultReservesMap] - the vault reserves map to get the reserves for; if not provided, the function will fetch the reserves
@@ -1244,7 +1278,6 @@ export class KaminoManager {
    * @param [farmsClient] - the farms client to use. Optional. If not provided, the function will create a new one
    * @param [slot] - the slot to read the farm APY for. Optional. If not provided, the function will read the current slot
    * @param [reserveState] - the reserve state. Optional. If not provided, the function will fetch the reserve state
-   * @param [cTokenMintDecimals] - the decimals of the cToken mint. Optional. If not provided, the function will fetch the decimals from the mint
    * @returns the APY of the farm built on top of the reserve
    */
   async getReserveFarmRewardsAPY(
@@ -1252,8 +1285,7 @@ export class KaminoManager {
     reserveTokenPrice: Decimal,
     farmsClient?: Farms,
     slot?: Slot,
-    reserveState?: Reserve,
-    cTokenMintDecimals?: number
+    reserveState?: Reserve
   ): Promise<ReserveIncentives> {
     return getReserveFarmRewardsAPYUtils(
       this._rpc,
@@ -1263,8 +1295,7 @@ export class KaminoManager {
       this._kaminoLendProgramId,
       farmsClient ? farmsClient : new Farms(this._rpc),
       slot ? slot : await this.getRpc().getSlot().send(),
-      reserveState,
-      cTokenMintDecimals
+      reserveState
     );
   }
 

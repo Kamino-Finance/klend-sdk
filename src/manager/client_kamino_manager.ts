@@ -1317,9 +1317,9 @@ async function main() {
       const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
 
       const vaultAddress = address(vault);
-      const vaultState = await new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId).getState();
+      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
       const vaultOverview = await kaminoManager.getVaultOverview(
-        vaultState,
+        kaminoVault,
         new Decimal(tokenPrice),
         await env.c.rpc.getSlot({ commitment: 'confirmed' }).send()
       );
@@ -1477,19 +1477,18 @@ async function main() {
 
       const vaultAddress = address(vault);
       const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId, slotDuration);
-      await kaminoVault.getState();
+      const vaultState = await kaminoVault.getState();
 
       const slot = await env.c.rpc.getSlot({ commitment: 'confirmed' }).send();
       const tokensPerShare = await kaminoManager.getTokensPerShareSingleVault(kaminoVault, slot);
       const holdings = await kaminoManager.getVaultHoldings(kaminoVault.state!, slot);
-      const vaultState = kaminoVault.state!;
 
       const sharesIssued = lamportsToDecimal(
         vaultState.sharesIssued.toString(),
         vaultState.sharesMintDecimals.toString()
       );
 
-      const vaultOverview = await kaminoManager.getVaultOverview(vaultState, new Decimal(1.0), slot);
+      const vaultOverview = await kaminoManager.getVaultOverview(kaminoVault, new Decimal(1.0), slot);
 
       console.log('farm', vaultState.vaultFarm.toString());
       console.log('vault token mint', vaultState.tokenMint);

@@ -20,7 +20,6 @@ export async function getReserveFarmRewardsAPY(
   farmsClient: Farms,
   slot: Slot,
   reserveState?: Reserve,
-  cTokenMintDecimals?: number,
   tokensPrices?: Map<Address, Decimal>
 ): Promise<ReserveIncentives> {
   const reserveIncentives: ReserveIncentives = {

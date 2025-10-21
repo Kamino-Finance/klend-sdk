@@ -202,3 +202,49 @@ export function getRewardPerTimeUnitSecond(reward: RewardInfo) {
 
   return rewardPerTimeUnitSecond ? rpsAdjusted : new Decimal(0);
 }
+
+/// reads the pending rewards for a user in a vault farm
+/// @param rpc - the rpc connection
+/// @param userStateAddress - the address of the user state (computed differently depending on farm type)
+/// @param farm - the address of the farm
+/// @returns a map of the pending rewards per token
+export async function getUserPendingRewardsInFarm(
+  rpc: Rpc<SolanaRpcApi>,
+  userStateAddress: Address,
+  farm: Address
+): Promise<Map<Address, Decimal>> {
+  const pendingRewardsPerToken: Map<Address, Decimal> = new Map();
+
+  const farmClient = new Farms(rpc);
+  // if the user state does not exist, return 0
+  const userStateAccountInfo = await fetchEncodedAccount(rpc, userStateAddress);
+  if (!userStateAccountInfo.exists) {
+    return pendingRewardsPerToken;
+  }
+  const userState = UserState.decode(Buffer.from(userStateAccountInfo.data));
+
+  const farmState = await FarmState.fetch(rpc, farm);
+  if (!farmState) {
+    throw new Error(`Farm state not found for ${farm}`);
+  }
+
+  const currentTimestamp = new Decimal(new Date().getTime() / 1000);
+  const rawRewards = farmClient.getUserPendingRewards(userState, farmState, currentTimestamp, null);
+
+  if (!rawRewards.hasReward) {
+    return pendingRewardsPerToken;
+  }
+
+  for (let i = 0; i < rawRewards.userPendingRewardAmounts.length; i++) {
+    const reward = rawRewards.userPendingRewardAmounts[i];
+    const rewardToken = farmState.rewardInfos[i].token.mint;
+    const existingReward = pendingRewardsPerToken.get(rewardToken);
+    if (existingReward) {
+      pendingRewardsPerToken.set(rewardToken, existingReward.add(reward));
+    } else {
+      pendingRewardsPerToken.set(rewardToken, reward);
+    }
+  }
+
+  return pendingRewardsPerToken;
+}

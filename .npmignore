@@ -1,8 +1,35 @@
-src/client/client.ts
-node_modules
-tests
-deps
-test-ledger
-.idea
-.github
-examples
+# Test files and directories
+test-ledger/
+tests/
+*.test.ts
+*.test.js
+
+# Build artifacts
+*.tsbuildinfo
+
+# Examples (these should be separate)
+examples/
+
+# Development files
+.github/
+.vscode/
+.idea/
+*.log
+yarn-error.log
+npm-debug.log
+
+# Config files
+.eslintrc*
+.prettierrc*
+tsconfig.*.json
+setupJest.js
+jest.config.js
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

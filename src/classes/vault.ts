@@ -77,6 +77,7 @@ import { PROGRAM_ID } from '../@codegen/klend/programId';
 import { ReserveWithAddress } from './reserve';
 import { Fraction } from './fraction';
 import {
+  CDN_ENDPOINT,
   createAtasIdempotent,
   createWsolAtaIfMissing,
   getAllStandardTokenProgramTokenAccounts,
@@ -106,12 +107,13 @@ import {
 } from './vault_types';
 import { batchFetch, collToLamportsDecimal, ZERO } from '@kamino-finance/kliquidity-sdk';
 import { FullBPSDecimal } from '@kamino-finance/kliquidity-sdk/dist/utils/CreationParameters';
-import { FarmIncentives, FarmState } from '@kamino-finance/farms-sdk/dist';
+import { FarmIncentives, FarmState, getUserStatePDA } from '@kamino-finance/farms-sdk/dist';
 import { getAccountsInLut, initLookupTableIx, insertIntoLookupTableIxs } from '../utils/lookupTable';
 import {
   getFarmStakeIxs,
   getFarmUnstakeAndWithdrawIxs,
   getSharesInFarmUserPosition,
+  getUserPendingRewardsInFarm,
   getUserSharesInTokensStakedInFarm,
 } from './farm_utils';
 import { getCreateAccountInstruction, SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
@@ -170,6 +172,10 @@ export class KaminoVaultClient {
 
   getProgramID() {
     return this._kaminoVaultProgramId;
+  }
+
+  getRpc() {
+    return this._rpc;
   }
 
   hasFarm() {
@@ -2693,7 +2699,7 @@ export class KaminoVaultClient {
    * @returns an VaultOverview object with details about the tokens available and invested in the vault, denominated in tokens and USD, along sie APYs
    */
   async getVaultOverview(
-    vault: VaultState,
+    vault: KaminoVault,
     vaultTokenPrice: Decimal,
     slot?: Slot,
     vaultReservesMap?: Map<Address, KaminoReserve>,
@@ -2701,10 +2707,11 @@ export class KaminoVaultClient {
     currentSlot?: Slot,
     tokensPrices?: Map<Address, Decimal>
   ): Promise<VaultOverview> {
-    const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vault);
+    const vaultState = await vault.getState();
+    const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
 
     const vaultHoldingsWithUSDValuePromise = this.getVaultHoldingsWithPrice(
-      vault,
+      vaultState,
       vaultTokenPrice,
       slot,
       vaultReservesState,
@@ -2714,15 +2721,20 @@ export class KaminoVaultClient {
     const slotForOverview = slot ? slot : await this.getConnection().getSlot().send();
     const farmsClient = new Farms(this.getConnection());
 
-    const vaultTheoreticalAPYPromise = this.getVaultTheoreticalAPY(vault, slotForOverview, vaultReservesState);
-    const vaultActualAPYPromise = this.getVaultActualAPY(vault, slotForOverview, vaultReservesState);
+    const vaultTheoreticalAPYPromise = this.getVaultTheoreticalAPY(vaultState, slotForOverview, vaultReservesState);
+    const vaultActualAPYPromise = this.getVaultActualAPY(vaultState, slotForOverview, vaultReservesState);
     const totalInvestedAndBorrowedPromise = this.getTotalBorrowedAndInvested(
-      vault,
+      vaultState,
       slotForOverview,
       vaultReservesState
     );
-    const vaultCollateralsPromise = this.getVaultCollaterals(vault, slotForOverview, vaultReservesState, kaminoMarkets);
-    const reservesOverviewPromise = this.getVaultReservesDetails(vault, slotForOverview, vaultReservesState);
+    const vaultCollateralsPromise = this.getVaultCollaterals(
+      vaultState,
+      slotForOverview,
+      vaultReservesState,
+      kaminoMarkets
+    );
+    const reservesOverviewPromise = this.getVaultReservesDetails(vaultState, slotForOverview, vaultReservesState);
     const vaultFarmIncentivesPromise = this.getVaultRewardsAPY(
       vault,
       vaultTokenPrice,
@@ -2738,6 +2750,13 @@ export class KaminoVaultClient {
       vaultReservesState,
       tokensPrices
     );
+    const vaultDelegatedFarmIncentivesPromise = this.getVaultDelegatedFarmRewardsAPY(
+      vault,
+      vaultTokenPrice,
+      farmsClient,
+      slotForOverview,
+      tokensPrices
+    );
 
     // all the async part of the functions above just read the vaultReservesState which is read beforehand, so excepting vaultCollateralsPromise they should do no additional network calls
     const [
@@ -2749,6 +2768,7 @@ export class KaminoVaultClient {
       reservesOverview,
       vaultFarmIncentives,
       vaultReservesFarmIncentives,
+      vaultDelegatedFarmIncentives,
     ] = await Promise.all([
       vaultHoldingsWithUSDValuePromise,
       vaultTheoreticalAPYPromise,
@@ -2758,6 +2778,7 @@ export class KaminoVaultClient {
       reservesOverviewPromise,
       vaultFarmIncentivesPromise,
       vaultReservesFarmIncentivesPromise,
+      vaultDelegatedFarmIncentivesPromise,
     ]);
 
     return {
@@ -2768,6 +2789,7 @@ export class KaminoVaultClient {
       theoreticalSupplyAPY: vaultTheoreticalAPYs,
       vaultFarmIncentives: vaultFarmIncentives,
       reservesFarmsIncentives: vaultReservesFarmIncentives,
+      delegatedFarmIncentives: vaultDelegatedFarmIncentives,
       totalBorrowed: totalInvestedAndBorrowed.totalBorrowed,
       totalBorrowedUSD: totalInvestedAndBorrowed.totalBorrowed.mul(vaultTokenPrice),
       utilizationRatio: totalInvestedAndBorrowed.utilizationRatio,
@@ -3077,9 +3099,52 @@ export class KaminoVaultClient {
     user: Address
   ): Promise<ProgramDerivedAddress> {
     return getProgramDerivedAddress({
-      seeds: [addressEncoder.encode(vault), addressEncoder.encode(reserve), addressEncoder.encode(user)],
+      seeds: [addressEncoder.encode(reserve), addressEncoder.encode(vault), addressEncoder.encode(user)],
       programAddress: farmsProgramId,
     });
+  }
+
+  /**
+   * Compute the delegatee PDA for the user farm state for a vault delegate farm
+   * @param farmProgramID - the program ID of the farm program
+   * @param vault - the address of the vault
+   * @param farm - the address of the delegated farm
+   * @param user - the address of the user
+   * @returns the PDA of the delegatee user farm state for the delegated farm
+   */
+  async computeUserFarmStateDelegateePDAForUserInDelegatedVaultFarm(
+    farmProgramID: Address,
+    vault: Address,
+    farm: Address,
+    user: Address
+  ): Promise<ProgramDerivedAddress> {
+    return getProgramDerivedAddress({
+      seeds: [addressEncoder.encode(vault), addressEncoder.encode(farm), addressEncoder.encode(user)],
+      programAddress: farmProgramID,
+    });
+  }
+
+  /**
+   * Compute the user state PDA for a user in a delegated vault farm
+   * @param farmProgramID - the program ID of the farm program
+   * @param vault - the address of the vault
+   * @param farm - the address of the delegated farm
+   * @param user - the address of the user
+   * @returns the PDA of the user state for the delegated farm
+   */
+  async computeUserStatePDAForUserInDelegatedVaultFarm(
+    farmProgramID: Address,
+    vault: Address,
+    farm: Address,
+    user: Address
+  ): Promise<Address> {
+    const delegateePDA = await this.computeUserFarmStateDelegateePDAForUserInDelegatedVaultFarm(
+      farmProgramID,
+      vault,
+      farm,
+      user
+    );
+    return getUserStatePDA(farmProgramID, farm, delegateePDA[0]);
   }
 
   /**
@@ -3112,6 +3177,39 @@ export class KaminoVaultClient {
 
     const kFarmsClient = farmsClient ? farmsClient : new Farms(this.getConnection());
     return getFarmIncentives(kFarmsClient, vaultState.vaultFarm, sharePrice, stakedTokenMintDecimals, tokensPrices);
+  }
+
+  /**
+   * Read the APY of the delegated farm providing incentives for vault depositors
+   * @param vault - the vault to read the farm APY for
+   * @param vaultTokenPrice - the price of the vault token in USD (e.g. 1.0 for USDC)
+   * @param [farmsClient] - the farms client to use. Optional. If not provided, the function will create a new one
+   * @param [slot] - the slot to read the farm APY for. Optional. If not provided, the function will read the current slot
+   * @param [tokensPrices] - the prices of the tokens in USD. Optional. If not provided, the function will fetch the prices
+   * @returns the APY of the delegated farm providing incentives for vault depositors
+   */
+  async getVaultDelegatedFarmRewardsAPY(
+    vault: KaminoVault,
+    vaultTokenPrice: Decimal,
+    farmsClient?: Farms,
+    slot?: Slot,
+    tokensPrices?: Map<Address, Decimal>
+  ): Promise<FarmIncentives> {
+    const delegatedFarm = await this.getDelegatedFarmForVault(vault.address);
+    if (!delegatedFarm) {
+      return {
+        incentivesStats: [],
+        totalIncentivesApy: 0,
+      };
+    }
+
+    const vaultState = await vault.getState();
+    const tokensPerShare = await this.getTokensPerShareSingleVault(vaultState, slot);
+    const sharePrice = tokensPerShare.mul(vaultTokenPrice);
+    const stakedTokenMintDecimals = vaultState.sharesMintDecimals.toNumber();
+
+    const kFarmsClient = farmsClient ? farmsClient : new Farms(this.getConnection());
+    return getFarmIncentives(kFarmsClient, delegatedFarm, sharePrice, stakedTokenMintDecimals, tokensPrices);
   }
 
   /**
@@ -3261,7 +3359,6 @@ export class KaminoVaultClient {
         kFarmsClient,
         currentSlot,
         reserveState.state,
-        undefined,
         tokensPrices
       );
       vaultReservesFarmsIncentives.set(reserveAddress, reserveFarmIncentives.collateralFarmIncentives);
@@ -3276,6 +3373,181 @@ export class KaminoVaultClient {
     return {
       reserveFarmsIncentives: vaultReservesFarmsIncentives,
       totalIncentivesAPY: totalIncentivesApy,
+    };
+  }
+
+  /// reads the pending rewards for a user in the vault farm
+  /// @param user - the user address
+  /// @param vault - the vault
+  /// @returns a map of the pending rewards token mint and amount in lamports
+  async getUserPendingRewardsInVaultFarm(user: Address, vault: KaminoVault): Promise<Map<Address, Decimal>> {
+    const vaultState = await vault.getState();
+    const hasFarm = await vault.hasFarm();
+    if (!hasFarm) {
+      return new Map<Address, Decimal>();
+    }
+
+    const farmClient = new Farms(this.getConnection());
+    const userState = await getUserStatePDA(farmClient.getProgramID(), vaultState.vaultFarm, user);
+    return getUserPendingRewardsInFarm(this.getConnection(), userState, vaultState.vaultFarm);
+  }
+
+  /// reads the pending rewards for a user in a delegated vault farm
+  /// @param user - the user address
+  /// @param vaultAddress - the address of the vault
+  /// @returns a map of the pending rewards token mint and amount in lamports
+  async getUserPendingRewardsInVaultDelegatedFarm(
+    user: Address,
+    vaultAddress: Address
+  ): Promise<Map<Address, Decimal>> {
+    const delegatedFarm = await this.getDelegatedFarmForVault(vaultAddress);
+    if (!delegatedFarm) {
+      return new Map<Address, Decimal>();
+    }
+
+    const farmClient = new Farms(this.getConnection());
+    const userState = await this.computeUserStatePDAForUserInDelegatedVaultFarm(
+      farmClient.getProgramID(),
+      vaultAddress,
+      delegatedFarm,
+      user
+    );
+
+    return getUserPendingRewardsInFarm(this.getConnection(), userState, delegatedFarm);
+  }
+
+  /// gets the delegated farm for a vault
+  async getDelegatedFarmForVault(vault: Address): Promise<Address | undefined> {
+    const response = await fetch(`${CDN_ENDPOINT}/resources.json`);
+    if (!response.ok) {
+      console.log(`Failed to fetch CDN for user pending rewards in vault delegated farm: ${response.statusText}`);
+      return undefined;
+    }
+    const data = (await response.json()) as { 'mainnet-beta'?: { delegatedVaultFarms: any } };
+    const delegatedVaultFarms = data['mainnet-beta']?.delegatedVaultFarms;
+    if (!delegatedVaultFarms) {
+      return undefined;
+    }
+    const delegatedFarmWithVault = delegatedVaultFarms.find((vaultWithFarm: any) => vaultWithFarm.vault === vault);
+    if (!delegatedFarmWithVault) {
+      return undefined;
+    }
+    return address(delegatedFarmWithVault.farm);
+  }
+
+  /// reads the pending rewards for a user in the reserves farms of a vault
+  /// @param user - the user address
+  /// @param vault - the vault
+  /// @param [vaultReservesMap] - the vault reserves map to get the reserves for; if not provided, the function will fetch the reserves
+  /// @returns a map of the pending rewards token mint and amount in lamports
+  async getUserPendingRewardsInVaultReservesFarms(
+    user: Address,
+    vault: KaminoVault,
+    vaultReservesMap?: Map<Address, KaminoReserve>
+  ): Promise<Map<Address, Decimal>> {
+    const vaultState = await vault.getState();
+
+    const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
+
+    const vaultReserves = vaultState.vaultAllocationStrategy
+      .map((allocationStrategy) => allocationStrategy.reserve)
+      .filter((reserve) => reserve !== DEFAULT_PUBLIC_KEY);
+    const pendingRewardsPerToken: Map<Address, Decimal> = new Map();
+
+    const farmClient = new Farms(this.getConnection());
+    for (const reserveAddress of vaultReserves) {
+      const reserveState = vaultReservesState.get(reserveAddress);
+      if (!reserveState) {
+        console.log(`Reserve to read farm incentives for not found: ${reserveAddress}`);
+        continue;
+      }
+
+      if (reserveState.state.farmCollateral === DEFAULT_PUBLIC_KEY) {
+        continue;
+      }
+
+      const delegatee = await this.computeUserFarmStateDelegateePDAForUserInVault(
+        farmClient.getProgramID(),
+        vault.address,
+        reserveAddress,
+        user
+      );
+      const userState = await getUserStatePDA(
+        farmClient.getProgramID(),
+        reserveState.state.farmCollateral,
+        delegatee[0]
+      );
+      console.log(`for reserve ${reserveAddress} the user state is ${userState} and delegatee is ${delegatee[0]}`);
+      const pendingRewards = await getUserPendingRewardsInFarm(
+        this.getConnection(),
+        userState,
+        reserveState.state.farmCollateral
+      );
+      pendingRewards.forEach((reward, token) => {
+        const existingReward = pendingRewardsPerToken.get(token);
+        if (existingReward) {
+          pendingRewardsPerToken.set(token, existingReward.add(reward));
+        } else {
+          pendingRewardsPerToken.set(token, reward);
+        }
+      });
+    }
+
+    return pendingRewardsPerToken;
+  }
+
+  /// reads the pending rewards for a user in the vault farm, the reserves farms of the vault and the delegated vault farm
+  /// @param user - the user address
+  /// @param vault - the vault
+  /// @param [vaultReservesMap] - the vault reserves map to get the reserves for; if not provided, the function will fetch the reserves
+  /// @returns a struct containing the pending rewards in the vault farm, the reserves farms of the vault and the delegated vault farm, and the total pending rewards in lamports
+  async getAllPendingRewardsForUserInVault(
+    user: Address,
+    vault: KaminoVault,
+    vaultReservesMap?: Map<Address, KaminoReserve>
+  ): Promise<PendingRewardsForUserInVault> {
+    const pendingRewardsInVaultFarm = await this.getUserPendingRewardsInVaultFarm(user, vault);
+    const pendingRewardsInVaultReservesFarms = await this.getUserPendingRewardsInVaultReservesFarms(
+      user,
+      vault,
+      vaultReservesMap
+    );
+    const pendingRewardsInVaultDelegatedFarm = await this.getUserPendingRewardsInVaultDelegatedFarm(
+      user,
+      vault.address
+    );
+
+    const totalPendingRewards = new Map<Address, Decimal>();
+    pendingRewardsInVaultFarm.forEach((reward, token) => {
+      const existingReward = totalPendingRewards.get(token);
+      if (existingReward) {
+        totalPendingRewards.set(token, existingReward.add(reward));
+      } else {
+        totalPendingRewards.set(token, reward);
+      }
+    });
+    pendingRewardsInVaultReservesFarms.forEach((reward, token) => {
+      const existingReward = totalPendingRewards.get(token);
+      if (existingReward) {
+        totalPendingRewards.set(token, existingReward.add(reward));
+      } else {
+        totalPendingRewards.set(token, reward);
+      }
+    });
+    pendingRewardsInVaultDelegatedFarm.forEach((reward, token) => {
+      const existingReward = totalPendingRewards.get(token);
+      if (existingReward) {
+        totalPendingRewards.set(token, existingReward.add(reward));
+      } else {
+        totalPendingRewards.set(token, reward);
+      }
+    });
+
+    return {
+      pendingRewardsInVaultFarm,
+      pendingRewardsInVaultReservesFarms,
+      pendingRewardsInVaultDelegatedFarm,
+      totalPendingRewards,
     };
   }
 
@@ -3698,6 +3970,7 @@ export type VaultOverview = {
   actualSupplyAPY: APYs;
   vaultFarmIncentives: FarmIncentives;
   reservesFarmsIncentives: VaultReservesFarmsIncentives;
+  delegatedFarmIncentives: FarmIncentives;
   totalBorrowed: Decimal;
   totalBorrowedUSD: Decimal;
   totalSupplied: Decimal;
@@ -3723,4 +3996,11 @@ export type VaultFees = {
 export type VaultCumulativeInterestWithTimestamp = {
   cumulativeInterest: Decimal;
   timestamp: number;
+};
+
+export type PendingRewardsForUserInVault = {
+  pendingRewardsInVaultFarm: Map<Address, Decimal>;
+  pendingRewardsInVaultDelegatedFarm: Map<Address, Decimal>;
+  pendingRewardsInVaultReservesFarms: Map<Address, Decimal>;
+  totalPendingRewards: Map<Address, Decimal>;
 };
