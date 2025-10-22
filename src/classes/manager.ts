@@ -1257,6 +1257,56 @@ export class KaminoManager {
   }
 
   /**
+   * This function will return the instructions to claim the rewards for the farm of a vault, the delegated farm of the vault and the reserves farms of the vault
+   * @param user - the user to claim the rewards
+   * @param vault - the vault
+   * @param [vaultReservesMap] - the vault reserves map to get the reserves for; if not provided, the function will fetch the reserves
+   * @returns the instructions to claim the rewards for the farm of the vault, the delegated farm of the vault and the reserves farms of the vault
+   */
+  async getClaimAllRewardsForVaultIxs(
+    user: TransactionSigner,
+    vault: KaminoVault,
+    vaultReservesMap?: Map<Address, KaminoReserve>
+  ): Promise<Instruction[]> {
+    return this._vaultClient.getClaimAllRewardsForVaultIxs(user, vault, vaultReservesMap);
+  }
+
+  /**
+   * This function will return the instructions to claim the rewards for the farm of a vault
+   * @param user - the user to claim the rewards
+   * @param vault - the vault
+   * @returns the instructions to claim the rewards for the farm of the vault
+   */
+  async getClaimVaultFarmRewardsIxs(user: TransactionSigner, vault: KaminoVault): Promise<Instruction[]> {
+    return this._vaultClient.getClaimVaultFarmRewardsIxs(user, vault);
+  }
+
+  /**
+   * This function will return the instructions to claim the rewards for the delegated farm of a vault
+   * @param user - the user to claim the rewards
+   * @param vault - the vault
+   * @returns the instructions to claim the rewards for the delegated farm of the vault
+   */
+  async getClaimVaultDelegatedFarmRewardsIxs(user: TransactionSigner, vault: KaminoVault): Promise<Instruction[]> {
+    return this._vaultClient.getClaimVaultDelegatedFarmRewardsIxs(user, vault);
+  }
+
+  /**
+   * This function will return the instructions to claim the rewards for the reserves farms of a vault
+   * @param user - the user to claim the rewards
+   * @param vault - the vault
+   * @param [vaultReservesMap] - the vault reserves map to get the reserves for; if not provided, the function will fetch the reserves
+   * @returns the instructions to claim the rewards for the reserves farms of the vault
+   */
+  async getClaimVaultReservesFarmsRewardsIxs(
+    user: TransactionSigner,
+    vault: KaminoVault,
+    vaultReservesMap?: Map<Address, KaminoReserve>
+  ): Promise<Instruction[]> {
+    return this._vaultClient.getClaimVaultReservesFarmsRewardsIxs(user, vault, vaultReservesMap);
+  }
+
+  /**
    * Get all the token mints of the vault, vault farm rewards and the allocation  rewards
    * @param vaults - the vaults to get the token mints for
    * @param [vaultReservesMap] - the vault reserves map to get the reserves for; if not provided, the function will fetch the reserves

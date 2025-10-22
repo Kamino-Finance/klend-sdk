@@ -4,13 +4,11 @@ import { Decimal } from 'decimal.js';
 
 const rpc = createSolanaRpc('https://api.mainnet-beta.solana.com');
 const vault = new KaminoVault(
-  rpc, // RPC
+  rpc,
   address('HDsayqAsDWy3QvANGqh2yNraqcD8Fnjgh73Mhb3WRS5E') // USDC vault
 );
 
-const kaminoManager = new KaminoManager(
-  rpc // RPC
-);
+const kaminoManager = new KaminoManager(rpc);
 
 const vaultTokenPrice = new Decimal(1.0); // as it is an USDC vault the token price is 1
 const vaultOverview = await kaminoManager.getVaultOverview(vault, vaultTokenPrice);

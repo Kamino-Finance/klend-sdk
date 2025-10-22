@@ -48,6 +48,7 @@ import { initEnv, ManagerEnv } from './tx/ManagerEnv';
 import { processTx } from './tx/processor';
 import { getPriorityFeeAndCuIxs } from '../client/tx/priorityFee';
 import { fetchAddressLookupTable, fetchAllAddressLookupTable } from '@solana-program/address-lookup-table';
+import { noopSigner } from '../utils/signer';
 
 dotenv.config({
   path: `.env${process.env.ENV ? '.' + process.env.ENV : ''}`,
@@ -1990,6 +1991,47 @@ async function main() {
       const env = await initEnv(staging);
       const adminInfo = await KaminoManager.getMarketOrVaultAdminInfo(env.c.rpc, address(addr));
       console.log(adminInfo);
+    });
+
+  commands
+    .command('claim-rewards-for-vault')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--user <string>`, 'User address')
+    .action(async ({ vault, mode, staging, user }) => {
+      const env = await initEnv(staging);
+      const vaultAddress = address(vault);
+      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress);
+      const kaminoManager = new KaminoManager(
+        env.c.rpc,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        env.kvaultProgramId
+      );
+      const userWallet = user ? noopSigner(address(user)) : await env.getSigner();
+      const rewardsIxs = await kaminoManager.getClaimAllRewardsForVaultIxs(userWallet, kaminoVault);
+
+      if (rewardsIxs.length > 0) {
+        await processTx(
+          env.c,
+          userWallet,
+          [
+            ...rewardsIxs,
+            ...getPriorityFeeAndCuIxs({
+              priorityFeeMultiplier: 2500,
+              computeUnits: 400_000,
+            }),
+          ],
+          mode,
+          []
+        );
+      } else {
+        console.log('No rewards to claim');
+      }
     });
 
   await commands.parseAsync();

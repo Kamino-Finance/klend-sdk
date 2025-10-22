@@ -1,6 +1,6 @@
 async function getUserVaultPositionHistory(): Promise<void> {
   const kvaultPubkey = 'A2wsxhA7pF4B2UKVfXocb6TAAP9ipfPJam6oMKgDE5BK';
-  const ownerPubkey = 'Ej51XVghq4KyzVCBT7butTPqGjJFns7zSqUR8sH6GdAA'; // user
+  const ownerPubkey = '883AnESJiUVzCnwowgaWCpXp4EGsK4JMVzUUUcjSSs62'; // user
 
   const API_BASE_URL = 'https://api.kamino.finance';
 

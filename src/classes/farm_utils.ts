@@ -203,11 +203,13 @@ export function getRewardPerTimeUnitSecond(reward: RewardInfo) {
   return rewardPerTimeUnitSecond ? rpsAdjusted : new Decimal(0);
 }
 
-/// reads the pending rewards for a user in a vault farm
-/// @param rpc - the rpc connection
-/// @param userStateAddress - the address of the user state (computed differently depending on farm type)
-/// @param farm - the address of the farm
-/// @returns a map of the pending rewards per token
+/**
+ * reads the pending rewards for a user in a vault farm
+ * @param rpc - the rpc connection
+ * @param userStateAddress - the address of the user state (computed differently depending on farm type)
+ * @param farm - the address of the farm
+ * @returns a map of the pending rewards per token
+ */
 export async function getUserPendingRewardsInFarm(
   rpc: Rpc<SolanaRpcApi>,
   userStateAddress: Address,

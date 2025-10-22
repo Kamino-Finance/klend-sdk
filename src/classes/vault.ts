@@ -3138,13 +3138,23 @@ export class KaminoVaultClient {
     farm: Address,
     user: Address
   ): Promise<Address> {
+    const delegateePDA = await this.computeDelegateeForUserInDelegatedFarm(farmProgramID, vault, farm, user);
+    return getUserStatePDA(farmProgramID, farm, delegateePDA);
+  }
+
+  async computeDelegateeForUserInDelegatedFarm(
+    farmProgramID: Address,
+    vault: Address,
+    farm: Address,
+    user: Address
+  ): Promise<Address> {
     const delegateePDA = await this.computeUserFarmStateDelegateePDAForUserInDelegatedVaultFarm(
       farmProgramID,
       vault,
       farm,
       user
     );
-    return getUserStatePDA(farmProgramID, farm, delegateePDA[0]);
+    return delegateePDA[0];
   }
 
   /**
@@ -3477,7 +3487,6 @@ export class KaminoVaultClient {
         reserveState.state.farmCollateral,
         delegatee[0]
       );
-      console.log(`for reserve ${reserveAddress} the user state is ${userState} and delegatee is ${delegatee[0]}`);
       const pendingRewards = await getUserPendingRewardsInFarm(
         this.getConnection(),
         userState,
@@ -3549,6 +3558,149 @@ export class KaminoVaultClient {
       pendingRewardsInVaultDelegatedFarm,
       totalPendingRewards,
     };
+  }
+
+  /**
+   * This function will return the instructions to claim the rewards for the farm of a vault, the delegated farm of the vault and the reserves farms of the vault
+   * @param user - the user to claim the rewards
+   * @param vault - the vault
+   * @param [vaultReservesMap] - the vault reserves map to get the reserves for; if not provided, the function will fetch the reserves
+   * @returns the instructions to claim the rewards for the farm of the vault, the delegated farm of the vault and the reserves farms of the vault
+   */
+  async getClaimAllRewardsForVaultIxs(
+    user: TransactionSigner,
+    vault: KaminoVault,
+    vaultReservesMap?: Map<Address, KaminoReserve>
+  ): Promise<Instruction[]> {
+    const [vaultFarmIxs, delegatedFarmIxs, reservesFarmsIxs] = await Promise.all([
+      this.getClaimVaultFarmRewardsIxs(user, vault),
+      this.getClaimVaultDelegatedFarmRewardsIxs(user, vault),
+      this.getClaimVaultReservesFarmsRewardsIxs(user, vault, vaultReservesMap),
+    ]);
+
+    return [...new Set([...vaultFarmIxs, ...delegatedFarmIxs, ...reservesFarmsIxs])];
+  }
+
+  /**
+   * This function will return the instructions to claim the rewards for the farm of a vault
+   * @param user - the user to claim the rewards
+   * @param vault - the vault
+   * @returns the instructions to claim the rewards for the farm of the vault
+   */
+  async getClaimVaultFarmRewardsIxs(user: TransactionSigner, vault: KaminoVault): Promise<Instruction[]> {
+    const vaultState = await vault.getState();
+    const hasFarm = await vault.hasFarm();
+    if (!hasFarm) {
+      return [];
+    }
+
+    const farmClient = new Farms(this.getConnection());
+    const pendingRewardsInVaultFarm = await this.getUserPendingRewardsInVaultFarm(user.address, vault);
+    // if there are no pending rewards of their total is 0 no ix is needed
+    const totalPendingRewards = Array.from(pendingRewardsInVaultFarm.values()).reduce(
+      (acc, reward) => acc.add(reward),
+      new Decimal(0)
+    );
+    if (totalPendingRewards.eq(0)) {
+      return [];
+    }
+    return farmClient.claimForUserForFarmAllRewardsIx(user, vaultState.vaultFarm, false);
+  }
+
+  /**
+   * This function will return the instructions to claim the rewards for the delegated farm of a vault
+   * @param user - the user to claim the rewards
+   * @param vault - the vault
+   * @returns the instructions to claim the rewards for the delegated farm of the vault
+   */
+  async getClaimVaultDelegatedFarmRewardsIxs(user: TransactionSigner, vault: KaminoVault): Promise<Instruction[]> {
+    const delegatedFarm = await this.getDelegatedFarmForVault(vault.address);
+    if (!delegatedFarm) {
+      return [];
+    }
+
+    const farmClient = new Farms(this.getConnection());
+
+    const delegatee = await this.computeDelegateeForUserInDelegatedFarm(
+      farmClient.getProgramID(),
+      vault.address,
+      delegatedFarm,
+      user.address
+    );
+    const userState = await getUserStatePDA(farmClient.getProgramID(), delegatedFarm, delegatee);
+    // check if the user state exists
+    const userStateExists = await fetchEncodedAccount(this.getConnection(), userState);
+    if (!userStateExists.exists) {
+      return [];
+    }
+
+    return farmClient.claimForUserForFarmAllRewardsIx(user, delegatedFarm, true, [delegatee]);
+  }
+
+  /**
+   * This function will return the instructions to claim the rewards for the reserves farms of a vault
+   * @param user - the user to claim the rewards
+   * @param vault - the vault
+   * @param [vaultReservesMap] - the vault reserves map to get the reserves for; if not provided, the function will fetch the reserves
+   * @returns the instructions to claim the rewards for the reserves farms of the vault
+   */
+  async getClaimVaultReservesFarmsRewardsIxs(
+    user: TransactionSigner,
+    vault: KaminoVault,
+    vaultReservesMap?: Map<Address, KaminoReserve>
+  ): Promise<Instruction[]> {
+    const vaultState = await vault.getState();
+
+    const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
+
+    const vaultReserves = vaultState.vaultAllocationStrategy
+      .map((allocationStrategy) => allocationStrategy.reserve)
+      .filter((reserve) => reserve !== DEFAULT_PUBLIC_KEY);
+
+    const ixs: Instruction[] = [];
+    const farmClient = new Farms(this.getConnection());
+    for (const reserveAddress of vaultReserves) {
+      const reserveState = vaultReservesState.get(reserveAddress);
+      if (!reserveState) {
+        console.log(`Reserve to read farm incentives for not found: ${reserveAddress}`);
+        continue;
+      }
+
+      if (reserveState.state.farmCollateral === DEFAULT_PUBLIC_KEY) {
+        continue;
+      }
+
+      const delegatee = await this.computeUserFarmStateDelegateePDAForUserInVault(
+        farmClient.getProgramID(),
+        vault.address,
+        reserveAddress,
+        user.address
+      );
+      const userState = await getUserStatePDA(
+        farmClient.getProgramID(),
+        reserveState.state.farmCollateral,
+        delegatee[0]
+      );
+
+      const pendingRewards = await getUserPendingRewardsInFarm(
+        this.getConnection(),
+        userState,
+        reserveState.state.farmCollateral
+      );
+      const totalPendingRewards = Array.from(pendingRewards.values()).reduce(
+        (acc, reward) => acc.add(reward),
+        new Decimal(0)
+      );
+      if (totalPendingRewards.eq(0)) {
+        continue;
+      }
+      const ix = await farmClient.claimForUserForFarmAllRewardsIx(user, reserveState.state.farmCollateral, true, [
+        delegatee[0],
+      ]);
+      ixs.push(...ix);
+    }
+
+    return ixs;
   }
 
   private appendRemainingAccountsForVaultReserves(

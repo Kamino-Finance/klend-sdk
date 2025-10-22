@@ -7,7 +7,7 @@ import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } f
 /// 2. vault delegated farm
 /// 3. farms of the reserves into which the vault is allocated
 (async () => {
-  const user = address('Ej51XVghq4KyzVCBT7butTPqGjJFns7zSqUR8sH6GdAA'); // user address
+  const user = address('883AnESJiUVzCnwowgaWCpXp4EGsK4JMVzUUUcjSSs62'); // user address
   const vaultAddress = address('A2wsxhA7pF4B2UKVfXocb6TAAP9ipfPJam6oMKgDE5BK'); // vault address
 
   const c = getConnectionPool();
