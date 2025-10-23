@@ -1230,7 +1230,7 @@ export class KaminoVaultClient {
 
     // if not enough shares in ATA unstake from farm
     const sharesInAtaAreEnoughForWithdraw = sharesToWithdraw.lte(userSharesAtaBalance);
-    if (hasFarm && !sharesInAtaAreEnoughForWithdraw) {
+    if (hasFarm && !sharesInAtaAreEnoughForWithdraw && userSharesInFarm.gt(0)) {
       // if we need to unstake we need to make sure share ata is created
       const [{ createAtaIx }] = await createAtasIdempotent(user, [
         {
@@ -1411,7 +1411,7 @@ export class KaminoVaultClient {
             reserveWithSharesAmountToWithdraw.push({ reserve: key, shares: new Decimal(U64_MAX.toString()) });
           } else {
             // round up to the nearest integer the shares to withdraw
-            const sharesToWithdrawFromReserve = tokensToWithdrawFromReserve.mul(sharesPerToken).ceil();
+            const sharesToWithdrawFromReserve = tokensToWithdrawFromReserve.mul(sharesPerToken).floor();
             reserveWithSharesAmountToWithdraw.push({ reserve: key, shares: sharesToWithdrawFromReserve });
           }
 
@@ -1430,13 +1430,6 @@ export class KaminoVaultClient {
       }
       const marketAddress = reserveState.state.lendingMarket;
 
-      const isLastWithdraw = reserveIndex === reserveWithSharesAmountToWithdraw.length - 1;
-      // if it is not last withdraw it means that we can pass all shares as we are withdrawing everything from that reserve
-      let sharesToWithdraw = shareAmount;
-      if (isLastWithdraw) {
-        sharesToWithdraw = reserveWithTokens.shares;
-      }
-
       const withdrawFromReserveIx = await this.withdrawIx(
         user,
         vault,
@@ -1445,7 +1438,7 @@ export class KaminoVaultClient {
         { address: reserveWithTokens.reserve, state: reserveState.state },
         userSharesAta,
         userTokenAta,
-        sharesToWithdraw,
+        reserveWithTokens.shares,
         vaultReservesState
       );
       withdrawIxs.push(withdrawFromReserveIx);
