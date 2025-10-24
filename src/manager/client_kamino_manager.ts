@@ -992,15 +992,16 @@ async function main() {
     .command('update-vault-reserve-allocation')
     .requiredOption('--vault <string>', 'Vault address')
     .requiredOption('--reserve <string>', 'Reserve address')
-    .requiredOption('--allocation-weight <number>', 'Allocation weight')
-    .requiredOption('--allocation-cap <string>', 'Allocation cap decimal value')
     .requiredOption(
       `--mode <string>`,
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
+    .option('--allocation-weight <number>', 'Allocation weight')
+    .option('--allocation-cap <string>', 'Allocation cap decimal value')
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ vault, reserve, allocationWeight, allocationCap, mode, staging, multisig }) => {
+    .option(`--skip-lut-update`, 'If set, it will skip the LUT update')
+    .action(async ({ vault, reserve, mode, allocationWeight, allocationCap, staging, multisig, skipLutUpdate }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
@@ -1011,8 +1012,9 @@ async function main() {
       const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
       const vaultState = await kaminoVault.getState();
       const signer = await env.getSigner({ vaultState });
-      const allocationWeightValue = Number(allocationWeight);
-      const allocationCapDecimal = new Decimal(allocationCap);
+      const shouldUpdateLut = skipLutUpdate ? false : true;
+      let allocationWeightValue: number;
+      let allocationCapDecimal: Decimal;
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
@@ -1024,6 +1026,29 @@ async function main() {
       if (!reserveState) {
         throw new Error('Reserve not found');
       }
+
+      const existentAllocation = kaminoManager.getVaultAllocations(vaultState).get(reserveAddress);
+
+      if (allocationWeight) {
+        allocationWeightValue = Number(allocationWeight);
+      } else if (existentAllocation) {
+        allocationWeightValue = existentAllocation.targetWeight.toNumber();
+      } else {
+        throw new Error('Allocation weight is required');
+      }
+
+      if (allocationCap) {
+        allocationCapDecimal = new Decimal(allocationCap);
+      } else if (existentAllocation) {
+        allocationCapDecimal = existentAllocation.tokenAllocationCap.div(
+          new Decimal(10).pow(Number(vaultState.tokenMintDecimals.toString()))
+        );
+      } else {
+        throw new Error('Allocation cap is required');
+      }
+
+      console.log('allocationWeightValue', allocationWeightValue);
+      console.log('allocationCapDecimal', allocationCapDecimal.toString());
 
       const reserveWithAddress: ReserveWithAddress = {
         address: reserveAddress,
@@ -1040,19 +1065,17 @@ async function main() {
         firstReserveAllocationConfig,
         signer
       );
-      await processTx(
-        env.c,
-        signer,
-        [
-          instructions.updateReserveAllocationIx,
-          ...instructions.updateLUTIxs,
-          ...getPriorityFeeAndCuIxs({
-            priorityFeeMultiplier: 2500,
-          }),
-        ],
-        mode,
-        []
-      );
+      const txInstructions = [
+        instructions.updateReserveAllocationIx,
+        ...instructions.updateLUTIxs,
+        ...getPriorityFeeAndCuIxs({
+          priorityFeeMultiplier: 2500,
+        }),
+      ];
+      if (shouldUpdateLut) {
+        txInstructions.push(...instructions.updateLUTIxs);
+      }
+      await processTx(env.c, signer, txInstructions, mode, []);
 
       mode === 'execute' && console.log('Vault allocation updated');
     });
