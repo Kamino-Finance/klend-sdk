@@ -37,9 +37,9 @@ import { confirmTransactionViaPolling } from '../../utils/tx';
     tokenMintProgramId: TOKEN_PROGRAM_ADDRESS,
     performanceFeeRatePercentage: new Decimal(15.0),
     managementFeeRatePercentage: new Decimal(2.0),
-    name: 'SunnyDayCustomVault', // Customize and make it unique for your vault
+    name: 'MyCustomVault', // Customize and make it unique for your vault
     vaultTokenSymbol: 'USDC',
-    vaultTokenName: 'SunnyDayCustomVaultToken',
+    vaultTokenName: 'MyCustomVaultToken',
     minDepositAmount: new Decimal(1000000), // 1 USDC (6 decimals)
     minWithdrawAmount: new Decimal(1000000),
     minInvestAmount: new Decimal(1000000),

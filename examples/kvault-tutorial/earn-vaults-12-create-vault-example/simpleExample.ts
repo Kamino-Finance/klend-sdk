@@ -23,9 +23,9 @@ const kaminoVaultConfig = new KaminoVaultConfig({
   tokenMintProgramId: TOKEN_PROGRAM_ADDRESS,
   performanceFeeRatePercentage: new Decimal(15.0),
   managementFeeRatePercentage: new Decimal(2.0),
-  name: 'SunnyDayCustomVault',
+  name: 'MyCustomVault',
   vaultTokenSymbol: 'USDC',
-  vaultTokenName: 'SunnyDayCustomVaultToken', // Customize and make it unique for your vault
+  vaultTokenName: 'MyCustomVaultToken', // Customize and make it unique for your vault
   minDepositAmount: new Decimal(1000000), // 1 USDC (6 decimals)
   minWithdrawAmount: new Decimal(1000000),
   minInvestAmount: new Decimal(1000000),

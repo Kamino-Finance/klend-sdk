@@ -66,18 +66,23 @@ This directory contains two examples:
 To run:
 
 ```bash
+yarn start
+```
+
+or
+
+```bash
 yarn tsx simpleExample.ts
 ```
 
-### Advanced Example (Transaction Execution)
+### Advanced Example
 
 `advancedExample.ts` demonstrates the complete flow of withdrawing from a vault, this will:
 - Load your keypair from file
 - Connect to the USDC vault
 - Build and sign a withdraw transaction for 1.0 share
 - Send the transaction to the network
-- Wait for confirmation (up to 30 seconds)
-- Confirming via HTTP polling
+- Wait for confirmation via HTTP polling
 - Display the transaction signature
 
 To run:
@@ -96,6 +101,16 @@ yarn tsx advancedExample.ts
 You can modify these values in `advancedExample.ts` as needed.
 
 ## Expected Output
+
+### Simple Example
+When running `yarn start` (simpleExample.ts), you should see:
+
+```
+Withdraw Instructions: [Array of instructions]
+```
+
+### Advanced Example
+When running `yarn tsx advancedExample.ts`, you should see:
 
 ```
 Withdraw successful! Signature: Your_Transaction_Signature

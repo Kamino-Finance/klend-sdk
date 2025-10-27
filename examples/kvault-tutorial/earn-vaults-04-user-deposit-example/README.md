@@ -57,7 +57,7 @@ Important: Save the seed phrase and fund the wallet with SOL and USDC before run
 
 This directory contains two examples:
 
-### Simple Example 
+### Simple Example
 
 `simpleExample.ts` demonstrates how to build deposit instructions without signing or sending a transaction. This uses a noop signer and will output the deposit instruction bundle without executing anything on-chain, which is useful for:
 - Understanding what instructions are created
@@ -66,18 +66,23 @@ This directory contains two examples:
 To run:
 
 ```bash
+yarn start
+```
+
+or
+
+```bash
 yarn tsx simpleExample.ts
 ```
 
-### Advanced Example (Transaction Execution)
+### Advanced Example
 
 `advancedExample.ts` demonstrates the complete flow of depositing to a vault, this will:
 - Load your keypair from file
 - Connect to the USDC vault
 - Build and sign a deposit transaction for 1.0 USDC
-- Send the transaction to the network 
-- Wait for confirmation (up to 30 seconds)
-- Confirming via HTTP polling
+- Send the transaction to the network
+- Wait for confirmation via HTTP polling
 - Display the transaction signature
 
 To run:
@@ -96,6 +101,16 @@ yarn tsx advancedExample.ts
 You can modify these values in `advancedExample.ts` as needed.
 
 ## Expected Output
+
+### Simple Example
+When running `yarn start` (simpleExample.ts), you should see:
+
+```
+Deposit Instructions: [Array of instructions]
+```
+
+### Advanced Example
+When running `yarn tsx advancedExample.ts`, you should see:
 
 ```
 Deposit successful! Signature: Your_Transaction_Signature
