@@ -140,3 +140,25 @@ export async function fetchBlockhash(rpc: Rpc<GetLatestBlockhashApi>): Promise<B
     slot: res.context.slot,
   };
 }
+
+export async function confirmTransactionViaPolling(rpc: any, signature: string): Promise<void> {
+  let confirmed = false;
+
+  // Poll for up to 30 seconds
+  for (let i = 0; i < 30; i++) {
+    const { value: statuses } = await rpc.getSignatureStatuses([signature]).send();
+
+    if (statuses[0]?.confirmationStatus === 'confirmed' ||
+        statuses[0]?.confirmationStatus === 'finalized') {
+      confirmed = true;
+      break;
+    }
+
+    // Wait 1 second before next poll
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
+  if (!confirmed) {
+    throw new Error('Transaction confirmation timeout');
+  }
+}

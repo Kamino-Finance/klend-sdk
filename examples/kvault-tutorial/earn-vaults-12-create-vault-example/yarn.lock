@@ -1024,9 +1024,9 @@
     "@types/node" "*"
 
 "@types/node@*", "@types/node@^24.8.1":
-  version "24.9.0"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-24.9.0.tgz#4fb62beb8b322fe2955ac94f80ff5a58c941ebf4"
-  integrity sha512-MKNwXh3seSK8WurXF7erHPJ2AONmMwkI7zAMrXZDPIru8jRqkk6rGDBVbw4mLwfqA+ZZliiDPg05JQ3uW66tKQ==
+  version "24.9.1"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-24.9.1.tgz#b7360b3c789089e57e192695a855aa4f6981a53c"
+  integrity sha512-QoiaXANRkSXK6p0Duvt56W208du4P9Uye9hWLWgGMDTEoKPhuenzNcC4vGUmrNkiOKTlIrBoyNQYNpSwfEZXSg==
   dependencies:
     undici-types "~7.16.0"
 
@@ -1212,9 +1212,9 @@ commander@^12.1.0:
   integrity sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==
 
 commander@^14.0.0:
-  version "14.0.1"
-  resolved "https://registry.yarnpkg.com/commander/-/commander-14.0.1.tgz#2f9225c19e6ebd0dc4404dd45821b2caa17ea09b"
-  integrity sha512-2JkV3gUZUVrbNA+1sjBOYLsMZ5cEEl8GTFP2a4AVz5hvasAMCQ1D2l2le/cX+pV4N6ZU17zjUahLpIXRrnWL8A==
+  version "14.0.2"
+  resolved "https://registry.yarnpkg.com/commander/-/commander-14.0.2.tgz#b71fd37fe4069e4c3c7c13925252ada4eba14e8e"
+  integrity sha512-TywoWNNRbhoD0BXs1P3ZEScW8W5iKrnbithIl0YH+uCmBd0QpPOA8yc82DS3BIE5Ma6FnBVUsJ7wVUDz4dvOWQ==
 
 commander@^2.20.3:
   version "2.20.3"
@@ -1452,9 +1452,9 @@ get-proto@^1.0.1:
     es-object-atoms "^1.0.0"
 
 get-tsconfig@^4.7.5:
-  version "4.12.0"
-  resolved "https://registry.yarnpkg.com/get-tsconfig/-/get-tsconfig-4.12.0.tgz#cfb3a4446a2abd324a205469e8bda4e7e44cbd35"
-  integrity sha512-LScr2aNr2FbjAjZh2C6X6BxRx1/x+aTDExct/xyq2XKbYOiG5c0aK7pMsSuyc0brz3ibr/lbQiHD9jzt4lccJw==
+  version "4.13.0"
+  resolved "https://registry.yarnpkg.com/get-tsconfig/-/get-tsconfig-4.13.0.tgz#fcdd991e6d22ab9a600f00e91c318707a5d9a0d7"
+  integrity sha512-1VKTZJCwBrvbd+Wn3AOgQP/2Av+TfTCOlE4AcRJE72W1ksZXbAx8PPBR9RzgTeSPzlPMHrbANMH3LbltH73wxQ==
   dependencies:
     resolve-pkg-maps "^1.0.0"
 

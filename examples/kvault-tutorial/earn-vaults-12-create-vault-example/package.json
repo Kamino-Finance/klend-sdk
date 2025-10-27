@@ -1,5 +1,5 @@
 {
-  "name": "earn-vaults-04-user-deposit-example",
+  "name": "earn-vaults-12-create-vault-example",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -14,6 +14,7 @@
     "@kamino-finance/klend-sdk": "link:../../../",
     "@solana-program/address-lookup-table": "^0.7.0",
     "@solana-program/compute-budget": "^0.7.0",
+    "@solana-program/token": "^0.5.1",
     "@solana/kit": "^2.1.1",
     "dotenv": "^16.4.5",
     "ts-node": "^10.9.2"

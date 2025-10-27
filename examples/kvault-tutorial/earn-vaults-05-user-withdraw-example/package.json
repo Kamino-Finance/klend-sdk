@@ -3,18 +3,19 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "tsx index.ts"
+    "start": "tsx simpleExample.ts"
   },
   "keywords": [],
   "author": "",
-  "type": "module",
   "license": "ISC",
   "description": "",
   "dependencies": {
     "decimal.js": "^10.4.3",
     "@kamino-finance/klend-sdk": "link:../../../",
+    "@solana-program/address-lookup-table": "^0.7.0",
     "@solana-program/compute-budget": "^0.7.0",
     "@solana/kit": "^2.1.1",
+    "dotenv": "^16.4.5",
     "ts-node": "^10.9.2"
   },
   "devDependencies": {
