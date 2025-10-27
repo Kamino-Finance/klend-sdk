@@ -2849,6 +2849,55 @@ export class KaminoVaultClient {
   }
 
   /**
+   * This will return a map of the cumulative rewards issued for all the delegated farms
+   * @param [vaults] - the vaults to get the cumulative rewards for; if not provided, the function will get the cumulative rewards for all the vaults
+   * @returns a map of the cumulative rewards issued for all the delegated farms, per token, in lamports
+   */
+  async getCumulativeDelegatedFarmsRewardsIssuedForAllVaults(vaults?: Address[]): Promise<Map<Address, Decimal>> {
+    const vaultsWithDelegatedFarms = await this.getVaultsWithDelegatedFarm();
+    const delegatedFarmsAddresses: Address[] = [];
+    if (vaults) {
+      vaults.forEach((vault) => {
+        const delegatedFarm = vaultsWithDelegatedFarms.get(vault);
+        if (delegatedFarm) {
+          delegatedFarmsAddresses.push(delegatedFarm);
+        }
+      });
+    } else {
+      delegatedFarmsAddresses.push(...Array.from(vaultsWithDelegatedFarms.values()));
+    }
+
+    const farmsSDK = new Farms(this.getConnection());
+    const delegatedFarmsStates = await farmsSDK.fetchMultipleFarmStatesWithCheckedSize(delegatedFarmsAddresses);
+
+    const cumulativeRewardsPerToken = new Map<Address, Decimal>();
+    for (const delegatedFarmState of delegatedFarmsStates) {
+      if (!delegatedFarmState) {
+        continue;
+      }
+
+      delegatedFarmState.rewardInfos.forEach((rewardInfo) => {
+        if (rewardInfo.token.mint === DEFAULT_PUBLIC_KEY) {
+          return;
+        }
+        const rewardTokenMint = rewardInfo.token.mint;
+        if (cumulativeRewardsPerToken.has(rewardTokenMint)) {
+          cumulativeRewardsPerToken.set(
+            rewardTokenMint,
+            cumulativeRewardsPerToken
+              .get(rewardTokenMint)!
+              .add(new Decimal(rewardInfo.rewardsIssuedCumulative.toString()))
+          );
+        } else {
+          cumulativeRewardsPerToken.set(rewardTokenMint, new Decimal(rewardInfo.rewardsIssuedCumulative.toString()));
+        }
+      });
+    }
+
+    return cumulativeRewardsPerToken;
+  }
+
+  /**
    * This will return an overview of each reserve that is part of the vault allocation
    * @param vault - the kamino vault to get available liquidity to withdraw for
    * @param slot - current slot
@@ -3436,6 +3485,36 @@ export class KaminoVaultClient {
       return undefined;
     }
     return address(delegatedFarmWithVault.farm);
+  }
+
+  /**
+   * gets all the delegated farms addresses
+   * @returns a list of delegated farms addresses
+   */
+  async getAllDelegatedFarms(): Promise<Address[]> {
+    const vaultsWithDelegatedFarm = await this.getVaultsWithDelegatedFarm();
+    return Array.from(vaultsWithDelegatedFarm.values());
+  }
+
+  /**
+   * This will return a map of the vault address and the delegated farm address for that vault
+   * @returns a map of the vault address and the delegated farm address for that vault
+   */
+  async getVaultsWithDelegatedFarm(): Promise<Map<Address, Address>> {
+    const response = await fetch(`${CDN_ENDPOINT}/resources.json`);
+    if (!response.ok) {
+      console.log(`Failed to fetch CDN for get vaults with delegated farm`);
+      return new Map<Address, Address>();
+    }
+    const data = (await response.json()) as { 'mainnet-beta'?: { delegatedVaultFarms: any } };
+    const delegatedVaultFarms = data['mainnet-beta']?.delegatedVaultFarms;
+    if (!delegatedVaultFarms) {
+      return new Map<Address, Address>();
+    }
+
+    return new Map(
+      delegatedVaultFarms.map((delegatedFarm: any) => [address(delegatedFarm.vault), address(delegatedFarm.farm)])
+    );
   }
 
   /// reads the pending rewards for a user in the reserves farms of a vault

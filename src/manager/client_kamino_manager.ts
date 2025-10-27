@@ -1527,6 +1527,35 @@ async function main() {
       }
     });
 
+  commands.command('get-cumulative-delegated-farms-rewards').action(async () => {
+    const env = await initEnv();
+    const kaminoManager = new KaminoManager(
+      env.c.rpc,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      env.klendProgramId,
+      env.kvaultProgramId
+    );
+    const cumulativeRewards = await kaminoManager.getCumulativeDelegatedFarmsRewardsIssuedForAllVaults();
+    cumulativeRewards.forEach((reward, tokenMint) => {
+      console.log(`token mint ${tokenMint} rewards issued (lamports) ${reward}`);
+    });
+  });
+
+  commands.command('get-vaults-with-delegated-farm').action(async () => {
+    const env = await initEnv();
+    const kaminoManager = new KaminoManager(
+      env.c.rpc,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      env.klendProgramId,
+      env.kvaultProgramId
+    );
+
+    const vaultsWithDelegatedFarm = await kaminoManager.getVaultsWithDelegatedFarm();
+    vaultsWithDelegatedFarm.forEach((delegatedFarm, vault) => {
+      console.log(`vault ${vault} delegated farm ${delegatedFarm}`);
+    });
+  });
+
   commands
     .command('simulate-reserve-apy')
     .requiredOption('--reserve <string>', 'Reserve address')

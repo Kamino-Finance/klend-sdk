@@ -1089,6 +1089,23 @@ export class KaminoManager {
   }
 
   /**
+   * This will return a map of the cumulative rewards issued for all the delegated farms, per token
+   * @param [vaults] - the vaults to get the cumulative rewards for; if not provided, the function will get the cumulative rewards for all the vaults
+   * @returns a map of the cumulative rewards issued for all the delegated farms, per token, in lamports
+   */
+  async getCumulativeDelegatedFarmsRewardsIssuedForAllVaults(vaults?: Address[]): Promise<Map<Address, Decimal>> {
+    return this._vaultClient.getCumulativeDelegatedFarmsRewardsIssuedForAllVaults(vaults);
+  }
+
+  /**
+   * This will return a map of the vault address and the delegated farm address for that vault
+   * @returns a map of the vault address and the delegated farm address for that vault
+   */
+  async getVaultsWithDelegatedFarm(): Promise<Map<Address, Address>> {
+    return this._vaultClient.getVaultsWithDelegatedFarm();
+  }
+
+  /**
    * This will return an overview of each reserve that is part of the vault allocation
    * @param vault - the kamino vault to get available liquidity to withdraw for
    * @param slot - current slot
