@@ -54,7 +54,7 @@ Important: Save the seed phrase and fund the wallet with SOL before running the 
 
 ## Running the Examples
 
-This directory contains three examples:
+This directory contains two examples:
 
 ### Simple Example
 
@@ -66,27 +66,27 @@ This directory contains three examples:
 To run:
 
 ```bash
+yarn start
+```
+
+or
+
+```bash
 yarn tsx simpleExample.ts
 ```
 
-### Advanced Example (index.ts)
+### Advanced Example
 
-`index.ts` (or `advancedExample.ts`) demonstrates the complete flow of creating a vault, including:
+`advancedExample.ts` demonstrates the complete flow of creating a vault, including:
 - Loading your keypair from file
 - Configuring vault parameters (fees, limits, etc.)
 - Building and signing vault creation transaction
 - Sending the transaction to the network
 - Waiting for confirmation via HTTP polling
 - Creating and populating the Lookup Table (LUT) in the background
-- Displaying the vault address and transaction signatures
+- Displaying the vault address
 
 To run:
-
-```bash
-yarn start
-```
-
-or
 
 ```bash
 yarn tsx advancedExample.ts
@@ -101,10 +101,10 @@ The examples create a USDC vault with the following default configuration:
 - **Management Fee**: 2%
 - **Vault Name**: "MyCustomVault" (CUSTOMIZE THIS - must be unique)
 - **Vault Token Symbol**: "USDC"
-- **Vault Token Name**: "My USDC Vault" (CUSTOMIZE THIS)
+- **Vault Token Name**: "MyCustomVaultToken" (CUSTOMIZE THIS)
 - **Min Deposit**: 1 USDC
 - **Min Withdraw**: 1 USDC
-- **Min Invest**: 4 USDC
+- **Min Invest**: 1 USDC (vault starts investing immediately)
 - **Min Invest Delay**: 150 slots
 - **Unallocated Weight**: 500
 - **Unallocated Cap**: 2 USDC
@@ -115,37 +115,22 @@ You can modify these values in the examples as needed.
 
 ## Expected Output
 
-When running the advanced example, you should see output similar to:
+### Simple Example
+When running `yarn start` (simpleExample.ts), you should see:
 
 ```
-🏦 Starting Kamino Vault Creation...
-
-📍 Admin address: YourAddress...
-🔨 Generating vault instructions...
-✅ Vault instructions created
-📍 Vault address: NewVaultAddress...
-📦 Total instructions: 5
-⏳ Getting fresh blockhash...
-🌐 Blockhash: abc12345...
-📊 Last valid height: 123456789
-🔨 Building transaction...
-✍️  Signing transaction...
-✅ Transaction signed
-📝 Transaction signature: YourSignature...
-📤 Sending transaction (skipPreflight: true, maxRetries: 3)...
-✅ Transaction sent successfully
-⏳ Waiting for transaction confirmation...
-✅ Transaction confirmed!
-🎉 Vault created successfully!
-🔗 Explorer: https://solscan.io/tx/YourSignature
-🏦 Vault ID: YourVaultAddress
-
-🔄 Starting LUT population (background)...
-...
-✅ LUT populated successfully!
+Vault Address: <generated-vault-address>
+Vault Creation Instructions: [Array of instructions]
 ```
 
-You can view your transaction on Solscan using the provided URL.
+### Advanced Example
+When running `yarn tsx advancedExample.ts`, you should see:
+
+```
+Vault creation successful! Vault ID: <your-vault-address>
+```
+
+The LUT population happens silently in the background. You can verify your vault was created by checking it on Solscan or using the earn-vaults-13-get-all-vaults-example to see it in the list of all vaults.
 
 ## Lookup Table (LUT)
 
@@ -168,11 +153,3 @@ Ensure your wallet has enough SOL for transaction fees (approximately 0.02-0.05 
 #### Error: Vault name already exists
 
 Vault names must be unique. Customize the `name` field in the `KaminoVaultConfig` to use a unique name for your vault.
-
-## Next Steps
-
-After creating your vault, you can:
-- Use earn-vaults-04 example to deposit into your vault
-- Use earn-vaults-05 example to withdraw from your vault
-- Configure vault strategies and allocations
-- Add markets to your vault for yield generation
