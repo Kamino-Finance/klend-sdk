@@ -697,13 +697,17 @@ export class KaminoVaultClient {
    * @param mode the field to update (based on VaultConfigFieldKind enum)
    * @param value the value to update the field with
    * @param [vaultAdminAuthority] the signer of the transaction. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx
+   * @param [lutIxsSigner] the signer of the transaction to be used for the lookup table instructions. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx
+   * @param [skipLutUpdate] if true, the lookup table instructions will not be included in the returned instructions
    * @returns a struct that contains the instruction to update the field and an optional list of instructions to update the lookup table
    */
   async updateVaultConfigIxs(
     vault: KaminoVault,
     mode: VaultConfigFieldKind,
     value: string,
-    vaultAdminAuthority?: TransactionSigner
+    vaultAdminAuthority?: TransactionSigner,
+    lutIxsSigner?: TransactionSigner,
+    skipLutUpdate: boolean = false
   ): Promise<UpdateVaultConfigIxs> {
     const vaultState: VaultState = await vault.getState();
     const admin = parseVaultAdmin(vaultState, vaultAdminAuthority);
@@ -753,36 +757,41 @@ export class KaminoVaultClient {
 
     const updateLUTIxs: Instruction[] = [];
 
-    if (mode.kind === new VaultConfigField.PendingVaultAdmin().kind) {
-      const newPubkey = address(value);
-      const insertIntoLutIxs = await insertIntoLookupTableIxs(
-        this.getConnection(),
-        admin,
-        vaultState.vaultLookupTable,
-        [newPubkey]
-      );
-      updateLUTIxs.push(...insertIntoLutIxs);
-    } else if (mode.kind === new VaultConfigField.Farm().kind) {
-      const keysToAddToLUT = [address(value)];
-      // if the farm already exist we want to read its state to add it to the LUT
-      try {
-        const farmState = await FarmState.fetch(this.getConnection(), keysToAddToLUT[0]);
-        keysToAddToLUT.push(
-          farmState!.farmVault,
-          farmState!.farmVaultsAuthority,
-          farmState!.token.mint,
-          farmState!.scopePrices,
-          farmState!.globalConfig
-        );
+    if (!skipLutUpdate) {
+      const lutIxsSignerAccount = lutIxsSigner ? lutIxsSigner : admin;
+
+      if (mode.kind === new VaultConfigField.PendingVaultAdmin().kind) {
+        const newPubkey = address(value);
+
         const insertIntoLutIxs = await insertIntoLookupTableIxs(
           this.getConnection(),
-          admin,
+          lutIxsSignerAccount,
           vaultState.vaultLookupTable,
-          keysToAddToLUT
+          [newPubkey]
         );
         updateLUTIxs.push(...insertIntoLutIxs);
-      } catch (error) {
-        console.log(`Error fetching farm ${keysToAddToLUT[0].toString()} state`, error);
+      } else if (mode.kind === new VaultConfigField.Farm().kind) {
+        const keysToAddToLUT = [address(value)];
+        // if the farm already exist we want to read its state to add it to the LUT
+        try {
+          const farmState = await FarmState.fetch(this.getConnection(), keysToAddToLUT[0]);
+          keysToAddToLUT.push(
+            farmState!.farmVault,
+            farmState!.farmVaultsAuthority,
+            farmState!.token.mint,
+            farmState!.scopePrices,
+            farmState!.globalConfig
+          );
+          const insertIntoLutIxs = await insertIntoLookupTableIxs(
+            this.getConnection(),
+            lutIxsSignerAccount,
+            vaultState.vaultLookupTable,
+            keysToAddToLUT
+          );
+          updateLUTIxs.push(...insertIntoLutIxs);
+        } catch (error) {
+          console.log(`Error fetching farm ${keysToAddToLUT[0].toString()} state`, error);
+        }
       }
     }
 
@@ -799,19 +808,30 @@ export class KaminoVaultClient {
    * @param farm - the farm where the vault shares can be staked
    * @param [errorOnOverride] - if true, the function will throw an error if the vault already has a farm. If false, it will override the farm
    * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
-   *
+   * @param [lutIxsSigner] - the signer of the transaction to be used for the lookup table instructions. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx
+   * @param [skipLutUpdate] - if true, the lookup table instructions will not be included in the returned instructions
+   * @returns - a struct that contains the instruction to update the farm and an optional list of instructions to update the lookup table
    */
   async setVaultFarmIxs(
     vault: KaminoVault,
     farm: Address,
     errorOnOverride: boolean = true,
-    vaultAdminAuthority?: TransactionSigner
+    vaultAdminAuthority?: TransactionSigner,
+    lutIxsSigner?: TransactionSigner,
+    skipLutUpdate: boolean = false
   ): Promise<UpdateVaultConfigIxs> {
     const vaultHasFarm = await vault.hasFarm();
     if (vaultHasFarm && errorOnOverride) {
       throw new Error('Vault already has a farm, if you want to override it set errorOnOverride to false');
     }
-    return this.updateVaultConfigIxs(vault, new VaultConfigField.Farm(), farm, vaultAdminAuthority);
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.Farm(),
+      farm,
+      vaultAdminAuthority,
+      lutIxsSigner,
+      skipLutUpdate
+    );
   }
 
   /**

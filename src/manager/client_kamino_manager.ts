@@ -48,7 +48,7 @@ import { initEnv, ManagerEnv } from './tx/ManagerEnv';
 import { processTx } from './tx/processor';
 import { getPriorityFeeAndCuIxs } from '../client/tx/priorityFee';
 import { fetchAddressLookupTable, fetchAllAddressLookupTable } from '@solana-program/address-lookup-table';
-import { noopSigner } from '../utils/signer';
+import { noopSigner, parseKeypairFile } from '../utils/signer';
 
 dotenv.config({
   path: `.env${process.env.ENV ? '.' + process.env.ENV : ''}`,
@@ -455,7 +455,9 @@ async function main() {
         kaminoVault,
         new PendingVaultAdmin(),
         newAdmin,
-        signer
+        signer,
+        undefined,
+        true
       );
 
       await processTx(
@@ -485,7 +487,12 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, field, value, mode, staging }) => {
+    .option(`--skip-lut-update`, 'If set, it will skip the LUT update')
+    .option(
+      `--lutSigner <string>`,
+      'If set, it will use the provided signer instead of the default one for the LUT update'
+    )
+    .action(async ({ vault, field, value, mode, staging, skipLutUpdate, lutSigner }) => {
       const env = await initEnv(staging);
       const vaultAddress = address(vault);
 
@@ -500,7 +507,20 @@ async function main() {
       const vaultState = await kaminoVault.getState();
       const signer = await env.getSigner({ vaultState });
 
-      const instructions = await kaminoManager.updateVaultConfigIxs(kaminoVault, field, value, signer);
+      let lutSignerOrUndefined = undefined;
+      if (lutSigner) {
+        lutSignerOrUndefined = await parseKeypairFile(lutSigner as string);
+      }
+
+      const shouldSkipLutUpdate = !!skipLutUpdate;
+      const instructions = await kaminoManager.updateVaultConfigIxs(
+        kaminoVault,
+        field,
+        value,
+        signer,
+        lutSignerOrUndefined,
+        shouldSkipLutUpdate
+      );
 
       await processTx(
         env.c,
@@ -576,10 +596,15 @@ async function main() {
     )
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ lut, addresses, mode, staging, multisig }) => {
+    .option(`--signer <string>`, 'If set, it will use the provided signer instead of the default one')
+    .action(async ({ lut, addresses, mode, staging, multisig, signer }) => {
       const env = await initEnv(multisig, staging);
       const lutAddress = address(lut);
-
+      let txSigner = await env.getSigner();
+      // if the signer is provided (path to a keypair) we use it, otherwise we use the default one
+      if (signer) {
+        txSigner = await parseKeypairFile(signer as string);
+      }
       const addressesArr = addresses.split(' ').map((a: string) => address(a));
 
       if (mode === 'multisig' && !multisig) {
@@ -593,12 +618,11 @@ async function main() {
         env.kvaultProgramId
       );
 
-      const signer = await env.getSigner();
-      const instructions = await kaminoManager.insertIntoLutIxs(signer, lutAddress, addressesArr);
+      const instructions = await kaminoManager.insertIntoLutIxs(txSigner, lutAddress, addressesArr);
 
       await processTx(
         env.c,
-        signer,
+        txSigner,
         [
           ...instructions,
           ...getPriorityFeeAndCuIxs({
@@ -640,7 +664,8 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, mode, staging }) => {
+    .option(`--signer <string>`, 'If set, it will use the provided signer instead of the default one')
+    .action(async ({ vault, mode, staging, signer }) => {
       const env = await initEnv(staging);
       const vaultAddress = address(vault);
 
@@ -653,14 +678,18 @@ async function main() {
 
       const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
       const vaultState = await kaminoVault.getState();
-      const signer = await env.getSigner({ vaultState });
-      const syncLUTIxs = await kaminoManager.syncVaultLUTIxs(signer, kaminoVault);
+      let txSigner = await env.getSigner({ vaultState });
+      // if the signer is provided (path to a keypair) we use it, otherwise we use the default one
+      if (signer) {
+        txSigner = await parseKeypairFile(signer as string);
+      }
+      const syncLUTIxs = await kaminoManager.syncVaultLUTIxs(txSigner, kaminoVault);
 
       // if we need to create the LUT we have to do that in a separate tx and wait a little bit after
       if (syncLUTIxs.setupLUTIfNeededIxs.length > 0) {
         await processTx(
           env.c,
-          signer,
+          txSigner,
           [
             ...syncLUTIxs.setupLUTIfNeededIxs,
             ...getPriorityFeeAndCuIxs({
@@ -677,7 +706,7 @@ async function main() {
       for (const ix of syncLUTIxs.syncLUTIxs) {
         await processTx(
           env.c,
-          signer,
+          txSigner,
           [
             ix,
             ...getPriorityFeeAndCuIxs({
@@ -1353,6 +1382,7 @@ async function main() {
         console.log('reserve ', reserveAddress);
         console.log('reserve incentive', incentive);
       });
+      console.log('totalIncentivesAPY', vaultOverview.reservesFarmsIncentives.totalIncentivesAPY.toString());
     });
 
   commands

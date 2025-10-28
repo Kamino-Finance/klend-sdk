@@ -581,20 +581,24 @@ export class KaminoManager {
    * @param mode the field to update (based on VaultConfigFieldKind enum)
    * @param value the value to update the field with
    * @param [signer] the signer of the transaction. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx
+   * @param [lutIxsSigner] the signer of the transaction to be used for the lookup table instructions. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx
+   * @param [skipLutUpdate] if true, the lookup table instructions will not be included in the returned instructions
    * @returns a struct that contains the instruction to update the field and an optional list of instructions to update the lookup table
    */
   async updateVaultConfigIxs(
     vault: KaminoVault,
     mode: VaultConfigFieldKind | string,
     value: string,
-    signer?: TransactionSigner
+    signer?: TransactionSigner,
+    lutIxsSigner?: TransactionSigner,
+    skipLutUpdate: boolean = false
   ): Promise<UpdateVaultConfigIxs> {
     if (typeof mode === 'string') {
       const field = VaultConfigField.fromDecoded({ [mode]: '' });
-      return this._vaultClient.updateVaultConfigIxs(vault, field, value, signer);
+      return this._vaultClient.updateVaultConfigIxs(vault, field, value, signer, lutIxsSigner, skipLutUpdate);
     }
 
-    return this._vaultClient.updateVaultConfigIxs(vault, mode, value, signer);
+    return this._vaultClient.updateVaultConfigIxs(vault, mode, value, signer, lutIxsSigner, skipLutUpdate);
   }
 
   /** Sets the farm where the shares can be staked. This is store in vault state and a vault can only have one farm, so the new farm will ovveride the old farm
@@ -607,9 +611,18 @@ export class KaminoManager {
     vault: KaminoVault,
     farm: Address,
     errorOnOverride: boolean = true,
-    vaultAdminAuthority?: TransactionSigner
+    vaultAdminAuthority?: TransactionSigner,
+    lutIxsSigner?: TransactionSigner,
+    skipLutUpdate: boolean = false
   ): Promise<UpdateVaultConfigIxs> {
-    return this._vaultClient.setVaultFarmIxs(vault, farm, errorOnOverride, vaultAdminAuthority);
+    return this._vaultClient.setVaultFarmIxs(
+      vault,
+      farm,
+      errorOnOverride,
+      vaultAdminAuthority,
+      lutIxsSigner,
+      skipLutUpdate
+    );
   }
 
   /**

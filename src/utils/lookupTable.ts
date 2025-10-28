@@ -110,11 +110,16 @@ export function closeLookupTableIx(authority: TransactionSigner, lookupTable: Ad
  * Returns the accounts in a lookup table
  * @param rpc
  * @param lookupTable - lookup table to get the accounts from
- * @returns - an array of accounts in the lookup table
+ * @returns - an array of accounts in the lookup table or an empty array if the lookup table does not exist
  */
 export async function getAccountsInLut(rpc: Rpc<GetAccountInfoApi>, lookupTable: Address): Promise<Address[]> {
-  const lutState = await fetchAddressLookupTable(rpc, lookupTable);
-  return lutState.data.addresses;
+  try {
+    const lutState = await fetchAddressLookupTable(rpc, lookupTable);
+    return lutState.data.addresses;
+  } catch (error) {
+    console.error(`Error fetching accounts in lookup table ${lookupTable.toString()}`, error);
+    return [];
+  }
 }
 /**
  * This method inserts the missing keys from the provided keys into an existent lookup table
