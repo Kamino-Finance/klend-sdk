@@ -697,13 +697,17 @@ export class KaminoVaultClient {
    * @param mode the field to update (based on VaultConfigFieldKind enum)
    * @param value the value to update the field with
    * @param [vaultAdminAuthority] the signer of the transaction. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx
+   * @param [lutIxsSigner] the signer of the transaction to be used for the lookup table instructions. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx
+   * @param [skipLutUpdate] if true, the lookup table instructions will not be included in the returned instructions
    * @returns a struct that contains the instruction to update the field and an optional list of instructions to update the lookup table
    */
   async updateVaultConfigIxs(
     vault: KaminoVault,
     mode: VaultConfigFieldKind,
     value: string,
-    vaultAdminAuthority?: TransactionSigner
+    vaultAdminAuthority?: TransactionSigner,
+    lutIxsSigner?: TransactionSigner,
+    skipLutUpdate: boolean = false
   ): Promise<UpdateVaultConfigIxs> {
     const vaultState: VaultState = await vault.getState();
     const admin = parseVaultAdmin(vaultState, vaultAdminAuthority);
@@ -753,36 +757,41 @@ export class KaminoVaultClient {
 
     const updateLUTIxs: Instruction[] = [];
 
-    if (mode.kind === new VaultConfigField.PendingVaultAdmin().kind) {
-      const newPubkey = address(value);
-      const insertIntoLutIxs = await insertIntoLookupTableIxs(
-        this.getConnection(),
-        admin,
-        vaultState.vaultLookupTable,
-        [newPubkey]
-      );
-      updateLUTIxs.push(...insertIntoLutIxs);
-    } else if (mode.kind === new VaultConfigField.Farm().kind) {
-      const keysToAddToLUT = [address(value)];
-      // if the farm already exist we want to read its state to add it to the LUT
-      try {
-        const farmState = await FarmState.fetch(this.getConnection(), keysToAddToLUT[0]);
-        keysToAddToLUT.push(
-          farmState!.farmVault,
-          farmState!.farmVaultsAuthority,
-          farmState!.token.mint,
-          farmState!.scopePrices,
-          farmState!.globalConfig
-        );
+    if (!skipLutUpdate) {
+      const lutIxsSignerAccount = lutIxsSigner ? lutIxsSigner : admin;
+
+      if (mode.kind === new VaultConfigField.PendingVaultAdmin().kind) {
+        const newPubkey = address(value);
+
         const insertIntoLutIxs = await insertIntoLookupTableIxs(
           this.getConnection(),
-          admin,
+          lutIxsSignerAccount,
           vaultState.vaultLookupTable,
-          keysToAddToLUT
+          [newPubkey]
         );
         updateLUTIxs.push(...insertIntoLutIxs);
-      } catch (error) {
-        console.log(`Error fetching farm ${keysToAddToLUT[0].toString()} state`, error);
+      } else if (mode.kind === new VaultConfigField.Farm().kind) {
+        const keysToAddToLUT = [address(value)];
+        // if the farm already exist we want to read its state to add it to the LUT
+        try {
+          const farmState = await FarmState.fetch(this.getConnection(), keysToAddToLUT[0]);
+          keysToAddToLUT.push(
+            farmState!.farmVault,
+            farmState!.farmVaultsAuthority,
+            farmState!.token.mint,
+            farmState!.scopePrices,
+            farmState!.globalConfig
+          );
+          const insertIntoLutIxs = await insertIntoLookupTableIxs(
+            this.getConnection(),
+            lutIxsSignerAccount,
+            vaultState.vaultLookupTable,
+            keysToAddToLUT
+          );
+          updateLUTIxs.push(...insertIntoLutIxs);
+        } catch (error) {
+          console.log(`Error fetching farm ${keysToAddToLUT[0].toString()} state`, error);
+        }
       }
     }
 
@@ -799,19 +808,30 @@ export class KaminoVaultClient {
    * @param farm - the farm where the vault shares can be staked
    * @param [errorOnOverride] - if true, the function will throw an error if the vault already has a farm. If false, it will override the farm
    * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
-   *
+   * @param [lutIxsSigner] - the signer of the transaction to be used for the lookup table instructions. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx
+   * @param [skipLutUpdate] - if true, the lookup table instructions will not be included in the returned instructions
+   * @returns - a struct that contains the instruction to update the farm and an optional list of instructions to update the lookup table
    */
   async setVaultFarmIxs(
     vault: KaminoVault,
     farm: Address,
     errorOnOverride: boolean = true,
-    vaultAdminAuthority?: TransactionSigner
+    vaultAdminAuthority?: TransactionSigner,
+    lutIxsSigner?: TransactionSigner,
+    skipLutUpdate: boolean = false
   ): Promise<UpdateVaultConfigIxs> {
     const vaultHasFarm = await vault.hasFarm();
     if (vaultHasFarm && errorOnOverride) {
       throw new Error('Vault already has a farm, if you want to override it set errorOnOverride to false');
     }
-    return this.updateVaultConfigIxs(vault, new VaultConfigField.Farm(), farm, vaultAdminAuthority);
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.Farm(),
+      farm,
+      vaultAdminAuthority,
+      lutIxsSigner,
+      skipLutUpdate
+    );
   }
 
   /**
@@ -2849,6 +2869,55 @@ export class KaminoVaultClient {
   }
 
   /**
+   * This will return a map of the cumulative rewards issued for all the delegated farms
+   * @param [vaults] - the vaults to get the cumulative rewards for; if not provided, the function will get the cumulative rewards for all the vaults
+   * @returns a map of the cumulative rewards issued for all the delegated farms, per token, in lamports
+   */
+  async getCumulativeDelegatedFarmsRewardsIssuedForAllVaults(vaults?: Address[]): Promise<Map<Address, Decimal>> {
+    const vaultsWithDelegatedFarms = await this.getVaultsWithDelegatedFarm();
+    const delegatedFarmsAddresses: Address[] = [];
+    if (vaults) {
+      vaults.forEach((vault) => {
+        const delegatedFarm = vaultsWithDelegatedFarms.get(vault);
+        if (delegatedFarm) {
+          delegatedFarmsAddresses.push(delegatedFarm);
+        }
+      });
+    } else {
+      delegatedFarmsAddresses.push(...Array.from(vaultsWithDelegatedFarms.values()));
+    }
+
+    const farmsSDK = new Farms(this.getConnection());
+    const delegatedFarmsStates = await farmsSDK.fetchMultipleFarmStatesWithCheckedSize(delegatedFarmsAddresses);
+
+    const cumulativeRewardsPerToken = new Map<Address, Decimal>();
+    for (const delegatedFarmState of delegatedFarmsStates) {
+      if (!delegatedFarmState) {
+        continue;
+      }
+
+      delegatedFarmState.rewardInfos.forEach((rewardInfo) => {
+        if (rewardInfo.token.mint === DEFAULT_PUBLIC_KEY) {
+          return;
+        }
+        const rewardTokenMint = rewardInfo.token.mint;
+        if (cumulativeRewardsPerToken.has(rewardTokenMint)) {
+          cumulativeRewardsPerToken.set(
+            rewardTokenMint,
+            cumulativeRewardsPerToken
+              .get(rewardTokenMint)!
+              .add(new Decimal(rewardInfo.rewardsIssuedCumulative.toString()))
+          );
+        } else {
+          cumulativeRewardsPerToken.set(rewardTokenMint, new Decimal(rewardInfo.rewardsIssuedCumulative.toString()));
+        }
+      });
+    }
+
+    return cumulativeRewardsPerToken;
+  }
+
+  /**
    * This will return an overview of each reserve that is part of the vault allocation
    * @param vault - the kamino vault to get available liquidity to withdraw for
    * @param slot - current slot
@@ -3436,6 +3505,36 @@ export class KaminoVaultClient {
       return undefined;
     }
     return address(delegatedFarmWithVault.farm);
+  }
+
+  /**
+   * gets all the delegated farms addresses
+   * @returns a list of delegated farms addresses
+   */
+  async getAllDelegatedFarms(): Promise<Address[]> {
+    const vaultsWithDelegatedFarm = await this.getVaultsWithDelegatedFarm();
+    return Array.from(vaultsWithDelegatedFarm.values());
+  }
+
+  /**
+   * This will return a map of the vault address and the delegated farm address for that vault
+   * @returns a map of the vault address and the delegated farm address for that vault
+   */
+  async getVaultsWithDelegatedFarm(): Promise<Map<Address, Address>> {
+    const response = await fetch(`${CDN_ENDPOINT}/resources.json`);
+    if (!response.ok) {
+      console.log(`Failed to fetch CDN for get vaults with delegated farm`);
+      return new Map<Address, Address>();
+    }
+    const data = (await response.json()) as { 'mainnet-beta'?: { delegatedVaultFarms: any } };
+    const delegatedVaultFarms = data['mainnet-beta']?.delegatedVaultFarms;
+    if (!delegatedVaultFarms) {
+      return new Map<Address, Address>();
+    }
+
+    return new Map(
+      delegatedVaultFarms.map((delegatedFarm: any) => [address(delegatedFarm.vault), address(delegatedFarm.farm)])
+    );
   }
 
   /// reads the pending rewards for a user in the reserves farms of a vault
