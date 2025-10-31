@@ -93,6 +93,7 @@ import { getAccountOwner, getProgramAccounts } from '../utils/rpc';
 import {
   AcceptVaultOwnershipIxs,
   APYs,
+  CreateVaultFarm,
   DepositIxs,
   DisinvestAllReservesIxs,
   InitVaultIxs,
@@ -107,9 +108,11 @@ import {
 } from './vault_types';
 import { batchFetch, collToLamportsDecimal, ZERO } from '@kamino-finance/kliquidity-sdk';
 import { FullBPSDecimal } from '@kamino-finance/kliquidity-sdk/dist/utils/CreationParameters';
-import { FarmIncentives, FarmState, getUserStatePDA } from '@kamino-finance/farms-sdk/dist';
+import { FarmConfigOption, FarmIncentives, FarmState, getUserStatePDA } from '@kamino-finance/farms-sdk/dist';
 import { getAccountsInLut, initLookupTableIx, insertIntoLookupTableIxs } from '../utils/lookupTable';
 import {
+  FARMS_ADMIN_MAINNET,
+  FARMS_GLOBAL_CONFIG_MAINNET,
   getFarmStakeIxs,
   getFarmUnstakeAndWithdrawIxs,
   getSharesInFarmUserPosition,
@@ -285,6 +288,8 @@ export class KaminoVaultClient {
     };
     const initVaultIx = initVault(initVaultAccounts, undefined, this._kaminoVaultProgramId);
 
+    const createVaultFarm = await this.createVaultFarm(vaultConfig.admin, vaultState.address, sharesMint);
+
     // create and set up the vault lookup table
     const [createLUTIx, lut] = await initLookupTableIx(vaultConfig.admin, slot);
 
@@ -300,6 +305,8 @@ export class KaminoVaultClient {
       TOKEN_PROGRAM_ADDRESS,
       this._kaminoLendProgramId,
       SYSVAR_INSTRUCTIONS_ADDRESS,
+      createVaultFarm.farm.address,
+      FARMS_GLOBAL_CONFIG_MAINNET,
     ];
     const insertIntoLUTIxs = await insertIntoLookupTableIxs(
       this.getConnection(),
@@ -345,6 +352,12 @@ export class KaminoVaultClient {
       );
       ixs.push(setNameIx);
     }
+    const setFarmIx = this.updateUninitialisedVaultConfigIx(
+      vaultConfig.admin,
+      vaultState.address,
+      new VaultConfigField.Farm(),
+      createVaultFarm.farm.address
+    );
 
     const metadataIx = await this.getSetSharesMetadataIx(
       this.getConnection(),
@@ -366,7 +379,54 @@ export class KaminoVaultClient {
         populateLUTIxs: insertIntoLUTIxs,
         cleanupIxs,
         initSharesMetadataIx: metadataIx,
+        createVaultFarm,
+        setFarmToVaultIx: setFarmIx,
       },
+    };
+  }
+
+  /**
+   * This method creates a farm for a vault
+   * @param signer - the signer of the transaction
+   * @param vaultSharesMint - the mint of the vault shares
+   * @param vaultAddress - the address of the vault (it doesn't need to be already initialized)
+   * @returns a struct with the farm, the setup farm ixs and the update farm ixs
+   */
+  async createVaultFarm(
+    signer: TransactionSigner,
+    vaultAddress: Address,
+    vaultSharesMint: Address
+  ): Promise<CreateVaultFarm> {
+    const farmsSDK = new Farms(this._rpc);
+
+    const farm = await generateKeyPairSigner();
+    const ixs = await farmsSDK.createFarmIxs(signer, farm, FARMS_GLOBAL_CONFIG_MAINNET, vaultSharesMint);
+
+    const updatePendingFarmAdminIx = await farmsSDK.updateFarmConfigIx(
+      signer,
+      farm.address,
+      DEFAULT_PUBLIC_KEY,
+      new FarmConfigOption.UpdatePendingFarmAdmin(),
+      FARMS_ADMIN_MAINNET,
+      undefined,
+      undefined,
+      true
+    );
+    const updateFarmVaultIdIx = await farmsSDK.updateFarmConfigIx(
+      signer,
+      farm.address,
+      DEFAULT_PUBLIC_KEY,
+      new FarmConfigOption.UpdateVaultId(),
+      vaultAddress,
+      undefined,
+      undefined,
+      true
+    );
+
+    return {
+      farm,
+      setupFarmIxs: ixs,
+      updateFarmIxs: [updatePendingFarmAdminIx, updateFarmVaultIdIx],
     };
   }
 
@@ -1936,7 +1996,8 @@ export class KaminoVaultClient {
       holdings.totalAUMIncludingFees.sub(holdings.pendingFees),
       new Decimal(vaultState.unallocatedWeight.toString()),
       new Decimal(vaultState.unallocatedTokensCap.toString()),
-      initialVaultAllocations
+      initialVaultAllocations,
+      vaultState.tokenMintDecimals.toNumber()
     );
   }
 
@@ -1944,9 +2005,16 @@ export class KaminoVaultClient {
     vaultAUM: Decimal,
     vaultUnallocatedWeight: Decimal,
     vaultUnallocatedCap: Decimal,
-    initialVaultAllocations: Map<Address, ReserveAllocationOverview>
+    initialVaultAllocations: Map<Address, ReserveAllocationOverview>,
+    vaultTokenDecimals: number
   ) {
-    return computeReservesAllocation(vaultAUM, vaultUnallocatedWeight, vaultUnallocatedCap, initialVaultAllocations);
+    return computeReservesAllocation(
+      vaultAUM,
+      vaultUnallocatedWeight,
+      vaultUnallocatedCap,
+      initialVaultAllocations,
+      vaultTokenDecimals
+    );
   }
 
   /**
@@ -2038,9 +2106,7 @@ export class KaminoVaultClient {
       if (await vault.hasFarm()) {
         const userFarmState = allUserFarmStatesMap.get(state.vaultFarm);
         if (userFarmState) {
-          console.log('there is a farm state for vault', vault.address);
           const stakedShares = getSharesInFarmUserPosition(userFarmState, state.sharesMintDecimals.toNumber());
-          console.log('staked shares', stakedShares);
           const userSharesBalance = vaultUserShareBalance.get(vault.address);
           if (userSharesBalance) {
             userSharesBalance.stakedShares = stakedShares;

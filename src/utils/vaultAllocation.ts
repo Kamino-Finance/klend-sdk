@@ -1,5 +1,6 @@
 import Decimal from 'decimal.js';
 import { Address } from '@solana/kit';
+import { lamportsToCollDecimal } from '@kamino-finance/farms-sdk';
 
 export interface ReserveAllocationOverview {
   targetWeight: Decimal;
@@ -13,21 +14,22 @@ export interface VaultAllocationResult {
 }
 
 const ZERO = new Decimal(0);
-const ONE = new Decimal(1);
 
 /**
  * Computes the allocation of vault funds across reserves based on weights and caps
- * @param vaultAUM - Total AUM of the vault
+ * @param vaultAUM - Total AUM of the vault, in tokens
  * @param vaultUnallocatedWeight - Weight for unallocated funds
  * @param vaultUnallocatedCap - Maximum amount that can remain unallocated
  * @param initialVaultAllocations - Map of reserve addresses to their allocation configurations
- * @returns Object containing target unallocated amount and target allocations per reserve
+ * @param vaultTokenDecimals - The number of decimals of the vault token, needed to compute the min amount
+ * @returns Object containing target unallocated amount and target allocations per reserve, in tokens
  */
 export function computeReservesAllocation(
   vaultAUM: Decimal,
   vaultUnallocatedWeight: Decimal,
   vaultUnallocatedCap: Decimal,
-  initialVaultAllocations: Map<Address, ReserveAllocationOverview>
+  initialVaultAllocations: Map<Address, ReserveAllocationOverview>,
+  vaultTokenDecimals: number
 ): VaultAllocationResult {
   let totalAllocation = new Decimal(0);
   const allReserves = Array.from(initialVaultAllocations.keys());
@@ -51,8 +53,10 @@ export function computeReservesAllocation(
 
   let currentAllocationSum = totalAllocation;
 
+  const reservesCount = allReserves.length;
+  const maxRemainedUninvestedLamports = lamportsToCollDecimal(new Decimal(reservesCount), vaultTokenDecimals); // invest only if the AUM has more lamports than the number of reserves
   // Iteratively allocate funds to reserves based on weights and caps
-  while (totalLeftToInvest.gt(ONE) && currentAllocationSum.gt(ZERO)) {
+  while (totalLeftToInvest.gt(maxRemainedUninvestedLamports) && currentAllocationSum.gt(ZERO)) {
     const totalLeftover = totalLeftToInvest;
 
     for (const reserve of allReserves) {

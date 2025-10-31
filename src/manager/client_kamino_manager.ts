@@ -352,6 +352,22 @@ async function main() {
           ...instructions.createAtaIfNeededIxs,
           ...instructions.initVaultIxs,
           instructions.createLUTIx,
+          instructions.setFarmToVaultIx,
+          ...getPriorityFeeAndCuIxs({
+            priorityFeeMultiplier: 2500,
+          }),
+        ],
+        mode,
+        []
+      );
+      await sleep(2000);
+      // create the farm
+      await processTx(
+        env.c,
+        admin,
+        [
+          ...instructions.createVaultFarm.setupFarmIxs,
+          ...instructions.createVaultFarm.updateFarmIxs,
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
           }),

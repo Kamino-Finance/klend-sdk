@@ -1,4 +1,4 @@
-import { Address, Instruction } from '@solana/kit';
+import { Address, Instruction, TransactionSigner } from '@solana/kit';
 import Decimal from 'decimal.js/decimal';
 
 /** the populateLUTIxs should be executed in a separate transaction as we cannot create and populate a lookup table in the same tx */
@@ -9,6 +9,8 @@ export type InitVaultIxs = {
   populateLUTIxs: Instruction[];
   cleanupIxs: Instruction[];
   initSharesMetadataIx: Instruction;
+  createVaultFarm: CreateVaultFarm;
+  setFarmToVaultIx: Instruction;
 };
 
 export type AcceptVaultOwnershipIxs = {
@@ -77,4 +79,10 @@ export type ReserveAllocationOverview = {
 export type APYs = {
   grossAPY: Decimal;
   netAPY: Decimal;
+};
+
+export type CreateVaultFarm = {
+  farm: TransactionSigner;
+  setupFarmIxs: Instruction[];
+  updateFarmIxs: Instruction[];
 };

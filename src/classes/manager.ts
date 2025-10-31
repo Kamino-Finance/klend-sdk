@@ -80,6 +80,7 @@ import { VaultConfigField, VaultConfigFieldKind } from '../@codegen/kvault/types
 import {
   AcceptVaultOwnershipIxs,
   APYs,
+  CreateVaultFarm,
   DepositIxs,
   DisinvestAllReservesIxs,
   InitVaultIxs,
@@ -236,6 +237,23 @@ export class KaminoManager {
     vaultConfig: KaminoVaultConfig
   ): Promise<{ vault: TransactionSigner; lut: Address; initVaultIxs: InitVaultIxs }> {
     return this._vaultClient.createVaultIxs(vaultConfig);
+  }
+
+  /**
+   * This method creates a farm for a vault
+   * @param admin - the admin of the vault
+   * @param vault - the vault to create a farm for (the vault should be already initialized)
+   * @returns a struct with the farm, the setup farm ixs and the update farm ixs
+   */
+  async createVaultFarmIxs(admin: TransactionSigner, vault: KaminoVault): Promise<CreateVaultFarm> {
+    const vaultState = await vault.getState();
+    if (!vaultState) {
+      throw new Error('Vault not initialized');
+    }
+    if (vaultState.vaultFarm !== DEFAULT_PUBLIC_KEY) {
+      throw new Error('Vault already has a farm');
+    }
+    return this._vaultClient.createVaultFarm(admin, vault.address, vaultState.sharesMint);
   }
 
   /**
