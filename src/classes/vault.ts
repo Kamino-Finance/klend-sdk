@@ -786,7 +786,7 @@ export class KaminoVaultClient {
       data: Buffer.from([0]),
     };
 
-    if (isNaN(+value)) {
+    if (isNaN(+value) || value === DEFAULT_PUBLIC_KEY) {
       if (mode.kind === new VaultConfigField.Name().kind) {
         const data = Array.from(this.encodeVaultName(value));
         updateVaultConfigArgs.data = Buffer.from(data);
