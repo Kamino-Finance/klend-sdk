@@ -158,3 +158,4 @@ yarn -s cli print-all-obligation-accounts --rpc <RPC> | jq -cn --stream 'fromstr
 ## Codegen
 * Copy the new `idl` from the kamino-lending program to `src/idl.json`
 * `yarn codegen`
+

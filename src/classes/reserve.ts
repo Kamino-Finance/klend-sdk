@@ -216,7 +216,7 @@ export class KaminoReserve {
    * @returns the origination fee percentage of the reserve
    */
   getBorrowFee = (): Decimal => {
-    return new Fraction(this.state.config.fees.borrowFeeSf).toDecimal();
+    return new Fraction(this.state.config.fees.originationFeeSf).toDecimal();
   };
 
   /**
@@ -1180,13 +1180,12 @@ export async function createReserveIxs(
 
   const { liquiditySupplyVault, collateralMint, collateralSupplyVault, feeVault } = await reservePdas(
     programId,
-    lendingMarket,
-    liquidityMint
+    reserveAddress.address,
   );
   const [lendingMarketAuthority] = await lendingMarketAuthPda(lendingMarket, programId);
 
   const accounts: InitReserveAccounts = {
-    lendingMarketOwner: owner,
+    signer: owner,
     lendingMarket: lendingMarket,
     lendingMarketAuthority: lendingMarketAuthority,
     reserve: reserveAddress.address,
@@ -1239,7 +1238,7 @@ export const RESERVE_CONFIG_UPDATER = new ConfigUpdater(UpdateConfigMode.fromDec
   [UpdateConfigMode.UpdateLiquidationThresholdPct.kind]: config.liquidationThresholdPct,
   [UpdateConfigMode.UpdateProtocolLiquidationFee.kind]: config.protocolLiquidationFeePct,
   [UpdateConfigMode.UpdateProtocolTakeRate.kind]: config.protocolTakeRatePct,
-  [UpdateConfigMode.UpdateFeesBorrowFee.kind]: config.fees.borrowFeeSf,
+  [UpdateConfigMode.UpdateFeesOriginationFee.kind]: config.fees.originationFeeSf,
   [UpdateConfigMode.UpdateFeesFlashLoanFee.kind]: config.fees.flashLoanFeeSf,
   [UpdateConfigMode.DeprecatedUpdateFeesReferralFeeBps.kind]: [], // deprecated
   [UpdateConfigMode.UpdateDepositLimit.kind]: config.depositLimit,
@@ -1291,6 +1290,9 @@ export const RESERVE_CONFIG_UPDATER = new ConfigUpdater(UpdateConfigMode.fromDec
   [UpdateConfigMode.UpdateAutodeleverageEnabled.kind]: config.autodeleverageEnabled,
   [UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.kind]: config.deleveragingBonusIncreaseBpsPerDay,
   [UpdateConfigMode.UpdateProtocolOrderExecutionFee.kind]: config.protocolOrderExecutionFeePct,
+  [UpdateConfigMode.UpdateProposerAuthorityLock.kind]: config.proposerAuthorityLocked,
+  [UpdateConfigMode.UpdateMinDeleveragingBonusBps.kind]: config.minDeleveragingBonusBps,
+  [UpdateConfigMode.UpdateBlockCTokenUsage.kind]: config.blockCtokenUsage,
 }));
 
 export async function updateEntireReserveConfigIx(

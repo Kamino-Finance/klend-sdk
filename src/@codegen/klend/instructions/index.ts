@@ -29,6 +29,8 @@ export type {
   WithdrawProtocolFeeArgs,
   WithdrawProtocolFeeAccounts,
 } from "./withdrawProtocolFee"
+export { seedDepositOnInitReserve } from "./seedDepositOnInitReserve"
+export type { SeedDepositOnInitReserveAccounts } from "./seedDepositOnInitReserve"
 export { socializeLoss } from "./socializeLoss"
 export type { SocializeLossArgs, SocializeLossAccounts } from "./socializeLoss"
 export { socializeLossV2 } from "./socializeLossV2"

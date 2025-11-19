@@ -1706,6 +1706,8 @@ export const MARKET_UPDATER = new ConfigUpdater(UpdateLendingMarketMode.fromDeco
   [UpdateLendingMarketMode.UpdateInitialDepositAmount.kind]: config.minInitialDepositAmount,
   [UpdateLendingMarketMode.UpdateObligationOrderCreationEnabled.kind]: config.obligationOrderCreationEnabled,
   [UpdateLendingMarketMode.UpdateObligationOrderExecutionEnabled.kind]: config.obligationOrderExecutionEnabled,
+  [UpdateLendingMarketMode.UpdateProposerAuthority.kind]: config.proposerAuthority,
+  [UpdateLendingMarketMode.UpdatePriceTriggeredLiquidationDisabled.kind]: config.priceTriggeredLiquidationDisabled,
 }));
 
 function parseForChangesMarketConfigAndGetIxs(

@@ -73,12 +73,12 @@ export interface ReservePdas {
  * @param mint
  * @returns ReservePdas
  */
-export async function reservePdas(programId: Address, market: Address, mint: Address): Promise<ReservePdas> {
+export async function reservePdas(programId: Address, reserve: Address): Promise<ReservePdas> {
   const [[liquiditySupplyVault], [collateralMint], [collateralSupplyVault], [feeVault]] = await Promise.all([
-    reserveLiqSupplyPda(market, mint, programId),
-    reserveCollateralMintPda(market, mint, programId),
-    reserveCollateralSupplyPda(market, mint, programId),
-    reserveFeeVaultPda(market, mint, programId),
+    reserveLiqSupplyPda(reserve, programId),
+    reserveCollateralMintPda(reserve, programId),
+    reserveCollateralSupplyPda(reserve, programId),
+    reserveFeeVaultPda(reserve, programId),
   ]);
   return {
     liquiditySupplyVault,
@@ -112,12 +112,11 @@ export function lendingMarketAuthPda(
  * @returns [pda, bump]
  */
 export async function reserveLiqSupplyPda(
-  lendingMarket: Address,
-  mint: Address,
+  reserve: Address,
   programId: Address = PROGRAM_ID
 ): Promise<ProgramDerivedAddress> {
   return getProgramDerivedAddress({
-    seeds: [Buffer.from(RESERVE_LIQ_SUPPLY_SEED), addressEncoder.encode(lendingMarket), addressEncoder.encode(mint)],
+    seeds: [Buffer.from(RESERVE_LIQ_SUPPLY_SEED), addressEncoder.encode(reserve)],
     programAddress: programId,
   });
 }
@@ -130,12 +129,11 @@ export async function reserveLiqSupplyPda(
  * @returns [vaultPda, bump]
  */
 export async function reserveFeeVaultPda(
-  lendingMarket: Address,
-  mint: Address,
+  reserve: Address,
   programId: Address = PROGRAM_ID
 ): Promise<ProgramDerivedAddress> {
   return getProgramDerivedAddress({
-    seeds: [Buffer.from(FEE_RECEIVER_SEED), addressEncoder.encode(lendingMarket), addressEncoder.encode(mint)],
+    seeds: [Buffer.from(FEE_RECEIVER_SEED), addressEncoder.encode(reserve)],
     programAddress: programId,
   });
 }
@@ -148,12 +146,11 @@ export async function reserveFeeVaultPda(
  * @returns [mintPda, bump]
  */
 export async function reserveCollateralMintPda(
-  lendingMarket: Address,
-  mint: Address,
+  reserve: Address,
   programId: Address = PROGRAM_ID
 ): Promise<ProgramDerivedAddress> {
   return getProgramDerivedAddress({
-    seeds: [Buffer.from(RESERVE_COLL_MINT_SEED), addressEncoder.encode(lendingMarket), addressEncoder.encode(mint)],
+    seeds: [Buffer.from(RESERVE_COLL_MINT_SEED), addressEncoder.encode(reserve)],
     programAddress: programId,
   });
 }
@@ -166,12 +163,11 @@ export async function reserveCollateralMintPda(
  * @returns [pda, bump]
  */
 export function reserveCollateralSupplyPda(
-  lendingMarket: Address,
-  mint: Address,
+  reserve: Address,
   programId: Address = PROGRAM_ID
 ): Promise<ProgramDerivedAddress> {
   return getProgramDerivedAddress({
-    seeds: [Buffer.from(RESERVE_COLL_SUPPLY_SEED), addressEncoder.encode(lendingMarket), addressEncoder.encode(mint)],
+    seeds: [Buffer.from(RESERVE_COLL_SUPPLY_SEED), addressEncoder.encode(reserve)],
     programAddress: programId,
   });
 }

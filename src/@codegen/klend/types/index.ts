@@ -15,7 +15,7 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateLiquidationThresholdPct
   | UpdateConfigMode.UpdateProtocolLiquidationFee
   | UpdateConfigMode.UpdateProtocolTakeRate
-  | UpdateConfigMode.UpdateFeesBorrowFee
+  | UpdateConfigMode.UpdateFeesOriginationFee
   | UpdateConfigMode.UpdateFeesFlashLoanFee
   | UpdateConfigMode.DeprecatedUpdateFeesReferralFeeBps
   | UpdateConfigMode.UpdateDepositLimit
@@ -60,13 +60,16 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateAutodeleverageEnabled
   | UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay
   | UpdateConfigMode.UpdateProtocolOrderExecutionFee
+  | UpdateConfigMode.UpdateProposerAuthorityLock
+  | UpdateConfigMode.UpdateMinDeleveragingBonusBps
+  | UpdateConfigMode.UpdateBlockCTokenUsage
 export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateLoanToValuePctJSON
   | UpdateConfigMode.UpdateMaxLiquidationBonusBpsJSON
   | UpdateConfigMode.UpdateLiquidationThresholdPctJSON
   | UpdateConfigMode.UpdateProtocolLiquidationFeeJSON
   | UpdateConfigMode.UpdateProtocolTakeRateJSON
-  | UpdateConfigMode.UpdateFeesBorrowFeeJSON
+  | UpdateConfigMode.UpdateFeesOriginationFeeJSON
   | UpdateConfigMode.UpdateFeesFlashLoanFeeJSON
   | UpdateConfigMode.DeprecatedUpdateFeesReferralFeeBpsJSON
   | UpdateConfigMode.UpdateDepositLimitJSON
@@ -111,6 +114,9 @@ export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateAutodeleverageEnabledJSON
   | UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDayJSON
   | UpdateConfigMode.UpdateProtocolOrderExecutionFeeJSON
+  | UpdateConfigMode.UpdateProposerAuthorityLockJSON
+  | UpdateConfigMode.UpdateMinDeleveragingBonusBpsJSON
+  | UpdateConfigMode.UpdateBlockCTokenUsageJSON
 
 export { UpdateLendingMarketConfigValue }
 
@@ -163,6 +169,8 @@ export type UpdateLendingMarketModeKind =
   | UpdateLendingMarketMode.UpdateObligationOrderExecutionEnabled
   | UpdateLendingMarketMode.UpdateImmutableFlag
   | UpdateLendingMarketMode.UpdateObligationOrderCreationEnabled
+  | UpdateLendingMarketMode.UpdateProposerAuthority
+  | UpdateLendingMarketMode.UpdatePriceTriggeredLiquidationDisabled
 export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateOwnerJSON
   | UpdateLendingMarketMode.UpdateEmergencyModeJSON
@@ -189,6 +197,8 @@ export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateObligationOrderExecutionEnabledJSON
   | UpdateLendingMarketMode.UpdateImmutableFlagJSON
   | UpdateLendingMarketMode.UpdateObligationOrderCreationEnabledJSON
+  | UpdateLendingMarketMode.UpdateProposerAuthorityJSON
+  | UpdateLendingMarketMode.UpdatePriceTriggeredLiquidationDisabledJSON
 
 export { UpdateGlobalConfigMode }
 

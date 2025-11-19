@@ -11,9 +11,9 @@ export interface ReserveFeesFields {
    * clarity:
    * 1% = (1 << 60) / 100 = 11529215046068470
    * 0.01% (1 basis point) = 115292150460685
-   * 0.00001% (Aave borrow fee) = 115292150461
+   * 0.00001% (Aave origination fee) = 115292150461
    */
-  borrowFeeSf: BN
+  originationFeeSf: BN
   /**
    * Fee for flash loan, expressed as scaled fraction.
    * 0.3% (Aave flash loan fee) = 0.003 * 2^60 = 3458764513820541
@@ -30,9 +30,9 @@ export interface ReserveFeesJSON {
    * clarity:
    * 1% = (1 << 60) / 100 = 11529215046068470
    * 0.01% (1 basis point) = 115292150460685
-   * 0.00001% (Aave borrow fee) = 115292150461
+   * 0.00001% (Aave origination fee) = 115292150461
    */
-  borrowFeeSf: string
+  originationFeeSf: string
   /**
    * Fee for flash loan, expressed as scaled fraction.
    * 0.3% (Aave flash loan fee) = 0.003 * 2^60 = 3458764513820541
@@ -56,9 +56,9 @@ export class ReserveFees {
    * clarity:
    * 1% = (1 << 60) / 100 = 11529215046068470
    * 0.01% (1 basis point) = 115292150460685
-   * 0.00001% (Aave borrow fee) = 115292150461
+   * 0.00001% (Aave origination fee) = 115292150461
    */
-  readonly borrowFeeSf: BN
+  readonly originationFeeSf: BN
   /**
    * Fee for flash loan, expressed as scaled fraction.
    * 0.3% (Aave flash loan fee) = 0.003 * 2^60 = 3458764513820541
@@ -68,7 +68,7 @@ export class ReserveFees {
   readonly padding: Array<number>
 
   constructor(fields: ReserveFeesFields) {
-    this.borrowFeeSf = fields.borrowFeeSf
+    this.originationFeeSf = fields.originationFeeSf
     this.flashLoanFeeSf = fields.flashLoanFeeSf
     this.padding = fields.padding
   }
@@ -76,7 +76,7 @@ export class ReserveFees {
   static layout(property?: string) {
     return borsh.struct(
       [
-        borsh.u64("borrowFeeSf"),
+        borsh.u64("originationFeeSf"),
         borsh.u64("flashLoanFeeSf"),
         borsh.array(borsh.u8(), 8, "padding"),
       ],
@@ -87,7 +87,7 @@ export class ReserveFees {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static fromDecoded(obj: any) {
     return new ReserveFees({
-      borrowFeeSf: obj.borrowFeeSf,
+      originationFeeSf: obj.originationFeeSf,
       flashLoanFeeSf: obj.flashLoanFeeSf,
       padding: obj.padding,
     })
@@ -95,7 +95,7 @@ export class ReserveFees {
 
   static toEncodable(fields: ReserveFeesFields) {
     return {
-      borrowFeeSf: fields.borrowFeeSf,
+      originationFeeSf: fields.originationFeeSf,
       flashLoanFeeSf: fields.flashLoanFeeSf,
       padding: fields.padding,
     }
@@ -103,7 +103,7 @@ export class ReserveFees {
 
   toJSON(): ReserveFeesJSON {
     return {
-      borrowFeeSf: this.borrowFeeSf.toString(),
+      originationFeeSf: this.originationFeeSf.toString(),
       flashLoanFeeSf: this.flashLoanFeeSf.toString(),
       padding: this.padding,
     }
@@ -111,7 +111,7 @@ export class ReserveFees {
 
   static fromJSON(obj: ReserveFeesJSON): ReserveFees {
     return new ReserveFees({
-      borrowFeeSf: new BN(obj.borrowFeeSf),
+      originationFeeSf: new BN(obj.originationFeeSf),
       flashLoanFeeSf: new BN(obj.flashLoanFeeSf),
       padding: obj.padding,
     })

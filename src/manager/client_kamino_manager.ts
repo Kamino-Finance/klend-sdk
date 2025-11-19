@@ -2157,7 +2157,7 @@ function parseReserveConfigFromFile(reserveConfigFromFile: any): ReserveConfig {
     maxLiquidationBonusBps: reserveConfigFromFile.maxLiquidationBonusBps,
     badDebtLiquidationBonusBps: reserveConfigFromFile.badDebtLiquidationBonusBps,
     fees: {
-      borrowFeeSf: Fraction.fromDecimal(new Decimal(reserveConfigFromFile.fees.borrowFee)).valueSf,
+      originationFeeSf: Fraction.fromDecimal(new Decimal(reserveConfigFromFile.fees.borrowFee)).valueSf,
       flashLoanFeeSf: Fraction.fromDecimal(new Decimal(reserveConfigFromFile.fees.flashLoanFee)).valueSf,
       padding: Array(8).fill(0),
     },
@@ -2203,7 +2203,9 @@ function parseReserveConfigFromFile(reserveConfigFromFile: any): ReserveConfig {
     borrowLimitAgainstThisCollateralInElevationGroup: parseReserveBorrowLimitAgainstCollInEmode(reserveConfigFromFile),
     deleveragingBonusIncreaseBpsPerDay: new BN(reserveConfigFromFile.deleveragingBonusIncreaseBpsPerDay),
     reserved1: Array(1).fill(0),
-    reserved2: Array(9).fill(0),
+    minDeleveragingBonusBps: 0,
+    proposerAuthorityLocked: 0,
+    blockCtokenUsage: 0
   };
 
   return new ReserveConfig(reserveConfigFields);
@@ -2287,7 +2289,7 @@ function parseReserveConfigToFile(reserveConfig: ReserveConfig) {
     maxLiquidationBonusBps: reserveConfig.maxLiquidationBonusBps,
     badDebtLiquidationBonusBps: reserveConfig.badDebtLiquidationBonusBps,
     fees: {
-      borrowFee: new Fraction(reserveConfig.fees.borrowFeeSf).toDecimal().toString(),
+      borrowFee: new Fraction(reserveConfig.fees.originationFeeSf).toDecimal().toString(),
       flashLoanFee: new Fraction(reserveConfig.fees.flashLoanFeeSf).toDecimal().toString(),
       padding: Array(8).fill(0),
     },

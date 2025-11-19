@@ -44,7 +44,7 @@ export function withdrawObligationCollateral(
   programAddress: Address = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta | AccountSignerMeta> = [
-    { address: accounts.owner.address, role: 2, signer: accounts.owner },
+    { address: accounts.owner.address, role: 3, signer: accounts.owner },
     { address: accounts.obligation, role: 1 },
     { address: accounts.lendingMarket, role: 0 },
     { address: accounts.lendingMarketAuthority, role: 0 },
