@@ -55,6 +55,7 @@ import { parseTokenSymbol, parseZeroPaddedUtf8 } from './utils';
 import { ObligationZP } from '../@codegen/klend/zero_padding';
 import { checkDefined } from '../utils/validations';
 import { Buffer } from 'buffer';
+import { ReserveStatus } from '../@codegen/klend/types';
 
 export type KaminoMarketRpcApi = GetAccountInfoApi &
   GetMultipleAccountsApi &
@@ -1714,6 +1715,9 @@ export async function getReservesForMarket(
   const reservesAndOracles = await getTokenOracleData(rpc, deserializedReserves, oracleAccounts);
   const reservesByAddress = new Map<Address, KaminoReserve>();
   reservesAndOracles.forEach(([reserve, oracle], index) => {
+    if (reserve.config.status === ReserveStatus.Obsolete.discriminator) {
+      return;
+    }
     if (!oracle) {
       throw Error(
         `Could not find oracle for ${parseTokenSymbol(reserve.config.tokenInfo.name)} (${
