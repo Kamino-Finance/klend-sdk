@@ -585,6 +585,16 @@ export class KaminoManager {
     return this._vaultClient.depositIxs(user, vault, tokenAmount, vaultReservesMap, farmState);
   }
 
+  async buyVaultSharesIxs(
+    user: TransactionSigner,
+    vault: KaminoVault,
+    tokenAmount: Decimal,
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    farmState?: FarmState
+  ): Promise<DepositIxs> {
+    return this._vaultClient.buySharesIxs(user, vault, tokenAmount, vaultReservesMap, farmState);
+  }
+
   /**
    * This function creates instructions to stake the shares in the vault farm if the vault has a farm
    * @param user - user to stake
@@ -716,6 +726,17 @@ export class KaminoManager {
     farmState?: FarmState
   ): Promise<WithdrawIxs> {
     return this._vaultClient.withdrawIxs(user, vault, shareAmount, slot, vaultReservesMap, farmState);
+  }
+
+  async sellVaultSharesIxs(
+    user: TransactionSigner,
+    vault: KaminoVault,
+    shareAmount: Decimal,
+    slot: Slot,
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    farmState?: FarmState
+  ): Promise<WithdrawIxs> {
+    return this._vaultClient.sellSharesIxs(user, vault, shareAmount, slot, vaultReservesMap, farmState);
   }
 
   /**
