@@ -200,6 +200,82 @@
       ]
     },
     {
+      "name": "buy",
+      "accounts": [
+        {
+          "name": "user",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "vaultState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenVault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenMint",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "baseVaultAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "sharesMint",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "userTokenAta",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "userSharesAta",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "klendProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "sharesTokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "eventAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "program",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "maxAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "withdraw",
       "accounts": [
         {
@@ -213,6 +289,157 @@
             {
               "name": "vaultState",
               "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "globalConfig",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "tokenVault",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "baseVaultAuthority",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "userTokenAta",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "tokenMint",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "userSharesAta",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "sharesMint",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "tokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "sharesTokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "klendProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "eventAuthority",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "program",
+              "isMut": false,
+              "isSigner": false
+            }
+          ]
+        },
+        {
+          "name": "withdrawFromReserveAccounts",
+          "accounts": [
+            {
+              "name": "vaultState",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserve",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "ctokenVault",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarket",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "lendingMarketAuthority",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "reserveLiquiditySupply",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveCollateralMint",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "reserveCollateralTokenProgram",
+              "isMut": false,
+              "isSigner": false
+            },
+            {
+              "name": "instructionSysvarAccount",
+              "isMut": false,
+              "isSigner": false
+            }
+          ]
+        },
+        {
+          "name": "eventAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "program",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "sharesAmount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "sell",
+      "accounts": [
+        {
+          "name": "withdrawFromAvailable",
+          "accounts": [
+            {
+              "name": "user",
+              "isMut": true,
+              "isSigner": true
+            },
+            {
+              "name": "vaultState",
+              "isMut": true,
+              "isSigner": false
+            },
+            {
+              "name": "globalConfig",
+              "isMut": false,
               "isSigner": false
             },
             {
@@ -709,6 +936,11 @@
           "isSigner": false
         },
         {
+          "name": "globalConfig",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
           "name": "tokenVault",
           "isMut": true,
           "isSigner": false
@@ -787,6 +1019,76 @@
         {
           "name": "reserve",
           "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initGlobalConfig",
+      "accounts": [
+        {
+          "name": "payer",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "globalConfig",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "programData",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "rent",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "updateGlobalConfig",
+      "accounts": [
+        {
+          "name": "globalAdmin",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "globalConfig",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "update",
+          "type": {
+            "defined": "UpdateGlobalConfigMode"
+          }
+        }
+      ]
+    },
+    {
+      "name": "updateGlobalConfigAdmin",
+      "accounts": [
+        {
+          "name": "pendingAdmin",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "globalConfig",
+          "isMut": true,
           "isSigner": false
         }
       ],
@@ -880,7 +1182,7 @@
             "type": {
               "array": [
                 "u64",
-                115
+                116
               ]
             }
           },
@@ -907,6 +1209,39 @@
               "array": [
                 "u64",
                 207
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "GlobalConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "globalAdmin",
+            "type": "publicKey"
+          },
+          {
+            "name": "pendingAdmin",
+            "type": "publicKey"
+          },
+          {
+            "name": "withdrawalPenaltyLamports",
+            "type": "u64"
+          },
+          {
+            "name": "withdrawalPenaltyBps",
+            "type": "u64"
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u8",
+                944
               ]
             }
           }
@@ -1076,11 +1411,19 @@
             "type": "publicKey"
           },
           {
+            "name": "withdrawalPenaltyLamports",
+            "type": "u64"
+          },
+          {
+            "name": "withdrawalPenaltyBps",
+            "type": "u64"
+          },
+          {
             "name": "padding3",
             "type": {
               "array": [
                 "u128",
-                242
+                241
               ]
             }
           }
@@ -1236,17 +1579,30 @@
             "type": "u16"
           },
           {
+            "name": "minDeleveragingBonusBps",
+            "docs": [
+              "Starting bonus for deleveraging-related liquidations, in bps."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "blockCtokenUsage",
+            "docs": [
+              "Boolean flag to block minting/redeeming of ctokens",
+              "Blocks usage of ctokens (minting or withdrawing from obligation)",
+              "Effectively blocks deposit_reserve_liquidity and withdraw_obligation_collateral"
+            ],
+            "type": "u8"
+          },
+          {
             "name": "reserved1",
             "docs": [
-              "[DEPRECATED] Space that used to hold 2 fields:",
-              "- Boost for side (debt or collateral)",
-              "- Reward points multiplier per obligation type",
-              "Can be re-used after making sure all underlying production account data is zeroed."
+              "Past reserved space - feel free to reuse."
             ],
             "type": {
               "array": [
                 "u8",
-                9
+                6
               ]
             }
           },
@@ -1463,15 +1819,6 @@
               "Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case."
             ],
             "type": "u64"
-          },
-          {
-            "name": "debtMaturityTimestamp",
-            "docs": [
-              "The timestamp at which all [Obligation::borrows] using this reserve become liquidatable",
-              "(on the same terms as reserve-wide deleveraging).",
-              "Inactive when zeroed (i.e. debt never matures)."
-            ],
-            "type": "u64"
           }
         ]
       }
@@ -1489,14 +1836,14 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "borrowFeeSf",
+            "name": "originationFeeSf",
             "docs": [
               "Fee assessed on `BorrowObligationLiquidity`, as scaled fraction (60 bits fractional part)",
               "Must be between `0` and `2^60`, such that `2^60 = 1`.  A few examples for",
               "clarity:",
               "1% = (1 << 60) / 100 = 11529215046068470",
               "0.01% (1 basis point) = 115292150460685",
-              "0.00001% (Aave borrow fee) = 115292150461"
+              "0.00001% (Aave origination fee) = 115292150461"
             ],
             "type": "u64"
           },
@@ -1971,6 +2318,12 @@
           },
           {
             "name": "UnallocatedTokensCap"
+          },
+          {
+            "name": "WithdrawalPenaltyLamports"
+          },
+          {
+            "name": "WithdrawalPenaltyBps"
           }
         ]
       }
@@ -2032,6 +2385,32 @@
                 128
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateGlobalConfigMode",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "PendingAdmin",
+            "fields": [
+              "publicKey"
+            ]
+          },
+          {
+            "name": "MinWithdrawalPenaltyLamports",
+            "fields": [
+              "u64"
+            ]
+          },
+          {
+            "name": "MinWithdrawalPenaltyBPS",
+            "fields": [
+              "u64"
+            ]
           }
         ]
       }
@@ -2113,22 +2492,22 @@
     {
       "code": 7000,
       "name": "DepositAmountsZero",
-      "msg": "DepositAmountsZero"
+      "msg": "Cannot deposit zero tokens"
     },
     {
       "code": 7001,
       "name": "SharesIssuedAmountDoesNotMatch",
-      "msg": "SharesIssuedAmountDoesNotMatch"
+      "msg": "Post check failed on share issued"
     },
     {
       "code": 7002,
       "name": "MathOverflow",
-      "msg": "MathOverflow"
+      "msg": "Math operation overflowed"
     },
     {
       "code": 7003,
       "name": "IntegerOverflow",
-      "msg": "IntegerOverflow"
+      "msg": "Integer conversion overflowed"
     },
     {
       "code": 7004,
@@ -2354,6 +2733,31 @@
       "code": 7048,
       "name": "DepositAmountGreaterThanRequestedAmount",
       "msg": "Deposit amount is greater than requested amount"
+    },
+    {
+      "code": 7049,
+      "name": "WithdrawAmountLessThanWithdrawalPenalty",
+      "msg": "Withdraw amount is less than withdrawal penalty"
+    },
+    {
+      "code": 7050,
+      "name": "CannotWithdrawZeroLamports",
+      "msg": "Cannot withdraw 0 lamports"
+    },
+    {
+      "code": 7051,
+      "name": "NoUpgradeAuthority",
+      "msg": "Cannot initialize global config because there is no upgrade authority to the program"
+    },
+    {
+      "code": 7052,
+      "name": "WithdrawalFeeBPSGreaterThanMaxAllowed",
+      "msg": "Withdrawal fee BPS is greater than maximum allowed"
+    },
+    {
+      "code": 7053,
+      "name": "WithdrawalFeeLamportsGreaterThanMaxAllowed",
+      "msg": "Withdrawal fee lamports is greater than maximum allowed"
     }
   ]
 }

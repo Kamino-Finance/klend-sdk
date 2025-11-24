@@ -1180,7 +1180,7 @@ export async function createReserveIxs(
 
   const { liquiditySupplyVault, collateralMint, collateralSupplyVault, feeVault } = await reservePdas(
     programId,
-    reserveAddress.address,
+    reserveAddress.address
   );
   const [lendingMarketAuthority] = await lendingMarketAuthPda(lendingMarket, programId);
 

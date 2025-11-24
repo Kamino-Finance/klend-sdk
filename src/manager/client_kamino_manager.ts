@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import { Command } from 'commander';
-import { Address, address, Instruction } from '@solana/kit';
+import { Address, address, Instruction, TransactionSigner } from '@solana/kit';
 import {
   AssetReserveConfigCli,
   calculateAPYFromAPR,
@@ -20,6 +20,7 @@ import {
   lamportsToDecimal,
   LendingMarket,
   parseZeroPaddedUtf8,
+  programDataPda,
   Reserve,
   ReserveAllocationConfig,
   ReserveWithAddress,
@@ -301,6 +302,59 @@ async function main() {
         './configs/' + reserveState.lendingMarket + '/' + reserveName + '.json',
         JSON.stringify(reserveConfigDisplay, null, 2)
       );
+    });
+
+  commands
+    .command('init-kvault-global-config')
+    .requiredOption(
+      '--mode <string>',
+      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .option('--signer-path <string>', 'If set, it will use the provided signer')
+    .action(async ({ mode, staging, multisig, signerPath }) => {
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+      const ms = multisig ? address(multisig) : undefined;
+      const env = await initEnv(staging, ms, signerPath);
+      const kaminoManager = new KaminoManager(
+        env.c.rpc,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        env.kvaultProgramId
+      );
+
+      let signer: TransactionSigner | undefined = undefined;
+      if (signerPath) {
+        signer = await parseKeypairFile(signerPath);
+      } else {
+        const programData = await programDataPda(env.kvaultProgramId);
+        const programDataInfo = await env.c.rpc.getAccountInfo(programData).send();
+        if (programDataInfo === null) {
+          throw new Error('KVault program data not found');
+        }
+        const programAdmin = programDataInfo.value?.owner.toString();
+        if (!programAdmin) {
+          throw new Error('Program admin not found');
+        }
+        signer = noopSigner(address(programAdmin));
+      }
+      const ix = await kaminoManager.initKvaultGlobalConfigIx(signer);
+      await processTx(
+        env.c,
+        signer,
+        [
+          ix,
+          ...getPriorityFeeAndCuIxs({
+            priorityFeeMultiplier: 2500,
+          }),
+        ],
+        mode,
+        []
+      );
+      mode === 'execute' && console.log('KVault global config initialized');
     });
 
   commands
@@ -2205,7 +2259,7 @@ function parseReserveConfigFromFile(reserveConfigFromFile: any): ReserveConfig {
     reserved1: Array(1).fill(0),
     minDeleveragingBonusBps: 0,
     proposerAuthorityLocked: 0,
-    blockCtokenUsage: 0
+    blockCtokenUsage: 0,
   };
 
   return new ReserveConfig(reserveConfigFields);

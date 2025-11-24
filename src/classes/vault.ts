@@ -46,6 +46,7 @@ import {
   giveUpPendingFees,
   GiveUpPendingFeesAccounts,
   GiveUpPendingFeesArgs,
+  initKVaultGlobalConfig,
   initVault,
   InitVaultAccounts,
   invest,
@@ -85,6 +86,7 @@ import {
   getTokenAccountAmount,
   getTokenAccountMint,
   lendingMarketAuthPda,
+  programDataPda,
   SECONDS_PER_YEAR,
   U64_MAX,
   VAULT_INITIAL_DEPOSIT,
@@ -140,6 +142,7 @@ const BASE_VAULT_AUTHORITY_SEED = 'authority';
 const SHARES_SEED = 'shares';
 const EVENT_AUTHORITY_SEED = '__event_authority';
 export const METADATA_SEED = 'metadata';
+const GLOBAL_CONFIG_STATE_SEED = 'global_config';
 
 export const METADATA_PROGRAM_ID: Address = address('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
 
@@ -213,6 +216,29 @@ export class KaminoVaultClient {
     console.log('Shares issued: ', sharesIssued);
     holdings.print();
     console.log('Tokens per share: ', tokensPerShare);
+  }
+
+  /**
+   * This method initializes the kvault global config (one off, needs to be signed by program owner)
+   * @param admin - the admin of the kvault program
+   * @returns - an instruction to initialize the kvault global config
+   */
+  async initKvaultGlobalConfigIx(admin: TransactionSigner) {
+    const globalConfigAddress = await getKvaultGlobalConfigPda(this.getProgramID());
+
+    const programData = await programDataPda(this.getProgramID());
+    const ix = initKVaultGlobalConfig(
+      {
+        payer: admin,
+        globalConfig: globalConfigAddress,
+        programData: programData,
+        systemProgram: SYSTEM_PROGRAM_ADDRESS,
+        rent: SYSVAR_RENT_ADDRESS,
+      },
+      undefined,
+      this.getProgramID()
+    );
+    return ix;
   }
 
   /**
@@ -1720,11 +1746,13 @@ export class KaminoVaultClient {
   ): Promise<Instruction> {
     const [lendingMarketAuth] = await lendingMarketAuthPda(marketAddress, this._kaminoLendProgramId);
 
+    const globalConfig = await getKvaultGlobalConfigPda(this._kaminoVaultProgramId);
     const eventAuthority = await getEventAuthorityPda(this._kaminoVaultProgramId);
     const withdrawAccounts: WithdrawAccounts = {
       withdrawFromAvailable: {
         user,
         vaultState: vault.address,
+        globalConfig: globalConfig,
         tokenVault: vaultState.tokenVault,
         baseVaultAuthority: vaultState.baseVaultAuthority,
         userTokenAta: userTokenAta,
@@ -1772,10 +1800,12 @@ export class KaminoVaultClient {
     userTokenAta: Address,
     shareAmountLamports: Decimal
   ): Promise<Instruction> {
+    const globalConfig = await getKvaultGlobalConfigPda(this._kaminoVaultProgramId);
     const eventAuthority = await getEventAuthorityPda(this._kaminoVaultProgramId);
     const withdrawFromAvailableAccounts: WithdrawFromAvailableAccounts = {
       user,
       vaultState: vault.address,
+      globalConfig: globalConfig,
       tokenVault: vaultState.tokenVault,
       baseVaultAuthority: vaultState.baseVaultAuthority,
       userTokenAta,
@@ -4157,6 +4187,15 @@ export async function getEventAuthorityPda(kaminoVaultProgramId: Address): Promi
   return (
     await getProgramDerivedAddress({
       seeds: [Buffer.from(EVENT_AUTHORITY_SEED)],
+      programAddress: kaminoVaultProgramId,
+    })
+  )[0];
+}
+
+export async function getKvaultGlobalConfigPda(kaminoVaultProgramId: Address): Promise<Address> {
+  return (
+    await getProgramDerivedAddress({
+      seeds: [Buffer.from(GLOBAL_CONFIG_STATE_SEED)],
       programAddress: kaminoVaultProgramId,
     })
   )[0];

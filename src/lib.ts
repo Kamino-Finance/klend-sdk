@@ -4,7 +4,8 @@ export * from './@codegen/klend/programId';
 export * from './@codegen/klend/zero_padding';
 
 export * from './@codegen/kvault/instructions';
-// only export vault state, do not export Reserve as it's the same one in main klend /@codegen/klend/accounts
+// only export vault state and global config, do not export Reserve as it's the same one in main klend /@codegen/klend/accounts
+export { GlobalConfig as KVaultGlobalConfig } from './@codegen/kvault/accounts/GlobalConfig';
 export * from './@codegen/kvault/accounts/VaultState';
 export * from './@codegen/kvault/types';
 export { PROGRAM_ID as KVAULTS_PROGRAM_ID } from './@codegen/kvault/programId';

@@ -46,6 +46,8 @@ export function decodeVaultState(data: Buffer): VaultState {
     vaultFarm: dec.vaultFarm,
     creationTimestamp: dec.creationTimestamp,
     allocationAdmin: dec.allocationAdmin,
+    withdrawalPenaltyLamports: dec.withdrawalPenaltyLamports,
+    withdrawalPenaltyBps: dec.withdrawalPenaltyBps,
     padding3: dec.padding3,
   });
 }

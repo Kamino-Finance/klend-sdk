@@ -372,7 +372,7 @@ function buildReserveConfig(fields: {
     reserved1: Array(1).fill(0),
     minDeleveragingBonusBps: 0,
     proposerAuthorityLocked: 0,
-    blockCtokenUsage: 0
+    blockCtokenUsage: 0,
   };
 
   return new ReserveConfig(reserveConfigFields);

@@ -229,6 +229,15 @@ export class KaminoManager {
   }
 
   /**
+   * This method initializes the kvault global config (one off, needs to be signed by program owner)
+   * @param admin - the admin of the kvault program
+   * @returns - an instruction to initialize the kvault global config
+   */
+  async initKvaultGlobalConfigIx(admin: TransactionSigner) {
+    return this._vaultClient.initKvaultGlobalConfigIx(admin);
+  }
+
+  /**
    * This method will create a vault with a given config. The config can be changed later on, but it is recommended to set it up correctly from the start
    * @param vaultConfig - the config object used to create a vault
    * @returns vault: the keypair of the vault, used to sign the initialization transaction; initVaultIxs: a struct with ixs to initialize the vault and its lookup table + populateLUTIxs, a list to populate the lookup table which has to be executed in a separate transaction

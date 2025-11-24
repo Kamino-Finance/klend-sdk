@@ -51,6 +51,8 @@ export interface VaultStateFields {
   creationTimestamp: BN
   unallocatedTokensCap: BN
   allocationAdmin: Address
+  withdrawalPenaltyLamports: BN
+  withdrawalPenaltyBps: BN
   padding3: Array<BN>
 }
 
@@ -90,6 +92,8 @@ export interface VaultStateJSON {
   creationTimestamp: string
   unallocatedTokensCap: string
   allocationAdmin: string
+  withdrawalPenaltyLamports: string
+  withdrawalPenaltyBps: string
   padding3: Array<string>
 }
 
@@ -129,6 +133,8 @@ export class VaultState {
   readonly creationTimestamp: BN
   readonly unallocatedTokensCap: BN
   readonly allocationAdmin: Address
+  readonly withdrawalPenaltyLamports: BN
+  readonly withdrawalPenaltyBps: BN
   readonly padding3: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -171,7 +177,9 @@ export class VaultState {
     borsh.u64("creationTimestamp"),
     borsh.u64("unallocatedTokensCap"),
     borshAddress("allocationAdmin"),
-    borsh.array(borsh.u128(), 242, "padding3"),
+    borsh.u64("withdrawalPenaltyLamports"),
+    borsh.u64("withdrawalPenaltyBps"),
+    borsh.array(borsh.u128(), 241, "padding3"),
   ])
 
   constructor(fields: VaultStateFields) {
@@ -212,6 +220,8 @@ export class VaultState {
     this.creationTimestamp = fields.creationTimestamp
     this.unallocatedTokensCap = fields.unallocatedTokensCap
     this.allocationAdmin = fields.allocationAdmin
+    this.withdrawalPenaltyLamports = fields.withdrawalPenaltyLamports
+    this.withdrawalPenaltyBps = fields.withdrawalPenaltyBps
     this.padding3 = fields.padding3
   }
 
@@ -302,6 +312,8 @@ export class VaultState {
       creationTimestamp: dec.creationTimestamp,
       unallocatedTokensCap: dec.unallocatedTokensCap,
       allocationAdmin: dec.allocationAdmin,
+      withdrawalPenaltyLamports: dec.withdrawalPenaltyLamports,
+      withdrawalPenaltyBps: dec.withdrawalPenaltyBps,
       padding3: dec.padding3,
     })
   }
@@ -345,6 +357,8 @@ export class VaultState {
       creationTimestamp: this.creationTimestamp.toString(),
       unallocatedTokensCap: this.unallocatedTokensCap.toString(),
       allocationAdmin: this.allocationAdmin,
+      withdrawalPenaltyLamports: this.withdrawalPenaltyLamports.toString(),
+      withdrawalPenaltyBps: this.withdrawalPenaltyBps.toString(),
       padding3: this.padding3.map((item) => item.toString()),
     }
   }
@@ -388,6 +402,8 @@ export class VaultState {
       creationTimestamp: new BN(obj.creationTimestamp),
       unallocatedTokensCap: new BN(obj.unallocatedTokensCap),
       allocationAdmin: address(obj.allocationAdmin),
+      withdrawalPenaltyLamports: new BN(obj.withdrawalPenaltyLamports),
+      withdrawalPenaltyBps: new BN(obj.withdrawalPenaltyBps),
       padding3: obj.padding3.map((item) => new BN(item)),
     })
   }

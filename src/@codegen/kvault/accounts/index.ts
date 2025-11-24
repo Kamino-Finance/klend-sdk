@@ -1,4 +1,6 @@
 export { Reserve } from "./Reserve"
 export type { ReserveFields, ReserveJSON } from "./Reserve"
+export { GlobalConfig } from "./GlobalConfig"
+export type { GlobalConfigFields, GlobalConfigJSON } from "./GlobalConfig"
 export { VaultState } from "./VaultState"
 export type { VaultStateFields, VaultStateJSON } from "./VaultState"

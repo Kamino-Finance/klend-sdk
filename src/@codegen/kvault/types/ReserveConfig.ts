@@ -11,12 +11,15 @@ export interface ReserveConfigFields {
   assetTier: number
   /** Flat rate that goes to the host */
   hostFixedInterestRateBps: number
+  /** Starting bonus for deleveraging-related liquidations, in bps. */
+  minDeleveragingBonusBps: number
   /**
-   * [DEPRECATED] Space that used to hold 2 fields:
-   * - Boost for side (debt or collateral)
-   * - Reward points multiplier per obligation type
-   * Can be re-used after making sure all underlying production account data is zeroed.
+   * Boolean flag to block minting/redeeming of ctokens
+   * Blocks usage of ctokens (minting or withdrawing from obligation)
+   * Effectively blocks deposit_reserve_liquidity and withdraw_obligation_collateral
    */
+  blockCtokenUsage: number
+  /** Past reserved space - feel free to reuse. */
   reserved1: Array<number>
   /** Cut of the order execution bonus that the protocol receives, as a percentage */
   protocolOrderExecutionFeePct: number
@@ -102,12 +105,6 @@ export interface ReserveConfigFields {
    * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
    */
   deleveragingBonusIncreaseBpsPerDay: BN
-  /**
-   * The timestamp at which all [Obligation::borrows] using this reserve become liquidatable
-   * (on the same terms as reserve-wide deleveraging).
-   * Inactive when zeroed (i.e. debt never matures).
-   */
-  debtMaturityTimestamp: BN
 }
 
 export interface ReserveConfigJSON {
@@ -117,12 +114,15 @@ export interface ReserveConfigJSON {
   assetTier: number
   /** Flat rate that goes to the host */
   hostFixedInterestRateBps: number
+  /** Starting bonus for deleveraging-related liquidations, in bps. */
+  minDeleveragingBonusBps: number
   /**
-   * [DEPRECATED] Space that used to hold 2 fields:
-   * - Boost for side (debt or collateral)
-   * - Reward points multiplier per obligation type
-   * Can be re-used after making sure all underlying production account data is zeroed.
+   * Boolean flag to block minting/redeeming of ctokens
+   * Blocks usage of ctokens (minting or withdrawing from obligation)
+   * Effectively blocks deposit_reserve_liquidity and withdraw_obligation_collateral
    */
+  blockCtokenUsage: number
+  /** Past reserved space - feel free to reuse. */
   reserved1: Array<number>
   /** Cut of the order execution bonus that the protocol receives, as a percentage */
   protocolOrderExecutionFeePct: number
@@ -208,12 +208,6 @@ export interface ReserveConfigJSON {
    * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
    */
   deleveragingBonusIncreaseBpsPerDay: string
-  /**
-   * The timestamp at which all [Obligation::borrows] using this reserve become liquidatable
-   * (on the same terms as reserve-wide deleveraging).
-   * Inactive when zeroed (i.e. debt never matures).
-   */
-  debtMaturityTimestamp: string
 }
 
 /** Reserve configuration values */
@@ -224,12 +218,15 @@ export class ReserveConfig {
   readonly assetTier: number
   /** Flat rate that goes to the host */
   readonly hostFixedInterestRateBps: number
+  /** Starting bonus for deleveraging-related liquidations, in bps. */
+  readonly minDeleveragingBonusBps: number
   /**
-   * [DEPRECATED] Space that used to hold 2 fields:
-   * - Boost for side (debt or collateral)
-   * - Reward points multiplier per obligation type
-   * Can be re-used after making sure all underlying production account data is zeroed.
+   * Boolean flag to block minting/redeeming of ctokens
+   * Blocks usage of ctokens (minting or withdrawing from obligation)
+   * Effectively blocks deposit_reserve_liquidity and withdraw_obligation_collateral
    */
+  readonly blockCtokenUsage: number
+  /** Past reserved space - feel free to reuse. */
   readonly reserved1: Array<number>
   /** Cut of the order execution bonus that the protocol receives, as a percentage */
   readonly protocolOrderExecutionFeePct: number
@@ -315,17 +312,13 @@ export class ReserveConfig {
    * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
    */
   readonly deleveragingBonusIncreaseBpsPerDay: BN
-  /**
-   * The timestamp at which all [Obligation::borrows] using this reserve become liquidatable
-   * (on the same terms as reserve-wide deleveraging).
-   * Inactive when zeroed (i.e. debt never matures).
-   */
-  readonly debtMaturityTimestamp: BN
 
   constructor(fields: ReserveConfigFields) {
     this.status = fields.status
     this.assetTier = fields.assetTier
     this.hostFixedInterestRateBps = fields.hostFixedInterestRateBps
+    this.minDeleveragingBonusBps = fields.minDeleveragingBonusBps
+    this.blockCtokenUsage = fields.blockCtokenUsage
     this.reserved1 = fields.reserved1
     this.protocolOrderExecutionFeePct = fields.protocolOrderExecutionFeePct
     this.protocolTakeRatePct = fields.protocolTakeRatePct
@@ -365,7 +358,6 @@ export class ReserveConfig {
       fields.borrowLimitAgainstThisCollateralInElevationGroup
     this.deleveragingBonusIncreaseBpsPerDay =
       fields.deleveragingBonusIncreaseBpsPerDay
-    this.debtMaturityTimestamp = fields.debtMaturityTimestamp
   }
 
   static layout(property?: string) {
@@ -374,7 +366,9 @@ export class ReserveConfig {
         borsh.u8("status"),
         borsh.u8("assetTier"),
         borsh.u16("hostFixedInterestRateBps"),
-        borsh.array(borsh.u8(), 9, "reserved1"),
+        borsh.u16("minDeleveragingBonusBps"),
+        borsh.u8("blockCtokenUsage"),
+        borsh.array(borsh.u8(), 6, "reserved1"),
         borsh.u8("protocolOrderExecutionFeePct"),
         borsh.u8("protocolTakeRatePct"),
         borsh.u8("protocolLiquidationFeePct"),
@@ -405,7 +399,6 @@ export class ReserveConfig {
           "borrowLimitAgainstThisCollateralInElevationGroup"
         ),
         borsh.u64("deleveragingBonusIncreaseBpsPerDay"),
-        borsh.u64("debtMaturityTimestamp"),
       ],
       property
     )
@@ -417,6 +410,8 @@ export class ReserveConfig {
       status: obj.status,
       assetTier: obj.assetTier,
       hostFixedInterestRateBps: obj.hostFixedInterestRateBps,
+      minDeleveragingBonusBps: obj.minDeleveragingBonusBps,
+      blockCtokenUsage: obj.blockCtokenUsage,
       reserved1: obj.reserved1,
       protocolOrderExecutionFeePct: obj.protocolOrderExecutionFeePct,
       protocolTakeRatePct: obj.protocolTakeRatePct,
@@ -452,7 +447,6 @@ export class ReserveConfig {
         obj.borrowLimitAgainstThisCollateralInElevationGroup,
       deleveragingBonusIncreaseBpsPerDay:
         obj.deleveragingBonusIncreaseBpsPerDay,
-      debtMaturityTimestamp: obj.debtMaturityTimestamp,
     })
   }
 
@@ -461,6 +455,8 @@ export class ReserveConfig {
       status: fields.status,
       assetTier: fields.assetTier,
       hostFixedInterestRateBps: fields.hostFixedInterestRateBps,
+      minDeleveragingBonusBps: fields.minDeleveragingBonusBps,
+      blockCtokenUsage: fields.blockCtokenUsage,
       reserved1: fields.reserved1,
       protocolOrderExecutionFeePct: fields.protocolOrderExecutionFeePct,
       protocolTakeRatePct: fields.protocolTakeRatePct,
@@ -498,7 +494,6 @@ export class ReserveConfig {
         fields.borrowLimitAgainstThisCollateralInElevationGroup,
       deleveragingBonusIncreaseBpsPerDay:
         fields.deleveragingBonusIncreaseBpsPerDay,
-      debtMaturityTimestamp: fields.debtMaturityTimestamp,
     }
   }
 
@@ -507,6 +502,8 @@ export class ReserveConfig {
       status: this.status,
       assetTier: this.assetTier,
       hostFixedInterestRateBps: this.hostFixedInterestRateBps,
+      minDeleveragingBonusBps: this.minDeleveragingBonusBps,
+      blockCtokenUsage: this.blockCtokenUsage,
       reserved1: this.reserved1,
       protocolOrderExecutionFeePct: this.protocolOrderExecutionFeePct,
       protocolTakeRatePct: this.protocolTakeRatePct,
@@ -542,7 +539,6 @@ export class ReserveConfig {
         ),
       deleveragingBonusIncreaseBpsPerDay:
         this.deleveragingBonusIncreaseBpsPerDay.toString(),
-      debtMaturityTimestamp: this.debtMaturityTimestamp.toString(),
     }
   }
 
@@ -551,6 +547,8 @@ export class ReserveConfig {
       status: obj.status,
       assetTier: obj.assetTier,
       hostFixedInterestRateBps: obj.hostFixedInterestRateBps,
+      minDeleveragingBonusBps: obj.minDeleveragingBonusBps,
+      blockCtokenUsage: obj.blockCtokenUsage,
       reserved1: obj.reserved1,
       protocolOrderExecutionFeePct: obj.protocolOrderExecutionFeePct,
       protocolTakeRatePct: obj.protocolTakeRatePct,
@@ -592,7 +590,6 @@ export class ReserveConfig {
       deleveragingBonusIncreaseBpsPerDay: new BN(
         obj.deleveragingBonusIncreaseBpsPerDay
       ),
-      debtMaturityTimestamp: new BN(obj.debtMaturityTimestamp),
     })
   }
 

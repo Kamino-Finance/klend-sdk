@@ -326,6 +326,52 @@ export class UnallocatedTokensCap {
   }
 }
 
+export interface WithdrawalPenaltyLamportsJSON {
+  kind: "WithdrawalPenaltyLamports"
+}
+
+export class WithdrawalPenaltyLamports {
+  static readonly discriminator = 14
+  static readonly kind = "WithdrawalPenaltyLamports"
+  readonly discriminator = 14
+  readonly kind = "WithdrawalPenaltyLamports"
+
+  toJSON(): WithdrawalPenaltyLamportsJSON {
+    return {
+      kind: "WithdrawalPenaltyLamports",
+    }
+  }
+
+  toEncodable() {
+    return {
+      WithdrawalPenaltyLamports: {},
+    }
+  }
+}
+
+export interface WithdrawalPenaltyBpsJSON {
+  kind: "WithdrawalPenaltyBps"
+}
+
+export class WithdrawalPenaltyBps {
+  static readonly discriminator = 15
+  static readonly kind = "WithdrawalPenaltyBps"
+  readonly discriminator = 15
+  readonly kind = "WithdrawalPenaltyBps"
+
+  toJSON(): WithdrawalPenaltyBpsJSON {
+    return {
+      kind: "WithdrawalPenaltyBps",
+    }
+  }
+
+  toEncodable() {
+    return {
+      WithdrawalPenaltyBps: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.VaultConfigFieldKind {
   if (typeof obj !== "object") {
@@ -373,6 +419,12 @@ export function fromDecoded(obj: any): types.VaultConfigFieldKind {
   }
   if ("UnallocatedTokensCap" in obj) {
     return new UnallocatedTokensCap()
+  }
+  if ("WithdrawalPenaltyLamports" in obj) {
+    return new WithdrawalPenaltyLamports()
+  }
+  if ("WithdrawalPenaltyBps" in obj) {
+    return new WithdrawalPenaltyBps()
   }
 
   throw new Error("Invalid enum object")
@@ -424,6 +476,12 @@ export function fromJSON(
     case "UnallocatedTokensCap": {
       return new UnallocatedTokensCap()
     }
+    case "WithdrawalPenaltyLamports": {
+      return new WithdrawalPenaltyLamports()
+    }
+    case "WithdrawalPenaltyBps": {
+      return new WithdrawalPenaltyBps()
+    }
   }
 }
 
@@ -443,6 +501,8 @@ export function layout(property?: string) {
     borsh.struct([], "AllocationAdmin"),
     borsh.struct([], "UnallocatedWeight"),
     borsh.struct([], "UnallocatedTokensCap"),
+    borsh.struct([], "WithdrawalPenaltyLamports"),
+    borsh.struct([], "WithdrawalPenaltyBps"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

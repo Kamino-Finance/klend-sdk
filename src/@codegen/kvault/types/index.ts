@@ -1,4 +1,5 @@
 import * as VaultConfigField from "./VaultConfigField"
+import * as UpdateGlobalConfigMode from "./UpdateGlobalConfigMode"
 
 export { LastUpdate } from "./LastUpdate"
 export type { LastUpdateFields, LastUpdateJSON } from "./LastUpdate"
@@ -66,6 +67,8 @@ export type VaultConfigFieldKind =
   | VaultConfigField.AllocationAdmin
   | VaultConfigField.UnallocatedWeight
   | VaultConfigField.UnallocatedTokensCap
+  | VaultConfigField.WithdrawalPenaltyLamports
+  | VaultConfigField.WithdrawalPenaltyBps
 export type VaultConfigFieldJSON =
   | VaultConfigField.PerformanceFeeBpsJSON
   | VaultConfigField.ManagementFeeBpsJSON
@@ -81,9 +84,21 @@ export type VaultConfigFieldJSON =
   | VaultConfigField.AllocationAdminJSON
   | VaultConfigField.UnallocatedWeightJSON
   | VaultConfigField.UnallocatedTokensCapJSON
+  | VaultConfigField.WithdrawalPenaltyLamportsJSON
+  | VaultConfigField.WithdrawalPenaltyBpsJSON
 
 export { VaultAllocation } from "./VaultAllocation"
 export type {
   VaultAllocationFields,
   VaultAllocationJSON,
 } from "./VaultAllocation"
+export { UpdateGlobalConfigMode }
+
+export type UpdateGlobalConfigModeKind =
+  | UpdateGlobalConfigMode.PendingAdmin
+  | UpdateGlobalConfigMode.MinWithdrawalPenaltyLamports
+  | UpdateGlobalConfigMode.MinWithdrawalPenaltyBPS
+export type UpdateGlobalConfigModeJSON =
+  | UpdateGlobalConfigMode.PendingAdminJSON
+  | UpdateGlobalConfigMode.MinWithdrawalPenaltyLamportsJSON
+  | UpdateGlobalConfigMode.MinWithdrawalPenaltyBPSJSON

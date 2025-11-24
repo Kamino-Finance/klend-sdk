@@ -48,15 +48,20 @@ export type CustomError =
   | WrongAdminOrAllocationAdmin
   | ReserveHasNonZeroAllocationOrCTokens
   | DepositAmountGreaterThanRequestedAmount
+  | WithdrawAmountLessThanWithdrawalPenalty
+  | CannotWithdrawZeroLamports
+  | NoUpgradeAuthority
+  | WithdrawalFeeBPSGreaterThanMaxAllowed
+  | WithdrawalFeeLamportsGreaterThanMaxAllowed
 
 export class DepositAmountsZero extends Error {
   static readonly code = 7000
   readonly code = 7000
   readonly name = "DepositAmountsZero"
-  readonly msg = "DepositAmountsZero"
+  readonly msg = "Cannot deposit zero tokens"
 
   constructor(readonly logs?: string[]) {
-    super("7000: DepositAmountsZero")
+    super("7000: Cannot deposit zero tokens")
   }
 }
 
@@ -64,10 +69,10 @@ export class SharesIssuedAmountDoesNotMatch extends Error {
   static readonly code = 7001
   readonly code = 7001
   readonly name = "SharesIssuedAmountDoesNotMatch"
-  readonly msg = "SharesIssuedAmountDoesNotMatch"
+  readonly msg = "Post check failed on share issued"
 
   constructor(readonly logs?: string[]) {
-    super("7001: SharesIssuedAmountDoesNotMatch")
+    super("7001: Post check failed on share issued")
   }
 }
 
@@ -75,10 +80,10 @@ export class MathOverflow extends Error {
   static readonly code = 7002
   readonly code = 7002
   readonly name = "MathOverflow"
-  readonly msg = "MathOverflow"
+  readonly msg = "Math operation overflowed"
 
   constructor(readonly logs?: string[]) {
-    super("7002: MathOverflow")
+    super("7002: Math operation overflowed")
   }
 }
 
@@ -86,10 +91,10 @@ export class IntegerOverflow extends Error {
   static readonly code = 7003
   readonly code = 7003
   readonly name = "IntegerOverflow"
-  readonly msg = "IntegerOverflow"
+  readonly msg = "Integer conversion overflowed"
 
   constructor(readonly logs?: string[]) {
-    super("7003: IntegerOverflow")
+    super("7003: Integer conversion overflowed")
   }
 }
 
@@ -591,6 +596,64 @@ export class DepositAmountGreaterThanRequestedAmount extends Error {
   }
 }
 
+export class WithdrawAmountLessThanWithdrawalPenalty extends Error {
+  static readonly code = 7049
+  readonly code = 7049
+  readonly name = "WithdrawAmountLessThanWithdrawalPenalty"
+  readonly msg = "Withdraw amount is less than withdrawal penalty"
+
+  constructor(readonly logs?: string[]) {
+    super("7049: Withdraw amount is less than withdrawal penalty")
+  }
+}
+
+export class CannotWithdrawZeroLamports extends Error {
+  static readonly code = 7050
+  readonly code = 7050
+  readonly name = "CannotWithdrawZeroLamports"
+  readonly msg = "Cannot withdraw 0 lamports"
+
+  constructor(readonly logs?: string[]) {
+    super("7050: Cannot withdraw 0 lamports")
+  }
+}
+
+export class NoUpgradeAuthority extends Error {
+  static readonly code = 7051
+  readonly code = 7051
+  readonly name = "NoUpgradeAuthority"
+  readonly msg =
+    "Cannot initialize global config because there is no upgrade authority to the program"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "7051: Cannot initialize global config because there is no upgrade authority to the program"
+    )
+  }
+}
+
+export class WithdrawalFeeBPSGreaterThanMaxAllowed extends Error {
+  static readonly code = 7052
+  readonly code = 7052
+  readonly name = "WithdrawalFeeBPSGreaterThanMaxAllowed"
+  readonly msg = "Withdrawal fee BPS is greater than maximum allowed"
+
+  constructor(readonly logs?: string[]) {
+    super("7052: Withdrawal fee BPS is greater than maximum allowed")
+  }
+}
+
+export class WithdrawalFeeLamportsGreaterThanMaxAllowed extends Error {
+  static readonly code = 7053
+  readonly code = 7053
+  readonly name = "WithdrawalFeeLamportsGreaterThanMaxAllowed"
+  readonly msg = "Withdrawal fee lamports is greater than maximum allowed"
+
+  constructor(readonly logs?: string[]) {
+    super("7053: Withdrawal fee lamports is greater than maximum allowed")
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 7000:
@@ -691,6 +754,16 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new ReserveHasNonZeroAllocationOrCTokens(logs)
     case 7048:
       return new DepositAmountGreaterThanRequestedAmount(logs)
+    case 7049:
+      return new WithdrawAmountLessThanWithdrawalPenalty(logs)
+    case 7050:
+      return new CannotWithdrawZeroLamports(logs)
+    case 7051:
+      return new NoUpgradeAuthority(logs)
+    case 7052:
+      return new WithdrawalFeeBPSGreaterThanMaxAllowed(logs)
+    case 7053:
+      return new WithdrawalFeeLamportsGreaterThanMaxAllowed(logs)
   }
 
   return null
