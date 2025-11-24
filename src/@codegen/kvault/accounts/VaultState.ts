@@ -53,6 +53,10 @@ export interface VaultStateFields {
   allocationAdmin: Address
   withdrawalPenaltyLamports: BN
   withdrawalPenaltyBps: BN
+  firstLossCapitalFarm: Address
+  allowAllocationsInWhitelistedReservesOnly: number
+  allowInvestInWhitelistedReservesOnly: number
+  padding4: Array<number>
   padding3: Array<BN>
 }
 
@@ -94,6 +98,10 @@ export interface VaultStateJSON {
   allocationAdmin: string
   withdrawalPenaltyLamports: string
   withdrawalPenaltyBps: string
+  firstLossCapitalFarm: string
+  allowAllocationsInWhitelistedReservesOnly: number
+  allowInvestInWhitelistedReservesOnly: number
+  padding4: Array<number>
   padding3: Array<string>
 }
 
@@ -135,6 +143,10 @@ export class VaultState {
   readonly allocationAdmin: Address
   readonly withdrawalPenaltyLamports: BN
   readonly withdrawalPenaltyBps: BN
+  readonly firstLossCapitalFarm: Address
+  readonly allowAllocationsInWhitelistedReservesOnly: number
+  readonly allowInvestInWhitelistedReservesOnly: number
+  readonly padding4: Array<number>
   readonly padding3: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -179,7 +191,11 @@ export class VaultState {
     borshAddress("allocationAdmin"),
     borsh.u64("withdrawalPenaltyLamports"),
     borsh.u64("withdrawalPenaltyBps"),
-    borsh.array(borsh.u128(), 241, "padding3"),
+    borshAddress("firstLossCapitalFarm"),
+    borsh.u8("allowAllocationsInWhitelistedReservesOnly"),
+    borsh.u8("allowInvestInWhitelistedReservesOnly"),
+    borsh.array(borsh.u8(), 14, "padding4"),
+    borsh.array(borsh.u128(), 238, "padding3"),
   ])
 
   constructor(fields: VaultStateFields) {
@@ -222,6 +238,12 @@ export class VaultState {
     this.allocationAdmin = fields.allocationAdmin
     this.withdrawalPenaltyLamports = fields.withdrawalPenaltyLamports
     this.withdrawalPenaltyBps = fields.withdrawalPenaltyBps
+    this.firstLossCapitalFarm = fields.firstLossCapitalFarm
+    this.allowAllocationsInWhitelistedReservesOnly =
+      fields.allowAllocationsInWhitelistedReservesOnly
+    this.allowInvestInWhitelistedReservesOnly =
+      fields.allowInvestInWhitelistedReservesOnly
+    this.padding4 = fields.padding4
     this.padding3 = fields.padding3
   }
 
@@ -314,6 +336,12 @@ export class VaultState {
       allocationAdmin: dec.allocationAdmin,
       withdrawalPenaltyLamports: dec.withdrawalPenaltyLamports,
       withdrawalPenaltyBps: dec.withdrawalPenaltyBps,
+      firstLossCapitalFarm: dec.firstLossCapitalFarm,
+      allowAllocationsInWhitelistedReservesOnly:
+        dec.allowAllocationsInWhitelistedReservesOnly,
+      allowInvestInWhitelistedReservesOnly:
+        dec.allowInvestInWhitelistedReservesOnly,
+      padding4: dec.padding4,
       padding3: dec.padding3,
     })
   }
@@ -359,6 +387,12 @@ export class VaultState {
       allocationAdmin: this.allocationAdmin,
       withdrawalPenaltyLamports: this.withdrawalPenaltyLamports.toString(),
       withdrawalPenaltyBps: this.withdrawalPenaltyBps.toString(),
+      firstLossCapitalFarm: this.firstLossCapitalFarm,
+      allowAllocationsInWhitelistedReservesOnly:
+        this.allowAllocationsInWhitelistedReservesOnly,
+      allowInvestInWhitelistedReservesOnly:
+        this.allowInvestInWhitelistedReservesOnly,
+      padding4: this.padding4,
       padding3: this.padding3.map((item) => item.toString()),
     }
   }
@@ -404,6 +438,12 @@ export class VaultState {
       allocationAdmin: address(obj.allocationAdmin),
       withdrawalPenaltyLamports: new BN(obj.withdrawalPenaltyLamports),
       withdrawalPenaltyBps: new BN(obj.withdrawalPenaltyBps),
+      firstLossCapitalFarm: address(obj.firstLossCapitalFarm),
+      allowAllocationsInWhitelistedReservesOnly:
+        obj.allowAllocationsInWhitelistedReservesOnly,
+      allowInvestInWhitelistedReservesOnly:
+        obj.allowInvestInWhitelistedReservesOnly,
+      padding4: obj.padding4,
       padding3: obj.padding3.map((item) => new BN(item)),
     })
   }

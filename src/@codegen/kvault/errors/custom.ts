@@ -53,6 +53,8 @@ export type CustomError =
   | NoUpgradeAuthority
   | WithdrawalFeeBPSGreaterThanMaxAllowed
   | WithdrawalFeeLamportsGreaterThanMaxAllowed
+  | ReserveNotWhitelisted
+  | InvalidBoolLikeValue
 
 export class DepositAmountsZero extends Error {
   static readonly code = 7000
@@ -654,6 +656,28 @@ export class WithdrawalFeeLamportsGreaterThanMaxAllowed extends Error {
   }
 }
 
+export class ReserveNotWhitelisted extends Error {
+  static readonly code = 7054
+  readonly code = 7054
+  readonly name = "ReserveNotWhitelisted"
+  readonly msg = "Reserve is not whitelisted"
+
+  constructor(readonly logs?: string[]) {
+    super("7054: Reserve is not whitelisted")
+  }
+}
+
+export class InvalidBoolLikeValue extends Error {
+  static readonly code = 7055
+  readonly code = 7055
+  readonly name = "InvalidBoolLikeValue"
+  readonly msg = "Invalid bool-like value passed in (should be 0 or 1)"
+
+  constructor(readonly logs?: string[]) {
+    super("7055: Invalid bool-like value passed in (should be 0 or 1)")
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 7000:
@@ -764,6 +788,10 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new WithdrawalFeeBPSGreaterThanMaxAllowed(logs)
     case 7053:
       return new WithdrawalFeeLamportsGreaterThanMaxAllowed(logs)
+    case 7054:
+      return new ReserveNotWhitelisted(logs)
+    case 7055:
+      return new InvalidBoolLikeValue(logs)
   }
 
   return null

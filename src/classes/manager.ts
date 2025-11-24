@@ -76,7 +76,7 @@ import { ReserveConfig, UpdateLendingMarketMode, UpdateLendingMarketModeKind } f
 import Decimal from 'decimal.js';
 import { VaultState } from '../@codegen/kvault/accounts';
 import { getProgramAccounts } from '../utils/rpc';
-import { VaultConfigField, VaultConfigFieldKind } from '../@codegen/kvault/types';
+import { UpdateReserveWhitelistModeKind, VaultConfigField, VaultConfigFieldKind } from '../@codegen/kvault/types';
 import {
   AcceptVaultOwnershipIxs,
   APYs,
@@ -626,6 +626,23 @@ export class KaminoManager {
     }
 
     return this._vaultClient.updateVaultConfigIxs(vault, mode, value, signer, lutIxsSigner, skipLutUpdate);
+  }
+
+  /**
+   * Add or update a reserve whitelist entry. This controls whether the reserve is whitelisted for adding/updating
+   * allocations or for invest, depending on the mode parameter.
+   *
+   * @param reserve - Address of the reserve to whitelist
+   * @param mode - The whitelist mode: either 'Invest' or 'AddAllocation' with a value (1 = add, 0 = remove)
+   * @param globalAdmin - The global admin that signs the transaction
+   * @returns - An instruction to add/update the whitelisted reserve entry
+   */
+  async addUpdateWhitelistedReserveIx(
+    reserve: Address,
+    mode: UpdateReserveWhitelistModeKind,
+    globalAdmin: TransactionSigner
+  ): Promise<Instruction> {
+    return this._vaultClient.addUpdateWhitelistedReserveIx(reserve, mode, globalAdmin);
   }
 
   /** Sets the farm where the shares can be staked. This is store in vault state and a vault can only have one farm, so the new farm will ovveride the old farm

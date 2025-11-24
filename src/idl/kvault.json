@@ -97,6 +97,12 @@
           "isSigner": false
         },
         {
+          "name": "reserveWhitelistEntry",
+          "isMut": false,
+          "isSigner": false,
+          "isOptional": true
+        },
+        {
           "name": "reserveCollateralTokenProgram",
           "isMut": false,
           "isSigner": false
@@ -634,6 +640,12 @@
           "isSigner": false
         },
         {
+          "name": "reserveWhitelistEntry",
+          "isMut": false,
+          "isSigner": false,
+          "isOptional": true
+        },
+        {
           "name": "klendProgram",
           "isMut": false,
           "isSigner": false
@@ -660,9 +672,14 @@
       "name": "updateVaultConfig",
       "accounts": [
         {
-          "name": "vaultAdminAuthority",
+          "name": "signer",
           "isMut": false,
           "isSigner": true
+        },
+        {
+          "name": "globalConfig",
+          "isMut": false,
+          "isSigner": false
         },
         {
           "name": "vaultState",
@@ -1093,6 +1110,44 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "addUpdateWhitelistedReserve",
+      "accounts": [
+        {
+          "name": "globalAdmin",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "globalConfig",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "reserve",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "reserveWhitelistEntry",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "update",
+          "type": {
+            "defined": "UpdateReserveWhitelistMode"
+          }
+        }
+      ]
     }
   ],
   "accounts": [
@@ -1242,6 +1297,46 @@
               "array": [
                 "u8",
                 944
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReserveWhitelistEntry",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "tokenMint",
+            "docs": [
+              "The token mint is stored to solve the problem of finding all the whitelisted reserves for a particular token mint:",
+              "when storing the token mint inside the PDA, finding all the whitelisted reserves becomes a `getProgramAccounts` with",
+              "a filter on discriminator + the mint field",
+              "The reserve pubkey, as seed of the reserve whitelist PDA account, it stored so you can link back the PDA to its seeds",
+              "(for instance, in the operation above we easily find the reserve corresponding to the PDA)"
+            ],
+            "type": "publicKey"
+          },
+          {
+            "name": "reserve",
+            "type": "publicKey"
+          },
+          {
+            "name": "whitelistAddAllocation",
+            "type": "u8"
+          },
+          {
+            "name": "whitelistInvest",
+            "type": "u8"
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u8",
+                62
               ]
             }
           }
@@ -1419,11 +1514,32 @@
             "type": "u64"
           },
           {
+            "name": "firstLossCapitalFarm",
+            "type": "publicKey"
+          },
+          {
+            "name": "allowAllocationsInWhitelistedReservesOnly",
+            "type": "u8"
+          },
+          {
+            "name": "allowInvestInWhitelistedReservesOnly",
+            "type": "u8"
+          },
+          {
+            "name": "padding4",
+            "type": {
+              "array": [
+                "u8",
+                14
+              ]
+            }
+          },
+          {
             "name": "padding3",
             "type": {
               "array": [
                 "u128",
-                241
+                238
               ]
             }
           }
@@ -2273,6 +2389,26 @@
       }
     },
     {
+      "name": "UpdateReserveWhitelistMode",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Invest",
+            "fields": [
+              "u8"
+            ]
+          },
+          {
+            "name": "AddAllocation",
+            "fields": [
+              "u8"
+            ]
+          }
+        ]
+      }
+    },
+    {
       "name": "VaultConfigField",
       "type": {
         "kind": "enum",
@@ -2324,6 +2460,15 @@
           },
           {
             "name": "WithdrawalPenaltyBps"
+          },
+          {
+            "name": "FirstLossCapitalFarm"
+          },
+          {
+            "name": "AllowAllocationsInWhitelistedReservesOnly"
+          },
+          {
+            "name": "AllowInvestInWhitelistedReservesOnly"
           }
         ]
       }
@@ -2758,6 +2903,16 @@
       "code": 7053,
       "name": "WithdrawalFeeLamportsGreaterThanMaxAllowed",
       "msg": "Withdrawal fee lamports is greater than maximum allowed"
+    },
+    {
+      "code": 7054,
+      "name": "ReserveNotWhitelisted",
+      "msg": "Reserve is not whitelisted"
+    },
+    {
+      "code": 7055,
+      "name": "InvalidBoolLikeValue",
+      "msg": "Invalid bool-like value passed in (should be 0 or 1)"
     }
   ]
 }

@@ -1,3 +1,4 @@
+import * as UpdateReserveWhitelistMode from "./UpdateReserveWhitelistMode"
 import * as VaultConfigField from "./VaultConfigField"
 import * as UpdateGlobalConfigMode from "./UpdateGlobalConfigMode"
 
@@ -50,6 +51,15 @@ export type {
 } from "./BorrowRateCurve"
 export { CurvePoint } from "./CurvePoint"
 export type { CurvePointFields, CurvePointJSON } from "./CurvePoint"
+export { UpdateReserveWhitelistMode }
+
+export type UpdateReserveWhitelistModeKind =
+  | UpdateReserveWhitelistMode.Invest
+  | UpdateReserveWhitelistMode.AddAllocation
+export type UpdateReserveWhitelistModeJSON =
+  | UpdateReserveWhitelistMode.InvestJSON
+  | UpdateReserveWhitelistMode.AddAllocationJSON
+
 export { VaultConfigField }
 
 export type VaultConfigFieldKind =
@@ -69,6 +79,9 @@ export type VaultConfigFieldKind =
   | VaultConfigField.UnallocatedTokensCap
   | VaultConfigField.WithdrawalPenaltyLamports
   | VaultConfigField.WithdrawalPenaltyBps
+  | VaultConfigField.FirstLossCapitalFarm
+  | VaultConfigField.AllowAllocationsInWhitelistedReservesOnly
+  | VaultConfigField.AllowInvestInWhitelistedReservesOnly
 export type VaultConfigFieldJSON =
   | VaultConfigField.PerformanceFeeBpsJSON
   | VaultConfigField.ManagementFeeBpsJSON
@@ -86,6 +99,9 @@ export type VaultConfigFieldJSON =
   | VaultConfigField.UnallocatedTokensCapJSON
   | VaultConfigField.WithdrawalPenaltyLamportsJSON
   | VaultConfigField.WithdrawalPenaltyBpsJSON
+  | VaultConfigField.FirstLossCapitalFarmJSON
+  | VaultConfigField.AllowAllocationsInWhitelistedReservesOnlyJSON
+  | VaultConfigField.AllowInvestInWhitelistedReservesOnlyJSON
 
 export { VaultAllocation } from "./VaultAllocation"
 export type {

@@ -23,6 +23,9 @@ import {
   AccountInfoWithPubkey,
   AccountInfoBase,
   AccountInfoWithJsonData,
+  Option,
+  some,
+  none,
 } from '@solana/kit';
 import {
   AllOracleAccounts,
@@ -40,6 +43,9 @@ import {
   WRAPPED_SOL_MINT,
 } from '../lib';
 import {
+  addUpdateWhitelistedReserve,
+  AddUpdateWhitelistedReserveAccounts,
+  AddUpdateWhitelistedReserveArgs,
   deposit,
   DepositAccounts,
   DepositArgs,
@@ -70,7 +76,7 @@ import {
   withdrawPendingFees,
   WithdrawPendingFeesAccounts,
 } from '../@codegen/kvault/instructions';
-import { VaultConfigField, VaultConfigFieldKind } from '../@codegen/kvault/types';
+import { UpdateReserveWhitelistModeKind, VaultConfigField, VaultConfigFieldKind } from '../@codegen/kvault/types';
 import { VaultState } from '../@codegen/kvault/accounts';
 import Decimal from 'decimal.js';
 import { bpsToPct, decodeVaultName, numberToLamportsDecimal, parseTokenSymbol, pubkeyHashMapToJson } from './utils';
@@ -86,6 +92,7 @@ import {
   getTokenAccountAmount,
   getTokenAccountMint,
   lendingMarketAuthPda,
+  parseBooleanFlag,
   programDataPda,
   SECONDS_PER_YEAR,
   U64_MAX,
@@ -143,6 +150,7 @@ const SHARES_SEED = 'shares';
 const EVENT_AUTHORITY_SEED = '__event_authority';
 export const METADATA_SEED = 'metadata';
 const GLOBAL_CONFIG_STATE_SEED = 'global_config';
+const WHITELISTED_RESERVES_SEED = 'whitelisted_reserves';
 
 export const METADATA_PROGRAM_ID: Address = address('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
 
@@ -342,7 +350,7 @@ export class KaminoVaultClient {
       []
     );
 
-    const setLUTIx = this.updateUninitialisedVaultConfigIx(
+    const setLUTIx = await this.updateUninitialisedVaultConfigIx(
       vaultConfig.admin,
       vaultState.address,
       new VaultConfigField.LookupTable(),
@@ -352,7 +360,7 @@ export class KaminoVaultClient {
     const ixs = [createVaultIx, initVaultIx, setLUTIx];
 
     if (vaultConfig.getPerformanceFeeBps() > 0) {
-      const setPerformanceFeeIx = this.updateUninitialisedVaultConfigIx(
+      const setPerformanceFeeIx = await this.updateUninitialisedVaultConfigIx(
         vaultConfig.admin,
         vaultState.address,
         new VaultConfigField.PerformanceFeeBps(),
@@ -361,7 +369,7 @@ export class KaminoVaultClient {
       ixs.push(setPerformanceFeeIx);
     }
     if (vaultConfig.getManagementFeeBps() > 0) {
-      const setManagementFeeIx = this.updateUninitialisedVaultConfigIx(
+      const setManagementFeeIx = await this.updateUninitialisedVaultConfigIx(
         vaultConfig.admin,
         vaultState.address,
         new VaultConfigField.ManagementFeeBps(),
@@ -370,7 +378,7 @@ export class KaminoVaultClient {
       ixs.push(setManagementFeeIx);
     }
     if (vaultConfig.name && vaultConfig.name.length > 0) {
-      const setNameIx = this.updateUninitialisedVaultConfigIx(
+      const setNameIx = await this.updateUninitialisedVaultConfigIx(
         vaultConfig.admin,
         vaultState.address,
         new VaultConfigField.Name(),
@@ -378,7 +386,7 @@ export class KaminoVaultClient {
       );
       ixs.push(setNameIx);
     }
-    const setFarmIx = this.updateUninitialisedVaultConfigIx(
+    const setFarmIx = await this.updateUninitialisedVaultConfigIx(
       vaultConfig.admin,
       vaultState.address,
       new VaultConfigField.Farm(),
@@ -508,6 +516,12 @@ export class KaminoVaultClient {
       this._kaminoVaultProgramId
     );
 
+    const reserveWhitelistEntryOption = await getReserveWhitelistEntryIfExists(
+      reserveAllocationConfig.getReserveAddress(),
+      this.getConnection(),
+      this._kaminoVaultProgramId
+    );
+
     const vaultAdmin = parseVaultAdmin(vaultState, vaultAdminAuthority);
     const updateReserveAllocationAccounts: UpdateReserveAllocationAccounts = {
       signer: vaultAdmin,
@@ -516,6 +530,7 @@ export class KaminoVaultClient {
       reserveCollateralMint: reserveState.collateral.mintPubkey,
       reserve: reserveAllocationConfig.getReserveAddress(),
       ctokenVault: cTokenVault,
+      reserveWhitelistEntry: reserveWhitelistEntryOption,
       systemProgram: SYSTEM_PROGRAM_ADDRESS,
       rent: SYSVAR_RENT_ADDRESS,
       reserveCollateralTokenProgram: TOKEN_PROGRAM_ADDRESS,
@@ -782,7 +797,8 @@ export class KaminoVaultClient {
    * @param vault the vault to update
    * @param mode the field to update (based on VaultConfigFieldKind enum)
    * @param value the value to update the field with
-   * @param [vaultAdminAuthority] the signer of the transaction. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx
+   * @param [adminAuthority] the signer of the transaction. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx.
+   *        The global admin should be passed in when wanting to change the AllowAllocationsInWhitelistedReservesOnly or AllowInvestInWhitelistedReservesOnly fields to false
    * @param [lutIxsSigner] the signer of the transaction to be used for the lookup table instructions. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx
    * @param [skipLutUpdate] if true, the lookup table instructions will not be included in the returned instructions
    * @returns a struct that contains the instruction to update the field and an optional list of instructions to update the lookup table
@@ -791,40 +807,25 @@ export class KaminoVaultClient {
     vault: KaminoVault,
     mode: VaultConfigFieldKind,
     value: string,
-    vaultAdminAuthority?: TransactionSigner,
+    adminAuthority?: TransactionSigner,
     lutIxsSigner?: TransactionSigner,
     skipLutUpdate: boolean = false
   ): Promise<UpdateVaultConfigIxs> {
     const vaultState: VaultState = await vault.getState();
-    const admin = parseVaultAdmin(vaultState, vaultAdminAuthority);
+    const admin = parseVaultAdmin(vaultState, adminAuthority);
 
+    const globalConfig = await getKvaultGlobalConfigPda(this._kaminoVaultProgramId);
     const updateVaultConfigAccs: UpdateVaultConfigAccounts = {
-      vaultAdminAuthority: admin,
+      signer: admin,
+      globalConfig: globalConfig,
       vaultState: vault.address,
       klendProgram: this._kaminoLendProgramId,
     };
-    if (vaultAdminAuthority) {
-      updateVaultConfigAccs.vaultAdminAuthority = vaultAdminAuthority;
-    }
 
     const updateVaultConfigArgs: UpdateVaultConfigArgs = {
       entry: mode,
-      data: Buffer.from([0]),
+      data: this.getValueForModeAsBuffer(mode, value),
     };
-
-    if (isNaN(+value) || value === DEFAULT_PUBLIC_KEY) {
-      if (mode.kind === new VaultConfigField.Name().kind) {
-        const data = Array.from(this.encodeVaultName(value));
-        updateVaultConfigArgs.data = Buffer.from(data);
-      } else {
-        const data = address(value);
-        updateVaultConfigArgs.data = Buffer.from(addressEncoder.encode(data));
-      }
-    } else {
-      const buffer = Buffer.alloc(8);
-      buffer.writeBigUInt64LE(BigInt(value.toString()));
-      updateVaultConfigArgs.data = buffer;
-    }
 
     const vaultReserves = this.getVaultReserves(vaultState);
     const vaultReservesState = await this.loadVaultReserves(vaultState);
@@ -889,6 +890,38 @@ export class KaminoVaultClient {
     return updateVaultConfigIxs;
   }
 
+  /**
+   * Add or update a reserve whitelist entry. This controls whether the reserve is whitelisted for adding/updating
+   * allocations or for invest, depending on the mode parameter.
+   *
+   * @param reserve - Address of the reserve to whitelist
+   * @param mode - The whitelist mode: either 'Invest' or 'AddAllocation' with a value (1 = allow, 0 = deny)
+   * @param globalAdmin - The global admin that signs the transaction
+   * @returns - An instruction to add/update the whitelisted reserve
+   */
+  async addUpdateWhitelistedReserveIx(
+    reserve: Address,
+    mode: UpdateReserveWhitelistModeKind,
+    globalAdmin: TransactionSigner
+  ): Promise<Instruction> {
+    const globalConfig = await getKvaultGlobalConfigPda(this._kaminoVaultProgramId);
+    const reserveWhitelistEntry = await getReserveWhitelistEntryPda(reserve, this._kaminoVaultProgramId);
+
+    const accounts: AddUpdateWhitelistedReserveAccounts = {
+      globalAdmin,
+      globalConfig,
+      reserve,
+      reserveWhitelistEntry,
+      systemProgram: SYSTEM_PROGRAM_ADDRESS,
+    };
+
+    const args: AddUpdateWhitelistedReserveArgs = {
+      update: mode,
+    };
+
+    return addUpdateWhitelistedReserve(args, accounts, undefined, this._kaminoVaultProgramId);
+  }
+
   /** Sets the farm where the shares can be staked. This is store in vault state and a vault can only have one farm, so the new farm will ovveride the old farm
    * @param vault - vault to set the farm for
    * @param farm - the farm where the vault shares can be staked
@@ -921,43 +954,34 @@ export class KaminoVaultClient {
   }
 
   /**
-   * This method updates the vault config for a vault that
-   * @param admin - address of vault to be updated
+   * This method updates the vault config during vault initialization, within the same transaction
+   * where the vault is created. Use this when the vault state is not yet committed to the chain
+   * and cannot be fetched via RPC. For updates to existing vaults, use updateVaultConfigIxs instead.
+   *
+   * @param admin - the admin that signs the transaction
    * @param vault - address of vault to be updated
    * @param mode - the field to be updated
    * @param value - the new value for the field to be updated (number or pubkey)
    * @returns - an instruction to update the vault config
    */
-  private updateUninitialisedVaultConfigIx(
+  private async updateUninitialisedVaultConfigIx(
     admin: TransactionSigner,
     vault: Address,
     mode: VaultConfigFieldKind,
     value: string
-  ): Instruction {
+  ): Promise<Instruction> {
+    const globalConfig = await getKvaultGlobalConfigPda(this._kaminoVaultProgramId);
     const updateVaultConfigAccs: UpdateVaultConfigAccounts = {
-      vaultAdminAuthority: admin,
+      signer: admin,
+      globalConfig: globalConfig,
       vaultState: vault,
       klendProgram: this._kaminoLendProgramId,
     };
 
     const updateVaultConfigArgs: UpdateVaultConfigArgs = {
       entry: mode,
-      data: Buffer.from([0]),
+      data: this.getValueForModeAsBuffer(mode, value),
     };
-
-    if (isNaN(+value)) {
-      if (mode.kind === new VaultConfigField.Name().kind) {
-        const data = Array.from(this.encodeVaultName(value));
-        updateVaultConfigArgs.data = Buffer.from(data);
-      } else {
-        const data = address(value);
-        updateVaultConfigArgs.data = Buffer.from(addressEncoder.encode(data));
-      }
-    } else {
-      const buffer = Buffer.alloc(8);
-      buffer.writeBigUInt64LE(BigInt(value.toString()));
-      updateVaultConfigArgs.data = buffer;
-    }
 
     const updateVaultConfigIx = updateVaultConfig(
       updateVaultConfigArgs,
@@ -1692,6 +1716,12 @@ export class KaminoVaultClient {
       ixs.push(createAtaIx);
     }
 
+    const reserveWhitelistEntryOption = await getReserveWhitelistEntryIfExists(
+      reserve.address,
+      this.getConnection(),
+      this._kaminoVaultProgramId
+    );
+
     const investAccounts: InvestAccounts = {
       payer,
       vaultState: vault.address,
@@ -1704,6 +1734,7 @@ export class KaminoVaultClient {
       lendingMarketAuthority: lendingMarketAuth,
       reserveLiquiditySupply: reserve.state.liquidity.supplyVault,
       reserveCollateralMint: reserve.state.collateral.mintPubkey,
+      reserveWhitelistEntry: reserveWhitelistEntryOption,
       klendProgram: this._kaminoLendProgramId,
       instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
       tokenProgram: tokenProgram,
@@ -1731,6 +1762,30 @@ export class KaminoVaultClient {
   /**Convert an u8 array to a string */
   decodeVaultName(token: number[]): string {
     return decodeVaultName(token);
+  }
+
+  /** Helper to serialize value as Buffer for updateVaultConfig instruction */
+  private getValueForModeAsBuffer(mode: VaultConfigFieldKind, value: string): Buffer {
+    const isWhitelistOnlyFlag =
+      mode.kind === new VaultConfigField.AllowInvestInWhitelistedReservesOnly().kind ||
+      mode.kind === new VaultConfigField.AllowAllocationsInWhitelistedReservesOnly().kind;
+
+    if (isWhitelistOnlyFlag) {
+      const flag = parseBooleanFlag(value);
+      return Buffer.from([flag]);
+    } else if (isNaN(+value)) {
+      if (mode.kind === new VaultConfigField.Name().kind) {
+        const data = Array.from(this.encodeVaultName(value));
+        return Buffer.from(data);
+      } else {
+        const data = address(value);
+        return Buffer.from(addressEncoder.encode(data));
+      }
+    } else {
+      const buffer = Buffer.alloc(8);
+      buffer.writeBigUInt64LE(BigInt(value.toString()));
+      return buffer;
+    }
   }
 
   private async withdrawIx(
@@ -4199,6 +4254,30 @@ export async function getKvaultGlobalConfigPda(kaminoVaultProgramId: Address): P
       programAddress: kaminoVaultProgramId,
     })
   )[0];
+}
+
+export async function getReserveWhitelistEntryPda(
+  reserveAddress: Address,
+  kaminoVaultProgramId: Address
+): Promise<Address> {
+  return (
+    await getProgramDerivedAddress({
+      seeds: [Buffer.from(WHITELISTED_RESERVES_SEED), addressEncoder.encode(reserveAddress)],
+      programAddress: kaminoVaultProgramId,
+    })
+  )[0];
+}
+
+async function getReserveWhitelistEntryIfExists(
+  reserveAddress: Address,
+  rpc: Rpc<SolanaRpcApi>,
+  kaminoVaultProgramId: Address
+): Promise<Option<Address>> {
+  const reserveWhitelistEntry = await getReserveWhitelistEntryPda(reserveAddress, kaminoVaultProgramId);
+  const reserveWhitelistEntryAccount = await fetchEncodedAccount(rpc, reserveWhitelistEntry, {
+    commitment: 'processed',
+  });
+  return reserveWhitelistEntryAccount.exists ? some(reserveWhitelistEntry) : none<Address>();
 }
 
 function parseVaultAdmin(vault: VaultState, signer?: TransactionSigner) {

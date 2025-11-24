@@ -19,6 +19,8 @@ import {
   KaminoVaultConfig,
   lamportsToDecimal,
   LendingMarket,
+  parseBooleanFlag,
+  parseTokenSymbol,
   parseZeroPaddedUtf8,
   programDataPda,
   Reserve,
@@ -39,7 +41,7 @@ import {
 import { Fraction } from '../classes/fraction';
 import Decimal from 'decimal.js';
 import BN from 'bn.js';
-import { PythConfiguration, SwitchboardConfiguration } from '../@codegen/kvault/types';
+import { PythConfiguration, SwitchboardConfiguration, UpdateReserveWhitelistMode } from '../@codegen/kvault/types';
 import * as fs from 'fs';
 import { MarketWithAddress } from '../utils/managerTypes';
 import { ManagementFeeBps, PendingVaultAdmin, PerformanceFeeBps } from '../@codegen/kvault/types/VaultConfigField';
@@ -73,7 +75,7 @@ async function main() {
         throw new Error('If using multisig mode, multisig pubkey is required');
       }
       const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(ms, staging);
+      const env = await initEnv(staging, ms);
       const admin = await env.getSigner();
 
       const kaminoManager = new KaminoManager(
@@ -562,8 +564,18 @@ async function main() {
       `--lutSigner <string>`,
       'If set, it will use the provided signer instead of the default one for the LUT update'
     )
-    .action(async ({ vault, field, value, mode, staging, skipLutUpdate, lutSigner }) => {
-      const env = await initEnv(staging);
+    .option(
+      `--global-admin <string>`,
+      'Global admin signer (keypair path in execute/simulate modes, pubkey in multisig mode). Required when setting AllowInvestInWhitelistedReservesOnly or AllowAllocationsInWhitelistedReservesOnly to false'
+    )
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ vault, field, value, mode, staging, skipLutUpdate, lutSigner, globalAdmin, multisig }) => {
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig pubkey is required');
+      }
+
+      const ms = multisig ? address(multisig) : undefined;
+      const env = await initEnv(staging, ms);
       const vaultAddress = address(vault);
 
       const kaminoManager = new KaminoManager(
@@ -575,7 +587,16 @@ async function main() {
 
       const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
       const vaultState = await kaminoVault.getState();
-      const signer = await env.getSigner({ vaultState });
+
+      // Use global admin signer if provided, otherwise fall back to vault admin/noop signer depending on mode
+      let signer;
+      if (mode === 'multisig' && globalAdmin) {
+        signer = noopSigner(address(globalAdmin));
+      } else if (globalAdmin) {
+        signer = await parseKeypairFile(globalAdmin as string);
+      } else {
+        signer = await env.getSigner({ vaultState });
+      }
 
       let lutSignerOrUndefined = undefined;
       if (lutSigner) {
@@ -610,9 +631,225 @@ async function main() {
     });
 
   commands
+    .command('add-update-whitelisted-reserve')
+    .requiredOption('--reserve <string>', 'Reserve address to whitelist')
+    .requiredOption('--whitelist-mode <string>', 'Whitelist mode: "Invest" or "AddAllocation"')
+    .requiredOption(
+      '--value <string>',
+      'Value: "1" or "true" to add to whitelist, "0" or "false" to remove from whitelist'
+    )
+    .requiredOption(
+      `--mode <string>`,
+      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
+    )
+    .requiredOption(
+      '--global-admin <string>',
+      'Global admin signer (keypair path in execute/simulate modes, pubkey in multisig mode)'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ reserve, whitelistMode, value, mode, globalAdmin, staging, multisig }) => {
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig pubkey is required');
+      }
+
+      const ms = multisig ? address(multisig) : undefined;
+      const env = await initEnv(staging, ms);
+      const reserveAddress = address(reserve);
+
+      const kaminoManager = new KaminoManager(
+        env.c.rpc,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        env.kvaultProgramId
+      );
+
+      // Parse the value (1/true = add, 0/false = remove)
+      const flagValue = parseBooleanFlag(value);
+
+      // Parse the whitelist mode
+      let whitelistModeEnum;
+      if (whitelistMode === 'Invest') {
+        whitelistModeEnum = new UpdateReserveWhitelistMode.Invest([flagValue]);
+      } else if (whitelistMode === 'AddAllocation') {
+        whitelistModeEnum = new UpdateReserveWhitelistMode.AddAllocation([flagValue]);
+      } else {
+        throw new Error(`Invalid whitelist mode '${whitelistMode}'. Expected 'Invest' or 'AddAllocation'.`);
+      }
+
+      let globalAdminSigner;
+      if (mode === 'multisig') {
+        globalAdminSigner = noopSigner(address(globalAdmin));
+      } else {
+        globalAdminSigner = await parseKeypairFile(globalAdmin as string);
+      }
+
+      const instruction = await kaminoManager.addUpdateWhitelistedReserveIx(
+        reserveAddress,
+        whitelistModeEnum,
+        globalAdminSigner
+      );
+
+      await processTx(
+        env.c,
+        globalAdminSigner,
+        [
+          instruction,
+          ...getPriorityFeeAndCuIxs({
+            priorityFeeMultiplier: 2500,
+          }),
+        ],
+        mode,
+        []
+      );
+
+      mode === 'execute' &&
+        console.log(
+          `Reserve ${reserveAddress} whitelisted for ${whitelistMode} with value ${flagValue ? 'ALLOW' : 'DENY'}`
+        );
+    });
+
+  commands
+    .command('backfill-whitelisted-reserves')
+    .option(
+      '--value <string>',
+      'Value: "1" or "true" to add to whitelist, "0" or "false" to remove from whitelist',
+      '1'
+    )
+    .requiredOption(
+      `--mode <string>`,
+      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
+    )
+    .requiredOption(
+      '--global-admin <string>',
+      'Global admin signer (keypair path in execute/simulate modes, pubkey in multisig mode)'
+    )
+    .option(
+      `--markets <string>`,
+      'Comma-separated list of market addresses. If not provided, all markets will be processed'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ value, mode, globalAdmin, markets, staging, multisig }) => {
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig pubkey is required');
+      }
+
+      const ms = multisig ? address(multisig) : undefined;
+      const env = await initEnv(staging, ms);
+
+      const kaminoManager = new KaminoManager(
+        env.c.rpc,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        env.kvaultProgramId
+      );
+
+      let globalAdminSigner;
+      if (mode === 'multisig') {
+        globalAdminSigner = noopSigner(address(globalAdmin));
+      } else {
+        globalAdminSigner = await parseKeypairFile(globalAdmin as string);
+      }
+
+      // Get markets to process
+      let marketsToProcess: KaminoMarket[];
+      if (markets) {
+        const marketAddresses = markets.split(',').map((m: string) => address(m.trim()));
+        console.log(`Processing ${marketAddresses.length} specified markets...`);
+        marketsToProcess = await Promise.all(
+          marketAddresses.map(async (marketAddress: Address) => {
+            const market = await KaminoMarket.load(
+              env.c.rpc,
+              marketAddress,
+              DEFAULT_RECENT_SLOT_DURATION_MS,
+              env.klendProgramId
+            );
+            if (!market) {
+              throw new Error(`Market ${marketAddress} not found`);
+            }
+            return market;
+          })
+        );
+      } else {
+        console.log('Fetching all markets...');
+        marketsToProcess = await kaminoManager.getAllMarkets(env.klendProgramId);
+        console.log(`Found ${marketsToProcess.length} markets`);
+      }
+
+      // Collect all reserves from all markets
+      const allReserves: Address[] = [];
+      for (const market of marketsToProcess) {
+        const marketName = parseTokenSymbol(market.state.name);
+        const reserveAddresses = Array.from(market.reserves.keys());
+        console.log(`Market ${market.getAddress()} (${marketName}): ${reserveAddresses.length} reserves`);
+        allReserves.push(...reserveAddresses);
+      }
+
+      console.log(`\nTotal reserves to whitelist: ${allReserves.length}`);
+      console.log(`Whitelist modes: Invest AND AddAllocation (both will be set)`);
+
+      // Parse the value (1/true = add, 0/false = remove)
+      const flagValue = parseBooleanFlag(value);
+      console.log(`Action: ${flagValue ? 'ADD to whitelist' : 'REMOVE from whitelist'}`);
+
+      if (mode === 'simulate') {
+        console.log('\nSimulation mode - no transactions will be executed');
+      }
+
+      // Create whitelist mode enums for both Invest and AddAllocation
+      const investModeEnum = new UpdateReserveWhitelistMode.Invest([flagValue]);
+      const addAllocationModeEnum = new UpdateReserveWhitelistMode.AddAllocation([flagValue]);
+
+      // Process each reserve with both whitelist modes
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const reserveAddress of allReserves) {
+        try {
+          const investInstruction = await kaminoManager.addUpdateWhitelistedReserveIx(
+            reserveAddress,
+            investModeEnum,
+            globalAdminSigner
+          );
+
+          const addAllocationInstruction = await kaminoManager.addUpdateWhitelistedReserveIx(
+            reserveAddress,
+            addAllocationModeEnum,
+            globalAdminSigner
+          );
+
+          await processTx(
+            env.c,
+            globalAdminSigner,
+            [
+              investInstruction,
+              addAllocationInstruction,
+              ...getPriorityFeeAndCuIxs({
+                priorityFeeMultiplier: 2500,
+              }),
+            ],
+            mode,
+            []
+          );
+
+          successCount++;
+          console.log(`✓ [${successCount}/${allReserves.length}] ${reserveAddress} (Invest + AddAllocation)`);
+        } catch (error) {
+          errorCount++;
+          console.error(`✗ Failed to whitelist ${reserveAddress}:`, error);
+        }
+      }
+
+      console.log(`\nBackfill complete!`);
+      console.log(`Success: ${successCount} reserves (both modes set)`);
+      console.log(`Errors: ${errorCount}`);
+    });
+
+  commands
     .command('update-vault-mgmt-fee')
     .requiredOption('--vault <string>', 'Vault address')
-    .requiredOption('--fee-bps <string>', 'Pubkey of the new admin')
+    .requiredOption('--fee-bps <string>', 'Management fee to set (in basis points)')
     .requiredOption(
       `--mode <string>`,
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
@@ -668,7 +905,11 @@ async function main() {
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
     .option(`--signer <string>`, 'If set, it will use the provided signer instead of the default one')
     .action(async ({ lut, addresses, mode, staging, multisig, signer }) => {
-      const env = await initEnv(multisig, staging);
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+      const ms = multisig ? address(multisig) : undefined;
+      const env = await initEnv(staging, ms);
       const lutAddress = address(lut);
       let txSigner = await env.getSigner();
       // if the signer is provided (path to a keypair) we use it, otherwise we use the default one
@@ -676,10 +917,6 @@ async function main() {
         txSigner = await parseKeypairFile(signer as string);
       }
       const addressesArr = addresses.split(' ').map((a: string) => address(a));
-
-      if (mode === 'multisig' && !multisig) {
-        throw new Error('If using multisig mode, multisig is required');
-      }
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
@@ -793,7 +1030,7 @@ async function main() {
   commands
     .command('update-vault-perf-fee')
     .requiredOption('--vault <string>', 'Vault address')
-    .requiredOption('--fee-bps <string>', 'Pubkey of the new admin')
+    .requiredOption('--fee-bps <string>', 'Performance fee to set (in basis points)')
     .requiredOption(
       `--mode <string>`,
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
@@ -1193,7 +1430,8 @@ async function main() {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
-      const env = await initEnv(staging, multisig);
+      const ms = multisig ? address(multisig) : undefined;
+      const env = await initEnv(staging, ms);
       const vaultAddress = address(vault);
 
       const kaminoManager = new KaminoManager(
@@ -1239,7 +1477,8 @@ async function main() {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
-      const env = await initEnv(multisig, staging);
+      const ms = multisig ? address(multisig) : undefined;
+      const env = await initEnv(staging, ms);
       const signer = await env.getSigner();
       const vaultAddress = address(vault);
 

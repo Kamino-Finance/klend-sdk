@@ -55,3 +55,8 @@ export type {
 } from "./updateGlobalConfig"
 export { updateGlobalConfigAdmin as updateKVaultGlobalConfigAdmin } from "./updateGlobalConfigAdmin"
 export type { UpdateGlobalConfigAdminAccounts as UpdateKVaultGlobalConfigAdminAccounts } from "./updateGlobalConfigAdmin"
+export { addUpdateWhitelistedReserve } from "./addUpdateWhitelistedReserve"
+export type {
+  AddUpdateWhitelistedReserveArgs,
+  AddUpdateWhitelistedReserveAccounts,
+} from "./addUpdateWhitelistedReserve"
