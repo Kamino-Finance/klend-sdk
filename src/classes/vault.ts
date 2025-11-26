@@ -139,6 +139,7 @@ import { Farms } from '@kamino-finance/farms-sdk';
 import { getFarmIncentives } from '@kamino-finance/farms-sdk/dist/utils/apy';
 import { computeReservesAllocation } from '../utils/vaultAllocation';
 import { getReserveFarmRewardsAPY } from '../utils/farmUtils';
+import { fetchKaminoCdnData } from '../utils/readCdnData';
 
 export const kaminoVaultId = address('KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd');
 export const kaminoVaultStagingId = address('stKvQfwRsQiKnLtMNVLHKS3exFJmZFsgfzBPWHECUYK');
@@ -2581,7 +2582,10 @@ export class KaminoVaultClient {
     const deserializedReserves = await batchFetch(vaultReservesAddresses, (chunk) =>
       this.loadReserializedReserves(chunk)
     );
-    const reservesAndOracles = await getTokenOracleData(this.getConnection(), deserializedReserves, oracleAccounts);
+    const [reservesAndOracles, cdnResourcesData] = await Promise.all([
+      getTokenOracleData(this.getConnection(), deserializedReserves, oracleAccounts),
+      fetchKaminoCdnData(),
+    ]);
     const kaminoReserves = new Map<Address, KaminoReserve>();
     reservesAndOracles.forEach(([reserve, oracle], index) => {
       if (!oracle) {
@@ -2596,7 +2600,8 @@ export class KaminoVaultClient {
         reserve,
         oracle,
         this.getConnection(),
-        this.recentSlotDurationMs
+        this.recentSlotDurationMs,
+        cdnResourcesData
       );
       kaminoReserves.set(kaminoReserve.address, kaminoReserve);
     });

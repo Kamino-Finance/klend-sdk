@@ -57,6 +57,7 @@ import { SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 import { noopSigner } from '../utils/signer';
 import { getRewardPerTimeUnitSecond } from './farm_utils';
 import { Scope, ScopeEntryMetadata } from '@kamino-finance/scope-sdk';
+import { fetchKaminoCdnData, KaminoCdnData } from '../utils/readCdnData';
 
 export type KaminoReserveRpcApi = GetProgramAccountsApi & GetAccountInfoApi & GetMultipleAccountsApi;
 
@@ -97,10 +98,11 @@ export class KaminoReserve {
     state: Reserve,
     tokenOraclePrice: TokenOracleData,
     rpc: Rpc<KaminoReserveRpcApi>,
-    recentSlotDurationMs: number
+    recentSlotDurationMs: number,
+    cdnResourcesData?: KaminoCdnData
   ): KaminoReserve {
     const reserve = new KaminoReserve(state, address, tokenOraclePrice, rpc, recentSlotDurationMs);
-    reserve.stats = reserve.formatReserveData(state);
+    reserve.stats = reserve.formatReserveData(state, cdnResourcesData?.deprecatedAssets ?? []);
     return reserve;
   }
 
@@ -779,13 +781,16 @@ export class KaminoReserve {
   }
 
   async load(tokenOraclePrice: TokenOracleData) {
-    const parsedData = await Reserve.fetch(this.rpc, this.address);
+    const [parsedData, cdnResourcesData] = await Promise.all([
+      Reserve.fetch(this.rpc, this.address),
+      fetchKaminoCdnData(),
+    ]);
     if (!parsedData) {
       throw Error(`Unable to parse data of reserve ${this.symbol}`);
     }
     this.state = parsedData;
     this.tokenOraclePrice = tokenOraclePrice;
-    this.stats = this.formatReserveData(parsedData);
+    this.stats = this.formatReserveData(parsedData, cdnResourcesData?.deprecatedAssets ?? []);
   }
 
   totalSupplyAPY(currentSlot: Slot) {
@@ -874,7 +879,7 @@ export class KaminoReserve {
     return { apy: aprToApy(apr, 365), apr };
   }
 
-  private formatReserveData(parsedData: ReserveFields): ReserveDataType {
+  private formatReserveData(parsedData: ReserveFields, deprecatedAssets: string[]): ReserveDataType {
     const mintTotalSupply = new Decimal(parsedData.collateral.mintTotalSupply.toString()).div(this.getMintFactor());
     let reserveStatus = ReserveStatus.Active;
     switch (parsedData.config.status) {
@@ -888,6 +893,8 @@ export class KaminoReserve {
         reserveStatus = ReserveStatus.Hidden;
         break;
     }
+    const reserveIsUIDeprecated =
+      deprecatedAssets.length > 0 ? deprecatedAssets.includes(this.address.toString()) : undefined;
     return {
       // Reserve config
 
@@ -910,6 +917,7 @@ export class KaminoReserve {
       depositLimitCrossedTimestamp: parsedData.liquidity.depositLimitCrossedTimestamp.toNumber(),
       borrowLimitCrossedTimestamp: parsedData.liquidity.borrowLimitCrossedTimestamp.toNumber(),
       borrowFactor: parsedData.config.borrowFactorPct.toNumber(),
+      isUIDeprecated: reserveIsUIDeprecated,
     };
   }
 

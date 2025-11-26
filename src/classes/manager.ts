@@ -104,6 +104,7 @@ import type { AccountInfoBase, AccountInfoWithJsonData, AccountInfoWithPubkey } 
 import { arrayElementConfigItems, ConfigUpdater } from './configItems';
 import { OracleMappings } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts';
 import { getReserveFarmRewardsAPY as getReserveFarmRewardsAPYUtils, ReserveIncentives } from '../utils/farmUtils';
+import { fetchKaminoCdnData } from '../utils/readCdnData';
 
 const base58Decoder = getBase58Decoder();
 
@@ -880,7 +881,10 @@ export class KaminoManager {
     const allReserves = reservePairs.map(([, reserve]) => reserve);
 
     // Get all oracle accounts
-    const allOracleAccounts = await getAllOracleAccounts(this.getRpc(), allReserves);
+    const [allOracleAccounts, cdnResourcesData] = await Promise.all([
+      getAllOracleAccounts(this.getRpc(), allReserves),
+      fetchKaminoCdnData(),
+    ]);
     // Group reserves by market
     const marketToReserve = new Map<Address, ReserveWithAddress[]>();
     for (const [reserveAddress, reserveState] of reservePairs) {
@@ -919,7 +923,8 @@ export class KaminoManager {
             state,
             oracle,
             this.getRpc(),
-            this.recentSlotDurationMs
+            this.recentSlotDurationMs,
+            cdnResourcesData
           );
           reservesByAddress.set(kaminoReserve.address, kaminoReserve);
         });

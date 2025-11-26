@@ -21,5 +21,4 @@ If you are running on a Mac (Apple Silicon), you need to target `x86_64` to have
 
 ## Development state
 
-These example are a work in progress.
-At the moment only deposit of liquidity to mint ctokens and redeem of ctokens for liquidity are presented.
+These example are a work in progress. At the moment only deposit of liquidity to mint ctokens and redeem of ctokens for liquidity are presented.
