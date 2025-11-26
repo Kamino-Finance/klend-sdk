@@ -587,6 +587,25 @@ export class KaminoManager {
   }
 
   /**
+   * This function creates instructions to buy shares (i.e. deposit) into a vault. It will also create ATA creation instructions for the vault shares that the user receives in return
+   * @param user - user to nuy shares
+   * @param vault - vault to buy shares from (if the state is not provided, it will be fetched)
+   * @param tokenAmount - token amount to be swapped for shares, in decimals (will be converted in lamports)
+   * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
+   * @returns - an instance of DepositIxs which contains the instructions to buy shares in vault and the instructions to stake the shares in the farm if the vault has a farm
+   */
+  async buyVaultSharesIxs(
+    user: TransactionSigner,
+    vault: KaminoVault,
+    tokenAmount: Decimal,
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    farmState?: FarmState
+  ): Promise<DepositIxs> {
+    return this._vaultClient.buySharesIxs(user, vault, tokenAmount, vaultReservesMap, farmState);
+  }
+
+  /**
    * This function creates instructions to stake the shares in the vault farm if the vault has a farm
    * @param user - user to stake
    * @param vault - vault to deposit into its farm (if the state is not provided, it will be fetched)
@@ -717,6 +736,27 @@ export class KaminoManager {
     farmState?: FarmState
   ): Promise<WithdrawIxs> {
     return this._vaultClient.withdrawIxs(user, vault, shareAmount, slot, vaultReservesMap, farmState);
+  }
+
+  /**
+   * This function will return the missing ATA creation instructions, as well as one or multiple withdraw instructions, based on how many reserves it's needed to withdraw from. This might have to be split in multiple transactions
+   * @param user - user to sell shares for vault tokens
+   * @param vault - vault to sell shares from
+   * @param shareAmount - share amount to sell (in tokens, not lamports), in order to withdraw everything, any value > user share amount
+   * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
+   * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
+   * @returns an array of instructions to create missing ATAs if needed and the withdraw instructions
+   */
+  async sellVaultSharesIxs(
+    user: TransactionSigner,
+    vault: KaminoVault,
+    shareAmount: Decimal,
+    slot: Slot,
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    farmState?: FarmState
+  ): Promise<WithdrawIxs> {
+    return this._vaultClient.sellSharesIxs(user, vault, shareAmount, slot, vaultReservesMap, farmState);
   }
 
   /**
