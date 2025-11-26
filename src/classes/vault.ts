@@ -49,9 +49,6 @@ import {
   buy,
   BuyAccounts,
   BuyArgs,
-  deposit,
-  DepositAccounts,
-  DepositArgs,
   giveUpPendingFees,
   GiveUpPendingFeesAccounts,
   GiveUpPendingFeesArgs,
@@ -73,9 +70,6 @@ import {
   updateVaultConfig,
   UpdateVaultConfigAccounts,
   UpdateVaultConfigArgs,
-  withdraw,
-  WithdrawAccounts,
-  WithdrawArgs,
   withdrawFromAvailable,
   WithdrawFromAvailableAccounts,
   WithdrawFromAvailableArgs,
@@ -1231,92 +1225,6 @@ export class KaminoVaultClient {
     createAtasIxs.push(createSharesAtaIxs);
 
     const eventAuthority = await getEventAuthorityPda(this._kaminoVaultProgramId);
-    const depositAccounts: DepositAccounts = {
-      user: user,
-      vaultState: vault.address,
-      tokenVault: vaultState.tokenVault,
-      tokenMint: vaultState.tokenMint,
-      baseVaultAuthority: vaultState.baseVaultAuthority,
-      sharesMint: vaultState.sharesMint,
-      userTokenAta: userTokenAta,
-      userSharesAta: userSharesAta,
-      tokenProgram: tokenProgramID,
-      klendProgram: this._kaminoLendProgramId,
-      sharesTokenProgram: TOKEN_PROGRAM_ADDRESS,
-      eventAuthority: eventAuthority,
-      program: this._kaminoVaultProgramId,
-    };
-
-    const depositArgs: DepositArgs = {
-      maxAmount: new BN(
-        numberToLamportsDecimal(tokenAmount, vaultState.tokenMintDecimals.toNumber()).floor().toString()
-      ),
-    };
-
-    let depositIx = deposit(depositArgs, depositAccounts, undefined, this._kaminoVaultProgramId);
-
-    const vaultReserves = this.getVaultReserves(vaultState);
-
-    const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
-    depositIx = this.appendRemainingAccountsForVaultReserves(depositIx, vaultReserves, vaultReservesState);
-
-    const depositIxs: DepositIxs = {
-      depositIxs: [...createAtasIxs, depositIx, ...closeAtasIxs],
-      stakeInFarmIfNeededIxs: [],
-    };
-
-    // if there is no farm, we can return the deposit instructions, otherwise include the stake ix in the response
-    if (!(await vault.hasFarm())) {
-      return depositIxs;
-    }
-
-    // if there is a farm, stake the shares
-    const stakeSharesIxs = await this.stakeSharesIxs(user, vault, undefined, farmState);
-    depositIxs.stakeInFarmIfNeededIxs = stakeSharesIxs;
-    return depositIxs;
-  }
-
-  // todo (silviu): after all tx indexing works for buy/sell ixs remove this function and use the buyIx in the deposit function above
-  async buySharesIxs(
-    user: TransactionSigner,
-    vault: KaminoVault,
-    tokenAmount: Decimal,
-    vaultReservesMap?: Map<Address, KaminoReserve>,
-    farmState?: FarmState
-  ): Promise<DepositIxs> {
-    const vaultState = await vault.getState();
-
-    const tokenProgramID = vaultState.tokenProgram;
-    const userTokenAta = await getAssociatedTokenAddress(vaultState.tokenMint, user.address, tokenProgramID);
-    const createAtasIxs: Instruction[] = [];
-    const closeAtasIxs: Instruction[] = [];
-    if (vaultState.tokenMint === WRAPPED_SOL_MINT) {
-      const [{ ata: wsolAta, createAtaIx: createWsolAtaIxn }] = await createAtasIdempotent(user, [
-        {
-          mint: WRAPPED_SOL_MINT,
-          tokenProgram: TOKEN_PROGRAM_ADDRESS,
-        },
-      ]);
-      createAtasIxs.push(createWsolAtaIxn);
-      const transferWsolIxs = getTransferWsolIxs(
-        user,
-        wsolAta,
-        lamports(
-          BigInt(numberToLamportsDecimal(tokenAmount, vaultState.tokenMintDecimals.toNumber()).ceil().toString())
-        )
-      );
-      createAtasIxs.push(...transferWsolIxs);
-    }
-
-    const [{ ata: userSharesAta, createAtaIx: createSharesAtaIxs }] = await createAtasIdempotent(user, [
-      {
-        mint: vaultState.sharesMint,
-        tokenProgram: TOKEN_PROGRAM_ADDRESS,
-      },
-    ]);
-    createAtasIxs.push(createSharesAtaIxs);
-
-    const eventAuthority = await getEventAuthorityPda(this._kaminoVaultProgramId);
     const buyAccounts: BuyAccounts = {
       user: user,
       vaultState: vault.address,
@@ -1531,135 +1439,6 @@ export class KaminoVaultClient {
     return withdrawIxs;
   }
 
-  async sellSharesIxs(
-    user: TransactionSigner,
-    vault: KaminoVault,
-    shareAmountToWithdraw: Decimal,
-    slot: Slot,
-    vaultReservesMap?: Map<Address, KaminoReserve>,
-    farmState?: FarmState
-  ): Promise<WithdrawIxs> {
-    const vaultState = await vault.getState();
-    const hasFarm = await vault.hasFarm();
-
-    const withdrawIxs: WithdrawIxs = {
-      unstakeFromFarmIfNeededIxs: [],
-      withdrawIxs: [],
-      postWithdrawIxs: [],
-    };
-
-    // compute the total shares the user has (in ATA + in farm) and check if they want to withdraw everything or just a part
-    let userSharesAtaBalance = new Decimal(0);
-    const userSharesAta = await getAssociatedTokenAddress(vaultState.sharesMint, user.address);
-    const userSharesAtaState = await fetchMaybeToken(this.getConnection(), userSharesAta);
-    if (userSharesAtaState.exists) {
-      const userSharesAtaBalanceInLamports = getTokenBalanceFromAccountInfoLamports(userSharesAtaState);
-      userSharesAtaBalance = userSharesAtaBalanceInLamports.div(
-        new Decimal(10).pow(vaultState.sharesMintDecimals.toString())
-      );
-    }
-
-    let userSharesInFarm = new Decimal(0);
-    if (hasFarm) {
-      userSharesInFarm = await getUserSharesInTokensStakedInFarm(
-        this.getConnection(),
-        user.address,
-        vaultState.vaultFarm,
-        vaultState.sharesMintDecimals.toNumber()
-      );
-    }
-
-    let sharesToWithdraw = shareAmountToWithdraw;
-    const totalUserShares = userSharesAtaBalance.add(userSharesInFarm);
-    let withdrawAllShares = false;
-    if (sharesToWithdraw.gt(totalUserShares)) {
-      sharesToWithdraw = new Decimal(U64_MAX.toString()).div(
-        new Decimal(10).pow(vaultState.sharesMintDecimals.toString())
-      );
-      withdrawAllShares = true;
-    }
-
-    // if not enough shares in ATA unstake from farm
-    const sharesInAtaAreEnoughForWithdraw = sharesToWithdraw.lte(userSharesAtaBalance);
-    if (hasFarm && !sharesInAtaAreEnoughForWithdraw && userSharesInFarm.gt(0)) {
-      // if we need to unstake we need to make sure share ata is created
-      const [{ createAtaIx }] = await createAtasIdempotent(user, [
-        {
-          mint: vaultState.sharesMint,
-          tokenProgram: TOKEN_PROGRAM_ADDRESS,
-        },
-      ]);
-      withdrawIxs.unstakeFromFarmIfNeededIxs.push(createAtaIx);
-      let shareLamportsToWithdraw = new Decimal(U64_MAX.toString());
-      if (!withdrawAllShares) {
-        const sharesToWithdrawFromFarm = sharesToWithdraw.sub(userSharesAtaBalance);
-        shareLamportsToWithdraw = collToLamportsDecimal(
-          sharesToWithdrawFromFarm,
-          vaultState.sharesMintDecimals.toNumber()
-        );
-      }
-      const unstakeAndWithdrawFromFarmIxs = await getFarmUnstakeAndWithdrawIxs(
-        this.getConnection(),
-        user,
-        shareLamportsToWithdraw,
-        vaultState.vaultFarm,
-        farmState
-      );
-      withdrawIxs.unstakeFromFarmIfNeededIxs.push(unstakeAndWithdrawFromFarmIxs.unstakeIx);
-      withdrawIxs.unstakeFromFarmIfNeededIxs.push(unstakeAndWithdrawFromFarmIxs.withdrawIx);
-    }
-
-    // if the vault has allocations withdraw otherwise wtihdraw from available ix
-    const vaultAllocation = vaultState.vaultAllocationStrategy.find(
-      (allocation) => allocation.reserve !== DEFAULT_PUBLIC_KEY
-    );
-
-    if (vaultAllocation) {
-      const withdrawFromVaultIxs = await this.sellSharesWithReserveIxs(
-        user,
-        vault,
-        sharesToWithdraw,
-        totalUserShares,
-        slot,
-        vaultReservesMap
-      );
-      withdrawIxs.withdrawIxs = withdrawFromVaultIxs;
-    } else {
-      const withdrawFromVaultIxs = await this.withdrawFromAvailableIxs(user, vault, sharesToWithdraw);
-      withdrawIxs.withdrawIxs = withdrawFromVaultIxs;
-    }
-
-    // if the vault is for SOL return the ix to unwrap the SOL
-    if (vaultState.tokenMint === WRAPPED_SOL_MINT) {
-      const userWsolAta = await getAssociatedTokenAddress(WRAPPED_SOL_MINT, user.address);
-      const unwrapIx = getCloseAccountInstruction(
-        {
-          account: userWsolAta,
-          owner: user,
-          destination: user.address,
-        },
-        { programAddress: TOKEN_PROGRAM_ADDRESS }
-      );
-      withdrawIxs.postWithdrawIxs.push(unwrapIx);
-    }
-
-    // if we burn all of user's shares close its shares ATA
-    const burnAllUserShares = sharesToWithdraw.gt(totalUserShares);
-    if (burnAllUserShares) {
-      const closeAtaIx = getCloseAccountInstruction(
-        {
-          account: userSharesAta,
-          owner: user,
-          destination: user.address,
-        },
-        { programAddress: TOKEN_PROGRAM_ADDRESS }
-      );
-      withdrawIxs.postWithdrawIxs.push(closeAtaIx);
-    }
-
-    return withdrawIxs;
-  }
-
   private async withdrawFromAvailableIxs(
     user: TransactionSigner,
     vault: KaminoVault,
@@ -1688,115 +1467,6 @@ export class KaminoVaultClient {
     return [createAtaIx, withdrawFromAvailableIxn];
   }
 
-  private async sellSharesWithReserveIxs(
-    user: TransactionSigner,
-    vault: KaminoVault,
-    shareAmount: Decimal,
-    allUserShares: Decimal,
-    slot: Slot,
-    vaultReservesMap?: Map<Address, KaminoReserve>
-  ): Promise<Instruction[]> {
-    const vaultState = await vault.getState();
-
-    const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
-    const userSharesAta = await getAssociatedTokenAddress(vaultState.sharesMint, user.address);
-    const [{ ata: userTokenAta, createAtaIx }] = await createAtasIdempotent(user, [
-      {
-        mint: vaultState.tokenMint,
-        tokenProgram: vaultState.tokenProgram,
-      },
-    ]);
-
-    const withdrawAllShares = shareAmount.gte(allUserShares);
-    const actualSharesToWithdraw = shareAmount.lte(allUserShares) ? shareAmount : allUserShares;
-    const shareLamportsToWithdraw = collToLamportsDecimal(
-      actualSharesToWithdraw,
-      vaultState.sharesMintDecimals.toNumber()
-    );
-    const tokensPerShare = await this.getTokensPerShareSingleVault(vault, slot);
-    const sharesPerToken = new Decimal(1).div(tokensPerShare);
-    const tokensToWithdraw = shareLamportsToWithdraw.mul(tokensPerShare);
-    let tokenLeftToWithdraw = tokensToWithdraw;
-    const availableTokens = new Decimal(vaultState.tokenAvailable.toString());
-    tokenLeftToWithdraw = tokenLeftToWithdraw.sub(availableTokens);
-
-    type ReserveWithTokensToWithdraw = { reserve: Address; shares: Decimal };
-
-    const reserveWithSharesAmountToWithdraw: ReserveWithTokensToWithdraw[] = [];
-    let isFirstWithdraw = true;
-
-    if (tokenLeftToWithdraw.lte(0)) {
-      // Availabe enough to withdraw all - using the first existent reserve
-      const firstReserve = vaultState.vaultAllocationStrategy.find((reserve) => reserve.reserve !== DEFAULT_PUBLIC_KEY);
-      if (withdrawAllShares) {
-        reserveWithSharesAmountToWithdraw.push({
-          reserve: firstReserve!.reserve,
-          shares: new Decimal(U64_MAX.toString()),
-        });
-      } else {
-        reserveWithSharesAmountToWithdraw.push({
-          reserve: firstReserve!.reserve,
-          shares: shareLamportsToWithdraw,
-        });
-      }
-    } else {
-      // Get decreasing order sorted available liquidity to withdraw from each reserve allocated to
-      const reserveAllocationAvailableLiquidityToWithdraw = await this.getReserveAllocationAvailableLiquidityToWithdraw(
-        vault,
-        slot,
-        vaultReservesState
-      );
-      // sort
-      const reserveAllocationAvailableLiquidityToWithdrawSorted = [
-        ...reserveAllocationAvailableLiquidityToWithdraw.entries(),
-      ].sort((a, b) => b[1].sub(a[1]).toNumber());
-
-      reserveAllocationAvailableLiquidityToWithdrawSorted.forEach(([key, availableLiquidityToWithdraw], _) => {
-        if (tokenLeftToWithdraw.gt(0)) {
-          let tokensToWithdrawFromReserve = Decimal.min(tokenLeftToWithdraw, availableLiquidityToWithdraw);
-          if (isFirstWithdraw) {
-            tokensToWithdrawFromReserve = tokensToWithdrawFromReserve.add(availableTokens);
-            isFirstWithdraw = false;
-          }
-          if (withdrawAllShares) {
-            reserveWithSharesAmountToWithdraw.push({ reserve: key, shares: new Decimal(U64_MAX.toString()) });
-          } else {
-            // round up to the nearest integer the shares to withdraw
-            const sharesToWithdrawFromReserve = tokensToWithdrawFromReserve.mul(sharesPerToken).floor();
-            reserveWithSharesAmountToWithdraw.push({ reserve: key, shares: sharesToWithdrawFromReserve });
-          }
-
-          tokenLeftToWithdraw = tokenLeftToWithdraw.sub(tokensToWithdrawFromReserve);
-        }
-      });
-    }
-
-    const withdrawIxs: Instruction[] = [];
-    withdrawIxs.push(createAtaIx);
-    for (let reserveIndex = 0; reserveIndex < reserveWithSharesAmountToWithdraw.length; reserveIndex++) {
-      const reserveWithTokens = reserveWithSharesAmountToWithdraw[reserveIndex];
-      const reserveState = vaultReservesState.get(reserveWithTokens.reserve);
-      if (reserveState === undefined) {
-        throw new Error(`Reserve ${reserveWithTokens.reserve} not found in vault reserves map`);
-      }
-      const marketAddress = reserveState.state.lendingMarket;
-
-      const withdrawFromReserveIx = await this.sellIx(
-        user,
-        vault,
-        vaultState,
-        marketAddress,
-        { address: reserveWithTokens.reserve, state: reserveState.state },
-        userSharesAta,
-        userTokenAta,
-        reserveWithTokens.shares,
-        vaultReservesState
-      );
-      withdrawIxs.push(withdrawFromReserveIx);
-    }
-
-    return withdrawIxs;
-  }
   private async withdrawWithReserveIxs(
     user: TransactionSigner,
     vault: KaminoVault,
@@ -1890,7 +1560,7 @@ export class KaminoVaultClient {
       }
       const marketAddress = reserveState.state.lendingMarket;
 
-      const withdrawFromReserveIx = await this.withdrawIx(
+      const sellIx = await this.sellIx(
         user,
         vault,
         vaultState,
@@ -1901,7 +1571,7 @@ export class KaminoVaultClient {
         reserveWithTokens.shares,
         vaultReservesState
       );
-      withdrawIxs.push(withdrawFromReserveIx);
+      withdrawIxs.push(sellIx);
     }
 
     return withdrawIxs;
@@ -2175,65 +1845,6 @@ export class KaminoVaultClient {
     sellIxn = this.appendRemainingAccountsForVaultReserves(sellIxn, vaultReserves, vaultReservesState);
 
     return sellIxn;
-  }
-
-  private async withdrawIx(
-    user: TransactionSigner,
-    vault: KaminoVault,
-    vaultState: VaultState,
-    marketAddress: Address,
-    reserve: ReserveWithAddress,
-    userSharesAta: Address,
-    userTokenAta: Address,
-    shareAmountLamports: Decimal,
-    vaultReservesState: Map<Address, KaminoReserve>
-  ): Promise<Instruction> {
-    const [lendingMarketAuth] = await lendingMarketAuthPda(marketAddress, this._kaminoLendProgramId);
-
-    const globalConfig = await getKvaultGlobalConfigPda(this._kaminoVaultProgramId);
-    const eventAuthority = await getEventAuthorityPda(this._kaminoVaultProgramId);
-    const withdrawAccounts: WithdrawAccounts = {
-      withdrawFromAvailable: {
-        user,
-        vaultState: vault.address,
-        globalConfig: globalConfig,
-        tokenVault: vaultState.tokenVault,
-        baseVaultAuthority: vaultState.baseVaultAuthority,
-        userTokenAta: userTokenAta,
-        tokenMint: vaultState.tokenMint,
-        userSharesAta: userSharesAta,
-        sharesMint: vaultState.sharesMint,
-        tokenProgram: vaultState.tokenProgram,
-        sharesTokenProgram: TOKEN_PROGRAM_ADDRESS,
-        klendProgram: this._kaminoLendProgramId,
-        eventAuthority: eventAuthority,
-        program: this._kaminoVaultProgramId,
-      },
-      withdrawFromReserveAccounts: {
-        vaultState: vault.address,
-        reserve: reserve.address,
-        ctokenVault: await getCTokenVaultPda(vault.address, reserve.address, this._kaminoVaultProgramId),
-        lendingMarket: marketAddress,
-        lendingMarketAuthority: lendingMarketAuth,
-        reserveLiquiditySupply: reserve.state.liquidity.supplyVault,
-        reserveCollateralMint: reserve.state.collateral.mintPubkey,
-        reserveCollateralTokenProgram: TOKEN_PROGRAM_ADDRESS,
-        instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
-      },
-      eventAuthority: eventAuthority,
-      program: this._kaminoVaultProgramId,
-    };
-
-    const withdrawArgs: WithdrawArgs = {
-      sharesAmount: new BN(shareAmountLamports.floor().toString()),
-    };
-
-    let withdrawIxn = withdraw(withdrawArgs, withdrawAccounts, undefined, this._kaminoVaultProgramId);
-
-    const vaultReserves = this.getVaultReserves(vaultState);
-    withdrawIxn = this.appendRemainingAccountsForVaultReserves(withdrawIxn, vaultReserves, vaultReservesState);
-
-    return withdrawIxn;
   }
 
   private async withdrawFromAvailableIx(
