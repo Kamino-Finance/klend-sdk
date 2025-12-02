@@ -23,6 +23,9 @@ import {
   AccountInfoWithPubkey,
   AccountInfoBase,
   AccountInfoWithJsonData,
+  Option,
+  some,
+  none,
 } from '@solana/kit';
 import {
   AllOracleAccounts,
@@ -40,18 +43,28 @@ import {
   WRAPPED_SOL_MINT,
 } from '../lib';
 import {
+  addUpdateWhitelistedReserve,
+  AddUpdateWhitelistedReserveAccounts,
+  AddUpdateWhitelistedReserveArgs,
+  buy,
+  BuyAccounts,
+  BuyArgs,
   deposit,
   DepositAccounts,
   DepositArgs,
   giveUpPendingFees,
   GiveUpPendingFeesAccounts,
   GiveUpPendingFeesArgs,
+  initKVaultGlobalConfig,
   initVault,
   InitVaultAccounts,
   invest,
   InvestAccounts,
   removeAllocation,
   RemoveAllocationAccounts,
+  sell,
+  SellAccounts,
+  SellArgs,
   updateAdmin,
   UpdateAdminAccounts,
   updateReserveAllocation,
@@ -69,7 +82,7 @@ import {
   withdrawPendingFees,
   WithdrawPendingFeesAccounts,
 } from '../@codegen/kvault/instructions';
-import { VaultConfigField, VaultConfigFieldKind } from '../@codegen/kvault/types';
+import { UpdateReserveWhitelistModeKind, VaultConfigField, VaultConfigFieldKind } from '../@codegen/kvault/types';
 import { VaultState } from '../@codegen/kvault/accounts';
 import Decimal from 'decimal.js';
 import { bpsToPct, decodeVaultName, numberToLamportsDecimal, parseTokenSymbol, pubkeyHashMapToJson } from './utils';
@@ -85,6 +98,8 @@ import {
   getTokenAccountAmount,
   getTokenAccountMint,
   lendingMarketAuthPda,
+  parseBooleanFlag,
+  programDataPda,
   SECONDS_PER_YEAR,
   U64_MAX,
   VAULT_INITIAL_DEPOSIT,
@@ -93,6 +108,7 @@ import { getAccountOwner, getProgramAccounts } from '../utils/rpc';
 import {
   AcceptVaultOwnershipIxs,
   APYs,
+  CreateVaultFarm,
   DepositIxs,
   DisinvestAllReservesIxs,
   InitVaultIxs,
@@ -107,9 +123,11 @@ import {
 } from './vault_types';
 import { batchFetch, collToLamportsDecimal, ZERO } from '@kamino-finance/kliquidity-sdk';
 import { FullBPSDecimal } from '@kamino-finance/kliquidity-sdk/dist/utils/CreationParameters';
-import { FarmIncentives, FarmState, getUserStatePDA } from '@kamino-finance/farms-sdk/dist';
+import { FarmConfigOption, FarmIncentives, FarmState, getUserStatePDA } from '@kamino-finance/farms-sdk/dist';
 import { getAccountsInLut, initLookupTableIx, insertIntoLookupTableIxs } from '../utils/lookupTable';
 import {
+  FARMS_ADMIN_MAINNET,
+  FARMS_GLOBAL_CONFIG_MAINNET,
   getFarmStakeIxs,
   getFarmUnstakeAndWithdrawIxs,
   getSharesInFarmUserPosition,
@@ -127,6 +145,7 @@ import { Farms } from '@kamino-finance/farms-sdk';
 import { getFarmIncentives } from '@kamino-finance/farms-sdk/dist/utils/apy';
 import { computeReservesAllocation } from '../utils/vaultAllocation';
 import { getReserveFarmRewardsAPY } from '../utils/farmUtils';
+import { fetchKaminoCdnData } from '../utils/readCdnData';
 
 export const kaminoVaultId = address('KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd');
 export const kaminoVaultStagingId = address('stKvQfwRsQiKnLtMNVLHKS3exFJmZFsgfzBPWHECUYK');
@@ -137,6 +156,8 @@ const BASE_VAULT_AUTHORITY_SEED = 'authority';
 const SHARES_SEED = 'shares';
 const EVENT_AUTHORITY_SEED = '__event_authority';
 export const METADATA_SEED = 'metadata';
+const GLOBAL_CONFIG_STATE_SEED = 'global_config';
+const WHITELISTED_RESERVES_SEED = 'whitelisted_reserves';
 
 export const METADATA_PROGRAM_ID: Address = address('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
 
@@ -213,6 +234,29 @@ export class KaminoVaultClient {
   }
 
   /**
+   * This method initializes the kvault global config (one off, needs to be signed by program owner)
+   * @param admin - the admin of the kvault program
+   * @returns - an instruction to initialize the kvault global config
+   */
+  async initKvaultGlobalConfigIx(admin: TransactionSigner) {
+    const globalConfigAddress = await getKvaultGlobalConfigPda(this.getProgramID());
+
+    const programData = await programDataPda(this.getProgramID());
+    const ix = initKVaultGlobalConfig(
+      {
+        payer: admin,
+        globalConfig: globalConfigAddress,
+        programData: programData,
+        systemProgram: SYSTEM_PROGRAM_ADDRESS,
+        rent: SYSVAR_RENT_ADDRESS,
+      },
+      undefined,
+      this.getProgramID()
+    );
+    return ix;
+  }
+
+  /**
    * This method will create a vault with a given config. The config can be changed later on, but it is recommended to set it up correctly from the start
    * @param vaultConfig - the config object used to create a vault
    * @returns vault: the keypair of the vault, used to sign the initialization transaction; initVaultIxs: a struct with ixs to initialize the vault and its lookup table + populateLUTIxs, a list to populate the lookup table which has to be executed in a separate transaction
@@ -285,6 +329,8 @@ export class KaminoVaultClient {
     };
     const initVaultIx = initVault(initVaultAccounts, undefined, this._kaminoVaultProgramId);
 
+    const createVaultFarm = await this.createVaultFarm(vaultConfig.admin, vaultState.address, sharesMint);
+
     // create and set up the vault lookup table
     const [createLUTIx, lut] = await initLookupTableIx(vaultConfig.admin, slot);
 
@@ -300,6 +346,8 @@ export class KaminoVaultClient {
       TOKEN_PROGRAM_ADDRESS,
       this._kaminoLendProgramId,
       SYSVAR_INSTRUCTIONS_ADDRESS,
+      createVaultFarm.farm.address,
+      FARMS_GLOBAL_CONFIG_MAINNET,
     ];
     const insertIntoLUTIxs = await insertIntoLookupTableIxs(
       this.getConnection(),
@@ -309,7 +357,7 @@ export class KaminoVaultClient {
       []
     );
 
-    const setLUTIx = this.updateUninitialisedVaultConfigIx(
+    const setLUTIx = await this.updateUninitialisedVaultConfigIx(
       vaultConfig.admin,
       vaultState.address,
       new VaultConfigField.LookupTable(),
@@ -319,7 +367,7 @@ export class KaminoVaultClient {
     const ixs = [createVaultIx, initVaultIx, setLUTIx];
 
     if (vaultConfig.getPerformanceFeeBps() > 0) {
-      const setPerformanceFeeIx = this.updateUninitialisedVaultConfigIx(
+      const setPerformanceFeeIx = await this.updateUninitialisedVaultConfigIx(
         vaultConfig.admin,
         vaultState.address,
         new VaultConfigField.PerformanceFeeBps(),
@@ -328,7 +376,7 @@ export class KaminoVaultClient {
       ixs.push(setPerformanceFeeIx);
     }
     if (vaultConfig.getManagementFeeBps() > 0) {
-      const setManagementFeeIx = this.updateUninitialisedVaultConfigIx(
+      const setManagementFeeIx = await this.updateUninitialisedVaultConfigIx(
         vaultConfig.admin,
         vaultState.address,
         new VaultConfigField.ManagementFeeBps(),
@@ -337,7 +385,7 @@ export class KaminoVaultClient {
       ixs.push(setManagementFeeIx);
     }
     if (vaultConfig.name && vaultConfig.name.length > 0) {
-      const setNameIx = this.updateUninitialisedVaultConfigIx(
+      const setNameIx = await this.updateUninitialisedVaultConfigIx(
         vaultConfig.admin,
         vaultState.address,
         new VaultConfigField.Name(),
@@ -345,6 +393,12 @@ export class KaminoVaultClient {
       );
       ixs.push(setNameIx);
     }
+    const setFarmIx = await this.updateUninitialisedVaultConfigIx(
+      vaultConfig.admin,
+      vaultState.address,
+      new VaultConfigField.Farm(),
+      createVaultFarm.farm.address
+    );
 
     const metadataIx = await this.getSetSharesMetadataIx(
       this.getConnection(),
@@ -366,7 +420,54 @@ export class KaminoVaultClient {
         populateLUTIxs: insertIntoLUTIxs,
         cleanupIxs,
         initSharesMetadataIx: metadataIx,
+        createVaultFarm,
+        setFarmToVaultIx: setFarmIx,
       },
+    };
+  }
+
+  /**
+   * This method creates a farm for a vault
+   * @param signer - the signer of the transaction
+   * @param vaultSharesMint - the mint of the vault shares
+   * @param vaultAddress - the address of the vault (it doesn't need to be already initialized)
+   * @returns a struct with the farm, the setup farm ixs and the update farm ixs
+   */
+  async createVaultFarm(
+    signer: TransactionSigner,
+    vaultAddress: Address,
+    vaultSharesMint: Address
+  ): Promise<CreateVaultFarm> {
+    const farmsSDK = new Farms(this._rpc);
+
+    const farm = await generateKeyPairSigner();
+    const ixs = await farmsSDK.createFarmIxs(signer, farm, FARMS_GLOBAL_CONFIG_MAINNET, vaultSharesMint);
+
+    const updatePendingFarmAdminIx = await farmsSDK.updateFarmConfigIx(
+      signer,
+      farm.address,
+      DEFAULT_PUBLIC_KEY,
+      new FarmConfigOption.UpdatePendingFarmAdmin(),
+      FARMS_ADMIN_MAINNET,
+      undefined,
+      undefined,
+      true
+    );
+    const updateFarmVaultIdIx = await farmsSDK.updateFarmConfigIx(
+      signer,
+      farm.address,
+      DEFAULT_PUBLIC_KEY,
+      new FarmConfigOption.UpdateVaultId(),
+      vaultAddress,
+      undefined,
+      undefined,
+      true
+    );
+
+    return {
+      farm,
+      setupFarmIxs: ixs,
+      updateFarmIxs: [updatePendingFarmAdminIx, updateFarmVaultIdIx],
     };
   }
 
@@ -422,6 +523,12 @@ export class KaminoVaultClient {
       this._kaminoVaultProgramId
     );
 
+    const reserveWhitelistEntryOption = await getReserveWhitelistEntryIfExists(
+      reserveAllocationConfig.getReserveAddress(),
+      this.getConnection(),
+      this._kaminoVaultProgramId
+    );
+
     const vaultAdmin = parseVaultAdmin(vaultState, vaultAdminAuthority);
     const updateReserveAllocationAccounts: UpdateReserveAllocationAccounts = {
       signer: vaultAdmin,
@@ -430,6 +537,7 @@ export class KaminoVaultClient {
       reserveCollateralMint: reserveState.collateral.mintPubkey,
       reserve: reserveAllocationConfig.getReserveAddress(),
       ctokenVault: cTokenVault,
+      reserveWhitelistEntry: reserveWhitelistEntryOption,
       systemProgram: SYSTEM_PROGRAM_ADDRESS,
       rent: SYSVAR_RENT_ADDRESS,
       reserveCollateralTokenProgram: TOKEN_PROGRAM_ADDRESS,
@@ -696,7 +804,8 @@ export class KaminoVaultClient {
    * @param vault the vault to update
    * @param mode the field to update (based on VaultConfigFieldKind enum)
    * @param value the value to update the field with
-   * @param [vaultAdminAuthority] the signer of the transaction. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx
+   * @param [adminAuthority] the signer of the transaction. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx.
+   *        The global admin should be passed in when wanting to change the AllowAllocationsInWhitelistedReservesOnly or AllowInvestInWhitelistedReservesOnly fields to false
    * @param [lutIxsSigner] the signer of the transaction to be used for the lookup table instructions. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx
    * @param [skipLutUpdate] if true, the lookup table instructions will not be included in the returned instructions
    * @returns a struct that contains the instruction to update the field and an optional list of instructions to update the lookup table
@@ -705,40 +814,25 @@ export class KaminoVaultClient {
     vault: KaminoVault,
     mode: VaultConfigFieldKind,
     value: string,
-    vaultAdminAuthority?: TransactionSigner,
+    adminAuthority?: TransactionSigner,
     lutIxsSigner?: TransactionSigner,
     skipLutUpdate: boolean = false
   ): Promise<UpdateVaultConfigIxs> {
     const vaultState: VaultState = await vault.getState();
-    const admin = parseVaultAdmin(vaultState, vaultAdminAuthority);
+    const admin = parseVaultAdmin(vaultState, adminAuthority);
 
+    const globalConfig = await getKvaultGlobalConfigPda(this._kaminoVaultProgramId);
     const updateVaultConfigAccs: UpdateVaultConfigAccounts = {
-      vaultAdminAuthority: admin,
+      signer: admin,
+      globalConfig: globalConfig,
       vaultState: vault.address,
       klendProgram: this._kaminoLendProgramId,
     };
-    if (vaultAdminAuthority) {
-      updateVaultConfigAccs.vaultAdminAuthority = vaultAdminAuthority;
-    }
 
     const updateVaultConfigArgs: UpdateVaultConfigArgs = {
       entry: mode,
-      data: Buffer.from([0]),
+      data: this.getValueForModeAsBuffer(mode, value),
     };
-
-    if (isNaN(+value)) {
-      if (mode.kind === new VaultConfigField.Name().kind) {
-        const data = Array.from(this.encodeVaultName(value));
-        updateVaultConfigArgs.data = Buffer.from(data);
-      } else {
-        const data = address(value);
-        updateVaultConfigArgs.data = Buffer.from(addressEncoder.encode(data));
-      }
-    } else {
-      const buffer = Buffer.alloc(8);
-      buffer.writeBigUInt64LE(BigInt(value.toString()));
-      updateVaultConfigArgs.data = buffer;
-    }
 
     const vaultReserves = this.getVaultReserves(vaultState);
     const vaultReservesState = await this.loadVaultReserves(vaultState);
@@ -803,6 +897,38 @@ export class KaminoVaultClient {
     return updateVaultConfigIxs;
   }
 
+  /**
+   * Add or update a reserve whitelist entry. This controls whether the reserve is whitelisted for adding/updating
+   * allocations or for invest, depending on the mode parameter.
+   *
+   * @param reserve - Address of the reserve to whitelist
+   * @param mode - The whitelist mode: either 'Invest' or 'AddAllocation' with a value (1 = allow, 0 = deny)
+   * @param globalAdmin - The global admin that signs the transaction
+   * @returns - An instruction to add/update the whitelisted reserve
+   */
+  async addUpdateWhitelistedReserveIx(
+    reserve: Address,
+    mode: UpdateReserveWhitelistModeKind,
+    globalAdmin: TransactionSigner
+  ): Promise<Instruction> {
+    const globalConfig = await getKvaultGlobalConfigPda(this._kaminoVaultProgramId);
+    const reserveWhitelistEntry = await getReserveWhitelistEntryPda(reserve, this._kaminoVaultProgramId);
+
+    const accounts: AddUpdateWhitelistedReserveAccounts = {
+      globalAdmin,
+      globalConfig,
+      reserve,
+      reserveWhitelistEntry,
+      systemProgram: SYSTEM_PROGRAM_ADDRESS,
+    };
+
+    const args: AddUpdateWhitelistedReserveArgs = {
+      update: mode,
+    };
+
+    return addUpdateWhitelistedReserve(args, accounts, undefined, this._kaminoVaultProgramId);
+  }
+
   /** Sets the farm where the shares can be staked. This is store in vault state and a vault can only have one farm, so the new farm will ovveride the old farm
    * @param vault - vault to set the farm for
    * @param farm - the farm where the vault shares can be staked
@@ -835,43 +961,34 @@ export class KaminoVaultClient {
   }
 
   /**
-   * This method updates the vault config for a vault that
-   * @param admin - address of vault to be updated
+   * This method updates the vault config during vault initialization, within the same transaction
+   * where the vault is created. Use this when the vault state is not yet committed to the chain
+   * and cannot be fetched via RPC. For updates to existing vaults, use updateVaultConfigIxs instead.
+   *
+   * @param admin - the admin that signs the transaction
    * @param vault - address of vault to be updated
    * @param mode - the field to be updated
    * @param value - the new value for the field to be updated (number or pubkey)
    * @returns - an instruction to update the vault config
    */
-  private updateUninitialisedVaultConfigIx(
+  private async updateUninitialisedVaultConfigIx(
     admin: TransactionSigner,
     vault: Address,
     mode: VaultConfigFieldKind,
     value: string
-  ): Instruction {
+  ): Promise<Instruction> {
+    const globalConfig = await getKvaultGlobalConfigPda(this._kaminoVaultProgramId);
     const updateVaultConfigAccs: UpdateVaultConfigAccounts = {
-      vaultAdminAuthority: admin,
+      signer: admin,
+      globalConfig: globalConfig,
       vaultState: vault,
       klendProgram: this._kaminoLendProgramId,
     };
 
     const updateVaultConfigArgs: UpdateVaultConfigArgs = {
       entry: mode,
-      data: Buffer.from([0]),
+      data: this.getValueForModeAsBuffer(mode, value),
     };
-
-    if (isNaN(+value)) {
-      if (mode.kind === new VaultConfigField.Name().kind) {
-        const data = Array.from(this.encodeVaultName(value));
-        updateVaultConfigArgs.data = Buffer.from(data);
-      } else {
-        const data = address(value);
-        updateVaultConfigArgs.data = Buffer.from(addressEncoder.encode(data));
-      }
-    } else {
-      const buffer = Buffer.alloc(8);
-      buffer.writeBigUInt64LE(BigInt(value.toString()));
-      updateVaultConfigArgs.data = buffer;
-    }
 
     const updateVaultConfigIx = updateVaultConfig(
       updateVaultConfigArgs,
@@ -1082,6 +1199,27 @@ export class KaminoVaultClient {
     vaultReservesMap?: Map<Address, KaminoReserve>,
     farmState?: FarmState
   ): Promise<DepositIxs> {
+    return this.buildShareEntryIxs('deposit', user, vault, tokenAmount, vaultReservesMap, farmState);
+  }
+
+  async buySharesIxs(
+    user: TransactionSigner,
+    vault: KaminoVault,
+    tokenAmount: Decimal,
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    farmState?: FarmState
+  ): Promise<DepositIxs> {
+    return this.buildShareEntryIxs('buy', user, vault, tokenAmount, vaultReservesMap, farmState);
+  }
+
+  private async buildShareEntryIxs(
+    mode: 'deposit' | 'buy',
+    user: TransactionSigner,
+    vault: KaminoVault,
+    tokenAmount: Decimal,
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    farmState?: FarmState
+  ): Promise<DepositIxs> {
     const vaultState = await vault.getState();
 
     const tokenProgramID = vaultState.tokenProgram;
@@ -1115,49 +1253,66 @@ export class KaminoVaultClient {
     createAtasIxs.push(createSharesAtaIxs);
 
     const eventAuthority = await getEventAuthorityPda(this._kaminoVaultProgramId);
-    const depositAccounts: DepositAccounts = {
-      user: user,
-      vaultState: vault.address,
-      tokenVault: vaultState.tokenVault,
-      tokenMint: vaultState.tokenMint,
-      baseVaultAuthority: vaultState.baseVaultAuthority,
-      sharesMint: vaultState.sharesMint,
-      userTokenAta: userTokenAta,
-      userSharesAta: userSharesAta,
-      tokenProgram: tokenProgramID,
-      klendProgram: this._kaminoLendProgramId,
-      sharesTokenProgram: TOKEN_PROGRAM_ADDRESS,
-      eventAuthority: eventAuthority,
-      program: this._kaminoVaultProgramId,
-    };
-
-    const depositArgs: DepositArgs = {
-      maxAmount: new BN(
-        numberToLamportsDecimal(tokenAmount, vaultState.tokenMintDecimals.toNumber()).floor().toString()
-      ),
-    };
-
-    let depositIx = deposit(depositArgs, depositAccounts, undefined, this._kaminoVaultProgramId);
+    const tokenAmountLamports = numberToLamportsDecimal(tokenAmount, vaultState.tokenMintDecimals.toNumber()).floor();
+    let entryIx: Instruction;
+    if (mode === 'deposit') {
+      const depositAccounts: DepositAccounts = {
+        user,
+        vaultState: vault.address,
+        tokenVault: vaultState.tokenVault,
+        tokenMint: vaultState.tokenMint,
+        baseVaultAuthority: vaultState.baseVaultAuthority,
+        sharesMint: vaultState.sharesMint,
+        userTokenAta,
+        userSharesAta,
+        tokenProgram: tokenProgramID,
+        klendProgram: this._kaminoLendProgramId,
+        sharesTokenProgram: TOKEN_PROGRAM_ADDRESS,
+        eventAuthority,
+        program: this._kaminoVaultProgramId,
+      };
+      const depositArgs: DepositArgs = {
+        maxAmount: new BN(tokenAmountLamports.toString()),
+      };
+      entryIx = deposit(depositArgs, depositAccounts, undefined, this._kaminoVaultProgramId);
+    } else {
+      const buyAccounts: BuyAccounts = {
+        user,
+        vaultState: vault.address,
+        tokenVault: vaultState.tokenVault,
+        tokenMint: vaultState.tokenMint,
+        baseVaultAuthority: vaultState.baseVaultAuthority,
+        sharesMint: vaultState.sharesMint,
+        userTokenAta,
+        userSharesAta,
+        tokenProgram: tokenProgramID,
+        klendProgram: this._kaminoLendProgramId,
+        sharesTokenProgram: TOKEN_PROGRAM_ADDRESS,
+        eventAuthority,
+        program: this._kaminoVaultProgramId,
+      };
+      const buyArgs: BuyArgs = {
+        maxAmount: new BN(tokenAmountLamports.toString()),
+      };
+      entryIx = buy(buyArgs, buyAccounts, undefined, this._kaminoVaultProgramId);
+    }
 
     const vaultReserves = this.getVaultReserves(vaultState);
-
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
-    depositIx = this.appendRemainingAccountsForVaultReserves(depositIx, vaultReserves, vaultReservesState);
+    entryIx = this.appendRemainingAccountsForVaultReserves(entryIx, vaultReserves, vaultReservesState);
 
-    const depositIxs: DepositIxs = {
-      depositIxs: [...createAtasIxs, depositIx, ...closeAtasIxs],
+    const result: DepositIxs = {
+      depositIxs: [...createAtasIxs, entryIx, ...closeAtasIxs],
       stakeInFarmIfNeededIxs: [],
     };
 
-    // if there is no farm, we can return the deposit instructions, otherwise include the stake ix in the response
     if (!(await vault.hasFarm())) {
-      return depositIxs;
+      return result;
     }
 
-    // if there is a farm, stake the shares
     const stakeSharesIxs = await this.stakeSharesIxs(user, vault, undefined, farmState);
-    depositIxs.stakeInFarmIfNeededIxs = stakeSharesIxs;
-    return depositIxs;
+    result.stakeInFarmIfNeededIxs = stakeSharesIxs;
+    return result;
   }
 
   /**
@@ -1201,6 +1356,39 @@ export class KaminoVaultClient {
    * @returns an array of instructions to create missing ATAs if needed and the withdraw instructions
    */
   async withdrawIxs(
+    user: TransactionSigner,
+    vault: KaminoVault,
+    shareAmountToWithdraw: Decimal,
+    slot: Slot,
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    farmState?: FarmState
+  ): Promise<WithdrawIxs> {
+    return this.buildShareExitIxs('withdraw', user, vault, shareAmountToWithdraw, slot, vaultReservesMap, farmState);
+  }
+
+  /**
+   * This function will return the missing ATA creation instructions, as well as one or multiple withdraw instructions, based on how many reserves it's needed to withdraw from. This might have to be split in multiple transactions
+   * @param user - user to sell shares for vault tokens
+   * @param vault - vault to sell shares from
+   * @param shareAmount - share amount to sell (in tokens, not lamports), in order to withdraw everything, any value > user share amount
+   * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
+   * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
+   * @returns an array of instructions to create missing ATAs if needed and the withdraw instructions
+   */
+  async sellSharesIxs(
+    user: TransactionSigner,
+    vault: KaminoVault,
+    shareAmountToWithdraw: Decimal,
+    slot: Slot,
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    farmState?: FarmState
+  ): Promise<WithdrawIxs> {
+    return this.buildShareExitIxs('sell', user, vault, shareAmountToWithdraw, slot, vaultReservesMap, farmState);
+  }
+
+  private async buildShareExitIxs(
+    mode: 'withdraw' | 'sell',
     user: TransactionSigner,
     vault: KaminoVault,
     shareAmountToWithdraw: Decimal,
@@ -1278,20 +1466,47 @@ export class KaminoVaultClient {
       withdrawIxs.unstakeFromFarmIfNeededIxs.push(unstakeAndWithdrawFromFarmIxs.withdrawIx);
     }
 
-    // if the vault has allocations withdraw otherwise wtihdraw from available ix
-    const vaultAllocation = vaultState.vaultAllocationStrategy.find(
+    const hasAllocatedReserves = vaultState.vaultAllocationStrategy.some(
       (allocation) => allocation.reserve !== DEFAULT_PUBLIC_KEY
     );
 
-    if (vaultAllocation) {
-      const withdrawFromVaultIxs = await this.withdrawWithReserveIxs(
+    if (hasAllocatedReserves) {
+      const reserveExitBuilder: ReserveExitInstructionBuilder =
+        mode === 'withdraw'
+          ? (params) =>
+              this.withdrawIx(
+                params.user,
+                params.vault,
+                params.vaultState,
+                params.marketAddress,
+                params.reserve,
+                params.userSharesAta,
+                params.userTokenAta,
+                params.shareAmountLamports,
+                params.vaultReservesState
+              )
+          : (params) =>
+              this.sellIx(
+                params.user,
+                params.vault,
+                params.vaultState,
+                params.marketAddress,
+                params.reserve,
+                params.userSharesAta,
+                params.userTokenAta,
+                params.shareAmountLamports,
+                params.vaultReservesState
+              );
+      const withdrawFromVaultIxs = await this.buildReserveExitIxs({
         user,
         vault,
-        sharesToWithdraw,
-        totalUserShares,
+        vaultState,
+        shareAmount: sharesToWithdraw,
+        allUserShares: totalUserShares,
         slot,
-        vaultReservesMap
-      );
+        vaultReservesMap,
+        builder: reserveExitBuilder,
+      });
       withdrawIxs.withdrawIxs = withdrawFromVaultIxs;
     } else {
       const withdrawFromVaultIxs = await this.withdrawFromAvailableIxs(user, vault, sharesToWithdraw);
@@ -1357,16 +1572,16 @@ export class KaminoVaultClient {
     return [createAtaIx, withdrawFromAvailableIxn];
   }
 
-  private async withdrawWithReserveIxs(
-    user: TransactionSigner,
-    vault: KaminoVault,
-    shareAmount: Decimal,
-    allUserShares: Decimal,
-    slot: Slot,
-    vaultReservesMap?: Map<Address, KaminoReserve>
-  ): Promise<Instruction[]> {
-    const vaultState = await vault.getState();
-
+  private async buildReserveExitIxs({
+    user,
+    vault,
+    vaultState,
+    shareAmount,
+    allUserShares,
+    slot,
+    vaultReservesMap,
+    builder,
+  }: BuildReserveExitIxsParams): Promise<Instruction[]> {
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
     const userSharesAta = await getAssociatedTokenAddress(vaultState.sharesMint, user.address);
     const [{ ata: userTokenAta, createAtaIx }] = await createAtasIdempotent(user, [
@@ -1395,32 +1610,32 @@ export class KaminoVaultClient {
     let isFirstWithdraw = true;
 
     if (tokenLeftToWithdraw.lte(0)) {
-      // Availabe enough to withdraw all - using the first existent reserve
       const firstReserve = vaultState.vaultAllocationStrategy.find((reserve) => reserve.reserve !== DEFAULT_PUBLIC_KEY);
+      if (!firstReserve) {
+        throw new Error('No reserve available to satisfy withdraw request');
+      }
       if (withdrawAllShares) {
         reserveWithSharesAmountToWithdraw.push({
-          reserve: firstReserve!.reserve,
+          reserve: firstReserve.reserve,
           shares: new Decimal(U64_MAX.toString()),
         });
       } else {
         reserveWithSharesAmountToWithdraw.push({
-          reserve: firstReserve!.reserve,
+          reserve: firstReserve.reserve,
           shares: shareLamportsToWithdraw,
         });
       }
     } else {
-      // Get decreasing order sorted available liquidity to withdraw from each reserve allocated to
       const reserveAllocationAvailableLiquidityToWithdraw = await this.getReserveAllocationAvailableLiquidityToWithdraw(
         vault,
         slot,
         vaultReservesState
       );
-      // sort
       const reserveAllocationAvailableLiquidityToWithdrawSorted = [
         ...reserveAllocationAvailableLiquidityToWithdraw.entries(),
       ].sort((a, b) => b[1].sub(a[1]).toNumber());
 
-      reserveAllocationAvailableLiquidityToWithdrawSorted.forEach(([key, availableLiquidityToWithdraw], _) => {
+      reserveAllocationAvailableLiquidityToWithdrawSorted.forEach(([key, availableLiquidityToWithdraw]) => {
         if (tokenLeftToWithdraw.gt(0)) {
           let tokensToWithdrawFromReserve = Decimal.min(tokenLeftToWithdraw, availableLiquidityToWithdraw);
           if (isFirstWithdraw) {
@@ -1430,7 +1645,6 @@ export class KaminoVaultClient {
           if (withdrawAllShares) {
             reserveWithSharesAmountToWithdraw.push({ reserve: key, shares: new Decimal(U64_MAX.toString()) });
           } else {
-            // round up to the nearest integer the shares to withdraw
             const sharesToWithdrawFromReserve = tokensToWithdrawFromReserve.mul(sharesPerToken).floor();
             reserveWithSharesAmountToWithdraw.push({ reserve: key, shares: sharesToWithdrawFromReserve });
           }
@@ -1442,26 +1656,25 @@ export class KaminoVaultClient {
 
     const withdrawIxs: Instruction[] = [];
     withdrawIxs.push(createAtaIx);
-    for (let reserveIndex = 0; reserveIndex < reserveWithSharesAmountToWithdraw.length; reserveIndex++) {
-      const reserveWithTokens = reserveWithSharesAmountToWithdraw[reserveIndex];
+    for (const reserveWithTokens of reserveWithSharesAmountToWithdraw) {
       const reserveState = vaultReservesState.get(reserveWithTokens.reserve);
       if (reserveState === undefined) {
         throw new Error(`Reserve ${reserveWithTokens.reserve} not found in vault reserves map`);
       }
       const marketAddress = reserveState.state.lendingMarket;
 
-      const withdrawFromReserveIx = await this.withdrawIx(
+      const exitIx = await builder({
         user,
         vault,
         vaultState,
         marketAddress,
-        { address: reserveWithTokens.reserve, state: reserveState.state },
+        reserve: { address: reserveWithTokens.reserve, state: reserveState.state },
         userSharesAta,
         userTokenAta,
-        reserveWithTokens.shares,
-        vaultReservesState
-      );
-      withdrawIxs.push(withdrawFromReserveIx);
+        shareAmountLamports: reserveWithTokens.shares,
+        vaultReservesState,
+      });
+      withdrawIxs.push(exitIx);
     }
 
     return withdrawIxs;
@@ -1606,6 +1819,12 @@ export class KaminoVaultClient {
       ixs.push(createAtaIx);
     }
 
+    const reserveWhitelistEntryOption = await getReserveWhitelistEntryIfExists(
+      reserve.address,
+      this.getConnection(),
+      this._kaminoVaultProgramId
+    );
+
     const investAccounts: InvestAccounts = {
       payer,
       vaultState: vault.address,
@@ -1618,6 +1837,7 @@ export class KaminoVaultClient {
       lendingMarketAuthority: lendingMarketAuth,
       reserveLiquiditySupply: reserve.state.liquidity.supplyVault,
       reserveCollateralMint: reserve.state.collateral.mintPubkey,
+      reserveWhitelistEntry: reserveWhitelistEntryOption,
       klendProgram: this._kaminoLendProgramId,
       instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
       tokenProgram: tokenProgram,
@@ -1647,6 +1867,89 @@ export class KaminoVaultClient {
     return decodeVaultName(token);
   }
 
+  /** Helper to serialize value as Buffer for updateVaultConfig instruction */
+  private getValueForModeAsBuffer(mode: VaultConfigFieldKind, value: string): Buffer {
+    const isWhitelistOnlyFlag =
+      mode.kind === new VaultConfigField.AllowInvestInWhitelistedReservesOnly().kind ||
+      mode.kind === new VaultConfigField.AllowAllocationsInWhitelistedReservesOnly().kind;
+
+    if (isWhitelistOnlyFlag) {
+      const flag = parseBooleanFlag(value);
+      return Buffer.from([flag]);
+    } else if (isNaN(+value)) {
+      if (mode.kind === new VaultConfigField.Name().kind) {
+        const data = Array.from(this.encodeVaultName(value));
+        return Buffer.from(data);
+      } else {
+        const data = address(value);
+        return Buffer.from(addressEncoder.encode(data));
+      }
+    } else {
+      const buffer = Buffer.alloc(8);
+      buffer.writeBigUInt64LE(BigInt(value.toString()));
+      return buffer;
+    }
+  }
+
+  private async sellIx(
+    user: TransactionSigner,
+    vault: KaminoVault,
+    vaultState: VaultState,
+    marketAddress: Address,
+    reserve: ReserveWithAddress,
+    userSharesAta: Address,
+    userTokenAta: Address,
+    shareAmountLamports: Decimal,
+    vaultReservesState: Map<Address, KaminoReserve>
+  ): Promise<Instruction> {
+    const [lendingMarketAuth] = await lendingMarketAuthPda(marketAddress, this._kaminoLendProgramId);
+
+    const globalConfig = await getKvaultGlobalConfigPda(this._kaminoVaultProgramId);
+    const eventAuthority = await getEventAuthorityPda(this._kaminoVaultProgramId);
+    const sellAccounts: SellAccounts = {
+      withdrawFromAvailable: {
+        user,
+        vaultState: vault.address,
+        globalConfig: globalConfig,
+        tokenVault: vaultState.tokenVault,
+        baseVaultAuthority: vaultState.baseVaultAuthority,
+        userTokenAta: userTokenAta,
+        tokenMint: vaultState.tokenMint,
+        userSharesAta: userSharesAta,
+        sharesMint: vaultState.sharesMint,
+        tokenProgram: vaultState.tokenProgram,
+        sharesTokenProgram: TOKEN_PROGRAM_ADDRESS,
+        klendProgram: this._kaminoLendProgramId,
+        eventAuthority: eventAuthority,
+        program: this._kaminoVaultProgramId,
+      },
+      withdrawFromReserveAccounts: {
+        vaultState: vault.address,
+        reserve: reserve.address,
+        ctokenVault: await getCTokenVaultPda(vault.address, reserve.address, this._kaminoVaultProgramId),
+        lendingMarket: marketAddress,
+        lendingMarketAuthority: lendingMarketAuth,
+        reserveLiquiditySupply: reserve.state.liquidity.supplyVault,
+        reserveCollateralMint: reserve.state.collateral.mintPubkey,
+        reserveCollateralTokenProgram: TOKEN_PROGRAM_ADDRESS,
+        instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
+      },
+      eventAuthority: eventAuthority,
+      program: this._kaminoVaultProgramId,
+    };
+
+    const sellArgs: SellArgs = {
+      sharesAmount: new BN(shareAmountLamports.floor().toString()),
+    };
+
+    let sellIxn = sell(sellArgs, sellAccounts, undefined, this._kaminoVaultProgramId);
+
+    const vaultReserves = this.getVaultReserves(vaultState);
+    sellIxn = this.appendRemainingAccountsForVaultReserves(sellIxn, vaultReserves, vaultReservesState);
+
+    return sellIxn;
+  }
+
   private async withdrawIx(
     user: TransactionSigner,
     vault: KaminoVault,
@@ -1660,11 +1963,13 @@ export class KaminoVaultClient {
   ): Promise<Instruction> {
     const [lendingMarketAuth] = await lendingMarketAuthPda(marketAddress, this._kaminoLendProgramId);
 
+    const globalConfig = await getKvaultGlobalConfigPda(this._kaminoVaultProgramId);
     const eventAuthority = await getEventAuthorityPda(this._kaminoVaultProgramId);
     const withdrawAccounts: WithdrawAccounts = {
       withdrawFromAvailable: {
         user,
         vaultState: vault.address,
+        globalConfig: globalConfig,
         tokenVault: vaultState.tokenVault,
         baseVaultAuthority: vaultState.baseVaultAuthority,
         userTokenAta: userTokenAta,
@@ -1712,10 +2017,12 @@ export class KaminoVaultClient {
     userTokenAta: Address,
     shareAmountLamports: Decimal
   ): Promise<Instruction> {
+    const globalConfig = await getKvaultGlobalConfigPda(this._kaminoVaultProgramId);
     const eventAuthority = await getEventAuthorityPda(this._kaminoVaultProgramId);
     const withdrawFromAvailableAccounts: WithdrawFromAvailableAccounts = {
       user,
       vaultState: vault.address,
+      globalConfig: globalConfig,
       tokenVault: vaultState.tokenVault,
       baseVaultAuthority: vaultState.baseVaultAuthority,
       userTokenAta,
@@ -1936,7 +2243,8 @@ export class KaminoVaultClient {
       holdings.totalAUMIncludingFees.sub(holdings.pendingFees),
       new Decimal(vaultState.unallocatedWeight.toString()),
       new Decimal(vaultState.unallocatedTokensCap.toString()),
-      initialVaultAllocations
+      initialVaultAllocations,
+      vaultState.tokenMintDecimals.toNumber()
     );
   }
 
@@ -1944,9 +2252,16 @@ export class KaminoVaultClient {
     vaultAUM: Decimal,
     vaultUnallocatedWeight: Decimal,
     vaultUnallocatedCap: Decimal,
-    initialVaultAllocations: Map<Address, ReserveAllocationOverview>
+    initialVaultAllocations: Map<Address, ReserveAllocationOverview>,
+    vaultTokenDecimals: number
   ) {
-    return computeReservesAllocation(vaultAUM, vaultUnallocatedWeight, vaultUnallocatedCap, initialVaultAllocations);
+    return computeReservesAllocation(
+      vaultAUM,
+      vaultUnallocatedWeight,
+      vaultUnallocatedCap,
+      initialVaultAllocations,
+      vaultTokenDecimals
+    );
   }
 
   /**
@@ -2038,9 +2353,7 @@ export class KaminoVaultClient {
       if (await vault.hasFarm()) {
         const userFarmState = allUserFarmStatesMap.get(state.vaultFarm);
         if (userFarmState) {
-          console.log('there is a farm state for vault', vault.address);
           const stakedShares = getSharesInFarmUserPosition(userFarmState, state.sharesMintDecimals.toNumber());
-          console.log('staked shares', stakedShares);
           const userSharesBalance = vaultUserShareBalance.get(vault.address);
           if (userSharesBalance) {
             userSharesBalance.stakedShares = stakedShares;
@@ -2430,7 +2743,10 @@ export class KaminoVaultClient {
     const deserializedReserves = await batchFetch(vaultReservesAddresses, (chunk) =>
       this.loadReserializedReserves(chunk)
     );
-    const reservesAndOracles = await getTokenOracleData(this.getConnection(), deserializedReserves, oracleAccounts);
+    const [reservesAndOracles, cdnResourcesData] = await Promise.all([
+      getTokenOracleData(this.getConnection(), deserializedReserves, oracleAccounts),
+      fetchKaminoCdnData(),
+    ]);
     const kaminoReserves = new Map<Address, KaminoReserve>();
     reservesAndOracles.forEach(([reserve, oracle], index) => {
       if (!oracle) {
@@ -2445,7 +2761,8 @@ export class KaminoVaultClient {
         reserve,
         oracle,
         this.getConnection(),
-        this.recentSlotDurationMs
+        this.recentSlotDurationMs,
+        cdnResourcesData
       );
       kaminoReserves.set(kaminoReserve.address, kaminoReserve);
     });
@@ -4096,6 +4413,39 @@ export async function getEventAuthorityPda(kaminoVaultProgramId: Address): Promi
   )[0];
 }
 
+export async function getKvaultGlobalConfigPda(kaminoVaultProgramId: Address): Promise<Address> {
+  return (
+    await getProgramDerivedAddress({
+      seeds: [Buffer.from(GLOBAL_CONFIG_STATE_SEED)],
+      programAddress: kaminoVaultProgramId,
+    })
+  )[0];
+}
+
+export async function getReserveWhitelistEntryPda(
+  reserveAddress: Address,
+  kaminoVaultProgramId: Address
+): Promise<Address> {
+  return (
+    await getProgramDerivedAddress({
+      seeds: [Buffer.from(WHITELISTED_RESERVES_SEED), addressEncoder.encode(reserveAddress)],
+      programAddress: kaminoVaultProgramId,
+    })
+  )[0];
+}
+
+async function getReserveWhitelistEntryIfExists(
+  reserveAddress: Address,
+  rpc: Rpc<SolanaRpcApi>,
+  kaminoVaultProgramId: Address
+): Promise<Option<Address>> {
+  const reserveWhitelistEntry = await getReserveWhitelistEntryPda(reserveAddress, kaminoVaultProgramId);
+  const reserveWhitelistEntryAccount = await fetchEncodedAccount(rpc, reserveWhitelistEntry, {
+    commitment: 'processed',
+  });
+  return reserveWhitelistEntryAccount.exists ? some(reserveWhitelistEntry) : none<Address>();
+}
+
 function parseVaultAdmin(vault: VaultState, signer?: TransactionSigner) {
   return signer ?? noopSigner(vault.vaultAdminAuthority);
 }
@@ -4247,4 +4597,29 @@ export type PendingRewardsForUserInVault = {
   pendingRewardsInVaultDelegatedFarm: Map<Address, Decimal>;
   pendingRewardsInVaultReservesFarms: Map<Address, Decimal>;
   totalPendingRewards: Map<Address, Decimal>;
+};
+
+type ReserveExitBuilderParams = {
+  user: TransactionSigner;
+  vault: KaminoVault;
+  vaultState: VaultState;
+  marketAddress: Address;
+  reserve: ReserveWithAddress;
+  userSharesAta: Address;
+  userTokenAta: Address;
+  shareAmountLamports: Decimal;
+  vaultReservesState: Map<Address, KaminoReserve>;
+};
+
+type ReserveExitInstructionBuilder = (params: ReserveExitBuilderParams) => Promise<Instruction>;
+
+type BuildReserveExitIxsParams = {
+  user: TransactionSigner;
+  vault: KaminoVault;
+  vaultState: VaultState;
+  shareAmount: Decimal;
+  allUserShares: Decimal;
+  slot: Slot;
+  vaultReservesMap?: Map<Address, KaminoReserve>;
+  builder: ReserveExitInstructionBuilder;
 };

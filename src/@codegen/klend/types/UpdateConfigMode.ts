@@ -119,25 +119,25 @@ export class UpdateProtocolTakeRate {
   }
 }
 
-export interface UpdateFeesBorrowFeeJSON {
-  kind: "UpdateFeesBorrowFee"
+export interface UpdateFeesOriginationFeeJSON {
+  kind: "UpdateFeesOriginationFee"
 }
 
-export class UpdateFeesBorrowFee {
+export class UpdateFeesOriginationFee {
   static readonly discriminator = 5
-  static readonly kind = "UpdateFeesBorrowFee"
+  static readonly kind = "UpdateFeesOriginationFee"
   readonly discriminator = 5
-  readonly kind = "UpdateFeesBorrowFee"
+  readonly kind = "UpdateFeesOriginationFee"
 
-  toJSON(): UpdateFeesBorrowFeeJSON {
+  toJSON(): UpdateFeesOriginationFeeJSON {
     return {
-      kind: "UpdateFeesBorrowFee",
+      kind: "UpdateFeesOriginationFee",
     }
   }
 
   toEncodable() {
     return {
-      UpdateFeesBorrowFee: {},
+      UpdateFeesOriginationFee: {},
     }
   }
 }
@@ -1154,6 +1154,75 @@ export class UpdateProtocolOrderExecutionFee {
   }
 }
 
+export interface UpdateProposerAuthorityLockJSON {
+  kind: "UpdateProposerAuthorityLock"
+}
+
+export class UpdateProposerAuthorityLock {
+  static readonly discriminator = 50
+  static readonly kind = "UpdateProposerAuthorityLock"
+  readonly discriminator = 50
+  readonly kind = "UpdateProposerAuthorityLock"
+
+  toJSON(): UpdateProposerAuthorityLockJSON {
+    return {
+      kind: "UpdateProposerAuthorityLock",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateProposerAuthorityLock: {},
+    }
+  }
+}
+
+export interface UpdateMinDeleveragingBonusBpsJSON {
+  kind: "UpdateMinDeleveragingBonusBps"
+}
+
+export class UpdateMinDeleveragingBonusBps {
+  static readonly discriminator = 51
+  static readonly kind = "UpdateMinDeleveragingBonusBps"
+  readonly discriminator = 51
+  readonly kind = "UpdateMinDeleveragingBonusBps"
+
+  toJSON(): UpdateMinDeleveragingBonusBpsJSON {
+    return {
+      kind: "UpdateMinDeleveragingBonusBps",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateMinDeleveragingBonusBps: {},
+    }
+  }
+}
+
+export interface UpdateBlockCTokenUsageJSON {
+  kind: "UpdateBlockCTokenUsage"
+}
+
+export class UpdateBlockCTokenUsage {
+  static readonly discriminator = 52
+  static readonly kind = "UpdateBlockCTokenUsage"
+  readonly discriminator = 52
+  readonly kind = "UpdateBlockCTokenUsage"
+
+  toJSON(): UpdateBlockCTokenUsageJSON {
+    return {
+      kind: "UpdateBlockCTokenUsage",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateBlockCTokenUsage: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if (typeof obj !== "object") {
@@ -1175,8 +1244,8 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if ("UpdateProtocolTakeRate" in obj) {
     return new UpdateProtocolTakeRate()
   }
-  if ("UpdateFeesBorrowFee" in obj) {
-    return new UpdateFeesBorrowFee()
+  if ("UpdateFeesOriginationFee" in obj) {
+    return new UpdateFeesOriginationFee()
   }
   if ("UpdateFeesFlashLoanFee" in obj) {
     return new UpdateFeesFlashLoanFee()
@@ -1310,6 +1379,15 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if ("UpdateProtocolOrderExecutionFee" in obj) {
     return new UpdateProtocolOrderExecutionFee()
   }
+  if ("UpdateProposerAuthorityLock" in obj) {
+    return new UpdateProposerAuthorityLock()
+  }
+  if ("UpdateMinDeleveragingBonusBps" in obj) {
+    return new UpdateMinDeleveragingBonusBps()
+  }
+  if ("UpdateBlockCTokenUsage" in obj) {
+    return new UpdateBlockCTokenUsage()
+  }
 
   throw new Error("Invalid enum object")
 }
@@ -1333,8 +1411,8 @@ export function fromJSON(
     case "UpdateProtocolTakeRate": {
       return new UpdateProtocolTakeRate()
     }
-    case "UpdateFeesBorrowFee": {
-      return new UpdateFeesBorrowFee()
+    case "UpdateFeesOriginationFee": {
+      return new UpdateFeesOriginationFee()
     }
     case "UpdateFeesFlashLoanFee": {
       return new UpdateFeesFlashLoanFee()
@@ -1468,6 +1546,15 @@ export function fromJSON(
     case "UpdateProtocolOrderExecutionFee": {
       return new UpdateProtocolOrderExecutionFee()
     }
+    case "UpdateProposerAuthorityLock": {
+      return new UpdateProposerAuthorityLock()
+    }
+    case "UpdateMinDeleveragingBonusBps": {
+      return new UpdateMinDeleveragingBonusBps()
+    }
+    case "UpdateBlockCTokenUsage": {
+      return new UpdateBlockCTokenUsage()
+    }
   }
 }
 
@@ -1478,7 +1565,7 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateLiquidationThresholdPct"),
     borsh.struct([], "UpdateProtocolLiquidationFee"),
     borsh.struct([], "UpdateProtocolTakeRate"),
-    borsh.struct([], "UpdateFeesBorrowFee"),
+    borsh.struct([], "UpdateFeesOriginationFee"),
     borsh.struct([], "UpdateFeesFlashLoanFee"),
     borsh.struct([], "DeprecatedUpdateFeesReferralFeeBps"),
     borsh.struct([], "UpdateDepositLimit"),
@@ -1523,6 +1610,9 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateAutodeleverageEnabled"),
     borsh.struct([], "UpdateDeleveragingBonusIncreaseBpsPerDay"),
     borsh.struct([], "UpdateProtocolOrderExecutionFee"),
+    borsh.struct([], "UpdateProposerAuthorityLock"),
+    borsh.struct([], "UpdateMinDeleveragingBonusBps"),
+    borsh.struct([], "UpdateBlockCTokenUsage"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

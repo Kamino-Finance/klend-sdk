@@ -24,6 +24,7 @@ import { DEFAULT_PUBLIC_KEY } from '../utils';
 import { getScopePricesFromFarm } from '@kamino-finance/farms-sdk/dist/utils/option';
 
 export const FARMS_GLOBAL_CONFIG_MAINNET: Address = address('6UodrBjL2ZreDy7QdR4YV1oxqMBjVYSEyrFpctqqwGwL');
+export const FARMS_ADMIN_MAINNET: Address = address('BbM3mbcLsa3QcYEVx8iovwfKaA1iZ6DK5fEbbtHwS3N8');
 
 export async function getFarmStakeIxs(
   rpc: Rpc<SolanaRpcApi>,

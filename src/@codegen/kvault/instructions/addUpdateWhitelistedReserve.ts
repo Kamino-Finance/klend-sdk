@@ -15,47 +15,46 @@ import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslin
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
 
-export const DISCRIMINATOR = Buffer.from([122, 3, 21, 222, 158, 255, 238, 157])
+export const DISCRIMINATOR = Buffer.from([219, 139, 95, 204, 7, 183, 118, 45])
 
-export interface UpdateVaultConfigArgs {
-  entry: types.VaultConfigFieldKind
-  data: Uint8Array
+export interface AddUpdateWhitelistedReserveArgs {
+  update: types.UpdateReserveWhitelistModeKind
 }
 
-export interface UpdateVaultConfigAccounts {
-  signer: TransactionSigner
+export interface AddUpdateWhitelistedReserveAccounts {
+  globalAdmin: TransactionSigner
   globalConfig: Address
-  vaultState: Address
-  klendProgram: Address
+  reserve: Address
+  reserveWhitelistEntry: Address
+  systemProgram: Address
 }
 
 export const layout = borsh.struct([
-  types.VaultConfigField.layout("entry"),
-  borsh.vecU8("data"),
+  types.UpdateReserveWhitelistMode.layout("update"),
 ])
 
-export function updateVaultConfig(
-  args: UpdateVaultConfigArgs,
-  accounts: UpdateVaultConfigAccounts,
+export function addUpdateWhitelistedReserve(
+  args: AddUpdateWhitelistedReserveArgs,
+  accounts: AddUpdateWhitelistedReserveAccounts,
   remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta | AccountSignerMeta> = [
-    { address: accounts.signer.address, role: 2, signer: accounts.signer },
+    {
+      address: accounts.globalAdmin.address,
+      role: 3,
+      signer: accounts.globalAdmin,
+    },
     { address: accounts.globalConfig, role: 0 },
-    { address: accounts.vaultState, role: 1 },
-    { address: accounts.klendProgram, role: 0 },
+    { address: accounts.reserve, role: 0 },
+    { address: accounts.reserveWhitelistEntry, role: 1 },
+    { address: accounts.systemProgram, role: 0 },
     ...remainingAccounts,
   ]
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
-      entry: args.entry.toEncodable(),
-      data: Buffer.from(
-        args.data.buffer,
-        args.data.byteOffset,
-        args.data.length
-      ),
+      update: args.update.toEncodable(),
     },
     buffer
   )

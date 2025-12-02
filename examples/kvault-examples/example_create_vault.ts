@@ -37,14 +37,24 @@ import { sendAndConfirmTx } from '../utils/tx';
       ...instructions.initVaultIxs,
       instructions.createLUTIx,
       instructions.initSharesMetadataIx,
+      instructions.setFarmToVaultIx,
     ],
     [],
     [],
     'InitVault'
   );
-  // sleep a little bit so the LUT is created
+  // sleep a little bit so the vault and LUT are created
   await sleep(2000);
 
+  // create the farm
+  await sendAndConfirmTx(
+    c,
+    wallet,
+    [...instructions.createVaultFarm.setupFarmIxs, ...instructions.createVaultFarm.updateFarmIxs],
+    [],
+    [],
+    'CreateVaultFarm'
+  );
   // populate the LUT
   await sendAndConfirmTx(c, wallet, instructions.populateLUTIxs, [], [], 'PopulateLUT');
 })().catch(async (e) => {

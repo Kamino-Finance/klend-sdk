@@ -1,4 +1,6 @@
+import * as UpdateReserveWhitelistMode from "./UpdateReserveWhitelistMode"
 import * as VaultConfigField from "./VaultConfigField"
+import * as UpdateGlobalConfigMode from "./UpdateGlobalConfigMode"
 
 export { LastUpdate } from "./LastUpdate"
 export type { LastUpdateFields, LastUpdateJSON } from "./LastUpdate"
@@ -49,6 +51,15 @@ export type {
 } from "./BorrowRateCurve"
 export { CurvePoint } from "./CurvePoint"
 export type { CurvePointFields, CurvePointJSON } from "./CurvePoint"
+export { UpdateReserveWhitelistMode }
+
+export type UpdateReserveWhitelistModeKind =
+  | UpdateReserveWhitelistMode.Invest
+  | UpdateReserveWhitelistMode.AddAllocation
+export type UpdateReserveWhitelistModeJSON =
+  | UpdateReserveWhitelistMode.InvestJSON
+  | UpdateReserveWhitelistMode.AddAllocationJSON
+
 export { VaultConfigField }
 
 export type VaultConfigFieldKind =
@@ -66,6 +77,11 @@ export type VaultConfigFieldKind =
   | VaultConfigField.AllocationAdmin
   | VaultConfigField.UnallocatedWeight
   | VaultConfigField.UnallocatedTokensCap
+  | VaultConfigField.WithdrawalPenaltyLamports
+  | VaultConfigField.WithdrawalPenaltyBps
+  | VaultConfigField.FirstLossCapitalFarm
+  | VaultConfigField.AllowAllocationsInWhitelistedReservesOnly
+  | VaultConfigField.AllowInvestInWhitelistedReservesOnly
 export type VaultConfigFieldJSON =
   | VaultConfigField.PerformanceFeeBpsJSON
   | VaultConfigField.ManagementFeeBpsJSON
@@ -81,9 +97,24 @@ export type VaultConfigFieldJSON =
   | VaultConfigField.AllocationAdminJSON
   | VaultConfigField.UnallocatedWeightJSON
   | VaultConfigField.UnallocatedTokensCapJSON
+  | VaultConfigField.WithdrawalPenaltyLamportsJSON
+  | VaultConfigField.WithdrawalPenaltyBpsJSON
+  | VaultConfigField.FirstLossCapitalFarmJSON
+  | VaultConfigField.AllowAllocationsInWhitelistedReservesOnlyJSON
+  | VaultConfigField.AllowInvestInWhitelistedReservesOnlyJSON
 
 export { VaultAllocation } from "./VaultAllocation"
 export type {
   VaultAllocationFields,
   VaultAllocationJSON,
 } from "./VaultAllocation"
+export { UpdateGlobalConfigMode }
+
+export type UpdateGlobalConfigModeKind =
+  | UpdateGlobalConfigMode.PendingAdmin
+  | UpdateGlobalConfigMode.MinWithdrawalPenaltyLamports
+  | UpdateGlobalConfigMode.MinWithdrawalPenaltyBPS
+export type UpdateGlobalConfigModeJSON =
+  | UpdateGlobalConfigMode.PendingAdminJSON
+  | UpdateGlobalConfigMode.MinWithdrawalPenaltyLamportsJSON
+  | UpdateGlobalConfigMode.MinWithdrawalPenaltyBPSJSON

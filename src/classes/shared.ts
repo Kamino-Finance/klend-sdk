@@ -44,6 +44,7 @@ export type ReserveDataType = {
   accumulatedProtocolFees: Decimal;
   mintTotalSupply: Decimal;
   borrowFactor: number;
+  isUIDeprecated: boolean | undefined;
 };
 
 export type ReserveRewardYield = {

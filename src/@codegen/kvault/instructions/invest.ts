@@ -31,6 +31,7 @@ export interface InvestAccounts {
   lendingMarketAuthority: Address
   reserveLiquiditySupply: Address
   reserveCollateralMint: Address
+  reserveWhitelistEntry: Option<Address>
   klendProgram: Address
   reserveCollateralTokenProgram: Address
   tokenProgram: Address
@@ -55,6 +56,9 @@ export function invest(
     { address: accounts.lendingMarketAuthority, role: 0 },
     { address: accounts.reserveLiquiditySupply, role: 1 },
     { address: accounts.reserveCollateralMint, role: 1 },
+    isSome(accounts.reserveWhitelistEntry)
+      ? { address: accounts.reserveWhitelistEntry.value, role: 0 }
+      : { address: programAddress, role: 0 },
     { address: accounts.klendProgram, role: 0 },
     { address: accounts.reserveCollateralTokenProgram, role: 0 },
     { address: accounts.tokenProgram, role: 0 },

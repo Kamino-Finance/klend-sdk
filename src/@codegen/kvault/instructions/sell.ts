@@ -15,13 +15,13 @@ import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslin
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
 
-export const DISCRIMINATOR = Buffer.from([183, 18, 70, 156, 148, 109, 161, 34])
+export const DISCRIMINATOR = Buffer.from([51, 230, 133, 164, 1, 127, 131, 173])
 
-export interface WithdrawArgs {
+export interface SellArgs {
   sharesAmount: BN
 }
 
-export interface WithdrawAccounts {
+export interface SellAccounts {
   withdrawFromAvailable: {
     user: TransactionSigner
     vaultState: Address
@@ -53,11 +53,11 @@ export interface WithdrawAccounts {
   program: Address
 }
 
-export const layout = borsh.struct<WithdrawArgs>([borsh.u64("sharesAmount")])
+export const layout = borsh.struct<SellArgs>([borsh.u64("sharesAmount")])
 
-export function withdraw(
-  args: WithdrawArgs,
-  accounts: WithdrawAccounts,
+export function sell(
+  args: SellArgs,
+  accounts: SellAccounts,
   remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {

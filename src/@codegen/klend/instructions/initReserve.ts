@@ -18,7 +18,7 @@ import { PROGRAM_ID } from "../programId"
 export const DISCRIMINATOR = Buffer.from([138, 245, 71, 225, 153, 4, 3, 43])
 
 export interface InitReserveAccounts {
-  lendingMarketOwner: TransactionSigner
+  signer: TransactionSigner
   lendingMarket: Address
   lendingMarketAuthority: Address
   reserve: Address
@@ -40,11 +40,7 @@ export function initReserve(
   programAddress: Address = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta | AccountSignerMeta> = [
-    {
-      address: accounts.lendingMarketOwner.address,
-      role: 3,
-      signer: accounts.lendingMarketOwner,
-    },
+    { address: accounts.signer.address, role: 3, signer: accounts.signer },
     { address: accounts.lendingMarket, role: 0 },
     { address: accounts.lendingMarketAuthority, role: 0 },
     { address: accounts.reserve, role: 1 },

@@ -579,6 +579,52 @@ export class UpdateObligationOrderCreationEnabled {
   }
 }
 
+export interface UpdateProposerAuthorityJSON {
+  kind: "UpdateProposerAuthority"
+}
+
+export class UpdateProposerAuthority {
+  static readonly discriminator = 25
+  static readonly kind = "UpdateProposerAuthority"
+  readonly discriminator = 25
+  readonly kind = "UpdateProposerAuthority"
+
+  toJSON(): UpdateProposerAuthorityJSON {
+    return {
+      kind: "UpdateProposerAuthority",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateProposerAuthority: {},
+    }
+  }
+}
+
+export interface UpdatePriceTriggeredLiquidationDisabledJSON {
+  kind: "UpdatePriceTriggeredLiquidationDisabled"
+}
+
+export class UpdatePriceTriggeredLiquidationDisabled {
+  static readonly discriminator = 26
+  static readonly kind = "UpdatePriceTriggeredLiquidationDisabled"
+  readonly discriminator = 26
+  readonly kind = "UpdatePriceTriggeredLiquidationDisabled"
+
+  toJSON(): UpdatePriceTriggeredLiquidationDisabledJSON {
+    return {
+      kind: "UpdatePriceTriggeredLiquidationDisabled",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdatePriceTriggeredLiquidationDisabled: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateLendingMarketModeKind {
   if (typeof obj !== "object") {
@@ -659,6 +705,12 @@ export function fromDecoded(obj: any): types.UpdateLendingMarketModeKind {
   }
   if ("UpdateObligationOrderCreationEnabled" in obj) {
     return new UpdateObligationOrderCreationEnabled()
+  }
+  if ("UpdateProposerAuthority" in obj) {
+    return new UpdateProposerAuthority()
+  }
+  if ("UpdatePriceTriggeredLiquidationDisabled" in obj) {
+    return new UpdatePriceTriggeredLiquidationDisabled()
   }
 
   throw new Error("Invalid enum object")
@@ -743,6 +795,12 @@ export function fromJSON(
     case "UpdateObligationOrderCreationEnabled": {
       return new UpdateObligationOrderCreationEnabled()
     }
+    case "UpdateProposerAuthority": {
+      return new UpdateProposerAuthority()
+    }
+    case "UpdatePriceTriggeredLiquidationDisabled": {
+      return new UpdatePriceTriggeredLiquidationDisabled()
+    }
   }
 }
 
@@ -773,6 +831,8 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateObligationOrderExecutionEnabled"),
     borsh.struct([], "UpdateImmutableFlag"),
     borsh.struct([], "UpdateObligationOrderCreationEnabled"),
+    borsh.struct([], "UpdateProposerAuthority"),
+    borsh.struct([], "UpdatePriceTriggeredLiquidationDisabled"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

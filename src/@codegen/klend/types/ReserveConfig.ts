@@ -11,13 +11,16 @@ export interface ReserveConfigFields {
   assetTier: number
   /** Flat rate that goes to the host */
   hostFixedInterestRateBps: number
+  /** Starting bonus for deleveraging-related liquidations, in bps. */
+  minDeleveragingBonusBps: number
   /**
-   * [DEPRECATED] Space that used to hold 2 fields:
-   * - Boost for side (debt or collateral)
-   * - Reward points multiplier per obligation type
-   * Can be re-used after making sure all underlying production account data is zeroed.
+   * Boolean flag to block minting/redeeming of ctokens
+   * Blocks usage of ctokens (minting or withdrawing from obligation)
+   * Effectively blocks deposit_reserve_liquidity and withdraw_obligation_collateral
    */
-  reserved2: Array<number>
+  blockCtokenUsage: number
+  /** Past reserved space - feel free to reuse. */
+  reserved1: Array<number>
   /** Cut of the order execution bonus that the protocol receives, as a percentage */
   protocolOrderExecutionFeePct: number
   /** Protocol take rate is the amount borrowed interest protocol receives, as a percentage */
@@ -76,7 +79,14 @@ export interface ReserveConfigFields {
    * obligations) is NOT affected by this flag.
    */
   autodeleverageEnabled: number
-  reserved1: Array<number>
+  /**
+   * Boolean flag indicating whether the reserve is locked for the proposer authority.
+   *
+   * Once the proposer have finished preparing the reserve, it must be locked to prevent
+   * further changes to the reserve configuration allowing review and voting on the proposal
+   * without alteration during the voting period.
+   */
+  proposerAuthorityLocked: number
   /**
    * Maximum amount liquidity of this reserve borrowed outside all elevation groups
    * - u64::MAX for inf
@@ -104,13 +114,16 @@ export interface ReserveConfigJSON {
   assetTier: number
   /** Flat rate that goes to the host */
   hostFixedInterestRateBps: number
+  /** Starting bonus for deleveraging-related liquidations, in bps. */
+  minDeleveragingBonusBps: number
   /**
-   * [DEPRECATED] Space that used to hold 2 fields:
-   * - Boost for side (debt or collateral)
-   * - Reward points multiplier per obligation type
-   * Can be re-used after making sure all underlying production account data is zeroed.
+   * Boolean flag to block minting/redeeming of ctokens
+   * Blocks usage of ctokens (minting or withdrawing from obligation)
+   * Effectively blocks deposit_reserve_liquidity and withdraw_obligation_collateral
    */
-  reserved2: Array<number>
+  blockCtokenUsage: number
+  /** Past reserved space - feel free to reuse. */
+  reserved1: Array<number>
   /** Cut of the order execution bonus that the protocol receives, as a percentage */
   protocolOrderExecutionFeePct: number
   /** Protocol take rate is the amount borrowed interest protocol receives, as a percentage */
@@ -169,7 +182,14 @@ export interface ReserveConfigJSON {
    * obligations) is NOT affected by this flag.
    */
   autodeleverageEnabled: number
-  reserved1: Array<number>
+  /**
+   * Boolean flag indicating whether the reserve is locked for the proposer authority.
+   *
+   * Once the proposer have finished preparing the reserve, it must be locked to prevent
+   * further changes to the reserve configuration allowing review and voting on the proposal
+   * without alteration during the voting period.
+   */
+  proposerAuthorityLocked: number
   /**
    * Maximum amount liquidity of this reserve borrowed outside all elevation groups
    * - u64::MAX for inf
@@ -198,13 +218,16 @@ export class ReserveConfig {
   readonly assetTier: number
   /** Flat rate that goes to the host */
   readonly hostFixedInterestRateBps: number
+  /** Starting bonus for deleveraging-related liquidations, in bps. */
+  readonly minDeleveragingBonusBps: number
   /**
-   * [DEPRECATED] Space that used to hold 2 fields:
-   * - Boost for side (debt or collateral)
-   * - Reward points multiplier per obligation type
-   * Can be re-used after making sure all underlying production account data is zeroed.
+   * Boolean flag to block minting/redeeming of ctokens
+   * Blocks usage of ctokens (minting or withdrawing from obligation)
+   * Effectively blocks deposit_reserve_liquidity and withdraw_obligation_collateral
    */
-  readonly reserved2: Array<number>
+  readonly blockCtokenUsage: number
+  /** Past reserved space - feel free to reuse. */
+  readonly reserved1: Array<number>
   /** Cut of the order execution bonus that the protocol receives, as a percentage */
   readonly protocolOrderExecutionFeePct: number
   /** Protocol take rate is the amount borrowed interest protocol receives, as a percentage */
@@ -263,7 +286,14 @@ export class ReserveConfig {
    * obligations) is NOT affected by this flag.
    */
   readonly autodeleverageEnabled: number
-  readonly reserved1: Array<number>
+  /**
+   * Boolean flag indicating whether the reserve is locked for the proposer authority.
+   *
+   * Once the proposer have finished preparing the reserve, it must be locked to prevent
+   * further changes to the reserve configuration allowing review and voting on the proposal
+   * without alteration during the voting period.
+   */
+  readonly proposerAuthorityLocked: number
   /**
    * Maximum amount liquidity of this reserve borrowed outside all elevation groups
    * - u64::MAX for inf
@@ -287,7 +317,9 @@ export class ReserveConfig {
     this.status = fields.status
     this.assetTier = fields.assetTier
     this.hostFixedInterestRateBps = fields.hostFixedInterestRateBps
-    this.reserved2 = fields.reserved2
+    this.minDeleveragingBonusBps = fields.minDeleveragingBonusBps
+    this.blockCtokenUsage = fields.blockCtokenUsage
+    this.reserved1 = fields.reserved1
     this.protocolOrderExecutionFeePct = fields.protocolOrderExecutionFeePct
     this.protocolTakeRatePct = fields.protocolTakeRatePct
     this.protocolLiquidationFeePct = fields.protocolLiquidationFeePct
@@ -319,7 +351,7 @@ export class ReserveConfig {
     this.utilizationLimitBlockBorrowingAbovePct =
       fields.utilizationLimitBlockBorrowingAbovePct
     this.autodeleverageEnabled = fields.autodeleverageEnabled
-    this.reserved1 = fields.reserved1
+    this.proposerAuthorityLocked = fields.proposerAuthorityLocked
     this.borrowLimitOutsideElevationGroup =
       fields.borrowLimitOutsideElevationGroup
     this.borrowLimitAgainstThisCollateralInElevationGroup =
@@ -334,7 +366,9 @@ export class ReserveConfig {
         borsh.u8("status"),
         borsh.u8("assetTier"),
         borsh.u16("hostFixedInterestRateBps"),
-        borsh.array(borsh.u8(), 9, "reserved2"),
+        borsh.u16("minDeleveragingBonusBps"),
+        borsh.u8("blockCtokenUsage"),
+        borsh.array(borsh.u8(), 6, "reserved1"),
         borsh.u8("protocolOrderExecutionFeePct"),
         borsh.u8("protocolTakeRatePct"),
         borsh.u8("protocolLiquidationFeePct"),
@@ -357,7 +391,7 @@ export class ReserveConfig {
         borsh.u8("disableUsageAsCollOutsideEmode"),
         borsh.u8("utilizationLimitBlockBorrowingAbovePct"),
         borsh.u8("autodeleverageEnabled"),
-        borsh.array(borsh.u8(), 1, "reserved1"),
+        borsh.u8("proposerAuthorityLocked"),
         borsh.u64("borrowLimitOutsideElevationGroup"),
         borsh.array(
           borsh.u64(),
@@ -376,7 +410,9 @@ export class ReserveConfig {
       status: obj.status,
       assetTier: obj.assetTier,
       hostFixedInterestRateBps: obj.hostFixedInterestRateBps,
-      reserved2: obj.reserved2,
+      minDeleveragingBonusBps: obj.minDeleveragingBonusBps,
+      blockCtokenUsage: obj.blockCtokenUsage,
+      reserved1: obj.reserved1,
       protocolOrderExecutionFeePct: obj.protocolOrderExecutionFeePct,
       protocolTakeRatePct: obj.protocolTakeRatePct,
       protocolLiquidationFeePct: obj.protocolLiquidationFeePct,
@@ -405,7 +441,7 @@ export class ReserveConfig {
       utilizationLimitBlockBorrowingAbovePct:
         obj.utilizationLimitBlockBorrowingAbovePct,
       autodeleverageEnabled: obj.autodeleverageEnabled,
-      reserved1: obj.reserved1,
+      proposerAuthorityLocked: obj.proposerAuthorityLocked,
       borrowLimitOutsideElevationGroup: obj.borrowLimitOutsideElevationGroup,
       borrowLimitAgainstThisCollateralInElevationGroup:
         obj.borrowLimitAgainstThisCollateralInElevationGroup,
@@ -419,7 +455,9 @@ export class ReserveConfig {
       status: fields.status,
       assetTier: fields.assetTier,
       hostFixedInterestRateBps: fields.hostFixedInterestRateBps,
-      reserved2: fields.reserved2,
+      minDeleveragingBonusBps: fields.minDeleveragingBonusBps,
+      blockCtokenUsage: fields.blockCtokenUsage,
+      reserved1: fields.reserved1,
       protocolOrderExecutionFeePct: fields.protocolOrderExecutionFeePct,
       protocolTakeRatePct: fields.protocolTakeRatePct,
       protocolLiquidationFeePct: fields.protocolLiquidationFeePct,
@@ -450,7 +488,7 @@ export class ReserveConfig {
       utilizationLimitBlockBorrowingAbovePct:
         fields.utilizationLimitBlockBorrowingAbovePct,
       autodeleverageEnabled: fields.autodeleverageEnabled,
-      reserved1: fields.reserved1,
+      proposerAuthorityLocked: fields.proposerAuthorityLocked,
       borrowLimitOutsideElevationGroup: fields.borrowLimitOutsideElevationGroup,
       borrowLimitAgainstThisCollateralInElevationGroup:
         fields.borrowLimitAgainstThisCollateralInElevationGroup,
@@ -464,7 +502,9 @@ export class ReserveConfig {
       status: this.status,
       assetTier: this.assetTier,
       hostFixedInterestRateBps: this.hostFixedInterestRateBps,
-      reserved2: this.reserved2,
+      minDeleveragingBonusBps: this.minDeleveragingBonusBps,
+      blockCtokenUsage: this.blockCtokenUsage,
+      reserved1: this.reserved1,
       protocolOrderExecutionFeePct: this.protocolOrderExecutionFeePct,
       protocolTakeRatePct: this.protocolTakeRatePct,
       protocolLiquidationFeePct: this.protocolLiquidationFeePct,
@@ -490,7 +530,7 @@ export class ReserveConfig {
       utilizationLimitBlockBorrowingAbovePct:
         this.utilizationLimitBlockBorrowingAbovePct,
       autodeleverageEnabled: this.autodeleverageEnabled,
-      reserved1: this.reserved1,
+      proposerAuthorityLocked: this.proposerAuthorityLocked,
       borrowLimitOutsideElevationGroup:
         this.borrowLimitOutsideElevationGroup.toString(),
       borrowLimitAgainstThisCollateralInElevationGroup:
@@ -507,7 +547,9 @@ export class ReserveConfig {
       status: obj.status,
       assetTier: obj.assetTier,
       hostFixedInterestRateBps: obj.hostFixedInterestRateBps,
-      reserved2: obj.reserved2,
+      minDeleveragingBonusBps: obj.minDeleveragingBonusBps,
+      blockCtokenUsage: obj.blockCtokenUsage,
+      reserved1: obj.reserved1,
       protocolOrderExecutionFeePct: obj.protocolOrderExecutionFeePct,
       protocolTakeRatePct: obj.protocolTakeRatePct,
       protocolLiquidationFeePct: obj.protocolLiquidationFeePct,
@@ -537,7 +579,7 @@ export class ReserveConfig {
       utilizationLimitBlockBorrowingAbovePct:
         obj.utilizationLimitBlockBorrowingAbovePct,
       autodeleverageEnabled: obj.autodeleverageEnabled,
-      reserved1: obj.reserved1,
+      proposerAuthorityLocked: obj.proposerAuthorityLocked,
       borrowLimitOutsideElevationGroup: new BN(
         obj.borrowLimitOutsideElevationGroup
       ),

@@ -835,10 +835,10 @@
   resolved "https://registry.yarnpkg.com/@jup-ag/api/-/api-6.0.39.tgz#540c898c1ee74291450a71d8f4a5d36bb7e1287d"
   integrity sha512-cejW4IWf3dKM5ucmqu5jWtlPZ46LJJOCrx3s5vKmEIB+0X9ykSZsKkcIHFBCOqf3/lSbGyU7THZqXuxjKK9//g==
 
-"@kamino-finance/farms-sdk@3.2.13":
-  version "3.2.13"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-3.2.13.tgz#40cc7ac8c75f1e660eada9be59d6946d4c0cf43e"
-  integrity sha512-oaS/qgI3fdointOj81Ov57TvrSYRiW/LgHrPb/UAe089K8h1N9yUSI5Q1oZOVQB4x906SIbgCv3rhkQO9TSGLA==
+"@kamino-finance/farms-sdk@3.2.14":
+  version "3.2.14"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-3.2.14.tgz#2f1d322ae14b698793528b75117ea03cf16fb57c"
+  integrity sha512-vfw6aIZWM8H5QDtgK1j9ZB6XSi7KGS008Ecp9aSYbERiczhVLLasB5Ggbsg710MGZgZ1TQ03DPt/qzWAS6wOCw==
   dependencies:
     "@coral-xyz/anchor" "^0.28.0"
     "@coral-xyz/borsh" "^0.28.0"
@@ -914,20 +914,6 @@
     buffer-layout "^1.2.2"
     decimal.js "^10.3.1"
     fzstd "^0.1.1"
-
-"@kamino-finance/scope-sdk@^10.1.0":
-  version "10.1.0"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/scope-sdk/-/scope-sdk-10.1.0.tgz#ee309530030d3f17430a1c8db53404bf711a55c8"
-  integrity sha512-FYUYCXavHUfbIX2DhVccacytxYYelFtUkBsLWkUZ5mIOWJ6foWT7uG66LTj80J1GQQ0iXJzj2i09iak8oanvQA==
-  dependencies:
-    "@coral-xyz/anchor" "^0.29.0"
-    "@coral-xyz/borsh" "^0.29.0"
-    "@solana-program/system" "^0.7.0"
-    "@solana/kit" "^2.1.1"
-    "@solana/sysvars" "^2.1.1"
-    bn.js "^5.2.1"
-    buffer-layout "^1.2.2"
-    decimal.js "^10.3.1"
 
 "@kamino-finance/scope-sdk@^10.1.0":
   version "10.1.0"

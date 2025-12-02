@@ -29,6 +29,7 @@ export interface UpdateReserveAllocationAccounts {
   reserveCollateralMint: Address
   reserve: Address
   ctokenVault: Address
+  reserveWhitelistEntry: Option<Address>
   reserveCollateralTokenProgram: Address
   systemProgram: Address
   rent: Address
@@ -52,6 +53,9 @@ export function updateReserveAllocation(
     { address: accounts.reserveCollateralMint, role: 1 },
     { address: accounts.reserve, role: 0 },
     { address: accounts.ctokenVault, role: 1 },
+    isSome(accounts.reserveWhitelistEntry)
+      ? { address: accounts.reserveWhitelistEntry.value, role: 0 }
+      : { address: programAddress, role: 0 },
     { address: accounts.reserveCollateralTokenProgram, role: 0 },
     { address: accounts.systemProgram, role: 0 },
     { address: accounts.rent, role: 0 },

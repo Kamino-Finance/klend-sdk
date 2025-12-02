@@ -46,6 +46,12 @@ export function decodeVaultState(data: Buffer): VaultState {
     vaultFarm: dec.vaultFarm,
     creationTimestamp: dec.creationTimestamp,
     allocationAdmin: dec.allocationAdmin,
+    withdrawalPenaltyLamports: dec.withdrawalPenaltyLamports,
+    withdrawalPenaltyBps: dec.withdrawalPenaltyBps,
     padding3: dec.padding3,
+    firstLossCapitalFarm: dec.firstLossCapitalFarm,
+    allowAllocationsInWhitelistedReservesOnly: dec.allowAllocationsInWhitelistedReservesOnly,
+    allowInvestInWhitelistedReservesOnly: dec.allowInvestInWhitelistedReservesOnly,
+    padding4: dec.padding4,
   });
 }

@@ -129,6 +129,9 @@ export type CustomError =
   | OperationNotPermittedMarketImmutable
   | OrderCreationDisabled
   | NoUpgradeAuthority
+  | InitialAdminDepositExecuted
+  | ReserveHasNotReceivedInitialDeposit
+  | CTokenUsageBlocked
 
 export class InvalidMarketAuthority extends Error {
   static readonly code = 6000
@@ -189,10 +192,10 @@ export class InvalidSigner extends Error {
   static readonly code = 6005
   readonly code = 6005
   readonly name = "InvalidSigner"
-  readonly msg = "Input account must be a signer"
+  readonly msg = "Signer is not allowed to perform this action"
 
   constructor(readonly logs?: string[]) {
-    super("6005: Input account must be a signer")
+    super("6005: Signer is not allowed to perform this action")
   }
 }
 
@@ -1641,6 +1644,42 @@ export class NoUpgradeAuthority extends Error {
   }
 }
 
+export class InitialAdminDepositExecuted extends Error {
+  static readonly code = 6130
+  readonly code = 6130
+  readonly name = "InitialAdminDepositExecuted"
+  readonly msg = "Initial admin deposit in reserve already executed"
+
+  constructor(readonly logs?: string[]) {
+    super("6130: Initial admin deposit in reserve already executed")
+  }
+}
+
+export class ReserveHasNotReceivedInitialDeposit extends Error {
+  static readonly code = 6131
+  readonly code = 6131
+  readonly name = "ReserveHasNotReceivedInitialDeposit"
+  readonly msg =
+    "Reserve has not received the initial deposit, cannot update config"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6131: Reserve has not received the initial deposit, cannot update config"
+    )
+  }
+}
+
+export class CTokenUsageBlocked extends Error {
+  static readonly code = 6132
+  readonly code = 6132
+  readonly name = "CTokenUsageBlocked"
+  readonly msg = "CToken minting/redeeming is blocked for this reserve"
+
+  constructor(readonly logs?: string[]) {
+    super("6132: CToken minting/redeeming is blocked for this reserve")
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 6000:
@@ -1903,6 +1942,12 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new OrderCreationDisabled(logs)
     case 6129:
       return new NoUpgradeAuthority(logs)
+    case 6130:
+      return new InitialAdminDepositExecuted(logs)
+    case 6131:
+      return new ReserveHasNotReceivedInitialDeposit(logs)
+    case 6132:
+      return new CTokenUsageBlocked(logs)
   }
 
   return null

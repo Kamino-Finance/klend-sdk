@@ -76,10 +76,11 @@ import { ReserveConfig, UpdateLendingMarketMode, UpdateLendingMarketModeKind } f
 import Decimal from 'decimal.js';
 import { VaultState } from '../@codegen/kvault/accounts';
 import { getProgramAccounts } from '../utils/rpc';
-import { VaultConfigField, VaultConfigFieldKind } from '../@codegen/kvault/types';
+import { UpdateReserveWhitelistModeKind, VaultConfigField, VaultConfigFieldKind } from '../@codegen/kvault/types';
 import {
   AcceptVaultOwnershipIxs,
   APYs,
+  CreateVaultFarm,
   DepositIxs,
   DisinvestAllReservesIxs,
   InitVaultIxs,
@@ -103,6 +104,7 @@ import type { AccountInfoBase, AccountInfoWithJsonData, AccountInfoWithPubkey } 
 import { arrayElementConfigItems, ConfigUpdater } from './configItems';
 import { OracleMappings } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts';
 import { getReserveFarmRewardsAPY as getReserveFarmRewardsAPYUtils, ReserveIncentives } from '../utils/farmUtils';
+import { fetchKaminoCdnData } from '../utils/readCdnData';
 
 const base58Decoder = getBase58Decoder();
 
@@ -228,6 +230,15 @@ export class KaminoManager {
   }
 
   /**
+   * This method initializes the kvault global config (one off, needs to be signed by program owner)
+   * @param admin - the admin of the kvault program
+   * @returns - an instruction to initialize the kvault global config
+   */
+  async initKvaultGlobalConfigIx(admin: TransactionSigner) {
+    return this._vaultClient.initKvaultGlobalConfigIx(admin);
+  }
+
+  /**
    * This method will create a vault with a given config. The config can be changed later on, but it is recommended to set it up correctly from the start
    * @param vaultConfig - the config object used to create a vault
    * @returns vault: the keypair of the vault, used to sign the initialization transaction; initVaultIxs: a struct with ixs to initialize the vault and its lookup table + populateLUTIxs, a list to populate the lookup table which has to be executed in a separate transaction
@@ -236,6 +247,23 @@ export class KaminoManager {
     vaultConfig: KaminoVaultConfig
   ): Promise<{ vault: TransactionSigner; lut: Address; initVaultIxs: InitVaultIxs }> {
     return this._vaultClient.createVaultIxs(vaultConfig);
+  }
+
+  /**
+   * This method creates a farm for a vault
+   * @param admin - the admin of the vault
+   * @param vault - the vault to create a farm for (the vault should be already initialized)
+   * @returns a struct with the farm, the setup farm ixs and the update farm ixs
+   */
+  async createVaultFarmIxs(admin: TransactionSigner, vault: KaminoVault): Promise<CreateVaultFarm> {
+    const vaultState = await vault.getState();
+    if (!vaultState) {
+      throw new Error('Vault not initialized');
+    }
+    if (vaultState.vaultFarm !== DEFAULT_PUBLIC_KEY) {
+      throw new Error('Vault already has a farm');
+    }
+    return this._vaultClient.createVaultFarm(admin, vault.address, vaultState.sharesMint);
   }
 
   /**
@@ -559,6 +587,25 @@ export class KaminoManager {
   }
 
   /**
+   * This function creates instructions to buy shares (i.e. deposit) into a vault. It will also create ATA creation instructions for the vault shares that the user receives in return
+   * @param user - user to nuy shares
+   * @param vault - vault to buy shares from (if the state is not provided, it will be fetched)
+   * @param tokenAmount - token amount to be swapped for shares, in decimals (will be converted in lamports)
+   * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
+   * @returns - an instance of DepositIxs which contains the instructions to buy shares in vault and the instructions to stake the shares in the farm if the vault has a farm
+   */
+  async buyVaultSharesIxs(
+    user: TransactionSigner,
+    vault: KaminoVault,
+    tokenAmount: Decimal,
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    farmState?: FarmState
+  ): Promise<DepositIxs> {
+    return this._vaultClient.buySharesIxs(user, vault, tokenAmount, vaultReservesMap, farmState);
+  }
+
+  /**
    * This function creates instructions to stake the shares in the vault farm if the vault has a farm
    * @param user - user to stake
    * @param vault - vault to deposit into its farm (if the state is not provided, it will be fetched)
@@ -599,6 +646,23 @@ export class KaminoManager {
     }
 
     return this._vaultClient.updateVaultConfigIxs(vault, mode, value, signer, lutIxsSigner, skipLutUpdate);
+  }
+
+  /**
+   * Add or update a reserve whitelist entry. This controls whether the reserve is whitelisted for adding/updating
+   * allocations or for invest, depending on the mode parameter.
+   *
+   * @param reserve - Address of the reserve to whitelist
+   * @param mode - The whitelist mode: either 'Invest' or 'AddAllocation' with a value (1 = add, 0 = remove)
+   * @param globalAdmin - The global admin that signs the transaction
+   * @returns - An instruction to add/update the whitelisted reserve entry
+   */
+  async addUpdateWhitelistedReserveIx(
+    reserve: Address,
+    mode: UpdateReserveWhitelistModeKind,
+    globalAdmin: TransactionSigner
+  ): Promise<Instruction> {
+    return this._vaultClient.addUpdateWhitelistedReserveIx(reserve, mode, globalAdmin);
   }
 
   /** Sets the farm where the shares can be staked. This is store in vault state and a vault can only have one farm, so the new farm will ovveride the old farm
@@ -672,6 +736,27 @@ export class KaminoManager {
     farmState?: FarmState
   ): Promise<WithdrawIxs> {
     return this._vaultClient.withdrawIxs(user, vault, shareAmount, slot, vaultReservesMap, farmState);
+  }
+
+  /**
+   * This function will return the missing ATA creation instructions, as well as one or multiple withdraw instructions, based on how many reserves it's needed to withdraw from. This might have to be split in multiple transactions
+   * @param user - user to sell shares for vault tokens
+   * @param vault - vault to sell shares from
+   * @param shareAmount - share amount to sell (in tokens, not lamports), in order to withdraw everything, any value > user share amount
+   * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
+   * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
+   * @returns an array of instructions to create missing ATAs if needed and the withdraw instructions
+   */
+  async sellVaultSharesIxs(
+    user: TransactionSigner,
+    vault: KaminoVault,
+    shareAmount: Decimal,
+    slot: Slot,
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    farmState?: FarmState
+  ): Promise<WithdrawIxs> {
+    return this._vaultClient.sellSharesIxs(user, vault, shareAmount, slot, vaultReservesMap, farmState);
   }
 
   /**
@@ -836,7 +921,10 @@ export class KaminoManager {
     const allReserves = reservePairs.map(([, reserve]) => reserve);
 
     // Get all oracle accounts
-    const allOracleAccounts = await getAllOracleAccounts(this.getRpc(), allReserves);
+    const [allOracleAccounts, cdnResourcesData] = await Promise.all([
+      getAllOracleAccounts(this.getRpc(), allReserves),
+      fetchKaminoCdnData(),
+    ]);
     // Group reserves by market
     const marketToReserve = new Map<Address, ReserveWithAddress[]>();
     for (const [reserveAddress, reserveState] of reservePairs) {
@@ -875,7 +963,8 @@ export class KaminoManager {
             state,
             oracle,
             this.getRpc(),
-            this.recentSlotDurationMs
+            this.recentSlotDurationMs,
+            cdnResourcesData
           );
           reservesByAddress.set(kaminoReserve.address, kaminoReserve);
         });
@@ -1688,6 +1777,8 @@ export const MARKET_UPDATER = new ConfigUpdater(UpdateLendingMarketMode.fromDeco
   [UpdateLendingMarketMode.UpdateInitialDepositAmount.kind]: config.minInitialDepositAmount,
   [UpdateLendingMarketMode.UpdateObligationOrderCreationEnabled.kind]: config.obligationOrderCreationEnabled,
   [UpdateLendingMarketMode.UpdateObligationOrderExecutionEnabled.kind]: config.obligationOrderExecutionEnabled,
+  [UpdateLendingMarketMode.UpdateProposerAuthority.kind]: config.proposerAuthority,
+  [UpdateLendingMarketMode.UpdatePriceTriggeredLiquidationDisabled.kind]: config.priceTriggeredLiquidationDisabled,
 }));
 
 function parseForChangesMarketConfigAndGetIxs(

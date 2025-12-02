@@ -92,7 +92,18 @@ export interface LendingMarketFields {
    * Note: updating or cancelling existing orders is *not* affected by this flag.
    */
   obligationOrderCreationEnabled: number
+  /**
+   * Whether the liquidation operations that are triggered by price changes should be disabled.
+   * This includes regular liquidation (i.e. LTV exceeding the unhealthy threshold) and some
+   * obligation orders' execution.
+   *
+   * *Caution:* this flag is *disabling* the liquidations when `1` - contrary to all the other
+   * liquidation-driving flags (see e.g. [Self::autodeleverage_enabled]).
+   */
+  priceTriggeredLiquidationDisabled: number
   padding2: Array<number>
+  /** Authority that can propose creating of new reserves but cannot enable them. */
+  proposerAuthority: Address
   padding1: Array<BN>
 }
 
@@ -173,7 +184,18 @@ export interface LendingMarketJSON {
    * Note: updating or cancelling existing orders is *not* affected by this flag.
    */
   obligationOrderCreationEnabled: number
+  /**
+   * Whether the liquidation operations that are triggered by price changes should be disabled.
+   * This includes regular liquidation (i.e. LTV exceeding the unhealthy threshold) and some
+   * obligation orders' execution.
+   *
+   * *Caution:* this flag is *disabling* the liquidations when `1` - contrary to all the other
+   * liquidation-driving flags (see e.g. [Self::autodeleverage_enabled]).
+   */
+  priceTriggeredLiquidationDisabled: number
   padding2: Array<number>
+  /** Authority that can propose creating of new reserves but cannot enable them. */
+  proposerAuthority: string
   padding1: Array<string>
 }
 
@@ -254,7 +276,18 @@ export class LendingMarket {
    * Note: updating or cancelling existing orders is *not* affected by this flag.
    */
   readonly obligationOrderCreationEnabled: number
+  /**
+   * Whether the liquidation operations that are triggered by price changes should be disabled.
+   * This includes regular liquidation (i.e. LTV exceeding the unhealthy threshold) and some
+   * obligation orders' execution.
+   *
+   * *Caution:* this flag is *disabling* the liquidations when `1` - contrary to all the other
+   * liquidation-driving flags (see e.g. [Self::autodeleverage_enabled]).
+   */
+  readonly priceTriggeredLiquidationDisabled: number
   readonly padding2: Array<number>
+  /** Authority that can propose creating of new reserves but cannot enable them. */
+  readonly proposerAuthority: Address
   readonly padding1: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -291,8 +324,10 @@ export class LendingMarket {
     borsh.u8("obligationOrderExecutionEnabled"),
     borsh.u8("immutable"),
     borsh.u8("obligationOrderCreationEnabled"),
-    borsh.array(borsh.u8(), 5, "padding2"),
-    borsh.array(borsh.u64(), 169, "padding1"),
+    borsh.u8("priceTriggeredLiquidationDisabled"),
+    borsh.array(borsh.u8(), 4, "padding2"),
+    borshAddress("proposerAuthority"),
+    borsh.array(borsh.u64(), 165, "padding1"),
   ])
 
   constructor(fields: LendingMarketFields) {
@@ -334,7 +369,10 @@ export class LendingMarket {
       fields.obligationOrderExecutionEnabled
     this.immutable = fields.immutable
     this.obligationOrderCreationEnabled = fields.obligationOrderCreationEnabled
+    this.priceTriggeredLiquidationDisabled =
+      fields.priceTriggeredLiquidationDisabled
     this.padding2 = fields.padding2
+    this.proposerAuthority = fields.proposerAuthority
     this.padding1 = fields.padding1
   }
 
@@ -421,7 +459,9 @@ export class LendingMarket {
       obligationOrderExecutionEnabled: dec.obligationOrderExecutionEnabled,
       immutable: dec.immutable,
       obligationOrderCreationEnabled: dec.obligationOrderCreationEnabled,
+      priceTriggeredLiquidationDisabled: dec.priceTriggeredLiquidationDisabled,
       padding2: dec.padding2,
+      proposerAuthority: dec.proposerAuthority,
       padding1: dec.padding1,
     })
   }
@@ -464,7 +504,9 @@ export class LendingMarket {
       obligationOrderExecutionEnabled: this.obligationOrderExecutionEnabled,
       immutable: this.immutable,
       obligationOrderCreationEnabled: this.obligationOrderCreationEnabled,
+      priceTriggeredLiquidationDisabled: this.priceTriggeredLiquidationDisabled,
       padding2: this.padding2,
+      proposerAuthority: this.proposerAuthority,
       padding1: this.padding1.map((item) => item.toString()),
     }
   }
@@ -514,7 +556,9 @@ export class LendingMarket {
       obligationOrderExecutionEnabled: obj.obligationOrderExecutionEnabled,
       immutable: obj.immutable,
       obligationOrderCreationEnabled: obj.obligationOrderCreationEnabled,
+      priceTriggeredLiquidationDisabled: obj.priceTriggeredLiquidationDisabled,
       padding2: obj.padding2,
+      proposerAuthority: address(obj.proposerAuthority),
       padding1: obj.padding1.map((item) => new BN(item)),
     })
   }

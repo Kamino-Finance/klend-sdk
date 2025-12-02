@@ -55,7 +55,7 @@ export function withdrawObligationCollateralV2(
   const keys: Array<AccountMeta | AccountSignerMeta> = [
     {
       address: accounts.withdrawAccounts.owner.address,
-      role: 2,
+      role: 3,
       signer: accounts.withdrawAccounts.owner,
     },
     { address: accounts.withdrawAccounts.obligation, role: 1 },

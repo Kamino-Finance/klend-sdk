@@ -1,6 +1,6 @@
 {
   "name": "@kamino-finance/klend-sdk",
-  "version": "7.2.3",
+  "version": "7.3.4",
   "description": "Typescript SDK for interacting with the Kamino Lending (klend) protocol",
   "repository": {
     "type": "git",
@@ -58,7 +58,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "^0.28.0",
     "@coral-xyz/borsh": "^0.28.0",
-    "@kamino-finance/farms-sdk": "3.2.13",
+    "@kamino-finance/farms-sdk": "3.2.14",
     "@kamino-finance/kliquidity-sdk": "^8.5.3",
     "@kamino-finance/scope-sdk": "^10.1.0",
     "@solana-program/address-lookup-table": "^0.8.0",

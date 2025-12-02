@@ -55,6 +55,8 @@ import { parseTokenSymbol, parseZeroPaddedUtf8 } from './utils';
 import { ObligationZP } from '../@codegen/klend/zero_padding';
 import { checkDefined } from '../utils/validations';
 import { Buffer } from 'buffer';
+import { ReserveStatus } from '../@codegen/klend/types';
+import { fetchKaminoCdnData } from '../utils/readCdnData';
 
 export type KaminoMarketRpcApi = GetAccountInfoApi &
   GetMultipleAccountsApi &
@@ -478,7 +480,10 @@ export class KaminoMarket {
         state: reserveAccount,
       };
     });
-    const reservesAndOracles = await getTokenOracleData(this.getRpc(), deserializedReserves, oracleAccounts);
+    const [reservesAndOracles, cdnResourcesData] = await Promise.all([
+      getTokenOracleData(this.getRpc(), deserializedReserves, oracleAccounts),
+      fetchKaminoCdnData(),
+    ]);
     const kaminoReserves = new Map<Address, KaminoReserve>();
     reservesAndOracles.forEach(([reserve, oracle], index) => {
       if (!oracle) {
@@ -493,7 +498,8 @@ export class KaminoMarket {
         reserve,
         oracle,
         this.rpc,
-        this.recentSlotDurationMs
+        this.recentSlotDurationMs,
+        cdnResourcesData
       );
       kaminoReserves.set(kaminoReserve.address, kaminoReserve);
     });
@@ -1711,9 +1717,15 @@ export async function getReservesForMarket(
       state: reserveAccount,
     };
   });
-  const reservesAndOracles = await getTokenOracleData(rpc, deserializedReserves, oracleAccounts);
+  const [reservesAndOracles, cdnResourcesData] = await Promise.all([
+    getTokenOracleData(rpc, deserializedReserves, oracleAccounts),
+    fetchKaminoCdnData(),
+  ]);
   const reservesByAddress = new Map<Address, KaminoReserve>();
   reservesAndOracles.forEach(([reserve, oracle], index) => {
+    if (reserve.config.status === ReserveStatus.Obsolete.discriminator) {
+      return;
+    }
     if (!oracle) {
       throw Error(
         `Could not find oracle for ${parseTokenSymbol(reserve.config.tokenInfo.name)} (${
@@ -1721,7 +1733,14 @@ export async function getReservesForMarket(
         }) reserve in market ${reserve.lendingMarket}`
       );
     }
-    const kaminoReserve = KaminoReserve.initialize(reserves[index].pubkey, reserve, oracle, rpc, recentSlotDurationMs);
+    const kaminoReserve = KaminoReserve.initialize(
+      reserves[index].pubkey,
+      reserve,
+      oracle,
+      rpc,
+      recentSlotDurationMs,
+      cdnResourcesData
+    );
     reservesByAddress.set(kaminoReserve.address, kaminoReserve);
   });
   return reservesByAddress;
@@ -1739,7 +1758,10 @@ export async function getSingleReserve(
   if (reserve === null) {
     throw new Error(`Reserve account ${reservePk} does not exist`);
   }
-  const reservesAndOracles = await getTokenOracleData(rpc, [{ address: reservePk, state: reserve }], oracleAccounts);
+  const [reservesAndOracles, cdnResourcesData] = await Promise.all([
+    getTokenOracleData(rpc, [{ address: reservePk, state: reserve }], oracleAccounts),
+    fetchKaminoCdnData(),
+  ]);
   const [, oracle] = reservesAndOracles[0];
 
   if (!oracle) {
@@ -1749,7 +1771,7 @@ export async function getSingleReserve(
       }`
     );
   }
-  return KaminoReserve.initialize(reservePk, reserve, oracle, rpc, recentSlotDurationMs);
+  return KaminoReserve.initialize(reservePk, reserve, oracle, rpc, recentSlotDurationMs, cdnResourcesData);
 }
 
 export function getReservesActive(reserves: Map<Address, KaminoReserve>): Map<Address, KaminoReserve> {

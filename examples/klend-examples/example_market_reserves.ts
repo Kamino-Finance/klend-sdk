@@ -18,6 +18,7 @@ import { getMarket } from '../utils/helpers';
       continue;
     }
     console.log(`RESERVE ${reserve.symbol}`);
+    console.log(`  Status: ${reserve.stats.status} | UI Deprecated: ${reserve.stats.isUIDeprecated ?? 'unknown'}`);
     const reserveSupplyApr = reserve.calculateSupplyAPR(currentSlot, market.state.referralFeeBps);
     const reserveSupplyApy = reserve.totalSupplyAPY(currentSlot);
     const reserveBorrowApr = reserve.calculateBorrowAPR(currentSlot, market.state.referralFeeBps);

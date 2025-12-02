@@ -15,51 +15,36 @@ import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslin
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
 
-export const DISCRIMINATOR = Buffer.from([122, 3, 21, 222, 158, 255, 238, 157])
-
-export interface UpdateVaultConfigArgs {
-  entry: types.VaultConfigFieldKind
-  data: Uint8Array
-}
-
-export interface UpdateVaultConfigAccounts {
-  signer: TransactionSigner
-  globalConfig: Address
-  vaultState: Address
-  klendProgram: Address
-}
-
-export const layout = borsh.struct([
-  types.VaultConfigField.layout("entry"),
-  borsh.vecU8("data"),
+export const DISCRIMINATOR = Buffer.from([
+  254, 197, 228, 118, 183, 206, 62, 226,
 ])
 
-export function updateVaultConfig(
-  args: UpdateVaultConfigArgs,
-  accounts: UpdateVaultConfigAccounts,
+export interface SeedDepositOnInitReserveAccounts {
+  signer: TransactionSigner
+  lendingMarket: Address
+  reserve: Address
+  reserveLiquidityMint: Address
+  reserveLiquiditySupply: Address
+  initialLiquiditySource: Address
+  liquidityTokenProgram: Address
+}
+
+export function seedDepositOnInitReserve(
+  accounts: SeedDepositOnInitReserveAccounts,
   remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta | AccountSignerMeta> = [
     { address: accounts.signer.address, role: 2, signer: accounts.signer },
-    { address: accounts.globalConfig, role: 0 },
-    { address: accounts.vaultState, role: 1 },
-    { address: accounts.klendProgram, role: 0 },
+    { address: accounts.lendingMarket, role: 0 },
+    { address: accounts.reserve, role: 1 },
+    { address: accounts.reserveLiquidityMint, role: 0 },
+    { address: accounts.reserveLiquiditySupply, role: 1 },
+    { address: accounts.initialLiquiditySource, role: 1 },
+    { address: accounts.liquidityTokenProgram, role: 0 },
     ...remainingAccounts,
   ]
-  const buffer = Buffer.alloc(1000)
-  const len = layout.encode(
-    {
-      entry: args.entry.toEncodable(),
-      data: Buffer.from(
-        args.data.buffer,
-        args.data.byteOffset,
-        args.data.length
-      ),
-    },
-    buffer
-  )
-  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const data = DISCRIMINATOR
   const ix: Instruction = { accounts: keys, programAddress, data }
   return ix
 }

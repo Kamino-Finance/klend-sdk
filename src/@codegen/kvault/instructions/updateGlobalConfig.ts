@@ -15,47 +15,40 @@ import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslin
 import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
 import { PROGRAM_ID } from "../programId"
 
-export const DISCRIMINATOR = Buffer.from([122, 3, 21, 222, 158, 255, 238, 157])
+export const DISCRIMINATOR = Buffer.from([164, 84, 130, 189, 111, 58, 250, 200])
 
-export interface UpdateVaultConfigArgs {
-  entry: types.VaultConfigFieldKind
-  data: Uint8Array
+export interface UpdateGlobalConfigArgs {
+  update: types.UpdateGlobalConfigModeKind
 }
 
-export interface UpdateVaultConfigAccounts {
-  signer: TransactionSigner
+export interface UpdateGlobalConfigAccounts {
+  globalAdmin: TransactionSigner
   globalConfig: Address
-  vaultState: Address
-  klendProgram: Address
 }
 
 export const layout = borsh.struct([
-  types.VaultConfigField.layout("entry"),
-  borsh.vecU8("data"),
+  types.UpdateGlobalConfigMode.layout("update"),
 ])
 
-export function updateVaultConfig(
-  args: UpdateVaultConfigArgs,
-  accounts: UpdateVaultConfigAccounts,
+export function updateGlobalConfig(
+  args: UpdateGlobalConfigArgs,
+  accounts: UpdateGlobalConfigAccounts,
   remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta | AccountSignerMeta> = [
-    { address: accounts.signer.address, role: 2, signer: accounts.signer },
-    { address: accounts.globalConfig, role: 0 },
-    { address: accounts.vaultState, role: 1 },
-    { address: accounts.klendProgram, role: 0 },
+    {
+      address: accounts.globalAdmin.address,
+      role: 2,
+      signer: accounts.globalAdmin,
+    },
+    { address: accounts.globalConfig, role: 1 },
     ...remainingAccounts,
   ]
   const buffer = Buffer.alloc(1000)
   const len = layout.encode(
     {
-      entry: args.entry.toEncodable(),
-      data: Buffer.from(
-        args.data.buffer,
-        args.data.byteOffset,
-        args.data.length
-      ),
+      update: args.update.toEncodable(),
     },
     buffer
   )

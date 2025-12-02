@@ -243,7 +243,7 @@ export type AssetReserveConfigParams = {
   minLiquidationBonusBps: number;
   badDebtLiquidationBonusBps: number;
   liquidationThresholdPct: number;
-  borrowFeeSf: Fraction;
+  originationFeeSf: Fraction;
   flashLoanFeeSf: Fraction;
   protocolTakeRate: number;
   elevationGroups: number[];
@@ -260,7 +260,7 @@ export const getDefaultConfigParams = (): AssetReserveConfigParams => {
     minLiquidationBonusBps: 200,
     badDebtLiquidationBonusBps: 10,
     liquidationThresholdPct: 75,
-    borrowFeeSf: ZERO_FRACTION,
+    originationFeeSf: ZERO_FRACTION,
     flashLoanFeeSf: ZERO_FRACTION,
     protocolTakeRate: 0,
     elevationGroups: new Array(20).fill(0),
@@ -310,7 +310,7 @@ function buildReserveConfig(fields: {
     maxLiquidationBonusBps: fields.configParams.maxLiquidationBonusBps,
     badDebtLiquidationBonusBps: fields.configParams.badDebtLiquidationBonusBps,
     fees: {
-      borrowFeeSf: fields.configParams.borrowFeeSf.getValue(),
+      originationFeeSf: fields.configParams.originationFeeSf.getValue(),
       flashLoanFeeSf: fields.configParams.flashLoanFeeSf.getValue(),
       padding: Array(6).fill(0),
     },
@@ -370,7 +370,9 @@ function buildReserveConfig(fields: {
     borrowLimitAgainstThisCollateralInElevationGroup: Array(32).fill(new BN(0)),
     deleveragingBonusIncreaseBpsPerDay: new BN(100),
     reserved1: Array(1).fill(0),
-    reserved2: Array(9).fill(0),
+    minDeleveragingBonusBps: 0,
+    proposerAuthorityLocked: 0,
+    blockCtokenUsage: 0,
   };
 
   return new ReserveConfig(reserveConfigFields);
