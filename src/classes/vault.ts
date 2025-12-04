@@ -816,7 +816,8 @@ export class KaminoVaultClient {
     value: string,
     adminAuthority?: TransactionSigner,
     lutIxsSigner?: TransactionSigner,
-    skipLutUpdate: boolean = false
+    skipLutUpdate: boolean = false,
+    errorOnOverride: boolean = true
   ): Promise<UpdateVaultConfigIxs> {
     const vaultState: VaultState = await vault.getState();
     const admin = parseVaultAdmin(vaultState, adminAuthority);
@@ -828,6 +829,14 @@ export class KaminoVaultClient {
       vaultState: vault.address,
       klendProgram: this._kaminoLendProgramId,
     };
+
+    if (mode.kind === new VaultConfigField.Farm().kind) {
+      if (value != DEFAULT_PUBLIC_KEY && vaultState.vaultFarm != DEFAULT_PUBLIC_KEY) {
+        if (errorOnOverride) {
+          throw new Error('Vault already has a farm, if you want to override it set errorOnOverride to false');
+        }
+      }
+    }
 
     const updateVaultConfigArgs: UpdateVaultConfigArgs = {
       entry: mode,
@@ -1876,7 +1885,7 @@ export class KaminoVaultClient {
     if (isWhitelistOnlyFlag) {
       const flag = parseBooleanFlag(value);
       return Buffer.from([flag]);
-    } else if (isNaN(+value)) {
+    } else if (isNaN(+value) || value == DEFAULT_PUBLIC_KEY) {
       if (mode.kind === new VaultConfigField.Name().kind) {
         const data = Array.from(this.encodeVaultName(value));
         return Buffer.from(data);

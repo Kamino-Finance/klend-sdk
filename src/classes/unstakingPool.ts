@@ -193,7 +193,7 @@ export class UnstakingPoolClient {
       data: Buffer.from([0]),
     };
 
-    if (isNaN(+value)) {
+    if (isNaN(+value) || value == DEFAULT_PUBLIC_KEY) {
       const data = address(value);
       args.data = Buffer.from(addressEncoder.encode(data));
     } else {

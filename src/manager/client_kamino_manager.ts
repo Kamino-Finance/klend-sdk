@@ -569,66 +569,84 @@ async function main() {
       'Global admin signer (keypair path in execute/simulate modes, pubkey in multisig mode). Required when setting AllowInvestInWhitelistedReservesOnly or AllowAllocationsInWhitelistedReservesOnly to false'
     )
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ vault, field, value, mode, staging, skipLutUpdate, lutSigner, globalAdmin, multisig }) => {
-      if (mode === 'multisig' && !multisig) {
-        throw new Error('If using multisig mode, multisig pubkey is required');
-      }
-
-      const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
-      const vaultAddress = address(vault);
-
-      const kaminoManager = new KaminoManager(
-        env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
-        env.klendProgramId,
-        env.kvaultProgramId
-      );
-
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
-      const vaultState = await kaminoVault.getState();
-
-      // Use global admin signer if provided, otherwise fall back to vault admin/noop signer depending on mode
-      let signer;
-      if (mode === 'multisig' && globalAdmin) {
-        signer = noopSigner(address(globalAdmin));
-      } else if (globalAdmin) {
-        signer = await parseKeypairFile(globalAdmin as string);
-      } else {
-        signer = await env.getSigner({ vaultState });
-      }
-
-      let lutSignerOrUndefined = undefined;
-      if (lutSigner) {
-        lutSignerOrUndefined = await parseKeypairFile(lutSigner as string);
-      }
-
-      const shouldSkipLutUpdate = !!skipLutUpdate;
-      const instructions = await kaminoManager.updateVaultConfigIxs(
-        kaminoVault,
+    .option(
+      `--error-on-override`,
+      'If set, it will throw an error if the vault already has a farm, if you want to override it set errorOnOverride to false'
+    )
+    .action(
+      async ({
+        vault,
         field,
         value,
-        signer,
-        lutSignerOrUndefined,
-        shouldSkipLutUpdate
-      );
-
-      await processTx(
-        env.c,
-        signer,
-        [
-          instructions.updateVaultConfigIx,
-          ...instructions.updateLUTIxs,
-          ...getPriorityFeeAndCuIxs({
-            priorityFeeMultiplier: 2500,
-          }),
-        ],
         mode,
-        []
-      );
+        staging,
+        skipLutUpdate,
+        lutSigner,
+        globalAdmin,
+        multisig,
+        errorOnOverride,
+      }) => {
+        if (mode === 'multisig' && !multisig) {
+          throw new Error('If using multisig mode, multisig pubkey is required');
+        }
 
-      mode === 'execute' && console.log('Vault updated');
-    });
+        const ms = multisig ? address(multisig) : undefined;
+        const env = await initEnv(staging, ms);
+        const vaultAddress = address(vault);
+
+        const kaminoManager = new KaminoManager(
+          env.c.rpc,
+          DEFAULT_RECENT_SLOT_DURATION_MS,
+          env.klendProgramId,
+          env.kvaultProgramId
+        );
+
+        const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+        const vaultState = await kaminoVault.getState();
+
+        // Use global admin signer if provided, otherwise fall back to vault admin/noop signer depending on mode
+        let signer;
+        if (mode === 'multisig' && globalAdmin) {
+          signer = noopSigner(address(globalAdmin));
+        } else if (globalAdmin) {
+          signer = await parseKeypairFile(globalAdmin as string);
+        } else {
+          signer = await env.getSigner({ vaultState });
+        }
+
+        let lutSignerOrUndefined = undefined;
+        if (lutSigner) {
+          lutSignerOrUndefined = await parseKeypairFile(lutSigner as string);
+        }
+
+        const shouldSkipLutUpdate = !!skipLutUpdate;
+        const instructions = await kaminoManager.updateVaultConfigIxs(
+          kaminoVault,
+          field,
+          value,
+          signer,
+          lutSignerOrUndefined,
+          shouldSkipLutUpdate,
+          errorOnOverride
+        );
+
+        await processTx(
+          env.c,
+          signer,
+          [
+            instructions.updateVaultConfigIx,
+            ...instructions.updateLUTIxs,
+            ...getPriorityFeeAndCuIxs({
+              priorityFeeMultiplier: 2500,
+            }),
+          ],
+          mode,
+          []
+        );
+
+        mode === 'execute' && console.log('Vault updated');
+      }
+    );
 
   commands
     .command('add-update-whitelisted-reserve')
