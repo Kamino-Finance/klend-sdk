@@ -8,6 +8,7 @@ import {
   scaleDownWads,
   WAD,
   RewardInfo,
+  RewardType,
 } from '@kamino-finance/farms-sdk';
 import {
   address,
@@ -174,7 +175,7 @@ export type UnstakeAndWithdrawFromFarmIxs = {
   withdrawIx: Instruction;
 };
 
-export function getRewardPerTimeUnitSecond(reward: RewardInfo) {
+export function getRewardPerTimeUnitSecond(reward: RewardInfo, farmTotalStakeLamports: Decimal) {
   const now = new Decimal(new Date().getTime()).div(1000);
   let rewardPerTimeUnitSecond = new Decimal(0);
   for (let i = 0; i < reward.rewardScheduleCurve.points.length - 1; i++) {
@@ -196,8 +197,11 @@ export function getRewardPerTimeUnitSecond(reward: RewardInfo) {
   const rewardTokenDecimals = reward.token.decimals.toNumber();
   const rewardAmountPerUnitDecimals = new Decimal(10).pow(reward.rewardsPerSecondDecimals.toString());
   const rewardAmountPerUnitLamports = new Decimal(10).pow(rewardTokenDecimals.toString());
+  const constantRewardStakeAdjustment =
+    reward.rewardType === RewardType.Constant.discriminator ? farmTotalStakeLamports : new Decimal(1);
 
   const rpsAdjusted = new Decimal(rewardPerTimeUnitSecond.toString())
+    .mul(constantRewardStakeAdjustment)
     .div(rewardAmountPerUnitDecimals)
     .div(rewardAmountPerUnitLamports);
 

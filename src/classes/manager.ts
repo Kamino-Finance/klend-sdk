@@ -643,10 +643,26 @@ export class KaminoManager {
   ): Promise<UpdateVaultConfigIxs> {
     if (typeof mode === 'string') {
       const field = VaultConfigField.fromDecoded({ [mode]: '' });
-      return this._vaultClient.updateVaultConfigIxs(vault, field, value, signer, lutIxsSigner, skipLutUpdate, errorOnOverride);
+      return this._vaultClient.updateVaultConfigIxs(
+        vault,
+        field,
+        value,
+        signer,
+        lutIxsSigner,
+        skipLutUpdate,
+        errorOnOverride
+      );
     }
 
-    return this._vaultClient.updateVaultConfigIxs(vault, mode, value, signer, lutIxsSigner, skipLutUpdate, errorOnOverride);
+    return this._vaultClient.updateVaultConfigIxs(
+      vault,
+      mode,
+      value,
+      signer,
+      lutIxsSigner,
+      skipLutUpdate,
+      errorOnOverride
+    );
   }
 
   /**

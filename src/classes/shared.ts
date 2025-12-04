@@ -1,6 +1,6 @@
 import { Address } from '@solana/kit';
 import Decimal from 'decimal.js';
-import { FarmState, RewardInfo } from '@kamino-finance/farms-sdk';
+import { FarmAndKey, RewardInfo } from '@kamino-finance/farms-sdk';
 
 export type ConfigType = Array<MarketConfigType>;
 
@@ -55,7 +55,7 @@ export type ReserveRewardYield = {
 
 export type ReserveFarmInfo = {
   fetched: boolean;
-  farmStates: FarmState[];
+  farms: FarmAndKey[];
 };
 
 export enum FeeCalculation {

@@ -38,7 +38,10 @@ import { getRewardPerTimeUnitSecond } from '../../src/classes/farm_utils';
 
   const totalStaked = lamportsToNumberDecimal(farmState?.totalStakedAmount.toString(), usdcTokenDecimals); // this is how much debt there is against the collateral (xBTC)
 
-  const rewardsPerSecond = getRewardPerTimeUnitSecond(farmState.rewardInfos[0]);
+  const rewardsPerSecond = getRewardPerTimeUnitSecond(
+    farmState.rewardInfos[0],
+    new Decimal(farmState?.totalStakedAmount.toString())
+  );
   const hasAvailableRewards = farmState.rewardInfos[0].rewardsAvailable.gtn(0);
   if (!hasAvailableRewards) {
     console.log('No available rewards');

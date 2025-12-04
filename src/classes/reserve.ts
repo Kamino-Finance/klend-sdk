@@ -49,7 +49,7 @@ import {
   UpdateReserveConfigArgs,
 } from '../lib';
 import { aprToApy, KaminoPrices } from '@kamino-finance/kliquidity-sdk';
-import { FarmState, RewardInfo } from '@kamino-finance/farms-sdk';
+import { FarmAndKey, FarmState, RewardInfo } from '@kamino-finance/farms-sdk';
 import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
 import { maxBigInt } from '../utils/bigint';
 import { getCreateAccountInstruction, SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
@@ -70,7 +70,7 @@ export class KaminoReserve {
 
   tokenOraclePrice: TokenOracleData;
   stats: ReserveDataType;
-  private farmData: ReserveFarmInfo = { fetched: false, farmStates: [] };
+  private farmData: ReserveFarmInfo = { fetched: false, farms: [] };
 
   private rpc: Rpc<KaminoReserveRpcApi>;
   private readonly recentSlotDurationMs: number;
@@ -813,22 +813,22 @@ export class KaminoReserve {
 
   async loadFarmStates() {
     if (!this.farmData.fetched) {
-      const farmStates: FarmState[] = [];
+      const farmStates: FarmAndKey[] = [];
       const debtFarmAddress = this.getDebtFarmAddress();
       if (isSome(debtFarmAddress)) {
         const farmState = await FarmState.fetch(this.rpc, debtFarmAddress.value);
         if (farmState !== null) {
-          farmStates.push(farmState);
+          farmStates.push({ farmState, key: debtFarmAddress.value });
         }
       }
       const collateralFarmAddress = this.getCollateralFarmAddress();
       if (isSome(collateralFarmAddress)) {
         const farmState = await FarmState.fetch(this.rpc, collateralFarmAddress.value);
         if (farmState !== null) {
-          farmStates.push(farmState);
+          farmStates.push({ farmState, key: collateralFarmAddress.value });
         }
       }
-      this.farmData.farmStates = farmStates;
+      this.farmData.farms = farmStates;
       this.farmData.fetched = true;
     }
   }
@@ -839,14 +839,19 @@ export class KaminoReserve {
       throw Error('KaminoMarket must call loadReserves.');
     }
 
-    const isDebtReward = this.state.farmDebt === this.address;
     await this.loadFarmStates();
     const yields: ReserveRewardYield[] = [];
-    for (const farmState of this.farmData.farmStates) {
-      for (const rewardInfo of farmState.rewardInfos.filter(
+    for (const farmAndKey of this.farmData.farms) {
+      const isDebtReward = this.state.farmDebt === farmAndKey.key;
+      for (const rewardInfo of farmAndKey.farmState.rewardInfos.filter(
         (x) => x.token.mint !== DEFAULT_PUBLIC_KEY && !x.rewardsAvailable.isZero()
       )) {
-        const { apy, apr } = this.calculateRewardYield(prices, rewardInfo, isDebtReward);
+        const { apy, apr } = this.calculateRewardYield(
+          prices,
+          rewardInfo,
+          isDebtReward,
+          new Decimal(farmAndKey.farmState.totalActiveStakeScaled.toString())
+        );
         if (apy.isZero() && apr.isZero()) {
           continue;
         }
@@ -856,9 +861,14 @@ export class KaminoReserve {
     return yields;
   }
 
-  private calculateRewardYield(prices: KaminoPrices, rewardInfo: RewardInfo, isDebtReward: boolean) {
+  calculateRewardYield(
+    prices: KaminoPrices,
+    rewardInfo: RewardInfo,
+    isDebtReward: boolean,
+    farmTotalStakeLamports: Decimal
+  ) {
     const mintAddress = this.getLiquidityMint();
-    const rewardPerTimeUnitSecond = getRewardPerTimeUnitSecond(rewardInfo);
+    const rewardPerTimeUnitSecond = getRewardPerTimeUnitSecond(rewardInfo, farmTotalStakeLamports);
     const reserveToken = prices.spot[mintAddress.toString()];
     const rewardToken = prices.spot[rewardInfo.token.mint.toString()];
 
