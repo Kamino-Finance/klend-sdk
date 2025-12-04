@@ -638,14 +638,15 @@ export class KaminoManager {
     value: string,
     signer?: TransactionSigner,
     lutIxsSigner?: TransactionSigner,
-    skipLutUpdate: boolean = false
+    skipLutUpdate: boolean = false,
+    errorOnOverride: boolean = true
   ): Promise<UpdateVaultConfigIxs> {
     if (typeof mode === 'string') {
       const field = VaultConfigField.fromDecoded({ [mode]: '' });
-      return this._vaultClient.updateVaultConfigIxs(vault, field, value, signer, lutIxsSigner, skipLutUpdate);
+      return this._vaultClient.updateVaultConfigIxs(vault, field, value, signer, lutIxsSigner, skipLutUpdate, errorOnOverride);
     }
 
-    return this._vaultClient.updateVaultConfigIxs(vault, mode, value, signer, lutIxsSigner, skipLutUpdate);
+    return this._vaultClient.updateVaultConfigIxs(vault, mode, value, signer, lutIxsSigner, skipLutUpdate, errorOnOverride);
   }
 
   /**
