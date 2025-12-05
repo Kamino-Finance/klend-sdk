@@ -1421,7 +1421,6 @@ async function main() {
       );
       const txInstructions = [
         instructions.updateReserveAllocationIx,
-        ...instructions.updateLUTIxs,
         ...getPriorityFeeAndCuIxs({
           priorityFeeMultiplier: 2500,
         }),
