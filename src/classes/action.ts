@@ -3322,29 +3322,19 @@ export class KaminoAction {
       { programAddress: TOKEN_PROGRAM_ADDRESS }
     );
 
-    if (isValidTokenAccount) {
-      if (sendAction) {
-        preIxs.push(syncIx);
-        preIxsLabels.push(`SyncUserAtaSOL[${userTokenAccountAddress}]`);
-      } else {
-        postIxs.push(closeWSOLAccountIx);
-        postIxsLabels.push(`CloseUserAtaSOL[${userTokenAccountAddress}]`);
-      }
-    } else {
-      const [, createUserWSOLAccountIx] = await createAssociatedTokenAccountIdempotentInstruction(
-        this.owner,
-        WRAPPED_SOL_MINT,
-        this.owner.address,
-        TOKEN_PROGRAM_ADDRESS,
-        userTokenAccountAddress
-      );
-      preIxs.push(createUserWSOLAccountIx);
-      preIxsLabels.push(`CreateUserAtaSOL[${userTokenAccountAddress}]`);
-      preIxs.push(syncIx);
-      preIxsLabels.push(`SyncUserAtaSOL[${userTokenAccountAddress}]`);
-      postIxs.push(closeWSOLAccountIx);
-      postIxsLabels.push(`CloseUserAtaSOL[${userTokenAccountAddress}]`);
-    }
+    const [, createUserWSOLAccountIx] = await createAssociatedTokenAccountIdempotentInstruction(
+      this.owner,
+      WRAPPED_SOL_MINT,
+      this.owner.address,
+      TOKEN_PROGRAM_ADDRESS,
+      userTokenAccountAddress
+    );
+    preIxs.push(createUserWSOLAccountIx);
+    preIxsLabels.push(`CreateUserAtaSOL[${userTokenAccountAddress}]`);
+    preIxs.push(syncIx);
+    preIxsLabels.push(`SyncUserAtaSOL[${userTokenAccountAddress}]`);
+    postIxs.push(closeWSOLAccountIx);
+    postIxsLabels.push(`CloseUserAtaSOL[${userTokenAccountAddress}]`);
 
     this.setupIxs.unshift(...preIxs);
     this.setupIxsLabels.unshift(...preIxsLabels);
