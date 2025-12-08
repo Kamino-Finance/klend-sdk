@@ -76,7 +76,11 @@ import { Scope } from '@kamino-finance/scope-sdk';
 import { ObligationOrderAtIndex } from './obligationOrder';
 import { ASSOCIATED_TOKEN_PROGRAM_ADDRESS, TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
 import { SYSVAR_INSTRUCTIONS_ADDRESS, SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
-import { getCloseAccountInstruction, getSyncNativeInstruction } from '@solana-program/token-2022';
+import {
+  getCloseAccountInstruction,
+  getSyncNativeInstruction,
+  TOKEN_2022_PROGRAM_ADDRESS,
+} from '@solana-program/token-2022';
 import { getTransferSolInstruction, SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
 import { noopSigner } from '../utils/signer';
 
@@ -3289,8 +3293,13 @@ export class KaminoAction {
       action === 'mint' ||
       (action === 'liquidate' && this.mint === WRAPPED_SOL_MINT); // only sync WSOL amount if liquidator repays SOL which is secondaryMint
 
+    const isValidTokenAccount =
+      userWSOLAccountInfo.exists &&
+      (userWSOLAccountInfo.programAddress === TOKEN_PROGRAM_ADDRESS ||
+        userWSOLAccountInfo.programAddress === TOKEN_2022_PROGRAM_ADDRESS);
+
     const transferLamportsIx = getTransferSolInstruction({
-      amount: (userWSOLAccountInfo.exists ? 0n : rentExemptLamports) + (sendAction ? BigInt(safeRepay.toString()) : 0n),
+      amount: (isValidTokenAccount ? 0n : rentExemptLamports) + (sendAction ? BigInt(safeRepay.toString()) : 0n),
       source: this.owner,
       destination: userTokenAccountAddress,
     });
@@ -3312,7 +3321,8 @@ export class KaminoAction {
       },
       { programAddress: TOKEN_PROGRAM_ADDRESS }
     );
-    if (userWSOLAccountInfo.exists) {
+
+    if (isValidTokenAccount) {
       if (sendAction) {
         preIxs.push(syncIx);
         preIxsLabels.push(`SyncUserAtaSOL[${userTokenAccountAddress}]`);
