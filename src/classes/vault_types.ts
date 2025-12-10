@@ -50,10 +50,11 @@ export type SyncVaultLUTIxs = {
   syncLUTIxs: Instruction[];
 };
 
-/** If the stakeInFarmIfNeededIxs exist they have to be executed after the deposit so the shares received from the deposit are staked in the vault farm */
+/** If the stakeInFarmIfNeededIxs/stakeInFlcFarmIfNeededIxs exist they have to be executed after the deposit so the shares received from the deposit are staked in the vault farm. Only one of the stake ixs can be executed, either for the vault farms or the first loss capital farm*/
 export type DepositIxs = {
   depositIxs: Instruction[];
   stakeInFarmIfNeededIxs: Instruction[];
+  stakeInFlcFarmIfNeededIxs: Instruction[]; // if the vault has a firstLossCapital farm, these ixs will stake the shares in the flc farm
 };
 
 /** the ixs to unstake shares from farm and withdraw them from the vault. The `unstakeFromFarmIfNeededIxs` should be in the tx before `withdrawIxs`*/

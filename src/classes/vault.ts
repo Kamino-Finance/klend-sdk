@@ -123,7 +123,13 @@ import {
 } from './vault_types';
 import { batchFetch, collToLamportsDecimal, ZERO } from '@kamino-finance/kliquidity-sdk';
 import { FullBPSDecimal } from '@kamino-finance/kliquidity-sdk/dist/utils/CreationParameters';
-import { FarmConfigOption, FarmIncentives, FarmState, getUserStatePDA } from '@kamino-finance/farms-sdk/dist';
+import {
+  FarmConfigOption,
+  FarmIncentives,
+  FarmState,
+  getUserStatePDA,
+  scaleDownWads,
+} from '@kamino-finance/farms-sdk/dist';
 import { getAccountsInLut, initLookupTableIx, insertIntoLookupTableIxs } from '../utils/lookupTable';
 import {
   FARMS_ADMIN_MAINNET,
@@ -843,6 +849,8 @@ export class KaminoVaultClient {
       data: this.getValueForModeAsBuffer(mode, value),
     };
 
+    await this.updateVaultConfigValidations(mode, value, vaultState);
+
     const vaultReserves = this.getVaultReserves(vaultState);
     const vaultReservesState = await this.loadVaultReserves(vaultState);
 
@@ -906,6 +914,24 @@ export class KaminoVaultClient {
     return updateVaultConfigIxs;
   }
 
+  async updateVaultConfigValidations(mode: VaultConfigFieldKind, value: string, vaultState: VaultState) {
+    if (
+      mode.kind === new VaultConfigField.FirstLossCapitalFarm().kind ||
+      mode.kind === new VaultConfigField.Farm().kind
+    ) {
+      const farmAddress = address(value);
+      const farmState = await FarmState.fetch(this.getConnection(), farmAddress);
+      if (!farmState) {
+        throw new Error(`Farm ${farmAddress.toString()} not found for FirstLossCapitalFarm`);
+      }
+      if (
+        mode.kind === new VaultConfigField.FirstLossCapitalFarm().kind &&
+        !(await this.isFlcFarmValid(farmState, vaultState))
+      ) {
+        throw new Error(`Farm ${farmAddress.toString()} is not valid for FirstLossCapitalFarm`);
+      }
+    }
+  }
   /**
    * Add or update a reserve whitelist entry. This controls whether the reserve is whitelisted for adding/updating
    * allocations or for invest, depending on the mode parameter.
@@ -1199,7 +1225,7 @@ export class KaminoVaultClient {
    * @param tokenAmount - token amount to be deposited, in decimals (will be converted in lamports)
    * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
-   * @returns - an instance of DepositIxs which contains the instructions to deposit in vault and the instructions to stake the shares in the farm if the vault has a farm
+   * @returns - an instance of DepositIxs which contains the instructions to deposit in vault and the instructions to stake the shares in the farm if the vault has a farm as well as ixs to stake in the first loss capital farm if the vault has one - only one set on ixs so stake in a farm can be used -> staking can be either done in the farm or in the first loss capital farm
    */
   async depositIxs(
     user: TransactionSigner,
@@ -1313,14 +1339,17 @@ export class KaminoVaultClient {
     const result: DepositIxs = {
       depositIxs: [...createAtasIxs, entryIx, ...closeAtasIxs],
       stakeInFarmIfNeededIxs: [],
+      stakeInFlcFarmIfNeededIxs: [],
     };
 
-    if (!(await vault.hasFarm())) {
-      return result;
+    if (await vault.hasFarm()) {
+      const stakeSharesIxs = await this.stakeSharesIxs(user, vault, undefined, farmState);
+      result.stakeInFarmIfNeededIxs = stakeSharesIxs;
     }
-
-    const stakeSharesIxs = await this.stakeSharesIxs(user, vault, undefined, farmState);
-    result.stakeInFarmIfNeededIxs = stakeSharesIxs;
+    if (await vault.hasFlcFarm()) {
+      const stakeSharesInFlcFarmIxs = await this.stakeSharesInFlcFarmIxs(user, vault, undefined, undefined);
+      result.stakeInFlcFarmIfNeededIxs = stakeSharesInFlcFarmIxs;
+    }
     return result;
   }
 
@@ -1352,6 +1381,42 @@ export class KaminoVaultClient {
 
     // returns the ix to create the farm state account if needed and the ix to stake the shares
     return getFarmStakeIxs(this.getConnection(), user, sharesToStakeLamports, vaultState.vaultFarm, farmState);
+  }
+
+  /**
+   * This function creates instructions to stake the shares in the vault firstLossCapital farm if the vault has a farm
+   * @param user - user to stake
+   * @param vault - vault to deposit into its flc farm (if the state is not provided, it will be fetched)
+   * @param [sharesAmount] - token amount to be deposited, in decimals (will be converted in lamports). Optional. If not provided, the user's share balance will be used
+   * @param [farmState] - the state of the vault flc farm, if the vault has a farm. Optional. If not provided, it will be fetched
+   * @returns - a list of instructions for the user to stake shares into the vault's firstLossCapital farm, including the creation of prerequisite accounts if needed
+   */
+  async stakeSharesInFlcFarmIxs(
+    user: TransactionSigner,
+    vault: KaminoVault,
+    sharesAmount?: Decimal,
+    farmState?: FarmState
+  ): Promise<Instruction[]> {
+    const vaultState = await vault.getState();
+
+    let sharesToStakeLamports = new Decimal(U64_MAX);
+    if (sharesAmount) {
+      sharesToStakeLamports = numberToLamportsDecimal(sharesAmount, vaultState.sharesMintDecimals.toNumber());
+    }
+
+    // if tokens to be staked are 0 or vault has no farm there is no stake needed
+    if (sharesToStakeLamports.lte(0) || !(await vault.hasFlcFarm())) {
+      return [];
+    }
+
+    // returns the ix to create the farm state account if needed and the ix to stake the shares
+    return getFarmStakeIxs(
+      this.getConnection(),
+      user,
+      sharesToStakeLamports,
+      vaultState.firstLossCapitalFarm,
+      farmState
+    );
   }
 
   /**
@@ -3096,6 +3161,7 @@ export class KaminoVaultClient {
       slotForOverview,
       tokensPrices
     );
+    const vaultFlcFarmStatsPromise = this.getVaultFlcFarmStats(vault);
 
     // all the async part of the functions above just read the vaultReservesState which is read beforehand, so excepting vaultCollateralsPromise they should do no additional network calls
     const [
@@ -3108,6 +3174,7 @@ export class KaminoVaultClient {
       vaultFarmIncentives,
       vaultReservesFarmIncentives,
       vaultDelegatedFarmIncentives,
+      vaultFlcFarmStats,
     ] = await Promise.all([
       vaultHoldingsWithUSDValuePromise,
       vaultTheoreticalAPYPromise,
@@ -3118,6 +3185,7 @@ export class KaminoVaultClient {
       vaultFarmIncentivesPromise,
       vaultReservesFarmIncentivesPromise,
       vaultDelegatedFarmIncentivesPromise,
+      vaultFlcFarmStatsPromise,
     ]);
 
     return {
@@ -3134,6 +3202,7 @@ export class KaminoVaultClient {
       utilizationRatio: totalInvestedAndBorrowed.utilizationRatio,
       totalSupplied: totalInvestedAndBorrowed.totalInvested,
       totalSuppliedUSD: totalInvestedAndBorrowed.totalInvested.mul(vaultTokenPrice),
+      flcFarmStats: vaultFlcFarmStats,
     };
   }
 
@@ -3774,6 +3843,69 @@ export class KaminoVaultClient {
     };
   }
 
+  async getVaultFlcFarmStats(vaultOrState: KaminoVault | VaultState): Promise<FlcFarmStats | undefined> {
+    const vaultState = 'getState' in vaultOrState ? await vaultOrState.getState() : vaultOrState;
+
+    if (vaultState.firstLossCapitalFarm === DEFAULT_PUBLIC_KEY) {
+      return undefined;
+    }
+
+    const kFarmsClient = new Farms(this.getConnection());
+
+    const flcFarmState = await FarmState.fetch(this.getConnection(), vaultState.firstLossCapitalFarm);
+
+    if (!flcFarmState) {
+      return undefined;
+    }
+
+    if (!(await this.isFlcFarmValid(flcFarmState, vaultState))) {
+      return undefined;
+    }
+
+    const userStates = await kFarmsClient.getAllUserStatesForFarm(vaultState.firstLossCapitalFarm);
+    const pendingUnstakes: FarmPendingUnstakeInfo[] = [];
+
+    for (const { userState, key } of userStates) {
+      const pendingWithdrawalUnstake = new Decimal(scaleDownWads(userState.pendingWithdrawalUnstakeScaled));
+      if (pendingWithdrawalUnstake.gt(0)) {
+        pendingUnstakes.push({
+          userStateAddress: key,
+          pendingUnstakeAmountLamports: pendingWithdrawalUnstake,
+          pendingUnstakeAvailableAtTimestamp: userState.pendingWithdrawalUnstakeTs.toNumber(),
+        });
+      }
+    }
+
+    return {
+      address: vaultState.firstLossCapitalFarm,
+      farmState: flcFarmState,
+      totalStakedShares: new Decimal(scaleDownWads(flcFarmState.totalActiveStakeScaled)),
+      withdrawalCooldownDurationSeconds: flcFarmState.withdrawalCooldownPeriod,
+      isPendingUnstake: pendingUnstakes.length > 0,
+      pendingUnstakeInfo: pendingUnstakes,
+    };
+  }
+
+  async isFlcFarmValid(flcFarmState: FarmState, vaultOrState: KaminoVault | VaultState): Promise<boolean> {
+    const vaultState = 'getState' in vaultOrState ? await vaultOrState.getState() : vaultOrState;
+
+    if (flcFarmState.timeUnit !== 0) {
+      // timeUnit = 0 -> seconds
+      return false;
+    }
+
+    if (flcFarmState.withdrawalCooldownPeriod === 0) {
+      // invalid FLC farm, should have > 0 withdrawal cooldown
+      return false;
+    }
+
+    if (flcFarmState.token.mint !== vaultState.sharesMint) {
+      // staked token mint should be the vault shares mint
+      return false;
+    }
+    return true;
+  }
+
   /// reads the pending rewards for a user in the vault farm
   /// @param user - the user address
   /// @param vault - the vault
@@ -4203,6 +4335,11 @@ export class KaminoVault {
     return state.vaultFarm !== DEFAULT_PUBLIC_KEY;
   }
 
+  async hasFlcFarm(): Promise<boolean> {
+    const state = await this.getState();
+    return state.firstLossCapitalFarm !== DEFAULT_PUBLIC_KEY;
+  }
+
   /**
    * This will return an VaultHoldings object which contains the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
    * @returns an VaultHoldings object representing the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
@@ -4579,11 +4716,27 @@ export type VaultOverview = {
   totalSupplied: Decimal;
   totalSuppliedUSD: Decimal;
   utilizationRatio: Decimal;
+  flcFarmStats: FlcFarmStats | undefined;
 };
 
 export type VaultReservesFarmsIncentives = {
   reserveFarmsIncentives: Map<Address, FarmIncentives>;
   totalIncentivesAPY: Decimal;
+};
+
+export type FlcFarmStats = {
+  address: Address;
+  farmState: FarmState;
+  totalStakedShares: Decimal;
+  withdrawalCooldownDurationSeconds: number;
+  isPendingUnstake: boolean;
+  pendingUnstakeInfo: FarmPendingUnstakeInfo[];
+};
+
+export type FarmPendingUnstakeInfo = {
+  userStateAddress: Address;
+  pendingUnstakeAmountLamports: Decimal;
+  pendingUnstakeAvailableAtTimestamp: number;
 };
 
 export type VaultFeesPct = {
