@@ -122,6 +122,22 @@ export class KaminoMarket {
   }
 
   /**
+   * TESTING ONLY!
+   *
+   * Used to create mock markets for testing
+   */
+  static createMarket(
+    rpc: Rpc<KaminoMarketRpcApi>,
+    state: LendingMarket,
+    marketAddress: Address,
+    reserves: Map<Address, KaminoReserve>,
+    recentSlotDurationMs: number,
+    programId: Address = PROGRAM_ID
+  ) {
+    return new KaminoMarket(rpc, state, marketAddress, reserves, recentSlotDurationMs, programId);
+  }
+
+  /**
    * Load a new market with all of its associated reserves
    * @param rpc
    * @param marketAddress
