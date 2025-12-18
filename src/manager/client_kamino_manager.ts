@@ -537,7 +537,6 @@ async function main() {
         signer,
         [
           instructions.updateVaultConfigIx,
-          ...instructions.updateLUTIxs,
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
           }),
@@ -1421,7 +1420,6 @@ async function main() {
       );
       const txInstructions = [
         instructions.updateReserveAllocationIx,
-        ...instructions.updateLUTIxs,
         ...getPriorityFeeAndCuIxs({
           priorityFeeMultiplier: 2500,
         }),
