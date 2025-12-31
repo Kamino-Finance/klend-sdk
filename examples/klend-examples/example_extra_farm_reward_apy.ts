@@ -13,10 +13,11 @@ import { getRewardPerTimeUnitSecond } from '../../src/classes/farm_utils';
   console.log(`fetching data for market ${MAIN_MARKET.toString()} reserve for ${PYUSD_MINT.toString()}`);
   const extraFarms = await getExtraFarms();
   const xbtcMint = address('CtzPWv73Sn1dMGVU3ZtLv9yWSyUAanBni19YWDaznnkn');
+  const xbtcReserveAddress = address('4Hyrqb9Mq7y1wkq4YoqHkPdPx3VQyFY3mxMj67naC1Cb');
   const { market, reserve } = await loadReserveData({
     rpc: c.rpc,
     marketPubkey: MAIN_MARKET,
-    mintPubkey: xbtcMint,
+    reserveAddress: xbtcReserveAddress,
   });
   const scope = new Scope('mainnet-beta', c.rpc);
   const oraclePrices = await scope.getSingleOraclePrices({ feed: 'hubble' });

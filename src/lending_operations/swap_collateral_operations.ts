@@ -40,14 +40,14 @@ export interface SwapCollIxsInputs<QuoteResponse> {
   isClosingSourceColl: boolean;
 
   /**
-   * The mint of the source collateral token (i.e. the current one).
+   * The address of the source collateral reserve (i.e. the current one).
    */
-  sourceCollTokenMint: Address;
+  sourceCollReserveAddress: Address;
 
   /**
-   * The mint of the target collateral token (i.e. the new one).
+   * The address of the target collateral reserve (i.e. the new one).
    */
-  targetCollTokenMint: Address;
+  targetCollReserveAddress: Address;
 
   /**
    * An elevation group ID that the obligation should end up with after the collateral swap - it will be requested by
@@ -220,7 +220,7 @@ type SwapCollContext<QuoteResponse> = {
 function extractArgsAndContext<QuoteResponse>(
   inputs: SwapCollIxsInputs<QuoteResponse>
 ): [SwapCollArgs, SwapCollContext<QuoteResponse>] {
-  if (inputs.sourceCollTokenMint === inputs.targetCollTokenMint) {
+  if (inputs.sourceCollReserveAddress === inputs.targetCollReserveAddress) {
     throw new Error(`Cannot swap from/to the same collateral`);
   }
   if (inputs.sourceCollSwapAmount.lte(0)) {
@@ -235,8 +235,14 @@ function extractArgsAndContext<QuoteResponse>(
     {
       budgetAndPriorityFeeIxs:
         inputs.budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxs(DEFAULT_MAX_COMPUTE_UNITS),
-      sourceCollReserve: inputs.market.getExistingReserveByMint(inputs.sourceCollTokenMint, 'Current collateral'),
-      targetCollReserve: inputs.market.getExistingReserveByMint(inputs.targetCollTokenMint, 'Target collateral'),
+      sourceCollReserve: inputs.market.getExistingReserveByAddress(
+        inputs.sourceCollReserveAddress,
+        'Current collateral'
+      ),
+      targetCollReserve: inputs.market.getExistingReserveByAddress(
+        inputs.targetCollReserveAddress,
+        'Target collateral'
+      ),
       logger: console.log,
       market: inputs.market,
       obligation: inputs.obligation,
@@ -395,22 +401,22 @@ async function getDepositTargetCollIxs(
   context: SwapCollContext<any>
 ): Promise<DepositTargetCollIxs> {
   const removesElevationGroup = mustRemoveElevationGroupBeforeDeposit(context);
-  const depositCollAction = await KaminoAction.buildDepositTxns(
-    context.market,
-    targetCollAmount.mul(context.targetCollReserve.getMintFactor()).toString(), // in lamports
-    context.targetCollReserve.getLiquidityMint(),
-    context.owner,
-    context.obligation,
-    context.useV2Ixs,
-    undefined, // we create the scope refresh ix outside of KaminoAction
-    0, // no extra compute budget
-    false, // we do not need ATA ixs here (we construct and close them ourselves)
-    removesElevationGroup, // we may need to (temporarily) remove the elevation group; the same or a different one will be set on withdraw, if requested
-    { skipInitialization: true, skipLutCreation: true }, // we are dealing with an existing obligation, no need to create user metadata
-    context.referrer,
-    context.currentSlot,
-    removesElevationGroup ? 0 : undefined // only applicable when removing the group
-  );
+  const depositCollAction = await KaminoAction.buildDepositTxns({
+    kaminoMarket: context.market,
+    amount: targetCollAmount.mul(context.targetCollReserve.getMintFactor()).toString(), // in lamports
+    reserveAddress: context.targetCollReserve.address,
+    owner: context.owner,
+    obligation: context.obligation,
+    useV2Ixs: context.useV2Ixs,
+    scopeRefreshConfig: undefined, // we create the scope refresh ix outside of KaminoAction
+    extraComputeBudget: 0, // no extra compute budget
+    includeAtaIxs: false, // we do not need ATA ixs here (we construct and close them ourselves)
+    requestElevationGroup: removesElevationGroup, // we may need to (temporarily) remove the elevation group; the same or a different one will be set on withdraw, if requested
+    initUserMetadata: { skipInitialization: true, skipLutCreation: true }, // we are dealing with an existing obligation, no need to create user metadata
+    referrer: context.referrer,
+    currentSlot: context.currentSlot,
+    overrideElevationGroupRequest: removesElevationGroup ? 0 : undefined, // only applicable when removing the group
+  });
   return {
     ixs: KaminoAction.actionToIxs(depositCollAction),
     removesElevationGroup,
@@ -444,27 +450,27 @@ async function getWithdrawSourceCollIxs(
     ? U64_MAX
     : args.sourceCollSwapAmount.mul(context.sourceCollReserve.getMintFactor()).toString();
   const requestedElevationGroup = elevationGroupIdToRequestAfterWithdraw(args, depositRemovedElevationGroup, context);
-  const withdrawCollAction = await KaminoAction.buildWithdrawTxns(
-    context.market,
-    withdrawnSourceCollLamports,
-    context.sourceCollReserve.getLiquidityMint(),
-    context.owner,
-    context.obligation,
-    context.useV2Ixs,
-    undefined, // we create the scope refresh ix outside of KaminoAction
-    0, // no extra compute budget
-    false, // we do not need ATA ixs here (we construct and close them ourselves)
-    requestedElevationGroup !== undefined, // the `elevationGroupIdToRequestAfterWithdraw()` has already decided on this
-    { skipInitialization: true, skipLutCreation: true }, // we are dealing with an existing obligation, no need to create user metadata
-    context.referrer,
-    context.currentSlot,
-    requestedElevationGroup,
-    context.obligation.deposits.has(context.targetCollReserve.address) // if our obligation already had the target coll...
+  const withdrawCollAction = await KaminoAction.buildWithdrawTxns({
+    kaminoMarket: context.market,
+    amount: withdrawnSourceCollLamports,
+    reserveAddress: context.sourceCollReserve.address,
+    owner: context.owner,
+    obligation: context.obligation,
+    useV2Ixs: context.useV2Ixs,
+    scopeRefreshConfig: undefined, // we create the scope refresh ix outside of KaminoAction
+    extraComputeBudget: 0, // no extra compute budget
+    includeAtaIxs: false, // we do not need ATA ixs here (we construct and close them ourselves)
+    requestElevationGroup: requestedElevationGroup !== undefined, // the `elevationGroupIdToRequestAfterWithdraw()` has already decided on this
+    initUserMetadata: { skipInitialization: true, skipLutCreation: true }, // we are dealing with an existing obligation, no need to create user metadata
+    referrer: context.referrer,
+    currentSlot: context.currentSlot,
+    overrideElevationGroupRequest: requestedElevationGroup,
+    obligationCustomizations: context.obligation.deposits.has(context.targetCollReserve.address) // if our obligation already had the target coll...
       ? undefined // ... then we need no customizations here, but otherwise...
       : {
           addedDepositReserves: [context.targetCollReserve.address], // ... we need to inform our infra that the obligation now has one more reserve that needs refreshing.
-        }
-  );
+        },
+  });
   return KaminoAction.actionToIxs(withdrawCollAction);
 }
 

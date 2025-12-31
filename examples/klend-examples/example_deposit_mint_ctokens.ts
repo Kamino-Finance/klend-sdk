@@ -1,7 +1,7 @@
 import { KaminoAction, PROGRAM_ID, VanillaObligation } from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
-import { MAIN_MARKET, USDC_MINT } from '../utils/constants';
+import { MAIN_MARKET, USDC_RESERVE_MAIN_MARKET } from '../utils/constants';
 import BN from 'bn.js';
 import { loadReserveData } from '../utils/helpers';
 import { sendAndConfirmTx } from '../utils/tx';
@@ -13,20 +13,20 @@ import { sendAndConfirmTx } from '../utils/tx';
   const { market, reserve: usdcReserve } = await loadReserveData({
     rpc: c.rpc,
     marketPubkey: MAIN_MARKET,
-    mintPubkey: USDC_MINT,
+    reserveAddress: USDC_RESERVE_MAIN_MARKET,
   });
 
-  const depositAction = await KaminoAction.buildDepositReserveLiquidityTxns(
-    market,
+  const depositAction = await KaminoAction.buildDepositReserveLiquidityTxns({
+    kaminoMarket: market,
     // Deposit 1 USDC * 10^6 decimals
-    new BN(1_000_000),
-    usdcReserve.getLiquidityMint(),
-    wallet,
-    new VanillaObligation(PROGRAM_ID),
-    undefined,
-    300_000,
-    true
-  );
+    amount: new BN(1_000_000),
+    reserveAddress: usdcReserve.address,
+    owner: wallet,
+    obligation: new VanillaObligation(PROGRAM_ID),
+    scopeRefreshConfig: undefined,
+    extraComputeBudget: 300_000,
+    includeAtaIxs: true,
+  });
 
   console.log('depositAction.computeBudgetIxsLabels', depositAction.computeBudgetIxsLabels);
   // depositAction.computeBudgetIxsLabels [ 'AddComputeBudget[300000]' ]

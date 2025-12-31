@@ -1,6 +1,6 @@
 import { getSwapCollIxs, getScopeRefreshIxForObligationAndReserves } from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from '../utils/connection';
-import { MAIN_MARKET, PYUSD_MINT, USDC_MINT } from '../utils/constants';
+import { MAIN_MARKET, PYUSD_RESERVE_MAIN_MARKET, USDC_MINT, USDC_RESERVE_MAIN_MARKET } from '../utils/constants';
 import { getMarket } from '../utils/helpers';
 import Decimal from 'decimal.js';
 import { getJupiterQuoter, getJupiterSwapper } from '../utils/jup_utils';
@@ -17,12 +17,12 @@ import { Scope } from '@kamino-finance/scope-sdk';
 
   const sourceCollSwapAmount = new Decimal(2.0);
   const sourceCollTokenMint = USDC_MINT;
-  const targetCollTokenMint = PYUSD_MINT;
+  const sourceCollReserveAddress = USDC_RESERVE_MAIN_MARKET;
+  const targetCollReserveAddress = PYUSD_RESERVE_MAIN_MARKET;
   const slippagePct = 0.01;
 
-  const sourceCollTokenReserve = market.getReserveByMint(sourceCollTokenMint)!;
-  const targetCollTokenReserve = market.getReserveByMint(targetCollTokenMint)!;
-
+  const sourceCollTokenReserve = market.getReserveByAddress(sourceCollReserveAddress)!;
+  const targetCollTokenReserve = market.getReserveByAddress(targetCollReserveAddress)!;
   const obligation = (await market.getObligationByAddress(address('HjYDundFuuUjc5KF3X5bu4pFVMhqRAnJubNBxo9KnnCr')))!;
 
   const currentSlot = await c.rpc.getSlot().send();
@@ -42,9 +42,9 @@ import { Scope } from '@kamino-finance/scope-sdk';
       market,
       obligation,
       sourceCollSwapAmount,
-      sourceCollTokenMint,
+      sourceCollReserveAddress,
       isClosingSourceColl: false,
-      targetCollTokenMint,
+      targetCollReserveAddress,
       newElevationGroup: 0,
       referrer: none(),
       currentSlot,

@@ -174,7 +174,7 @@ export function estimateDebtRepaymentWithColl(props: {
   slippagePct: Decimal;
   flashLoanFeePct: Decimal;
   kaminoMarket: KaminoMarket;
-  debtTokenMint: Address;
+  debtReserveAddress: Address;
   obligation: KaminoObligation;
   currentSlot: Slot;
 }): Decimal {
@@ -184,15 +184,14 @@ export function estimateDebtRepaymentWithColl(props: {
     slippagePct,
     flashLoanFeePct,
     kaminoMarket,
-    debtTokenMint,
+    debtReserveAddress,
     obligation,
     currentSlot,
   } = props;
   const slippageMultiplier = new Decimal(1.0).add(slippagePct.div('100'));
   const flashLoanFeeMultiplier = new Decimal(1.0).add(flashLoanFeePct.div('100'));
 
-  const debtReserve = kaminoMarket.getExistingReserveByMint(debtTokenMint);
-
+  const debtReserve = kaminoMarket.getExistingReserveByAddress(debtReserveAddress);
   const debtAfterSwap = collAmount.div(slippageMultiplier).div(priceDebtToColl);
   const debtAfterFlashLoanRepay = debtAfterSwap.div(flashLoanFeeMultiplier);
 

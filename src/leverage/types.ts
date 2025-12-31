@@ -65,8 +65,8 @@ export type LeverageInitialInputs<LeverageCalcsResult, QuoteResponse> = {
 export interface BaseLeverageSwapInputsProps<QuoteResponse> {
   owner: TransactionSigner;
   kaminoMarket: KaminoMarket;
-  debtTokenMint: Address;
-  collTokenMint: Address;
+  debtReserveAddress: Address;
+  collReserveAddress: Address;
   referrer: Option<Address>;
   currentSlot: Slot;
   slippagePct: Decimal;

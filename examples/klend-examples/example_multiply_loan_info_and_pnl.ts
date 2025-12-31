@@ -80,7 +80,7 @@ export async function getObligationPnl(
   const currentSlot = await c.rpc.getSlot().send();
   // Get the deposit
   const deposit = loan.deposits.values().next().value!;
-  const collReserve = market.getReserveByMint(deposit.mintAddress);
+  const collReserve = market.getReserveByAddress(deposit.reserveAddress);
   if (!collReserve) {
     console.error(`reserve not found for ${deposit.mintAddress.toString()}`);
     return;
@@ -101,7 +101,7 @@ export async function getObligationPnl(
 
   // Print all borrows
   const borrow = loan.borrows.values().next().value!;
-  const debtReserve = market.getReserveByMint(borrow.mintAddress);
+  const debtReserve = market.getReserveByAddress(borrow.reserveAddress);
   if (!debtReserve) {
     console.error(`reserve not found for ${borrow.mintAddress.toString()}`);
     return;

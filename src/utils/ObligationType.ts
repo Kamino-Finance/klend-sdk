@@ -11,6 +11,9 @@ export enum ObligationTypeTag {
   Multiply = 1,
   Lending = 2,
   Leverage = 3,
+  MultiplyFixedRate = 4,
+  LendingFixedRate = 5,
+  LeverageFixedRate = 6,
 }
 
 export type InitObligationArgsModel = {
@@ -76,6 +79,36 @@ export class MultiplyObligation {
   }
 }
 
+export class MultiplyObligationFixedRate {
+  readonly collReserveAddress: Address;
+  readonly debtReserveAddress: Address;
+  readonly programId: Address;
+  readonly id: number;
+  static tag = 4;
+
+  constructor(collReserveAddress: Address, debtReserveAddress: Address, programId: Address, id?: number) {
+    this.collReserveAddress = collReserveAddress;
+    this.debtReserveAddress = debtReserveAddress;
+    this.programId = programId;
+    this.id = id ?? 0;
+  }
+
+  toArgs() {
+    const initObligationArgs: InitObligationArgsModel = {
+      tag: MultiplyObligationFixedRate.tag,
+      id: this.id,
+      seed1: this.collReserveAddress,
+      seed2: this.debtReserveAddress,
+    };
+
+    return initObligationArgs;
+  }
+
+  toPda(market: Address, user: Address) {
+    return getObligationPdaWithArgs(market, user, this.toArgs(), this.programId);
+  }
+}
+
 export class LeverageObligation {
   readonly collToken: Address;
   readonly debtToken: Address;
@@ -106,6 +139,36 @@ export class LeverageObligation {
   }
 }
 
+export class LeverageObligationFixedRate {
+  readonly collReserveAddress: Address;
+  readonly debtReserveAddress: Address;
+  readonly programId: Address;
+  readonly id: number;
+  static tag = 6;
+
+  constructor(collReserveAddress: Address, debtReserveAddress: Address, programId: Address, id?: number) {
+    this.collReserveAddress = collReserveAddress;
+    this.debtReserveAddress = debtReserveAddress;
+    this.programId = programId;
+    this.id = id ?? 0;
+  }
+
+  toArgs() {
+    const initObligationArgs: InitObligationArgsModel = {
+      tag: LeverageObligationFixedRate.tag,
+      id: this.id,
+      seed1: this.collReserveAddress,
+      seed2: this.debtReserveAddress,
+    };
+
+    return initObligationArgs;
+  }
+
+  toPda(market: Address, user: Address) {
+    return getObligationPdaWithArgs(market, user, this.toArgs(), this.programId);
+  }
+}
+
 export class LendingObligation {
   readonly token: Address;
   readonly programId: Address;
@@ -121,9 +184,37 @@ export class LendingObligation {
   toArgs() {
     const initObligationArgs: InitObligationArgsModel = {
       tag: LendingObligation.tag,
-      id: 0,
+      id: this.id,
       seed1: this.token,
       seed2: this.token,
+    };
+
+    return initObligationArgs;
+  }
+
+  toPda(market: Address, user: Address) {
+    return getObligationPdaWithArgs(market, user, this.toArgs(), this.programId);
+  }
+}
+
+export class LendingObligationFixedRate {
+  readonly reserveAddress: Address;
+  readonly programId: Address;
+  readonly id: number;
+  static tag = 5;
+
+  constructor(reserveAddress: Address, programId: Address, id?: number) {
+    this.reserveAddress = reserveAddress;
+    this.programId = programId;
+    this.id = id ?? 0;
+  }
+
+  toArgs() {
+    const initObligationArgs: InitObligationArgsModel = {
+      tag: LendingObligationFixedRate.tag,
+      id: this.id,
+      seed1: this.reserveAddress,
+      seed2: this.reserveAddress,
     };
 
     return initObligationArgs;

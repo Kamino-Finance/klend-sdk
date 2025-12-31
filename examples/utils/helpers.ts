@@ -45,11 +45,11 @@ export async function getLoan(args: LoanArgs): Promise<KaminoObligation | null> 
   return market.getObligationByAddress(args.obligationPubkey);
 }
 
-export async function loadReserveData({ rpc, marketPubkey, mintPubkey }: ReserveArgs) {
+export async function loadReserveData({ rpc, marketPubkey, reserveAddress }: ReserveArgs) {
   const market = await getMarket({ rpc: rpc, marketPubkey });
-  const reserve = market.getReserveByMint(mintPubkey);
+  const reserve = market.getReserveByAddress(reserveAddress);
   if (!reserve) {
-    throw Error(`Could not load reserve for ${mintPubkey.toString()}`);
+    throw Error(`Could not load reserve ${reserveAddress.toString()}`);
   }
   const currentSlot = await rpc.getSlot().send();
 

@@ -9,7 +9,15 @@ import {
 } from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
-import { JLP_MARKET, JLP_MARKET_LUT, JLP_MINT, JUP_QUOTE_BUFFER_BPS, USDC_MINT } from '../utils/constants';
+import {
+  JLP_MARKET,
+  JLP_MARKET_LUT,
+  JLP_MINT,
+  JLP_RESERVE_JLP_MARKET,
+  JUP_QUOTE_BUFFER_BPS,
+  USDC_MINT,
+  USDC_RESERVE_JLP_MARKET,
+} from '../utils/constants';
 import { executeUserSetupLutsTransactions, getMarket } from '../utils/helpers';
 import { getKaminoResources } from '../utils/kamino_resources';
 import { address, Address, none } from '@solana/kit';
@@ -28,6 +36,8 @@ import { sendAndConfirmTx } from '../utils/tx';
 
   const collTokenMint = JLP_MINT;
   const debtTokenMint = USDC_MINT;
+  const collReserveAddress = JLP_RESERVE_JLP_MARKET;
+  const debtReserveAddress = USDC_RESERVE_JLP_MARKET;
   // const vaultType = 'multiply';
   const leverage = 3; // 3x leverage/ 3x multiply
   const amountToDeposit = new Decimal(5); // 5 USDC
@@ -40,11 +50,13 @@ import { sendAndConfirmTx } from '../utils/tx';
 
   const multiplyLutKeys = multiplyLut.map((lut) => address(lut));
 
-  const multiplyMints: { coll: Address; debt: Address }[] = [{ coll: collTokenMint, debt: debtTokenMint }];
-  const leverageMints: { coll: Address; debt: Address }[] = [];
-  multiplyMints.push({
-    coll: collTokenMint,
-    debt: debtTokenMint,
+  const multiplyReserveAddresses: { collReserve: Address; debtReserve: Address }[] = [
+    { collReserve: collReserveAddress, debtReserve: debtReserveAddress },
+  ];
+  const leverageReserveAddresses: { collReserve: Address; debtReserve: Address }[] = [];
+  multiplyReserveAddresses.push({
+    collReserve: collReserveAddress,
+    debtReserve: debtReserveAddress,
   });
 
   // This is the setup step that should happen each time the user has to extend it's LookupTable with missing keys
@@ -55,8 +67,8 @@ import { sendAndConfirmTx } from '../utils/tx';
     wallet,
     none(),
     true, // always extending LUT
-    multiplyMints,
-    leverageMints
+    multiplyReserveAddresses,
+    leverageReserveAddresses
   );
 
   await executeUserSetupLutsTransactions(c, wallet, txsIxs);
@@ -66,8 +78,8 @@ import { sendAndConfirmTx } from '../utils/tx';
 
   const currentSlot = await c.rpc.getSlot().send();
 
-  const collTokenReserve = market.getReserveByMint(collTokenMint)!;
-  const debtTokenReserve = market.getReserveByMint(debtTokenMint)!;
+  const collTokenReserve = market.getExistingReserveByAddress(collReserveAddress);
+  const debtTokenReserve = market.getExistingReserveByAddress(debtReserveAddress);
   const obligation = await market.getObligationByAddress(obligationAddress)!;
 
   const scopeConfiguration = { scope, scopeConfigurations: await scope.getAllConfigurations() };
@@ -95,8 +107,8 @@ import { sendAndConfirmTx } from '../utils/tx';
     await getDepositWithLeverageIxs({
       owner: wallet,
       kaminoMarket: market,
-      debtTokenMint: debtTokenMint,
-      collTokenMint: collTokenMint,
+      debtReserveAddress: debtReserveAddress,
+      collReserveAddress: collReserveAddress,
       depositAmount: amountToDeposit,
       priceDebtToColl: priceDebtToColl,
       slippagePct: new Decimal(slippagePct),
@@ -109,11 +121,7 @@ import { sendAndConfirmTx } from '../utils/tx';
       scopeRefreshIx,
       budgetAndPriorityFeeIxs: computeIxs,
       quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
-      quoter: getJupiterQuoter(
-        slippagePct * 100,
-        market.getReserveByMint(debtTokenMint)!,
-        market.getReserveByMint(collTokenMint)!
-      ), // IMPORTANT!: For deposit the input mint is the debt token mint and the output mint is the collateral token
+      quoter: getJupiterQuoter(slippagePct * 100, debtTokenReserve, collTokenReserve), // IMPORTANT!: For deposit the input mint is the debt token mint and the output mint is the collateral token
       swapper: getJupiterSwapper(c.rpc, wallet.address),
       useV2Ixs: true,
     })

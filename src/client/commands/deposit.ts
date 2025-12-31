@@ -5,21 +5,22 @@ import { Scope } from '@kamino-finance/scope-sdk';
 import { CliEnv, SendTxMode } from '../tx/CliEnv';
 import { getMarket, STAGING_LENDING_MARKET } from '../services/market';
 import { processTx } from '../tx/processor';
+import { address } from '@solana/kit';
 
-export async function deposit(env: CliEnv, mode: SendTxMode, token: string, depositAmount: BN): Promise<void> {
+export async function deposit(env: CliEnv, mode: SendTxMode, reserveAddress: string, depositAmount: BN): Promise<void> {
   const signer = await env.getSigner();
   const programId = getProgramId('staging');
   const kaminoMarket = await getMarket(env.c.rpc, programId);
   const scope = new Scope('mainnet-beta', env.c.rpc);
-  const kaminoAction = await KaminoAction.buildDepositTxns(
+  const kaminoAction = await KaminoAction.buildDepositTxns({
     kaminoMarket,
-    depositAmount,
-    kaminoMarket.getReserveBySymbol(token)!.getLiquidityMint(),
-    signer,
-    new VanillaObligation(STAGING_LENDING_MARKET),
-    true,
-    { scope, scopeConfigurations: await scope.getAllConfigurations() }
-  );
+    amount: depositAmount,
+    reserveAddress: address(reserveAddress),
+    owner: signer,
+    obligation: new VanillaObligation(STAGING_LENDING_MARKET),
+    useV2Ixs: true,
+    scopeRefreshConfig: { scope, scopeConfigurations: await scope.getAllConfigurations() },
+  });
   console.log('User obligation', await kaminoAction.getObligationPda());
 
   console.log('Deposit SetupIxs:', kaminoAction.setupIxsLabels);

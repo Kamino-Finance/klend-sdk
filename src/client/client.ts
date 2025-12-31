@@ -32,15 +32,15 @@ async function main() {
   commands
     .command('print-borrow-rate')
     .option(`--url <string>`, 'The admin keypair file')
-    .option(`--token <string>`, 'The token symbol')
+    .option(`--reserveAddress <string>`, 'The token symbol')
     .option(`--cluster <string>`, 'staging or mainnet-beta')
-    .action(async ({ url, token, cluster }) => {
+    .action(async ({ url, reserveAddress, cluster }) => {
       const env = await initEnv(url);
 
       const programId = getProgramId(cluster);
       const kaminoMarket = await getMarket(env.c.rpc, programId);
 
-      const reserve = kaminoMarket.getReserveBySymbol(token);
+      const reserve = kaminoMarket.getReserveByAddress(reserveAddress);
 
       const slot = await env.c.rpc.getSlot().send();
 
@@ -130,10 +130,9 @@ async function main() {
     .command('print-reserve')
     .option(`--url <string>`, 'The admin keypair file')
     .option(`--reserve <string>`, 'Reserve address')
-    .option(`--symbol <string>`, 'Symbol (optional)')
-    .action(async ({ url, reserve, symbol }) => {
+    .action(async ({ url, reserve }) => {
       const env = await initEnv(url);
-      await printReserve(env.c.rpc, reserve, symbol);
+      await printReserve(env.c.rpc, reserve);
     });
 
   commands
@@ -148,48 +147,48 @@ async function main() {
     .command('deposit')
     .option(`--url <string>`, 'Custom RPC URL')
     .option(`--owner <string>`, 'Custom RPC URL')
-    .option(`--token <string>`, 'Custom RPC URL')
+    .option(`--reserveAddress <string>`, 'Custom RPC URL')
     .option(`--amount <string>`, 'Custom RPC URL')
-    .action(async ({ url, owner, token, amount }) => {
+    .action(async ({ url, owner, reserveAddress, amount }) => {
       const depositAmount = new BN(amount);
       const env = await initEnv(url, owner);
-      await deposit(env, 'execute', token, depositAmount);
+      await deposit(env, 'execute', reserveAddress, depositAmount);
     });
 
   commands
     .command('withdraw')
     .option(`--url <string>`, 'Custom RPC URL')
     .option(`--owner <string>`, 'Custom RPC URL')
-    .option(`--token <string>`, 'Custom RPC URL')
+    .option(`--reserveAddress <string>`, 'Custom RPC URL')
     .option(`--amount <string>`, 'Custom RPC URL')
-    .action(async ({ url, owner, token, amount }) => {
+    .action(async ({ url, owner, reserveAddress, amount }) => {
       const withdrawAmount = new BN(amount);
       const env = await initEnv(url, owner);
-      await withdraw(env, 'execute', token, withdrawAmount);
+      await withdraw(env, 'execute', reserveAddress, withdrawAmount);
     });
 
   commands
     .command('borrow')
     .option(`--url <string>`, 'Custom RPC URL')
     .option(`--owner <string>`, 'Custom RPC URL')
-    .option(`--token <string>`, 'Custom RPC URL')
+    .option(`--reserveAddress <string>`, 'Custom RPC URL')
     .option(`--amount <string>`, 'Custom RPC URL')
-    .action(async ({ url, owner, token, amount }) => {
+    .action(async ({ url, owner, reserveAddress, amount }) => {
       const borrowAmount = new BN(amount);
       const env = await initEnv(url, owner);
-      await borrow(env, 'execute', token, borrowAmount);
+      await borrow(env, 'execute', reserveAddress, borrowAmount);
     });
 
   commands
     .command('repay')
     .option(`--url <string>`, 'Custom RPC URL')
     .option(`--owner <string>`, 'Custom RPC URL')
-    .option(`--token <string>`, 'Custom RPC URL')
+    .option(`--reserveAddress <string>`, 'Custom RPC URL')
     .option(`--amount <string>`, 'Custom RPC URL')
-    .action(async ({ url, owner, token, amount }) => {
+    .action(async ({ url, owner, reserveAddress, amount }) => {
       const repayAmount = new BN(amount);
       const env = await initEnv(url, owner);
-      await repay(env, 'execute', token, repayAmount);
+      await repay(env, 'execute', reserveAddress, repayAmount);
     });
 
   commands

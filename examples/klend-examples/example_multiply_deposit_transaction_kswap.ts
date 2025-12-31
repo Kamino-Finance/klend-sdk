@@ -9,7 +9,15 @@ import {
 } from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
-import { JLP_MARKET, JLP_MINT, JUP_QUOTE_BUFFER_BPS, USDC_MINT, JLP_MARKET_LUT } from '../utils/constants';
+import {
+  JLP_MARKET,
+  JLP_MINT,
+  JUP_QUOTE_BUFFER_BPS,
+  USDC_MINT,
+  JLP_MARKET_LUT,
+  JLP_RESERVE_JLP_MARKET,
+  USDC_RESERVE_JLP_MARKET,
+} from '../utils/constants';
 import { executeUserSetupLutsTransactions, getMarket } from '../utils/helpers';
 import { getKaminoResources } from '../utils/kamino_resources';
 import Decimal from 'decimal.js';
@@ -31,6 +39,8 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
 
   const collTokenMint = JLP_MINT;
   const debtTokenMint = USDC_MINT;
+  const collReserveAddress = JLP_RESERVE_JLP_MARKET;
+  const debtReserveAddress = USDC_RESERVE_JLP_MARKET;
   // const vaultType = 'multiply';
   const leverage = 3; // 3x leverage/ 3x multiply
   const amountToDeposit = new Decimal(5); // 5 USDC
@@ -42,11 +52,13 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
   const multiplyLut = multiplyColPairs[debtTokenMint] || [];
   const multiplyLutKeys = multiplyLut.map((lut) => address(lut));
 
-  const multiplyMints: { coll: Address; debt: Address }[] = [{ coll: collTokenMint, debt: debtTokenMint }];
-  const leverageMints: { coll: Address; debt: Address }[] = [];
-  multiplyMints.push({
-    coll: collTokenMint,
-    debt: debtTokenMint,
+  const multiplyReserveAddresses: { collReserve: Address; debtReserve: Address }[] = [
+    { collReserve: collReserveAddress, debtReserve: debtReserveAddress },
+  ];
+  const leverageReserveAddresses: { collReserve: Address; debtReserve: Address }[] = [];
+  multiplyReserveAddresses.push({
+    collReserve: collReserveAddress,
+    debtReserve: debtReserveAddress,
   });
 
   // This is the setup step that should happen each time the user has to extend it's LookupTable with missing keys
@@ -57,8 +69,8 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
     wallet,
     none(),
     true, // always extending LUT
-    multiplyMints,
-    leverageMints
+    multiplyReserveAddresses,
+    leverageReserveAddresses
   );
 
   await executeUserSetupLutsTransactions(c, wallet, txsIxs);
@@ -68,8 +80,8 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
 
   const currentSlot = await c.rpc.getSlot().send();
 
-  const collTokenReserve = market.getReserveByMint(collTokenMint)!;
-  const debtTokenReserve = market.getReserveByMint(debtTokenMint)!;
+  const collTokenReserve = market.getExistingReserveByAddress(collReserveAddress);
+  const debtTokenReserve = market.getExistingReserveByAddress(debtReserveAddress);
   const obligation = await market.getObligationByAddress(obligationAddress)!;
 
   const scopeConfiguration = { scope, scopeConfigurations: await scope.getAllConfigurations() };
@@ -96,8 +108,8 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
   const depositWithLeverageRoutes = await getDepositWithLeverageIxs({
     owner: wallet,
     kaminoMarket: market,
-    debtTokenMint: debtTokenMint,
-    collTokenMint: collTokenMint,
+    debtReserveAddress: debtReserveAddress,
+    collReserveAddress: collReserveAddress,
     depositAmount: amountToDeposit,
     priceDebtToColl: priceDebtToColl,
     slippagePct: new Decimal(slippageBps / 100),
@@ -110,13 +122,7 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
     scopeRefreshIx,
     budgetAndPriorityFeeIxs: computeIxs,
     quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
-    quoter: getKswapQuoter(
-      kswapSdk,
-      wallet.address,
-      slippageBps,
-      market.getReserveByMint(debtTokenMint)!,
-      market.getReserveByMint(collTokenMint)!
-    ), // IMPORTANT!: For deposit the input mint is the debt token mint and the output mint is the collateral token
+    quoter: getKswapQuoter(kswapSdk, wallet.address, slippageBps, debtTokenReserve, collTokenReserve), // IMPORTANT!: For deposit the input mint is the debt token mint and the output mint is the collateral token
     swapper: getKswapSwapper(kswapSdk, wallet.address, slippageBps),
     useV2Ixs: true,
   });
@@ -162,8 +168,10 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
   const passingSimulationTxs = simulationTxs.filter((tx) => tx !== undefined);
 
   const transactionToExecute = passingSimulationTxs.reduce((bestTx, currentTx) => {
-    const inputMintReserve = market.getReserveByMint(bestTx.swapInputs.inputMint)!;
-    const outputMintReserve = market.getReserveByMint(bestTx.swapInputs.outputMint)!;
+    const inputMintReserve =
+      bestTx.swapInputs.inputMint === collTokenReserve.getLiquidityMint() ? collTokenReserve : debtTokenReserve;
+    const outputMintReserve =
+      bestTx.swapInputs.outputMint === collTokenReserve.getLiquidityMint() ? collTokenReserve : debtTokenReserve;
     if (!currentTx) return bestTx;
     if (!bestTx) return currentTx;
     const best = bestTx.routeOutput;
