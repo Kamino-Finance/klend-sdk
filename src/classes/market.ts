@@ -34,11 +34,8 @@ import {
   isNotNullPubkey,
   lendingMarketAuthPda,
   LendingObligation,
-  LendingObligationFixedRate,
   LeverageObligation,
-  LeverageObligationFixedRate,
   MultiplyObligation,
-  MultiplyObligationFixedRate,
   ObligationType,
   PythPrices,
   referrerTokenStatePda,
@@ -56,7 +53,7 @@ import { Fraction } from './fraction';
 import { batchFetch, chunks, KaminoPrices, MintToPriceMap } from '@kamino-finance/kliquidity-sdk';
 import { parseTokenSymbol, parseZeroPaddedUtf8 } from './utils';
 import { ObligationZP } from '../@codegen/klend/zero_padding';
-import { checkArrayNotEmpty, checkDefined } from '../utils/validations';
+import { checkDefined } from '../utils/validations';
 import { Buffer } from 'buffer';
 import { fetchKaminoCdnData } from '../utils/readCdnData';
 
@@ -309,22 +306,14 @@ export class KaminoMarket {
     return parseZeroPaddedUtf8(this.state.name);
   }
 
-  async getObligationDepositByWallet(
-    owner: Address,
-    depositReserveAddress: Address,
-    obligationType: ObligationType
-  ): Promise<Decimal> {
+  async getObligationDepositByWallet(owner: Address, mint: Address, obligationType: ObligationType): Promise<Decimal> {
     const obligation = await this.getObligationByWallet(owner, obligationType);
-    return obligation?.getDepositByReserve(depositReserveAddress)?.amount ?? new Decimal(0);
+    return obligation?.getDepositByMint(mint)?.amount ?? new Decimal(0);
   }
 
-  async getObligationBorrowByWallet(
-    owner: Address,
-    borrowReserveAddress: Address,
-    obligationType: ObligationType
-  ): Promise<Decimal> {
+  async getObligationBorrowByWallet(owner: Address, mint: Address, obligationType: ObligationType): Promise<Decimal> {
     const obligation = await this.getObligationByWallet(owner, obligationType);
-    return obligation?.getBorrowByReserve(borrowReserveAddress)?.amount ?? new Decimal(0);
+    return obligation?.getBorrowByMint(mint)?.amount ?? new Decimal(0);
   }
 
   getTotalDepositTVL(): Decimal {
@@ -343,10 +332,10 @@ export class KaminoMarket {
     return tvl;
   }
 
-  getMaxLeverageForPair(collReserveAddress: Address, debtReserveAddress: Address): number {
+  getMaxLeverageForPair(collTokenMint: Address, debtTokenMint: Address): number {
     const { maxLtv: maxCollateralLtv, borrowFactor } = this.getMaxAndLiquidationLtvAndBorrowFactorForPair(
-      collReserveAddress,
-      debtReserveAddress
+      collTokenMint,
+      debtTokenMint
     );
 
     const maxLeverage =
@@ -371,11 +360,12 @@ export class KaminoMarket {
   }
 
   getMaxAndLiquidationLtvAndBorrowFactorForPair(
-    collReserveAddress: Address,
-    debtReserveAddress: Address
+    collTokenMint: Address,
+    debtTokenMint: Address
   ): { maxLtv: number; liquidationLtv: number; borrowFactor: number } {
-    const collReserve: KaminoReserve | undefined = this.getReserveByAddress(collReserveAddress);
-    const debtReserve: KaminoReserve | undefined = this.getReserveByAddress(debtReserveAddress);
+    const collReserve: KaminoReserve | undefined = this.getReserveByMint(collTokenMint);
+    const debtReserve: KaminoReserve | undefined = this.getReserveByMint(debtTokenMint);
+
     if (!collReserve || !debtReserve) {
       throw Error('Could not find one of the reserves.');
     }
@@ -417,7 +407,7 @@ export class KaminoMarket {
       }
       case LendingObligation.tag: {
         const mint = productType.toArgs().seed1;
-        obligations = obligations.filter((obligation) => obligation.getDepositsByMint(mint).length > 0);
+        obligations = obligations.filter((obligation) => obligation.getDepositByMint(mint) !== undefined);
         break;
       }
       case MultiplyObligation.tag:
@@ -426,24 +416,8 @@ export class KaminoMarket {
         const debtMint = productType.toArgs().seed2;
         obligations = obligations.filter(
           (obligation) =>
-            obligation.getDepositsByMint(collMint).length > 0 && obligation.getBorrowsByMint(debtMint).length > 0
+            obligation.getDepositByMint(collMint) !== undefined && obligation.getBorrowByMint(debtMint) !== undefined
         );
-        break;
-      }
-      case LendingObligationFixedRate.tag: {
-        const reserveAddress = productType.toArgs().seed1;
-        obligations = obligations.filter((obligation) => obligation.getDepositByReserve(reserveAddress) !== undefined);
-        break;
-      }
-      case LeverageObligationFixedRate.tag:
-      case MultiplyObligationFixedRate.tag: {
-        const collReserveAddress = productType.toArgs().seed1;
-        const debtReserveAddress = productType.toArgs().seed2;
-        obligations = obligations.filter((obligation) => {
-          const collDeposit = obligation.getDepositByReserve(collReserveAddress);
-          const debtBorrow = obligation.getBorrowByReserve(debtReserveAddress);
-          return collDeposit !== undefined && debtBorrow !== undefined;
-        });
         break;
       }
       default:
@@ -498,7 +472,7 @@ export class KaminoMarket {
     obligation?: KaminoObligation
   ): Decimal {
     return obligation
-      ? obligation.getMaxBorrowAmount(this, debtReserve.address, slot, requestElevationGroup)
+      ? obligation.getMaxBorrowAmount(this, debtReserve.getLiquidityMint(), slot, requestElevationGroup)
       : debtReserve.getMaxBorrowAmountWithCollReserve(this, collReserve, slot);
   }
 
@@ -570,47 +544,46 @@ export class KaminoMarket {
     return checkDefined(this.getReserveByAddress(address), `${description} reserve ${address} not found`);
   }
 
-  getReservesByMint(address: Address): KaminoReserve[] {
-    const reserves: KaminoReserve[] = [];
+  getReserveByMint(address: Address): KaminoReserve | undefined {
     for (const reserve of this.reserves.values()) {
       if (reserve.getLiquidityMint() === address) {
-        reserves.push(reserve);
+        return reserve;
       }
     }
-    return reserves;
+    return undefined;
   }
 
   /**
    * Returns this market's reserve of the given mint address, or throws an error (including the given description) if
    * such reserve does not exist.
    */
-  getExistingReservesByMint(address: Address, description: string = 'Requested'): KaminoReserve[] {
-    return checkArrayNotEmpty(this.getReservesByMint(address), `${description} reserve with mint ${address} not found`);
+  getExistingReserveByMint(address: Address, description: string = 'Requested'): KaminoReserve {
+    return checkDefined(this.getReserveByMint(address), `${description} reserve with mint ${address} not found`);
   }
 
-  getReservesBySymbol(symbol: string): KaminoReserve[] {
-    const reserves: KaminoReserve[] = [];
+  getReserveBySymbol(symbol: string) {
     for (const reserve of this.reserves.values()) {
       if (reserve.symbol === symbol) {
-        reserves.push(reserve);
+        return reserve;
       }
     }
-    return reserves;
+    return undefined;
   }
 
   /**
    * Returns this market's reserve of the given symbol, or throws an error (including the given description) if
    * such reserve does not exist.
    */
-  getExistingReservesBySymbol(symbol: string, description: string = 'Requested'): KaminoReserve[] {
-    return checkArrayNotEmpty(
-      this.getReservesBySymbol(symbol),
-      `${description} reserve with symbol ${symbol} not found`
-    );
+  getExistingReserveBySymbol(symbol: string, description: string = 'Requested'): KaminoReserve {
+    return checkDefined(this.getReserveBySymbol(symbol), `${description} reserve with symbol ${symbol} not found`);
+  }
+
+  getReserveMintBySymbol(symbol: string) {
+    return this.getReserveBySymbol(symbol)?.getLiquidityMint();
   }
 
   async getReserveFarmInfo(
-    reserveAddress: Address,
+    mint: Address,
     getRewardPrice: (mint: Address) => Promise<number>
   ): Promise<{ borrowingRewards: ReserveRewardInfo; depositingRewards: ReserveRewardInfo }> {
     const { address } = this;
@@ -622,10 +595,10 @@ export class KaminoMarket {
     }
 
     // Find the reserve
-    const kaminoReserve = this.getReserveByAddress(reserveAddress);
+    const kaminoReserve = this.getReserveByMint(mint);
 
     if (!kaminoReserve) {
-      throw Error(`Could not find reserve ${reserveAddress}`);
+      throw Error(`Could not find reserve. ${mint}`);
     }
 
     const totalDepositAmount = lamportsToNumberDecimal(

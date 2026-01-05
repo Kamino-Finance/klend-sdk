@@ -169,7 +169,6 @@ export class DeleverageDebtAmount implements OrderOpportunity {
     return {
       mint: singleBorrow.mintAddress,
       amount: Decimal.min(singleBorrow.amount, this.amount),
-      reserveAddress: singleBorrow.reserveAddress,
     };
   }
 }
@@ -205,7 +204,6 @@ export class DeleverageAllDebt implements OrderOpportunity {
     return {
       mint: highestValueBorrow.mintAddress,
       amount: highestValueBorrow.amount,
-      reserveAddress: highestValueBorrow.reserveAddress,
     };
   }
 }
@@ -312,7 +310,7 @@ export class KaminoObligationOrder {
       return undefined; // condition not met - cannot execute
     }
     const maxRepay = this.opportunity.getMaxRepay(obligation.getBorrows());
-    const repayBorrow = obligation.getBorrowByReserve(maxRepay.reserveAddress)!;
+    const repayBorrow = obligation.getBorrowByMint(maxRepay.mint)!;
     const maxRepayValue = tokenAmountToValue(maxRepay, repayBorrow);
     const executionBonusRate = this.calculateExecutionBonusRate(conditionHit, obligation);
     const executionBonusFactor = new Decimal(1).add(executionBonusRate);
@@ -507,7 +505,7 @@ export type AvailableOrderExecution = {
 // Internal calculation functions:
 
 function tokenAmountToValue(tokenAmount: TokenAmount, position: Position): Decimal {
-  if (tokenAmount.reserveAddress !== position.reserveAddress) {
+  if (tokenAmount.mint !== position.mintAddress) {
     throw new Error(`Value of token amount ${tokenAmount} cannot be computed using data from ${position}`);
   }
   return tokenAmount.amount.mul(position.marketValueRefreshed).div(position.amount);
@@ -518,7 +516,6 @@ function valueToTokenAmount(value: Decimal, position: Position): TokenAmount {
   return {
     amount: roundNearest(fractionalAmount),
     mint: position.mintAddress,
-    reserveAddress: position.reserveAddress,
   };
 }
 

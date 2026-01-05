@@ -1,6 +1,6 @@
 import { getConnectionPool } from '../utils/connection';
 import { KaminoObligation, ObligationStats } from '@kamino-finance/klend-sdk';
-import { EXAMPLE_OBLIGATION, MAIN_MARKET, PYUSD_RESERVE_MAIN_MARKET } from '../utils/constants';
+import { EXAMPLE_OBLIGATION, MAIN_MARKET } from '../utils/constants';
 import { getLoan, getMarket } from '../utils/helpers';
 import { address } from '@solana/kit';
 
@@ -13,8 +13,6 @@ import { address } from '@solana/kit';
     obligationPubkey: EXAMPLE_OBLIGATION,
     marketPubkey: MAIN_MARKET,
   };
-
-  const pyusdReserveAddress = PYUSD_RESERVE_MAIN_MARKET;
 
   const market = await getMarket(args);
   const loan: KaminoObligation | null = await getLoan(args);
@@ -38,7 +36,9 @@ import { address } from '@solana/kit';
   console.log(`liquidation LTV threshold: ${loanStats.liquidationLtv.toFixed(2)}`);
 
   console.log(
-    `Max withdraw amount : ${loan.getMaxWithdrawAmount(market, pyusdReserveAddress, currentSlot).toFixed(2)}`
+    `Max withdraw amount : ${loan
+      .getMaxWithdrawAmount(market, address('2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo'), currentSlot)
+      .toFixed(2)}`
   );
 
   console.log(`Borrow limt; ${loanStats.borrowLimit.toFixed(2)}`);
@@ -48,7 +48,7 @@ import { address } from '@solana/kit';
   console.log('\nBreakdown:');
   // Print all deposits
   loan.deposits.forEach((deposit) => {
-    const reserve = market.getReserveByAddress(deposit.reserveAddress);
+    const reserve = market.getReserveByMint(deposit.mintAddress);
     if (!reserve) {
       console.error(`reserve not found for ${deposit.mintAddress.toString()}`);
       return;
@@ -70,7 +70,7 @@ import { address } from '@solana/kit';
 
   // Print all borrows
   loan.borrows.forEach((borrow) => {
-    const reserve = market.getReserveByAddress(borrow.reserveAddress);
+    const reserve = market.getReserveByMint(borrow.mintAddress);
     if (!reserve) {
       console.error(`reserve not found for ${borrow.mintAddress.toString()}`);
       return;

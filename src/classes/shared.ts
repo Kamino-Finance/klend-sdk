@@ -77,8 +77,6 @@ export type TokenAmount = {
    */
   mint: Address;
 
-  reserveAddress: Address;
-
   /**
    * Amount, in lamports.
    */

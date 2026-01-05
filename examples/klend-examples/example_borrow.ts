@@ -2,7 +2,7 @@ import { KaminoAction, PROGRAM_ID, VanillaObligation } from '@kamino-finance/kle
 import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import BN from 'bn.js';
-import { MAIN_MARKET, USDC_RESERVE_MAIN_MARKET } from '../utils/constants';
+import { MAIN_MARKET, USDC_MINT } from '../utils/constants';
 import { loadReserveData } from '../utils/helpers';
 import { sendAndConfirmTx } from '../utils/tx';
 
@@ -13,19 +13,19 @@ import { sendAndConfirmTx } from '../utils/tx';
   const { market, reserve: usdcReserve } = await loadReserveData({
     rpc: c.rpc,
     marketPubkey: MAIN_MARKET,
-    reserveAddress: USDC_RESERVE_MAIN_MARKET,
+    mintPubkey: USDC_MINT,
   });
 
   // The user needs to have collateral backing its loan (deposited beforehand), otherwise the borrow tx will fail.
-  const borrowAction = await KaminoAction.buildBorrowTxns({
-    kaminoMarket: market,
-    amount: new BN(1_000_000), // 1 USDC
-    reserveAddress: usdcReserve.address,
-    owner: wallet,
-    obligation: new VanillaObligation(PROGRAM_ID),
-    useV2Ixs: true,
-    scopeRefreshConfig: undefined,
-  });
+  const borrowAction = await KaminoAction.buildBorrowTxns(
+    market,
+    new BN(1_000_000), // 1 USDC
+    usdcReserve.getLiquidityMint(),
+    wallet,
+    new VanillaObligation(PROGRAM_ID),
+    true,
+    undefined
+  );
 
   // If we want to inspect the prepended instructions to the borrow instruction
   console.log('borrowAction.setupIxsLabels', borrowAction.setupIxsLabels);

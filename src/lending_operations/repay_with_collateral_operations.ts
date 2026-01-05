@@ -47,8 +47,8 @@ export type RepayWithCollInitialInputs<QuoteResponse> = {
 
 interface RepayWithCollSwapInputsProps<QuoteResponse> {
   kaminoMarket: KaminoMarket;
-  debtReserveAddress: Address;
-  collReserveAddress: Address;
+  debtTokenMint: Address;
+  collTokenMint: Address;
   owner: TransactionSigner;
   obligation: KaminoObligation;
   referrer: Option<Address>;
@@ -67,9 +67,9 @@ export enum MaxWithdrawLtvCheck {
 }
 
 export async function getRepayWithCollSwapInputs<QuoteResponse>({
-  collReserveAddress,
+  collTokenMint,
   currentSlot,
-  debtReserveAddress,
+  debtTokenMint,
   kaminoMarket,
   owner,
   obligation,
@@ -85,10 +85,8 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
   flashLoanInfo: FlashLoanInfo;
   initialInputs: RepayWithCollInitialInputs<QuoteResponse>;
 }> {
-  const collReserve = kaminoMarket.getExistingReserveByAddress(collReserveAddress);
-  const debtReserve = kaminoMarket.getExistingReserveByAddress(debtReserveAddress);
-  const collTokenMint = collReserve.getLiquidityMint();
-  const debtTokenMint = debtReserve.getLiquidityMint();
+  const collReserve = kaminoMarket.getExistingReserveByMint(collTokenMint);
+  const debtReserve = kaminoMarket.getExistingReserveByMint(debtTokenMint);
 
   const {
     repayAmountLamports,
@@ -190,9 +188,9 @@ export async function getRepayWithCollIxs<QuoteResponse>({
   repayAmount,
   isClosingPosition,
   budgetAndPriorityFeeIxs,
-  collReserveAddress,
+  collTokenMint,
   currentSlot,
-  debtReserveAddress,
+  debtTokenMint,
   kaminoMarket,
   owner,
   obligation,
@@ -204,9 +202,9 @@ export async function getRepayWithCollIxs<QuoteResponse>({
   logger = console.log,
 }: RepayWithCollIxsProps<QuoteResponse>): Promise<Array<RepayWithCollIxsResponse<QuoteResponse>>> {
   const { swapInputs, initialInputs } = await getRepayWithCollSwapInputs({
-    collReserveAddress,
+    collTokenMint,
     currentSlot,
-    debtReserveAddress,
+    debtTokenMint,
     kaminoMarket,
     owner,
     obligation,
@@ -221,8 +219,8 @@ export async function getRepayWithCollIxs<QuoteResponse>({
   const { debtRepayAmountLamports, flashRepayAmountLamports, maxCollateralWithdrawLamports, swapQuote } = initialInputs;
   const { inputAmountLamports: collSwapInLamports } = swapInputs;
 
-  const collReserve = kaminoMarket.getExistingReserveByAddress(collReserveAddress);
-  const debtReserve = kaminoMarket.getExistingReserveByAddress(debtReserveAddress);
+  const collReserve = kaminoMarket.getExistingReserveByMint(collTokenMint);
+  const debtReserve = kaminoMarket.getExistingReserveByMint(debtTokenMint);
 
   // the client should use these values to prevent this input, but the tx may succeed, so we don't want to fail
   // there is also a chance that the tx will consume debt token from the user's ata which they would not expect
@@ -330,40 +328,40 @@ async function buildRepayWithCollateralIxs<QuoteResponse>(
   // 3. Repay using the flash borrowed funds & withdraw collateral to swap and pay the flash loan
   let repayAndWithdrawAction;
   if (maxWithdrawLtvCheck === MaxWithdrawLtvCheck.MAX_LTV) {
-    repayAndWithdrawAction = await KaminoAction.buildRepayAndWithdrawTxns({
-      kaminoMarket: market,
-      repayAmount: isClosingPosition ? U64_MAX : debtRepayAmountLamports.toString(),
-      repayReserveAddress: debtReserve.address,
-      withdrawAmount: isClosingPosition ? U64_MAX : collWithdrawLamports.toString(),
-      withdrawReserveAddress: collReserve.address,
-      payer: owner,
+    repayAndWithdrawAction = await KaminoAction.buildRepayAndWithdrawTxns(
+      market,
+      isClosingPosition ? U64_MAX : debtRepayAmountLamports.toString(),
+      debtReserve.getLiquidityMint(),
+      isClosingPosition ? U64_MAX : collWithdrawLamports.toString(),
+      collReserve.getLiquidityMint(),
+      owner,
       currentSlot,
       obligation,
       useV2Ixs,
-      scopeRefreshConfig: undefined,
-      extraComputeBudget: 0,
-      includeAtaIxs: false,
+      undefined,
+      0,
+      false,
       requestElevationGroup,
-      initUserMetadata: undefined,
-      referrer,
-    });
+      undefined,
+      referrer
+    );
   } else {
-    repayAndWithdrawAction = await KaminoAction.buildRepayAndWithdrawV2Txns({
-      kaminoMarket: market,
-      repayAmount: isClosingPosition ? U64_MAX : debtRepayAmountLamports.toString(),
-      repayReserveAddress: debtReserve.address,
-      withdrawAmount: isClosingPosition ? U64_MAX : collWithdrawLamports.toString(),
-      withdrawReserveAddress: collReserve.address,
-      payer: owner,
+    repayAndWithdrawAction = await KaminoAction.buildRepayAndWithdrawV2Txns(
+      market,
+      isClosingPosition ? U64_MAX : debtRepayAmountLamports.toString(),
+      debtReserve.getLiquidityMint(),
+      isClosingPosition ? U64_MAX : collWithdrawLamports.toString(),
+      collReserve.getLiquidityMint(),
+      owner,
       currentSlot,
       obligation,
-      scopeRefreshConfig: undefined,
-      extraComputeBudget: 0,
-      includeAtaIxs: false,
+      undefined,
+      0,
+      false,
       requestElevationGroup,
-      initUserMetadata: undefined,
-      referrer,
-    });
+      undefined,
+      referrer
+    );
   }
 
   // 4. Swap collateral to debt to repay flash loan

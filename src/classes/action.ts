@@ -83,25 +83,6 @@ import {
 } from '@solana-program/token-2022';
 import { getTransferSolInstruction, SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
 import { noopSigner } from '../utils/signer';
-import {
-  BuildDepositTxnsProps,
-  BuildBorrowTxnsProps,
-  BuildDepositReserveLiquidityTxnsProps,
-  BuildRedeemReserveCollateralTxnsProps,
-  BuildWithdrawTxnsProps,
-  BuildRepayTxnsProps,
-  BuildDepositAndBorrowTxnsProps,
-  BuildRefreshObligationTxnsProps,
-  BuildRequestElevationGroupTxnsProps,
-  BuildDepositAndWithdrawV2TxnsProps,
-  BuildRepayAndWithdrawTxnsProps,
-  BuildRepayAndWithdrawV2TxnsProps,
-  BuildLiquidateTxnsProps,
-  BuildWithdrawReferrerFeeTxnsProps,
-  BuildDepositObligationCollateralTxnsProps,
-  InitializeActionProps,
-  InitializeMultiTokenActionProps,
-} from './actionTypes';
 
 export type ActionType =
   | 'deposit'
@@ -222,22 +203,20 @@ export class KaminoAction {
     this.currentSlot = currentSlot;
   }
 
-  static async initialize(props: InitializeActionProps) {
-    const {
-      kaminoMarket,
-      action,
-      amount,
-      reserveAddress,
-      owner,
-      obligation,
-      referrer = none(),
-      currentSlot = 0n,
-      payer = owner,
-    } = props;
-
-    const reserve = kaminoMarket.getReserveByAddress(reserveAddress);
+  static async initialize(
+    action: ActionType,
+    amount: string | BN,
+    mint: Address,
+    owner: TransactionSigner,
+    kaminoMarket: KaminoMarket,
+    obligation: KaminoObligation | ObligationType,
+    referrer: Option<Address> = none(),
+    currentSlot: Slot = 0n,
+    payer: TransactionSigner = owner
+  ) {
+    const reserve = kaminoMarket.getReserveByMint(mint);
     if (reserve === undefined) {
-      throw new Error(`Reserve ${reserveAddress} not found in market ${kaminoMarket.getAddress()}`);
+      throw new Error(`Reserve ${mint} not found in market ${kaminoMarket.getAddress()}`);
     }
 
     const { kaminoObligation, depositReserves, borrowReserves, distinctReserveCount } =
@@ -249,7 +228,7 @@ export class KaminoAction {
       kaminoMarket,
       owner,
       kaminoObligation || obligation,
-      reserve.getLiquidityMint(),
+      mint,
       distinctReserveCount,
       amount,
       depositReserves,
@@ -330,23 +309,29 @@ export class KaminoAction {
     };
   }
 
-  static async buildRefreshObligationTxns(props: BuildRefreshObligationTxnsProps) {
-    const { kaminoMarket, payer, obligation, extraComputeBudget = 1_000_000, currentSlot = 0n } = props;
+  static async buildRefreshObligationTxns(
+    kaminoMarket: KaminoMarket,
+    payer: TransactionSigner,
+    obligation: KaminoObligation,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    currentSlot: Slot = 0n
+  ) {
     //  placeholder for action initialization
     const firstReserve = obligation.getDeposits()[0].reserveAddress;
     const firstKaminoReserve = kaminoMarket.getReserveByAddress(firstReserve);
     if (!firstKaminoReserve) {
       throw new Error(`Reserve ${firstReserve} not found`);
     }
-    const axn = await KaminoAction.initialize({
+    const axn = await KaminoAction.initialize(
+      'refreshObligation',
+      '0',
+      firstKaminoReserve?.getLiquidityMint(),
+      noopSigner(obligation.state.owner), // owner does not need to sign for refresh
       kaminoMarket,
-      action: 'refreshObligation',
-      amount: '0',
-      reserveAddress: firstKaminoReserve.address,
-      owner: noopSigner(obligation.state.owner), // owner does not need to sign for refresh
       obligation,
-      currentSlot,
-    });
+      undefined,
+      currentSlot
+    );
 
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIx(extraComputeBudget);
@@ -357,22 +342,29 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildRequestElevationGroupTxns(props: BuildRequestElevationGroupTxnsProps) {
-    const { kaminoMarket, owner, obligation, elevationGroup, extraComputeBudget = 1_000_000, currentSlot = 0n } = props;
+  static async buildRequestElevationGroupTxns(
+    kaminoMarket: KaminoMarket,
+    owner: TransactionSigner,
+    obligation: KaminoObligation,
+    elevationGroup: number,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    currentSlot: Slot = 0n
+  ) {
     const firstReserve = obligation.state.deposits.find((x) => x.depositReserve !== DEFAULT_PUBLIC_KEY)!.depositReserve;
     const firstKaminoReserve = kaminoMarket.getReserveByAddress(firstReserve);
     if (!firstKaminoReserve) {
       throw new Error(`Reserve ${firstReserve} not found`);
     }
-    const axn = await KaminoAction.initialize({
-      kaminoMarket,
-      action: 'requestElevationGroup',
-      amount: '0',
-      reserveAddress: firstKaminoReserve.address,
+    const axn = await KaminoAction.initialize(
+      'requestElevationGroup',
+      '0',
+      firstKaminoReserve?.getLiquidityMint(),
       owner,
+      kaminoMarket,
       obligation,
-      currentSlot,
-    });
+      undefined,
+      currentSlot
+    );
 
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIx(extraComputeBudget);
@@ -384,34 +376,35 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildDepositTxns(props: BuildDepositTxnsProps) {
-    const {
-      kaminoMarket,
+  static async buildDepositTxns(
+    kaminoMarket: KaminoMarket,
+    amount: string | BN,
+    mint: Address,
+    owner: TransactionSigner,
+    obligation: KaminoObligation | ObligationType,
+    useV2Ixs: boolean,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
+    requestElevationGroup: boolean = false, // to be requested *before* the deposit
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
+    referrer: Option<Address> = none(),
+    currentSlot: Slot = 0n,
+    overrideElevationGroupRequest: number | undefined = undefined // if set, when an elevationgroup request is made, it will use this value
+  ) {
+    const axn = await KaminoAction.initialize(
+      'deposit',
       amount,
-      reserveAddress,
+      mint,
       owner,
-      obligation,
-      useV2Ixs,
-      scopeRefreshConfig,
-      extraComputeBudget = 1_000_000,
-      includeAtaIxs = true,
-      requestElevationGroup = false,
-      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
-      referrer = none(),
-      currentSlot = 0n,
-      overrideElevationGroupRequest,
-    } = props;
-
-    const axn = await KaminoAction.initialize({
       kaminoMarket,
-      action: 'deposit',
-      amount,
-      reserveAddress,
-      owner,
       obligation,
       referrer,
-      currentSlot,
-    });
+      currentSlot
+    );
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
@@ -447,34 +440,35 @@ export class KaminoAction {
     }
   }
 
-  static async buildBorrowTxns(props: BuildBorrowTxnsProps) {
-    const {
-      kaminoMarket,
+  static async buildBorrowTxns(
+    kaminoMarket: KaminoMarket,
+    amount: string | BN,
+    mint: Address,
+    owner: TransactionSigner,
+    obligation: KaminoObligation | ObligationType,
+    useV2Ixs: boolean,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
+    requestElevationGroup: boolean = false,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
+    referrer: Option<Address> = none(),
+    currentSlot: Slot = 0n,
+    overrideElevationGroupRequest: number | undefined = undefined // if set, when an elevationgroup request is made, it will use this value
+  ) {
+    const axn = await KaminoAction.initialize(
+      'borrow',
       amount,
-      reserveAddress,
+      mint,
       owner,
-      obligation,
-      useV2Ixs,
-      scopeRefreshConfig,
-      extraComputeBudget = 1_000_000,
-      includeAtaIxs = true,
-      requestElevationGroup = false,
-      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
-      referrer = none(),
-      currentSlot = 0n,
-      overrideElevationGroupRequest,
-    } = props;
-
-    const axn = await KaminoAction.initialize({
       kaminoMarket,
-      action: 'borrow',
-      amount,
-      reserveAddress,
-      owner,
       obligation,
       referrer,
-      currentSlot,
-    });
+      currentSlot
+    );
     const addInitObligationForFarm = true;
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIx(extraComputeBudget);
@@ -513,31 +507,29 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildDepositReserveLiquidityTxns(props: BuildDepositReserveLiquidityTxnsProps) {
-    const {
-      kaminoMarket,
+  static async buildDepositReserveLiquidityTxns(
+    kaminoMarket: KaminoMarket,
+    amount: string | BN,
+    mint: Address,
+    owner: TransactionSigner,
+    obligation: KaminoObligation | ObligationType,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas
+    requestElevationGroup: boolean = false,
+    referrer: Option<Address> = none(),
+    currentSlot: Slot = 0n
+  ) {
+    const axn = await KaminoAction.initialize(
+      'mint',
       amount,
-      reserveAddress,
+      mint,
       owner,
-      obligation,
-      scopeRefreshConfig,
-      extraComputeBudget = 1_000_000,
-      includeAtaIxs = true,
-      requestElevationGroup = false,
-      referrer = none(),
-      currentSlot = 0n,
-    } = props;
-
-    const axn = await KaminoAction.initialize({
       kaminoMarket,
-      action: 'mint',
-      amount,
-      reserveAddress,
-      owner,
       obligation,
       referrer,
-      currentSlot,
-    });
+      currentSlot
+    );
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
@@ -558,31 +550,29 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildRedeemReserveCollateralTxns(props: BuildRedeemReserveCollateralTxnsProps) {
-    const {
-      kaminoMarket,
+  static async buildRedeemReserveCollateralTxns(
+    kaminoMarket: KaminoMarket,
+    amount: string | BN,
+    mint: Address,
+    owner: TransactionSigner,
+    obligation: KaminoObligation | ObligationType,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas
+    requestElevationGroup: boolean = false,
+    referrer: Option<Address> = none(),
+    currentSlot: Slot = 0n
+  ) {
+    const axn = await KaminoAction.initialize(
+      'redeem',
       amount,
-      reserveAddress,
+      mint,
       owner,
-      obligation,
-      scopeRefreshConfig,
-      extraComputeBudget = 1_000_000,
-      includeAtaIxs = true,
-      requestElevationGroup = false,
-      referrer = none(),
-      currentSlot = 0n,
-    } = props;
-
-    const axn = await KaminoAction.initialize({
       kaminoMarket,
-      action: 'redeem',
-      amount,
-      reserveAddress,
-      owner,
       obligation,
       referrer,
-      currentSlot,
-    });
+      currentSlot
+    );
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
@@ -603,32 +593,34 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildDepositObligationCollateralTxns(props: BuildDepositObligationCollateralTxnsProps) {
-    const {
-      kaminoMarket,
+  static async buildDepositObligationCollateralTxns(
+    kaminoMarket: KaminoMarket,
+    amount: string | BN,
+    mint: Address,
+    owner: TransactionSigner,
+    obligation: KaminoObligation | ObligationType,
+    useV2Ixs: boolean,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas
+    requestElevationGroup: boolean = false,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
+    referrer: Option<Address> = none(),
+    currentSlot: Slot = 0n
+  ) {
+    const axn = await KaminoAction.initialize(
+      'depositCollateral',
       amount,
-      reserveAddress,
+      mint,
       owner,
-      obligation,
-      useV2Ixs,
-      scopeRefreshConfig,
-      extraComputeBudget = 1_000_000,
-      includeAtaIxs = true,
-      requestElevationGroup = false,
-      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
-      referrer = none(),
-      currentSlot = 0n,
-    } = props;
-    const axn = await KaminoAction.initialize({
       kaminoMarket,
-      action: 'depositCollateral',
-      amount,
-      reserveAddress,
-      owner,
       obligation,
       referrer,
-      currentSlot,
-    });
+      currentSlot
+    );
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
@@ -653,37 +645,39 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildDepositAndBorrowTxns(props: BuildDepositAndBorrowTxnsProps) {
-    const {
+  static async buildDepositAndBorrowTxns(
+    kaminoMarket: KaminoMarket,
+    depositAmount: string | BN,
+    depositMint: Address,
+    borrowAmount: string | BN,
+    borrowMint: Address,
+    owner: TransactionSigner,
+    obligation: KaminoObligation | ObligationType,
+    useV2Ixs: boolean,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
+    requestElevationGroup: boolean = false,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
+    referrer: Option<Address> = none(),
+    currentSlot: Slot = 0n
+  ) {
+    const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
+      'depositAndBorrow',
       depositAmount,
-      depositReserveAddress,
-      borrowAmount,
-      borrowReserveAddress,
+      depositMint,
+      borrowMint,
       owner,
+      owner.address,
       obligation,
-      useV2Ixs,
-      scopeRefreshConfig,
-      extraComputeBudget = 1_000_000,
-      includeAtaIxs = true,
-      requestElevationGroup = false,
-      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
-      referrer = none(),
-      currentSlot = 0n,
-    } = props;
-    const axn = await KaminoAction.initializeMultiTokenAction({
-      kaminoMarket,
-      action: 'depositAndBorrow',
-      inflowAmount: depositAmount,
-      inflowReserveAddress: depositReserveAddress,
-      outflowReserveAddress: borrowReserveAddress,
-      signer: owner,
-      obligationOwner: owner.address,
-      obligation,
-      outflowAmount: borrowAmount,
+      borrowAmount,
       referrer,
-      currentSlot,
-    });
+      currentSlot
+    );
     const addInitObligationForFarmForDeposit = true;
     const addInitObligationForFarmForBorrow = false;
     const twoTokenAction = true;
@@ -751,36 +745,38 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildDepositAndWithdrawV2Txns(props: BuildDepositAndWithdrawV2TxnsProps) {
-    const {
+  static async buildDepositAndWithdrawV2Txns(
+    kaminoMarket: KaminoMarket,
+    depositAmount: string | BN,
+    depositMint: Address,
+    withdrawAmount: string | BN,
+    withdrawMint: Address,
+    owner: TransactionSigner,
+    currentSlot: Slot,
+    obligation: KaminoObligation | ObligationType,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
+    requestElevationGroup: boolean = false,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
+    referrer: Option<Address> = none()
+  ) {
+    const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
+      'depositAndWithdraw',
       depositAmount,
-      depositReserveAddress,
-      withdrawAmount,
-      withdrawReserveAddress,
+      depositMint,
+      withdrawMint,
       owner,
-      currentSlot,
+      owner.address,
       obligation,
-      scopeRefreshConfig,
-      extraComputeBudget = 1_000_000,
-      includeAtaIxs = true,
-      requestElevationGroup = false,
-      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
-      referrer = none(),
-    } = props;
-    const axn = await KaminoAction.initializeMultiTokenAction({
-      kaminoMarket,
-      action: 'depositAndWithdraw',
-      inflowAmount: depositAmount,
-      inflowReserveAddress: depositReserveAddress,
-      outflowReserveAddress: withdrawReserveAddress,
-      signer: owner,
-      obligationOwner: owner.address,
-      obligation,
-      outflowAmount: withdrawAmount,
+      withdrawAmount,
       referrer,
-      currentSlot,
-    });
+      currentSlot
+    );
     const addInitObligationForFarm = true;
     const twoTokenAction = true;
     if (extraComputeBudget > 0) {
@@ -803,36 +799,38 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildRepayAndWithdrawV2Txns(props: BuildRepayAndWithdrawV2TxnsProps) {
-    const {
+  static async buildRepayAndWithdrawV2Txns(
+    kaminoMarket: KaminoMarket,
+    repayAmount: string | BN,
+    repayMint: Address,
+    withdrawAmount: string | BN,
+    withdrawMint: Address,
+    payer: TransactionSigner,
+    currentSlot: Slot,
+    obligation: KaminoObligation | ObligationType,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
+    requestElevationGroup: boolean = false,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
+    referrer: Option<Address> = none()
+  ) {
+    const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
+      'repayAndWithdrawV2',
       repayAmount,
-      repayReserveAddress,
-      withdrawAmount,
-      withdrawReserveAddress,
+      repayMint,
+      withdrawMint,
       payer,
-      currentSlot,
+      payer.address,
       obligation,
-      scopeRefreshConfig,
-      extraComputeBudget = 1_000_000,
-      includeAtaIxs = true,
-      requestElevationGroup = false,
-      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
-      referrer = none(),
-    } = props;
-    const axn = await KaminoAction.initializeMultiTokenAction({
-      kaminoMarket,
-      action: 'repayAndWithdrawV2',
-      inflowAmount: repayAmount,
-      inflowReserveAddress: repayReserveAddress,
-      outflowReserveAddress: withdrawReserveAddress,
-      signer: payer,
-      obligationOwner: payer.address,
-      obligation,
-      outflowAmount: withdrawAmount,
+      withdrawAmount,
       referrer,
-      currentSlot,
-    });
+      currentSlot
+    );
     const addInitObligationForFarm = true;
     const twoTokenAction = true;
     if (extraComputeBudget > 0) {
@@ -855,37 +853,39 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildRepayAndWithdrawTxns(props: BuildRepayAndWithdrawTxnsProps) {
-    const {
+  static async buildRepayAndWithdrawTxns(
+    kaminoMarket: KaminoMarket,
+    repayAmount: string | BN,
+    repayMint: Address,
+    withdrawAmount: string | BN,
+    withdrawMint: Address,
+    payer: TransactionSigner,
+    currentSlot: Slot,
+    obligation: KaminoObligation | ObligationType,
+    useV2Ixs: boolean,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
+    requestElevationGroup: boolean = false,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
+    referrer: Option<Address> = none()
+  ) {
+    const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
+      'repayAndWithdraw',
       repayAmount,
-      repayReserveAddress,
-      withdrawAmount,
-      withdrawReserveAddress,
+      repayMint,
+      withdrawMint,
       payer,
-      currentSlot,
+      payer.address,
       obligation,
-      useV2Ixs,
-      scopeRefreshConfig,
-      extraComputeBudget = 1_000_000,
-      includeAtaIxs = true,
-      requestElevationGroup = false,
-      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
-      referrer = none(),
-    } = props;
-    const axn = await KaminoAction.initializeMultiTokenAction({
-      kaminoMarket,
-      action: 'repayAndWithdraw',
-      inflowAmount: repayAmount,
-      inflowReserveAddress: repayReserveAddress,
-      outflowReserveAddress: withdrawReserveAddress,
-      signer: payer,
-      obligationOwner: payer.address,
-      obligation,
-      outflowAmount: withdrawAmount,
+      withdrawAmount,
       referrer,
-      currentSlot,
-    });
+      currentSlot
+    );
     const addInitObligationForFarmForRepay = true;
     const addInitObligationForFarmForWithdraw = false;
     const twoTokenAction = true;
@@ -942,35 +942,40 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildWithdrawTxns(props: BuildWithdrawTxnsProps) {
-    const {
-      kaminoMarket,
+  static async buildWithdrawTxns(
+    kaminoMarket: KaminoMarket,
+    amount: string | BN,
+    mint: Address,
+    owner: TransactionSigner,
+    obligation: KaminoObligation | ObligationType,
+    useV2Ixs: boolean,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
+    requestElevationGroup: boolean = false, // to be requested *after* the withdraw
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
+    referrer: Option<Address> = none(),
+    currentSlot: Slot = 0n,
+    overrideElevationGroupRequest?: number,
+    // Optional customizations which may be needed if the obligation was mutated by some previous ix.
+    obligationCustomizations?: {
+      // Any newly-added deposit reserves.
+      addedDepositReserves?: Address[];
+    }
+  ) {
+    const axn = await KaminoAction.initialize(
+      'withdraw',
       amount,
-      reserveAddress,
+      mint,
       owner,
-      obligation,
-      useV2Ixs,
-      scopeRefreshConfig,
-      extraComputeBudget = 1_000_000,
-      includeAtaIxs = true,
-      requestElevationGroup = false,
-      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
-      referrer = none(),
-      currentSlot = 0n,
-      overrideElevationGroupRequest,
-      obligationCustomizations,
-    } = props;
-
-    const axn = await KaminoAction.initialize({
       kaminoMarket,
-      action: 'withdraw',
-      amount,
-      reserveAddress,
-      owner,
       obligation,
       referrer,
-      currentSlot,
-    });
+      currentSlot
+    );
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
@@ -1004,38 +1009,52 @@ export class KaminoAction {
   }
 
   /**
-   * Build repay transactions
-   * @param props - BuildRepayTxnsProps containing all required and optional parameters
+   *
+   * @param kaminoMarket
+   * @param amount
+   * @param mint
+   * @param owner
+   * @param obligation - obligation to repay or the PDA seeds
+   * @param useV2Ixs
+   * @param scopeRefreshConfig
+   * @param currentSlot
+   * @param payer - if not set then owner is used
+   * @param extraComputeBudget - if > 0 then adds the ix
+   * @param includeAtaIxs - if true it includes create and close wsol and token atas
+   * @param requestElevationGroup
+   * @param initUserMetadata
+   * @param referrer
    */
-  static async buildRepayTxns(props: BuildRepayTxnsProps) {
-    const {
-      kaminoMarket,
+  static async buildRepayTxns(
+    kaminoMarket: KaminoMarket,
+    amount: string | BN,
+    mint: Address,
+    owner: TransactionSigner,
+    obligation: KaminoObligation | ObligationType,
+    useV2Ixs: boolean,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
+    currentSlot: Slot,
+    payer: TransactionSigner = owner,
+    extraComputeBudget: number = 1_000_000,
+    includeAtaIxs: boolean = true,
+    requestElevationGroup: boolean = false,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
+    referrer: Option<Address> = none()
+  ) {
+    const axn = await KaminoAction.initialize(
+      'repay',
       amount,
-      reserveAddress,
+      mint,
       owner,
-      obligation,
-      useV2Ixs,
-      scopeRefreshConfig,
-      currentSlot,
-      payer = owner,
-      extraComputeBudget = 1_000_000,
-      includeAtaIxs = true,
-      requestElevationGroup = false,
-      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
-      referrer = none(),
-    } = props;
-
-    const axn = await KaminoAction.initialize({
       kaminoMarket,
-      action: 'repay',
-      amount,
-      reserveAddress,
-      owner,
       obligation,
       referrer,
       currentSlot,
-      payer,
-    });
+      payer
+    );
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
@@ -1061,39 +1080,41 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildLiquidateTxns(props: BuildLiquidateTxnsProps): Promise<KaminoAction> {
-    const {
+  static async buildLiquidateTxns(
+    kaminoMarket: KaminoMarket,
+    amount: string | BN,
+    minCollateralReceiveAmount: string | BN,
+    repayTokenMint: Address,
+    withdrawTokenMint: Address,
+    liquidator: TransactionSigner,
+    obligationOwner: Address,
+    obligation: KaminoObligation | ObligationType,
+    useV2Ixs: boolean,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined = undefined,
+    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
+    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas, and creates all other token atas if they don't exist
+    requestElevationGroup: boolean = false,
+    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
+      skipInitialization: false,
+      skipLutCreation: false,
+    },
+    referrer: Option<Address> = none(),
+    maxAllowedLtvOverridePercent: number = 0,
+    currentSlot: Slot = 0n
+  ): Promise<KaminoAction> {
+    const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
+      'liquidate',
       amount,
-      minCollateralReceiveAmount,
-      repayReserveAddress,
-      withdrawReserveAddress,
+      repayTokenMint,
+      withdrawTokenMint,
       liquidator,
       obligationOwner,
       obligation,
-      useV2Ixs,
-      scopeRefreshConfig,
-      extraComputeBudget = 1_000_000,
-      includeAtaIxs = true,
-      requestElevationGroup = false,
-      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
-      referrer = none(),
-      maxAllowedLtvOverridePercent = 0,
-      currentSlot = 0n,
-    } = props;
-    const axn = await KaminoAction.initializeMultiTokenAction({
-      kaminoMarket,
-      action: 'liquidate',
-      inflowAmount: amount,
-      inflowReserveAddress: repayReserveAddress,
-      outflowReserveAddress: withdrawReserveAddress,
-      signer: liquidator,
-      obligationOwner,
-      obligation,
-      outflowAmount: minCollateralReceiveAmount,
+      minCollateralReceiveAmount,
       referrer,
-      currentSlot,
-    });
+      currentSlot
+    );
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
@@ -1119,10 +1140,14 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildWithdrawReferrerFeeTxns(props: BuildWithdrawReferrerFeeTxnsProps) {
-    const { owner, reserveAddress, kaminoMarket, currentSlot = 0n } = props;
+  static async buildWithdrawReferrerFeeTxns(
+    owner: TransactionSigner,
+    tokenMint: Address,
+    kaminoMarket: KaminoMarket,
+    currentSlot: Slot = 0n
+  ) {
     const { axn, createAtaIxs } = await KaminoAction.initializeWithdrawReferrerFees(
-      reserveAddress,
+      tokenMint,
       owner,
       kaminoMarket,
       currentSlot
@@ -3317,22 +3342,21 @@ export class KaminoAction {
     this.cleanupIxsLabels.push(...postIxsLabels);
   }
 
-  static async initializeMultiTokenAction(props: InitializeMultiTokenActionProps) {
-    const {
-      kaminoMarket,
-      action,
-      inflowAmount,
-      inflowReserveAddress,
-      outflowReserveAddress,
-      signer,
-      obligationOwner,
-      obligation,
-      outflowAmount,
-      referrer = none(),
-      currentSlot = 0n,
-    } = props;
-    const inflowReserve = kaminoMarket.getExistingReserveByAddress(inflowReserveAddress);
-    const outflowReserve = kaminoMarket.getExistingReserveByAddress(outflowReserveAddress);
+  static async initializeMultiTokenAction(
+    kaminoMarket: KaminoMarket,
+    action: ActionType,
+    inflowAmount: string | BN,
+    inflowTokenMint: Address,
+    outflowTokenMint: Address,
+    signer: TransactionSigner,
+    obligationOwner: Address,
+    obligation: KaminoObligation | ObligationType,
+    outflowAmount?: string | BN,
+    referrer: Option<Address> = none(),
+    currentSlot: Slot = 0n
+  ) {
+    const inflowReserve = kaminoMarket.getExistingReserveByMint(inflowTokenMint);
+    const outflowReserve = kaminoMarket.getExistingReserveByMint(outflowTokenMint);
 
     const { kaminoObligation, depositReserves, borrowReserves, distinctReserveCount } =
       await KaminoAction.loadObligation(
@@ -3354,8 +3378,8 @@ export class KaminoAction {
       action === 'repayAndWithdraw' ||
       action === 'repayAndWithdrawV2'
     ) {
-      primaryMint = inflowReserve.getLiquidityMint();
-      secondaryMint = outflowReserve.getLiquidityMint();
+      primaryMint = inflowTokenMint;
+      secondaryMint = outflowTokenMint;
     } else {
       throw new Error('Invalid action');
     }
@@ -3379,14 +3403,14 @@ export class KaminoAction {
   }
 
   static async initializeWithdrawReferrerFees(
-    reserveAddress: Address,
+    mint: Address,
     owner: TransactionSigner,
     kaminoMarket: KaminoMarket,
     currentSlot: Slot = 0n
   ) {
-    const reserve = kaminoMarket.getReserveByAddress(reserveAddress);
+    const reserve = kaminoMarket.getReserveByMint(mint);
     if (reserve === undefined) {
-      throw new Error(`Reserve ${reserveAddress} not found in market ${kaminoMarket.getAddress()}`);
+      throw new Error(`Reserve ${mint} not found in market ${kaminoMarket.getAddress()}`);
     }
 
     const [{ createAtaIx }] = await createAtasIdempotent(owner, [
@@ -3401,7 +3425,7 @@ export class KaminoAction {
         kaminoMarket,
         owner,
         new VanillaObligation(kaminoMarket.programId),
-        reserve.getLiquidityMint(),
+        mint,
         0,
         new BN(0),
         [],

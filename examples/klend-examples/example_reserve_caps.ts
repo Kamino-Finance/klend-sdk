@@ -1,5 +1,5 @@
 import { ReserveArgs } from '../utils/models';
-import { MAIN_MARKET, PYUSD_MINT, PYUSD_RESERVE_MAIN_MARKET } from '../utils/constants';
+import { MAIN_MARKET, PYUSD_MINT } from '../utils/constants';
 import { getConnectionPool } from '../utils/connection';
 import { loadReserveData } from '../utils/helpers';
 
@@ -20,7 +20,7 @@ export async function getReserveCaps(args: ReserveArgs) {
   const c = getConnectionPool();
   console.log(`fetching data for market ${MAIN_MARKET.toString()} token ${PYUSD_MINT.toString()}`);
   const { currentSupplyCapacity, currentBorrowCapacity, dailySupplyCapacity, dailyBorrowCapacity } =
-    await getReserveCaps({ rpc: c.rpc, marketPubkey: MAIN_MARKET, reserveAddress: PYUSD_RESERVE_MAIN_MARKET });
+    await getReserveCaps({ rpc: c.rpc, marketPubkey: MAIN_MARKET, mintPubkey: PYUSD_MINT });
   console.log(`current supply capacity:`, currentSupplyCapacity.toNumber());
   console.log('current borrow capacity:', currentBorrowCapacity.toNumber());
   console.log('daily supply capacity:', dailySupplyCapacity.toNumber());

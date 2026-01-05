@@ -6,7 +6,7 @@ import {
 } from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
-import { JLP_MARKET, JLP_MINT, JLP_RESERVE_JLP_MARKET, USDC_MINT, USDC_RESERVE_JLP_MARKET } from '../utils/constants';
+import { JLP_MARKET, JLP_MINT, USDC_MINT } from '../utils/constants';
 import { getMarket } from '../utils/helpers';
 import Decimal from 'decimal.js';
 import { sendAndConfirmTx } from '../utils/tx';
@@ -22,30 +22,31 @@ import { sendAndConfirmTx } from '../utils/tx';
 
   const collTokenMint = JLP_MINT;
   const debtTokenMint = USDC_MINT;
-  const collTokenReserveAddress = JLP_RESERVE_JLP_MARKET;
-  const debtTokenReserveAddress = USDC_RESERVE_JLP_MARKET;
-  const collTokenReserve = market.getExistingReserveByAddress(collTokenReserveAddress);
-  const debtTokenReserve = market.getExistingReserveByAddress(debtTokenReserveAddress);
 
   const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, PROGRAM_ID); // new LeverageObligation(collTokenMint, debtTokenMint, PROGRAM_ID); for leverage
   const obligationAddress = await obligationType.toPda(market.getAddress(), wallet.address);
   const obligation = await market.getObligationByAddress(obligationAddress);
   const currentSlot = await c.rpc.getSlot().send();
 
-  const collTokenMintFactor = collTokenReserve.getMintFactor() || 0;
-  const debtTokenMintFactor = debtTokenReserve.getMintFactor() || 0;
+  const collTokenMintFactor = market.getReserveByMint(collTokenMint)?.getMintFactor() || 0;
+  const debtTokenMintFactor = market.getReserveByMint(debtTokenMint)?.getMintFactor() || 0;
 
   // Deposit some JLP
-  const depositAction = await KaminoAction.buildDepositTxns({
-    kaminoMarket: market,
-    amount: new Decimal(1).mul(collTokenMintFactor).toString(),
-    reserveAddress: collTokenReserveAddress,
-    owner: wallet,
-    obligation: obligation!,
-    useV2Ixs: true,
-    scopeRefreshConfig: undefined,
-    currentSlot,
-  });
+  const depositAction = await KaminoAction.buildDepositTxns(
+    market,
+    new Decimal(1).mul(collTokenMintFactor).toString(),
+    collTokenMint,
+    wallet,
+    obligation!,
+    true,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    currentSlot
+  );
 
   const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
   const depositIxs = [
@@ -60,16 +61,21 @@ import { sendAndConfirmTx } from '../utils/tx';
   console.log('txHash depositColl', depositTxHash);
 
   // Borrow some USDC
-  const borrowAction = await KaminoAction.buildBorrowTxns({
-    kaminoMarket: market,
-    amount: new Decimal(1).mul(debtTokenMintFactor).toString(),
-    reserveAddress: debtTokenReserveAddress,
-    owner: wallet,
-    obligation: obligation!,
-    useV2Ixs: true,
-    scopeRefreshConfig: undefined,
-    currentSlot,
-  });
+  const borrowAction = await KaminoAction.buildBorrowTxns(
+    market,
+    new Decimal(1).mul(debtTokenMintFactor).toString(),
+    debtTokenMint,
+    wallet,
+    obligation!,
+    true,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    currentSlot
+  );
 
   const borrowIxs = [...computeIxs, ...borrowAction.setupIxs, ...borrowAction.lendingIxs, ...borrowAction.cleanupIxs];
 
@@ -78,16 +84,16 @@ import { sendAndConfirmTx } from '../utils/tx';
   console.log('txHash borrowDebt', borrowTxHash);
 
   // Repay debt
-  const repayAction = await KaminoAction.buildRepayTxns({
-    kaminoMarket: market,
-    amount: new Decimal(1).mul(debtTokenMintFactor).toString(), // U64_MAX for full repay
-    reserveAddress: debtTokenReserveAddress,
-    owner: wallet,
-    obligation: obligation!,
-    useV2Ixs: true,
-    scopeRefreshConfig: undefined,
-    currentSlot,
-  });
+  const repayAction = await KaminoAction.buildRepayTxns(
+    market,
+    new Decimal(1).mul(debtTokenMintFactor).toString(), // U64_MAX for full repay
+    debtTokenMint,
+    wallet,
+    obligation!,
+    true,
+    undefined,
+    currentSlot
+  );
 
   const repayIxs = [...computeIxs, ...repayAction.setupIxs, ...repayAction.lendingIxs, ...repayAction.cleanupIxs];
 
@@ -96,16 +102,21 @@ import { sendAndConfirmTx } from '../utils/tx';
   console.log('txHash repayDebt', repayTxHash);
 
   // Repay debt
-  const withdrawAction = await KaminoAction.buildWithdrawTxns({
-    kaminoMarket: market,
-    amount: new Decimal(1).mul(collTokenMintFactor).toString(), // U64_MAX for full withdraw
-    reserveAddress: collTokenReserveAddress,
-    owner: wallet,
-    obligation: obligation!,
-    useV2Ixs: true,
-    scopeRefreshConfig: undefined,
-    currentSlot,
-  });
+  const withdrawAction = await KaminoAction.buildWithdrawTxns(
+    market,
+    new Decimal(1).mul(collTokenMintFactor).toString(), // U64_MAX for full withdraw
+    collTokenMint,
+    wallet,
+    obligation!,
+    true,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    currentSlot
+  );
 
   const withdrawIxs = [
     ...computeIxs,

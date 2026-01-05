@@ -14,11 +14,6 @@ export function checkNotNull<T>(value: T | null, message: string = 'value null')
   return value as T;
 }
 
-export function checkArrayNotEmpty<T>(array: T[], message: string = 'array is empty'): T[] {
-  checkThat(array.length > 0, message);
-  return array;
-}
-
 export function getSingleElement<T>(iterable: Iterable<T>, nameWithinMessage: string = 'element'): T {
   const nothingReturnedMarker = {};
   let single: T | {} = nothingReturnedMarker;

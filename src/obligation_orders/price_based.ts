@@ -246,12 +246,10 @@ function collectReserveAddresses(
   symbolOrMintAddresses: SymbolOrMintAddress[]
 ): Set<Address> {
   return new Set<Address>(
-    symbolOrMintAddresses
-      .map((symbolOrMintAddress) =>
-        typeof symbolOrMintAddress === 'string'
-          ? kaminoMarket.getExistingReservesBySymbol(symbolOrMintAddress).map((r) => r.address)
-          : kaminoMarket.getExistingReservesByMint(symbolOrMintAddress).map((r) => r.address)
-      )
-      .flat()
+    symbolOrMintAddresses.map((symbolOrMintAddress) =>
+      typeof symbolOrMintAddress === 'string'
+        ? kaminoMarket.getExistingReserveBySymbol(symbolOrMintAddress).address
+        : kaminoMarket.getExistingReserveByMint(symbolOrMintAddress).address
+    )
   );
 }

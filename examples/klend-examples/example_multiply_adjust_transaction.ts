@@ -8,15 +8,7 @@ import {
 } from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
-import {
-  JLP_MARKET,
-  JLP_MARKET_LUT,
-  JLP_MINT,
-  JLP_RESERVE_JLP_MARKET,
-  JUP_QUOTE_BUFFER_BPS,
-  USDC_MINT,
-  USDC_RESERVE_JLP_MARKET,
-} from '../utils/constants';
+import { JLP_MARKET, JLP_MARKET_LUT, JLP_MINT, JUP_QUOTE_BUFFER_BPS, USDC_MINT } from '../utils/constants';
 import { executeUserSetupLutsTransactions, getMarket } from '../utils/helpers';
 import { getKaminoResources } from '../utils/kamino_resources';
 import { address, Address, none } from '@solana/kit';
@@ -37,8 +29,6 @@ import { sendAndConfirmTx } from '../utils/tx';
 
   const collTokenMint = JLP_MINT;
   const debtTokenMint = USDC_MINT;
-  const collReserveAddress = JLP_RESERVE_JLP_MARKET;
-  const debtReserveAddress = USDC_RESERVE_JLP_MARKET;
   // const vaultType = 'multiply';
   const targetLeverage = new Decimal(2); // 3x leverage/ 3x multiply
   const ogLeverage = new Decimal(3);
@@ -51,13 +41,11 @@ import { sendAndConfirmTx } from '../utils/tx';
 
   const multiplyLutKeys = multiplyLut.map((lut) => address(lut));
 
-  const multiplyReserveAddresses: { collReserve: Address; debtReserve: Address }[] = [
-    { collReserve: collReserveAddress, debtReserve: debtReserveAddress },
-  ];
-  const leverageReserveAddresses: { collReserve: Address; debtReserve: Address }[] = [];
-  multiplyReserveAddresses.push({
-    collReserve: address(collReserveAddress),
-    debtReserve: address(debtReserveAddress),
+  const multiplyMints: { coll: Address; debt: Address }[] = [{ coll: collTokenMint, debt: debtTokenMint }];
+  const leverageMints: { coll: Address; debt: Address }[] = [];
+  multiplyMints.push({
+    coll: address(collTokenMint),
+    debt: address(debtTokenMint),
   });
 
   // This is the setup step that should happen each time the user has to extend it's LookupTable with missing keys
@@ -68,20 +56,20 @@ import { sendAndConfirmTx } from '../utils/tx';
     wallet,
     none(),
     true, // always extending LUT
-    multiplyReserveAddresses,
-    leverageReserveAddresses
+    multiplyMints,
+    leverageMints
   );
 
-  const debtTokenReserve = market.getExistingReserveByAddress(debtReserveAddress);
-  const collTokenReserve = market.getExistingReserveByAddress(collReserveAddress);
+  const debtTokenReserve = market.getReserveByMint(debtTokenMint);
+  const collTokenReserve = market.getReserveByMint(collTokenMint);
 
   await executeUserSetupLutsTransactions(c, wallet, txsIxs);
 
   const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, PROGRAM_ID); // new LeverageObligation(collTokenMint, debtTokenMint, PROGRAM_ID); for leverage
   const obligationAddress = await obligationType.toPda(market.getAddress(), wallet.address);
   const obligation = await market.getObligationByAddress(obligationAddress);
-  const depositedLamports = obligation!.getDepositByReserve(collReserveAddress)!.amount;
-  const borrowedLamports = obligation!.getBorrowByReserve(debtReserveAddress)!.amount;
+  const depositedLamports = obligation!.getDepositByMint(collTokenMint)!.amount;
+  const borrowedLamports = obligation!.getBorrowByMint(debtTokenMint)!.amount;
 
   const scopeConfiguration = { scope, scopeConfigurations: await scope.getAllConfigurations() };
   const scopeRefreshIx = await getScopeRefreshIxForObligationAndReserves(
@@ -116,8 +104,8 @@ import { sendAndConfirmTx } from '../utils/tx';
     await getAdjustLeverageIxs<QuoteResponse>({
       owner: wallet,
       kaminoMarket: market,
-      debtReserveAddress: debtReserveAddress,
-      collReserveAddress: collReserveAddress,
+      debtTokenMint: debtTokenMint,
+      collTokenMint: collTokenMint,
       obligation: obligation!, // obligation does not exist as we are creating it with this deposit
       depositedLamports,
       borrowedLamports,
@@ -158,8 +146,8 @@ import { sendAndConfirmTx } from '../utils/tx';
       await getAdjustLeverageIxs<QuoteResponse>({
         owner: wallet,
         kaminoMarket: market,
-        debtReserveAddress: debtReserveAddress,
-        collReserveAddress: collReserveAddress,
+        debtTokenMint: debtTokenMint,
+        collTokenMint: collTokenMint,
         obligation: obligation!, // obligation does not exist as we are creating it with this deposit
         depositedLamports,
         borrowedLamports,

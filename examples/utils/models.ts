@@ -10,9 +10,9 @@ export interface ReserveArgs {
    */
   marketPubkey: Address;
   /**
-   * Public Key of the reserve's address
+   * Public Key of the reserve's token mint (e.g. For SOL reserve, SOL mint pubkey: So11111111111111111111111111111111111111112)
    */
-  reserveAddress: Address;
+  mintPubkey: Address;
 }
 
 export interface MarketArgs {
