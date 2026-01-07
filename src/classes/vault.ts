@@ -127,6 +127,7 @@ import {
   FarmConfigOption,
   FarmIncentives,
   FarmState,
+  getFarmIncentivesWithExistentState,
   getUserStatePDA,
   scaleDownWads,
 } from '@kamino-finance/farms-sdk/dist';
@@ -148,7 +149,6 @@ import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
 import { SYSVAR_INSTRUCTIONS_ADDRESS, SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 import { noopSigner } from '../utils/signer';
 import { Farms } from '@kamino-finance/farms-sdk';
-import { getFarmIncentives } from '@kamino-finance/farms-sdk/dist/utils/apy';
 import { computeReservesAllocation } from '../utils/vaultAllocation';
 import { getReserveFarmRewardsAPY } from '../utils/farmUtils';
 import { fetchKaminoCdnData } from '../utils/readCdnData';
@@ -3616,10 +3616,11 @@ export class KaminoVaultClient {
 
   /**
    * Read the APY of the farm built on top of the vault (farm in vaultState.vaultFarm)
-   * @param vault - the vault to read the farm APY for
+   * @param vaultOrState - the vault or state to read the farm APY for
    * @param vaultTokenPrice - the price of the vault token in USD (e.g. 1.0 for USDC)
    * @param [farmsClient] - the farms client to use. Optional. If not provided, the function will create a new one
    * @param [slot] - the slot to read the farm APY for. Optional. If not provided, the function will read the current slot
+   * @param tokensPrices cached token prices
    * @returns the APY of the farm built on top of the vault
    */
   async getVaultRewardsAPY(
@@ -3637,13 +3638,33 @@ export class KaminoVaultClient {
         totalIncentivesApy: 0,
       };
     }
+    const kFarmsClient = farmsClient ? farmsClient : new Farms(this.getConnection());
+    const farmState = await FarmState.fetch(
+      kFarmsClient.getConnection(),
+      vaultState.vaultFarm,
+      kFarmsClient.getProgramID()
+    );
+
+    if (!farmState) {
+      // a vault may have a badly configured farm that does not exist on chain but isn't set as a default pubkey by mistake
+      return {
+        incentivesStats: [],
+        totalIncentivesApy: 0,
+      };
+    }
 
     const tokensPerShare = await this.getTokensPerShareSingleVault(vaultState, slot);
     const sharePrice = tokensPerShare.mul(vaultTokenPrice);
     const stakedTokenMintDecimals = vaultState.sharesMintDecimals.toNumber();
 
-    const kFarmsClient = farmsClient ? farmsClient : new Farms(this.getConnection());
-    return getFarmIncentives(kFarmsClient, vaultState.vaultFarm, sharePrice, stakedTokenMintDecimals, tokensPrices);
+    return getFarmIncentivesWithExistentState(
+      kFarmsClient,
+      vaultState.vaultFarm,
+      farmState,
+      sharePrice,
+      stakedTokenMintDecimals,
+      tokensPrices
+    );
   }
 
   /**
@@ -3676,7 +3697,27 @@ export class KaminoVaultClient {
     const stakedTokenMintDecimals = vaultState.sharesMintDecimals.toNumber();
 
     const kFarmsClient = farmsClient ? farmsClient : new Farms(this.getConnection());
-    return getFarmIncentives(kFarmsClient, delegatedFarm, sharePrice, stakedTokenMintDecimals, tokensPrices);
+    const farmState = await FarmState.fetch(
+      kFarmsClient.getConnection(),
+      vaultState.vaultFarm,
+      kFarmsClient.getProgramID()
+    );
+
+    if (!farmState) {
+      // a vault may have a badly configured farm that does not exist on chain but isn't set as a default pubkey by mistake
+      return {
+        incentivesStats: [],
+        totalIncentivesApy: 0,
+      };
+    }
+    return getFarmIncentivesWithExistentState(
+      kFarmsClient,
+      delegatedFarm,
+      farmState,
+      sharePrice,
+      stakedTokenMintDecimals,
+      tokensPrices
+    );
   }
 
   /**
