@@ -29,6 +29,8 @@ import {
 } from '@solana/kit';
 import {
   AllOracleAccounts,
+  CdnResources,
+  CdnResourcesResponse,
   DEFAULT_PUBLIC_KEY,
   DEFAULT_RECENT_SLOT_DURATION_MS,
   getAssociatedTokenAddress,
@@ -104,7 +106,7 @@ import {
   U64_MAX,
   VAULT_INITIAL_DEPOSIT,
 } from '../utils';
-import { getAccountOwner, getProgramAccounts } from '../utils/rpc';
+import { getAccountOwner, getProgramAccounts } from '../utils';
 import {
   AcceptVaultOwnershipIxs,
   APYs,
@@ -131,7 +133,7 @@ import {
   getUserStatePDA,
   scaleDownWads,
 } from '@kamino-finance/farms-sdk/dist';
-import { getAccountsInLut, initLookupTableIx, insertIntoLookupTableIxs } from '../utils/lookupTable';
+import { getAccountsInLut, initLookupTableIx, insertIntoLookupTableIxs } from '../utils';
 import {
   FARMS_ADMIN_MAINNET,
   FARMS_GLOBAL_CONFIG_MAINNET,
@@ -181,16 +183,22 @@ export class KaminoVaultClient {
   private readonly _kaminoLendProgramId: Address;
   recentSlotDurationMs: number;
 
+  // CDN cache
+  private _cdnResources?: CdnResources;
+  private _cdnResourcesPromise?: Promise<CdnResources | undefined>;
+
   constructor(
     rpc: Rpc<SolanaRpcApi>,
     recentSlotDurationMs: number,
     kaminoVaultprogramId?: Address,
-    kaminoLendProgramId?: Address
+    kaminoLendProgramId?: Address,
+    cdnResources?: CdnResources
   ) {
     this._rpc = rpc;
     this.recentSlotDurationMs = recentSlotDurationMs;
     this._kaminoVaultProgramId = kaminoVaultprogramId ? kaminoVaultprogramId : kaminoVaultId;
     this._kaminoLendProgramId = kaminoLendProgramId ? kaminoLendProgramId : PROGRAM_ID;
+    this._cdnResources = cdnResources;
   }
 
   getConnection() {
@@ -207,6 +215,35 @@ export class KaminoVaultClient {
 
   hasFarm() {
     return;
+  }
+
+  private async loadCdnResourcesOnce(): Promise<CdnResources | undefined> {
+    if (this._cdnResources) {
+      return this._cdnResources;
+    }
+    if (this._cdnResourcesPromise) {
+      return this._cdnResourcesPromise;
+    }
+
+    this._cdnResourcesPromise = (async () => {
+      const response = await fetch(`${CDN_ENDPOINT}/resources.json`);
+      if (!response.ok) {
+        console.error(`Failed to fetch CDN resources: ${response.status} ${response.statusText}`);
+        return undefined;
+      }
+
+      const raw = (await response.json()) as CdnResourcesResponse;
+      const delegatedVaultFarms = raw['mainnet-beta']?.delegatedVaultFarms;
+      if (!delegatedVaultFarms) {
+        return undefined;
+      }
+
+      const parsed: CdnResources = { delegatedVaultFarms };
+      this._cdnResources = parsed;
+      return parsed;
+    })();
+
+    return this._cdnResourcesPromise;
   }
 
   /**
@@ -814,6 +851,7 @@ export class KaminoVaultClient {
    *        The global admin should be passed in when wanting to change the AllowAllocationsInWhitelistedReservesOnly or AllowInvestInWhitelistedReservesOnly fields to false
    * @param [lutIxsSigner] the signer of the transaction to be used for the lookup table instructions. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx
    * @param [skipLutUpdate] if true, the lookup table instructions will not be included in the returned instructions
+   * @param errorOnOverride throw error if vault already has a farm
    * @returns a struct that contains the instruction to update the field and an optional list of instructions to update the lookup table
    */
   async updateVaultConfigIxs(
@@ -1128,7 +1166,6 @@ export class KaminoVaultClient {
 
   /**
    * This method withdraws all the pending fees from the vault to the owner's token ATA
-   * @param authority - vault admin
    * @param vault - vault for which the admin withdraws the pending fees
    * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
    * @param [vaultReservesMap] - a hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
@@ -1423,7 +1460,7 @@ export class KaminoVaultClient {
    * This function will return a struct with the instructions to unstake from the farm if necessary and the instructions for the missing ATA creation instructions, as well as one or multiple withdraw instructions, based on how many reserves it's needed to withdraw from. This might have to be split in multiple transactions
    * @param user - user to withdraw
    * @param vault - vault to withdraw from
-   * @param shareAmount - share amount to withdraw (in tokens, not lamports), in order to withdraw everything, any value > user share amount
+   * @param shareAmountToWithdraw - share amount to withdraw (in tokens, not lamports), in order to withdraw everything, any value > user share amount
    * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
    * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
@@ -1444,7 +1481,7 @@ export class KaminoVaultClient {
    * This function will return the missing ATA creation instructions, as well as one or multiple withdraw instructions, based on how many reserves it's needed to withdraw from. This might have to be split in multiple transactions
    * @param user - user to sell shares for vault tokens
    * @param vault - vault to sell shares from
-   * @param shareAmount - share amount to sell (in tokens, not lamports), in order to withdraw everything, any value > user share amount
+   * @param shareAmountToWithdraw - share amount to sell (in tokens, not lamports), in order to withdraw everything, any value > user share amount
    * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
    * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
@@ -3473,6 +3510,7 @@ export class KaminoVaultClient {
    * @param vaultState the kamino vault state to get simulated holdings and earnings for
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [currentSlot] - the current slot. Optional. If not provided it will fetch the current slot
+   * @param slot - latest slot
    * @param [previousNetAUM] - the previous AUM of the vault to compute the earned interest relative to this value. Optional. If not provided the function will estimate the total AUM at the slot of the last state update on chain
    * @param [currentSlot] - the latest confirmed slot. Optional. If provided the function will be  faster as it will not have to fetch the latest slot
    * @returns a struct of simulated vault holdings and earned interest
@@ -3697,11 +3735,7 @@ export class KaminoVaultClient {
     const stakedTokenMintDecimals = vaultState.sharesMintDecimals.toNumber();
 
     const kFarmsClient = farmsClient ? farmsClient : new Farms(this.getConnection());
-    const farmState = await FarmState.fetch(
-      kFarmsClient.getConnection(),
-      vaultState.vaultFarm,
-      kFarmsClient.getProgramID()
-    );
+    const farmState = await FarmState.fetch(kFarmsClient.getConnection(), delegatedFarm, kFarmsClient.getProgramID());
 
     if (!farmState) {
       // a vault may have a badly configured farm that does not exist on chain but isn't set as a default pubkey by mistake
@@ -3989,17 +4023,12 @@ export class KaminoVaultClient {
 
   /// gets the delegated farm for a vault
   async getDelegatedFarmForVault(vault: Address): Promise<Address | undefined> {
-    const response = await fetch(`${CDN_ENDPOINT}/resources.json`);
-    if (!response.ok) {
-      console.log(`Failed to fetch CDN for user pending rewards in vault delegated farm: ${response.statusText}`);
-      return undefined;
-    }
-    const data = (await response.json()) as { 'mainnet-beta'?: { delegatedVaultFarms: any } };
-    const delegatedVaultFarms = data['mainnet-beta']?.delegatedVaultFarms;
+    const resources = await this.loadCdnResourcesOnce();
+    const delegatedVaultFarms = resources?.delegatedVaultFarms;
     if (!delegatedVaultFarms) {
       return undefined;
     }
-    const delegatedFarmWithVault = delegatedVaultFarms.find((vaultWithFarm: any) => vaultWithFarm.vault === vault);
+    const delegatedFarmWithVault = delegatedVaultFarms.find((vaultWithFarm) => vaultWithFarm.vault === vault);
     if (!delegatedFarmWithVault) {
       return undefined;
     }
@@ -4020,19 +4049,14 @@ export class KaminoVaultClient {
    * @returns a map of the vault address and the delegated farm address for that vault
    */
   async getVaultsWithDelegatedFarm(): Promise<Map<Address, Address>> {
-    const response = await fetch(`${CDN_ENDPOINT}/resources.json`);
-    if (!response.ok) {
-      console.log(`Failed to fetch CDN for get vaults with delegated farm`);
-      return new Map<Address, Address>();
-    }
-    const data = (await response.json()) as { 'mainnet-beta'?: { delegatedVaultFarms: any } };
-    const delegatedVaultFarms = data['mainnet-beta']?.delegatedVaultFarms;
+    const resources = await this.loadCdnResourcesOnce();
+    const delegatedVaultFarms = resources?.delegatedVaultFarms;
     if (!delegatedVaultFarms) {
       return new Map<Address, Address>();
     }
 
     return new Map(
-      delegatedVaultFarms.map((delegatedFarm: any) => [address(delegatedFarm.vault), address(delegatedFarm.farm)])
+      delegatedVaultFarms.map((delegatedFarm) => [address(delegatedFarm.vault), address(delegatedFarm.farm)])
     );
   }
 

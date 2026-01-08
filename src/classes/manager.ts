@@ -35,6 +35,7 @@ import {
 import {
   AddAssetToMarketParams,
   AllOracleAccounts,
+  CdnResources,
   CreateKaminoMarketParams,
   createReserveIxs,
   DEFAULT_PUBLIC_KEY,
@@ -75,7 +76,7 @@ import BN from 'bn.js';
 import { ReserveConfig, UpdateLendingMarketMode, UpdateLendingMarketModeKind } from '../@codegen/klend/types';
 import Decimal from 'decimal.js';
 import { VaultState } from '../@codegen/kvault/accounts';
-import { getProgramAccounts } from '../utils/rpc';
+import { getProgramAccounts } from '../utils';
 import { UpdateReserveWhitelistModeKind, VaultConfigField, VaultConfigFieldKind } from '../@codegen/kvault/types';
 import {
   AcceptVaultOwnershipIxs,
@@ -122,7 +123,8 @@ export class KaminoManager {
     rpc: Rpc<SolanaRpcApi>,
     recentSlotDurationMs?: number,
     kaminoLendProgramId?: Address,
-    kaminoVaultProgramId?: Address
+    kaminoVaultProgramId?: Address,
+    cdnResources?: CdnResources
   ) {
     this._rpc = rpc;
     this.recentSlotDurationMs = recentSlotDurationMs ?? DEFAULT_RECENT_SLOT_DURATION_MS;
@@ -132,7 +134,8 @@ export class KaminoManager {
       rpc,
       this.recentSlotDurationMs,
       this._kaminoVaultProgramId,
-      this._kaminoLendProgramId
+      this._kaminoLendProgramId,
+      cdnResources
     );
   }
 
@@ -630,6 +633,7 @@ export class KaminoManager {
    * @param [signer] the signer of the transaction. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx
    * @param [lutIxsSigner] the signer of the transaction to be used for the lookup table instructions. Optional. If not provided the admin of the vault will be used. It should be used when changing the admin of the vault if we want to build or batch multiple ixs in the same tx
    * @param [skipLutUpdate] if true, the lookup table instructions will not be included in the returned instructions
+   * @param errorOnOverride throw error if vault already has a farm
    * @returns a struct that contains the instruction to update the field and an optional list of instructions to update the lookup table
    */
   async updateVaultConfigIxs(
@@ -687,6 +691,8 @@ export class KaminoManager {
    * @param farm - the farm where the vault shares can be staked
    * @param [errorOnOverride] - if true, the function will throw an error if the vault already has a farm. If false, it will override the farm
    * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @param [lutIxsSigner] (optional) signer of the LUT ixs
+   * @param skipLutUpdate  if true, the lookup table instructions will not be included in the returned instructions
    */
   async setVaultFarmIxs(
     vault: KaminoVault,
@@ -1154,9 +1160,9 @@ export class KaminoManager {
   /**
    * This will return an VaultOverview object that encapsulates all the information about the vault, including the holdings, reserves details, theoretical APY, utilization ratio and total borrowed amount
    * @param vault - the kamino vault to get available liquidity to withdraw for
-   * @param vaultTokenPrice - the price of the token in the vault (e.g. USDC)
+   * @param price - the price of the token in the vault (e.g. USDC)
    * @param [slot] - the slot for which to retrieve the vault overview for. Optional. If not provided the function will fetch the current slot
-   * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [vaultReserves] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [kaminoMarkets] - a list of all kamino markets. Optional. If provided the function will be significantly faster as it will not have to fetch the markets
    * @param [currentSlot] - the latest confirmed slot. Optional. If provided the function will be  faster as it will not have to fetch the latest slot
    * @param [tokensPrices] - a hashmap from a token pubkey to the price of the token in USD. Optional. If some tokens are not in the map, the function will fetch the price
@@ -1258,7 +1264,7 @@ export class KaminoManager {
    * This will return the APY of the vault based on the current invested amounts; for percentage it needs multiplication by 100
    * @param vault - the kamino vault to get APY for
    * @param slot - current slot
-   * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [vaultReserves] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @returns a struct containing estimated gross APY and net APY (gross - vault fees) for the vault
    */
   async getVaultActualAPY(vault: VaultState, slot: Slot, vaultReserves?: Map<Address, KaminoReserve>): Promise<APYs> {
@@ -1277,8 +1283,9 @@ export class KaminoManager {
   /**
    * Simulate the current holdings of the vault and the earned interest
    * @param vaultState the kamino vault state to get simulated holdings and earnings for
-   * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [vaultReserves] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [currentSlot] - the current slot. Optional. If not provided it will fetch the current slot
+   * @param [slot] - latest slot
    * @param [previousTotalAUM] - the previous AUM of the vault to compute the earned interest relative to this value. Optional. If not provided the function will estimate the total AUM at the slot of the last state update on chain
    * @param [currentSlot] - the latest confirmed slot. Optional. If provided the function will be  faster as it will not have to fetch the latest slot
    * @returns a struct of simulated vault holdings and earned interest
@@ -1365,7 +1372,6 @@ export class KaminoManager {
    * @param vaultTokenPrice - the price of the vault token in USD (e.g. 1.0 for USDC)
    * @param [farmsClient] - the farms client to use. Optional. If not provided, the function will create a new one
    * @param [slot] - the slot to read the farm APY for. Optional. If not provided, the function will read the current slot
-   * @param [tokensPrices] - the prices of the tokens in USD. Optional. If not provided, the function will fetch the prices
    * @returns the APY of the delegated farm providing incentives for vault depositors
    */
   async getVaultDelegatedFarmRewardsAPY(
@@ -1509,7 +1515,7 @@ export class KaminoManager {
 
   /**
    * This will load the onchain state for all the reserves that the vault has allocations for
-   * @param vaultState - the vault state to load reserves for
+   * @param vault - the vault state to load reserves for
    * @returns a hashmap from each reserve pubkey to the reserve state
    */
   getVaultReserves(vault: VaultState): Address[] {
@@ -1520,6 +1526,9 @@ export class KaminoManager {
    * This will retrieve all the tokens that can be use as collateral by the users who borrow the token in the vault alongside details about the min and max loan to value ratio
    * @param vaultState - the vault state to load reserves for
    *
+   * @param slot - current slot
+   * @param vaultReservesMap - cached vault reserves map
+   * @param kaminoMarkets - cached kamino markets
    * @returns a hashmap from each reserve pubkey to the market overview of the collaterals that can be used and the min and max loan to value ratio in that market
    */
   async getVaultCollaterals(
@@ -1583,7 +1592,7 @@ export class KaminoManager {
 
   /**
    * This will return the amount of token invested from the vault into the given reserve
-   * @param vault - the kamino vault to get invested amount in reserve for
+   * @param vaultState - the kamino vault to get invested amount in reserve for
    * @param slot - current slot
    * @param reserve - the reserve state to get vault invested amount in
    * @returns vault amount supplied in reserve in decimal
@@ -1734,21 +1743,21 @@ export class KaminoManager {
       if (!vaultState) {
         throw new Error('Vault not found');
       }
-      return await KaminoManager.getWalletInfo(rpc, vaultState.vaultAdminAuthority);
+      return await KaminoManager.getWalletInfo(vaultState.vaultAdminAuthority);
     } catch (error) {
       // If vault not found, try to fetch market state
       const market = await LendingMarket.fetch(rpc, address);
       if (!market) {
         return undefined;
       }
-      return await KaminoManager.getWalletInfo(rpc, market.lendingMarketOwner);
+      return await KaminoManager.getWalletInfo(market.lendingMarketOwner);
     }
   }
 
   /**
    * Helper method to get wallet information for a given authority
    */
-  private static async getWalletInfo(connection: Rpc<GetAccountInfoApi>, authority: Address): Promise<WalletType> {
+  private static async getWalletInfo(authority: Address): Promise<WalletType> {
     const isSquadsMultisig = await KaminoManager.walletIsSquadsMultisig(authority);
     let walletAdminsNumber = 1;
     let walletThreshold = 1;
