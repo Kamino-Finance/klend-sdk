@@ -77,7 +77,7 @@ export interface ObligationOrderFields {
    */
   opportunityType: number
   /**
-   * Internal padding.
+   * Alignment padding.
    * The fields above take up 2+2+1+1 bytes = 48 bits, which means we need 80 bits = 10 bytes to
    * align with `u128`s.
    */
@@ -162,7 +162,7 @@ export interface ObligationOrderJSON {
    */
   opportunityType: number
   /**
-   * Internal padding.
+   * Alignment padding.
    * The fields above take up 2+2+1+1 bytes = 48 bits, which means we need 80 bits = 10 bytes to
    * align with `u128`s.
    */
@@ -176,7 +176,7 @@ export interface ObligationOrderJSON {
 
 /**
  * A single obligation order.
- * See [Obligation::orders].
+ * See [Obligation::obligation_orders].
  */
 export class ObligationOrder {
   /**
@@ -251,7 +251,7 @@ export class ObligationOrder {
    */
   readonly opportunityType: number
   /**
-   * Internal padding.
+   * Alignment padding.
    * The fields above take up 2+2+1+1 bytes = 48 bits, which means we need 80 bits = 10 bytes to
    * align with `u128`s.
    */

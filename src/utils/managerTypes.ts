@@ -306,7 +306,7 @@ function buildReserveConfig(fields: {
     protocolLiquidationFeePct: 0,
     protocolOrderExecutionFeePct: 0,
     protocolTakeRatePct: fields.configParams.protocolTakeRate,
-    assetTier: 0,
+    paddingDeprecatedAssetTier: 0,
     maxLiquidationBonusBps: fields.configParams.maxLiquidationBonusBps,
     badDebtLiquidationBonusBps: fields.configParams.badDebtLiquidationBonusBps,
     fees: {
@@ -373,6 +373,8 @@ function buildReserveConfig(fields: {
     minDeleveragingBonusBps: 0,
     proposerAuthorityLocked: 0,
     blockCtokenUsage: 0,
+    debtMaturityTimestamp: new BN(0),
+    debtTermSeconds: new BN(0),
   };
 
   return new ReserveConfig(reserveConfigFields);

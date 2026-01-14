@@ -2,11 +2,15 @@ import * as UpdateConfigMode from "./UpdateConfigMode"
 import * as UpdateLendingMarketConfigValue from "./UpdateLendingMarketConfigValue"
 import * as UpdateLendingMarketMode from "./UpdateLendingMarketMode"
 import * as UpdateGlobalConfigMode from "./UpdateGlobalConfigMode"
-import * as AssetTier from "./AssetTier"
 import * as FeeCalculation from "./FeeCalculation"
 import * as ReserveFarmKind from "./ReserveFarmKind"
 import * as ReserveStatus from "./ReserveStatus"
 
+export { BorrowOrderConfigArgs } from "./BorrowOrderConfigArgs"
+export type {
+  BorrowOrderConfigArgsFields,
+  BorrowOrderConfigArgsJSON,
+} from "./BorrowOrderConfigArgs"
 export { UpdateConfigMode }
 
 export type UpdateConfigModeKind =
@@ -43,7 +47,7 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateMinLiquidationBonusBps
   | UpdateConfigMode.UpdateDeleveragingMarginCallPeriod
   | UpdateConfigMode.UpdateBorrowFactor
-  | UpdateConfigMode.UpdateAssetTier
+  | UpdateConfigMode.DeprecatedUpdateAssetTier
   | UpdateConfigMode.UpdateElevationGroup
   | UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay
   | UpdateConfigMode.DeprecatedUpdateMultiplierSideBoost
@@ -63,6 +67,8 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateProposerAuthorityLock
   | UpdateConfigMode.UpdateMinDeleveragingBonusBps
   | UpdateConfigMode.UpdateBlockCTokenUsage
+  | UpdateConfigMode.UpdateDebtMaturityTimestamp
+  | UpdateConfigMode.UpdateDebtTermSeconds
 export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateLoanToValuePctJSON
   | UpdateConfigMode.UpdateMaxLiquidationBonusBpsJSON
@@ -97,7 +103,7 @@ export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateMinLiquidationBonusBpsJSON
   | UpdateConfigMode.UpdateDeleveragingMarginCallPeriodJSON
   | UpdateConfigMode.UpdateBorrowFactorJSON
-  | UpdateConfigMode.UpdateAssetTierJSON
+  | UpdateConfigMode.DeprecatedUpdateAssetTierJSON
   | UpdateConfigMode.UpdateElevationGroupJSON
   | UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDayJSON
   | UpdateConfigMode.DeprecatedUpdateMultiplierSideBoostJSON
@@ -117,6 +123,8 @@ export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateProposerAuthorityLockJSON
   | UpdateConfigMode.UpdateMinDeleveragingBonusBpsJSON
   | UpdateConfigMode.UpdateBlockCTokenUsageJSON
+  | UpdateConfigMode.UpdateDebtMaturityTimestampJSON
+  | UpdateConfigMode.UpdateDebtTermSecondsJSON
 
 export { UpdateLendingMarketConfigValue }
 
@@ -171,6 +179,10 @@ export type UpdateLendingMarketModeKind =
   | UpdateLendingMarketMode.UpdateObligationOrderCreationEnabled
   | UpdateLendingMarketMode.UpdateProposerAuthority
   | UpdateLendingMarketMode.UpdatePriceTriggeredLiquidationDisabled
+  | UpdateLendingMarketMode.UpdateMatureReserveDebtLiquidationEnabled
+  | UpdateLendingMarketMode.UpdateObligationBorrowDebtTermLiquidationEnabled
+  | UpdateLendingMarketMode.UpdateBorrowOrderCreationEnabled
+  | UpdateLendingMarketMode.UpdateBorrowOrderExecutionEnabled
 export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateOwnerJSON
   | UpdateLendingMarketMode.UpdateEmergencyModeJSON
@@ -199,6 +211,10 @@ export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateObligationOrderCreationEnabledJSON
   | UpdateLendingMarketMode.UpdateProposerAuthorityJSON
   | UpdateLendingMarketMode.UpdatePriceTriggeredLiquidationDisabledJSON
+  | UpdateLendingMarketMode.UpdateMatureReserveDebtLiquidationEnabledJSON
+  | UpdateLendingMarketMode.UpdateObligationBorrowDebtTermLiquidationEnabledJSON
+  | UpdateLendingMarketMode.UpdateBorrowOrderCreationEnabledJSON
+  | UpdateLendingMarketMode.UpdateBorrowOrderExecutionEnabledJSON
 
 export { UpdateGlobalConfigMode }
 
@@ -213,6 +229,8 @@ export { LastUpdate } from "./LastUpdate"
 export type { LastUpdateFields, LastUpdateJSON } from "./LastUpdate"
 export { ElevationGroup } from "./ElevationGroup"
 export type { ElevationGroupFields, ElevationGroupJSON } from "./ElevationGroup"
+export { BorrowOrder } from "./BorrowOrder"
+export type { BorrowOrderFields, BorrowOrderJSON } from "./BorrowOrder"
 export { InitObligationArgs } from "./InitObligationArgs"
 export type {
   InitObligationArgsFields,
@@ -233,17 +251,6 @@ export type {
   ObligationOrderFields,
   ObligationOrderJSON,
 } from "./ObligationOrder"
-export { AssetTier }
-
-export type AssetTierKind =
-  | AssetTier.Regular
-  | AssetTier.IsolatedCollateral
-  | AssetTier.IsolatedDebt
-export type AssetTierJSON =
-  | AssetTier.RegularJSON
-  | AssetTier.IsolatedCollateralJSON
-  | AssetTier.IsolatedDebtJSON
-
 export { BigFractionBytes } from "./BigFractionBytes"
 export type {
   BigFractionBytesFields,

@@ -101,7 +101,23 @@ export interface LendingMarketFields {
    * liquidation-driving flags (see e.g. [Self::autodeleverage_enabled]).
    */
   priceTriggeredLiquidationDisabled: number
-  padding2: Array<number>
+  /**
+   * Whether the debts that reached their reserve's [ReserveConfig::debt_maturity_timestamp] can
+   * be liquidated.
+   */
+  matureReserveDebtLiquidationEnabled: number
+  /**
+   * Whether the [Obligation::borrows] that reached their [ReserveConfig::debt_term_seconds] can
+   * be liquidated.
+   */
+  obligationBorrowDebtTermLiquidationEnabled: number
+  /**
+   * Whether new borrow orders can be created.
+   * Note: updating or cancelling existing orders is *not* affected by this flag.
+   */
+  borrowOrderCreationEnabled: number
+  /** Whether the existing borrow orders can be filled. */
+  borrowOrderExecutionEnabled: number
   /** Authority that can propose creating of new reserves but cannot enable them. */
   proposerAuthority: Address
   padding1: Array<BN>
@@ -193,7 +209,23 @@ export interface LendingMarketJSON {
    * liquidation-driving flags (see e.g. [Self::autodeleverage_enabled]).
    */
   priceTriggeredLiquidationDisabled: number
-  padding2: Array<number>
+  /**
+   * Whether the debts that reached their reserve's [ReserveConfig::debt_maturity_timestamp] can
+   * be liquidated.
+   */
+  matureReserveDebtLiquidationEnabled: number
+  /**
+   * Whether the [Obligation::borrows] that reached their [ReserveConfig::debt_term_seconds] can
+   * be liquidated.
+   */
+  obligationBorrowDebtTermLiquidationEnabled: number
+  /**
+   * Whether new borrow orders can be created.
+   * Note: updating or cancelling existing orders is *not* affected by this flag.
+   */
+  borrowOrderCreationEnabled: number
+  /** Whether the existing borrow orders can be filled. */
+  borrowOrderExecutionEnabled: number
   /** Authority that can propose creating of new reserves but cannot enable them. */
   proposerAuthority: string
   padding1: Array<string>
@@ -285,7 +317,23 @@ export class LendingMarket {
    * liquidation-driving flags (see e.g. [Self::autodeleverage_enabled]).
    */
   readonly priceTriggeredLiquidationDisabled: number
-  readonly padding2: Array<number>
+  /**
+   * Whether the debts that reached their reserve's [ReserveConfig::debt_maturity_timestamp] can
+   * be liquidated.
+   */
+  readonly matureReserveDebtLiquidationEnabled: number
+  /**
+   * Whether the [Obligation::borrows] that reached their [ReserveConfig::debt_term_seconds] can
+   * be liquidated.
+   */
+  readonly obligationBorrowDebtTermLiquidationEnabled: number
+  /**
+   * Whether new borrow orders can be created.
+   * Note: updating or cancelling existing orders is *not* affected by this flag.
+   */
+  readonly borrowOrderCreationEnabled: number
+  /** Whether the existing borrow orders can be filled. */
+  readonly borrowOrderExecutionEnabled: number
   /** Authority that can propose creating of new reserves but cannot enable them. */
   readonly proposerAuthority: Address
   readonly padding1: Array<BN>
@@ -325,7 +373,10 @@ export class LendingMarket {
     borsh.u8("immutable"),
     borsh.u8("obligationOrderCreationEnabled"),
     borsh.u8("priceTriggeredLiquidationDisabled"),
-    borsh.array(borsh.u8(), 4, "padding2"),
+    borsh.u8("matureReserveDebtLiquidationEnabled"),
+    borsh.u8("obligationBorrowDebtTermLiquidationEnabled"),
+    borsh.u8("borrowOrderCreationEnabled"),
+    borsh.u8("borrowOrderExecutionEnabled"),
     borshAddress("proposerAuthority"),
     borsh.array(borsh.u64(), 165, "padding1"),
   ])
@@ -371,7 +422,12 @@ export class LendingMarket {
     this.obligationOrderCreationEnabled = fields.obligationOrderCreationEnabled
     this.priceTriggeredLiquidationDisabled =
       fields.priceTriggeredLiquidationDisabled
-    this.padding2 = fields.padding2
+    this.matureReserveDebtLiquidationEnabled =
+      fields.matureReserveDebtLiquidationEnabled
+    this.obligationBorrowDebtTermLiquidationEnabled =
+      fields.obligationBorrowDebtTermLiquidationEnabled
+    this.borrowOrderCreationEnabled = fields.borrowOrderCreationEnabled
+    this.borrowOrderExecutionEnabled = fields.borrowOrderExecutionEnabled
     this.proposerAuthority = fields.proposerAuthority
     this.padding1 = fields.padding1
   }
@@ -460,7 +516,12 @@ export class LendingMarket {
       immutable: dec.immutable,
       obligationOrderCreationEnabled: dec.obligationOrderCreationEnabled,
       priceTriggeredLiquidationDisabled: dec.priceTriggeredLiquidationDisabled,
-      padding2: dec.padding2,
+      matureReserveDebtLiquidationEnabled:
+        dec.matureReserveDebtLiquidationEnabled,
+      obligationBorrowDebtTermLiquidationEnabled:
+        dec.obligationBorrowDebtTermLiquidationEnabled,
+      borrowOrderCreationEnabled: dec.borrowOrderCreationEnabled,
+      borrowOrderExecutionEnabled: dec.borrowOrderExecutionEnabled,
       proposerAuthority: dec.proposerAuthority,
       padding1: dec.padding1,
     })
@@ -505,7 +566,12 @@ export class LendingMarket {
       immutable: this.immutable,
       obligationOrderCreationEnabled: this.obligationOrderCreationEnabled,
       priceTriggeredLiquidationDisabled: this.priceTriggeredLiquidationDisabled,
-      padding2: this.padding2,
+      matureReserveDebtLiquidationEnabled:
+        this.matureReserveDebtLiquidationEnabled,
+      obligationBorrowDebtTermLiquidationEnabled:
+        this.obligationBorrowDebtTermLiquidationEnabled,
+      borrowOrderCreationEnabled: this.borrowOrderCreationEnabled,
+      borrowOrderExecutionEnabled: this.borrowOrderExecutionEnabled,
       proposerAuthority: this.proposerAuthority,
       padding1: this.padding1.map((item) => item.toString()),
     }
@@ -557,7 +623,12 @@ export class LendingMarket {
       immutable: obj.immutable,
       obligationOrderCreationEnabled: obj.obligationOrderCreationEnabled,
       priceTriggeredLiquidationDisabled: obj.priceTriggeredLiquidationDisabled,
-      padding2: obj.padding2,
+      matureReserveDebtLiquidationEnabled:
+        obj.matureReserveDebtLiquidationEnabled,
+      obligationBorrowDebtTermLiquidationEnabled:
+        obj.obligationBorrowDebtTermLiquidationEnabled,
+      borrowOrderCreationEnabled: obj.borrowOrderCreationEnabled,
+      borrowOrderExecutionEnabled: obj.borrowOrderExecutionEnabled,
       proposerAuthority: address(obj.proposerAuthority),
       padding1: obj.padding1.map((item) => new BN(item)),
     })

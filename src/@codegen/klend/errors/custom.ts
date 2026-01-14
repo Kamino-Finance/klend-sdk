@@ -132,6 +132,17 @@ export type CustomError =
   | InitialAdminDepositExecuted
   | ReserveHasNotReceivedInitialDeposit
   | CTokenUsageBlocked
+  | CannotUseSameReserve
+  | TransactionIncludesRestrictedPrograms
+  | BorrowOrderDebtLiquidityMintMismatch
+  | BorrowOrderMaxBorrowRateExceeded
+  | BorrowOrderMinDebtTermInsufficient
+  | BorrowOrderFillTimeLimitExceeded
+  | ReserveDebtMaturityReached
+  | NonUpdatableOrderConfiguration
+  | BorrowOrderExecutionDisabled
+  | DebtReachedReserveDebtTerm
+  | ExpectationNotMet
 
 export class InvalidMarketAuthority extends Error {
   static readonly code = 6000
@@ -1680,6 +1691,145 @@ export class CTokenUsageBlocked extends Error {
   }
 }
 
+export class CannotUseSameReserve extends Error {
+  static readonly code = 6133
+  readonly code = 6133
+  readonly name = "CannotUseSameReserve"
+  readonly msg = "Cannot call ix with same reserve"
+
+  constructor(readonly logs?: string[]) {
+    super("6133: Cannot call ix with same reserve")
+  }
+}
+
+export class TransactionIncludesRestrictedPrograms extends Error {
+  static readonly code = 6134
+  readonly code = 6134
+  readonly name = "TransactionIncludesRestrictedPrograms"
+  readonly msg = "Transaction includes restricted programs"
+
+  constructor(readonly logs?: string[]) {
+    super("6134: Transaction includes restricted programs")
+  }
+}
+
+export class BorrowOrderDebtLiquidityMintMismatch extends Error {
+  static readonly code = 6135
+  readonly code = 6135
+  readonly name = "BorrowOrderDebtLiquidityMintMismatch"
+  readonly msg = "There is no borrow order requesting debt in the given asset"
+
+  constructor(readonly logs?: string[]) {
+    super("6135: There is no borrow order requesting debt in the given asset")
+  }
+}
+
+export class BorrowOrderMaxBorrowRateExceeded extends Error {
+  static readonly code = 6136
+  readonly code = 6136
+  readonly name = "BorrowOrderMaxBorrowRateExceeded"
+  readonly msg =
+    "Reserve used for fill exceeds the maximum borrow rate specified by the order"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6136: Reserve used for fill exceeds the maximum borrow rate specified by the order"
+    )
+  }
+}
+
+export class BorrowOrderMinDebtTermInsufficient extends Error {
+  static readonly code = 6137
+  readonly code = 6137
+  readonly name = "BorrowOrderMinDebtTermInsufficient"
+  readonly msg =
+    "Reserve used for fill defines a debt term shorter than specified by the order"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6137: Reserve used for fill defines a debt term shorter than specified by the order"
+    )
+  }
+}
+
+export class BorrowOrderFillTimeLimitExceeded extends Error {
+  static readonly code = 6138
+  readonly code = 6138
+  readonly name = "BorrowOrderFillTimeLimitExceeded"
+  readonly msg = "Borrow order can no longer be filled"
+
+  constructor(readonly logs?: string[]) {
+    super("6138: Borrow order can no longer be filled")
+  }
+}
+
+export class ReserveDebtMaturityReached extends Error {
+  static readonly code = 6139
+  readonly code = 6139
+  readonly name = "ReserveDebtMaturityReached"
+  readonly msg =
+    "Cannot borrow from a reserve that reached its debt maturity timestamp"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6139: Cannot borrow from a reserve that reached its debt maturity timestamp"
+    )
+  }
+}
+
+export class NonUpdatableOrderConfiguration extends Error {
+  static readonly code = 6140
+  readonly code = 6140
+  readonly name = "NonUpdatableOrderConfiguration"
+  readonly msg =
+    "Some piece of the order's configuration cannot be updated (the order should be cancelled and placed again)"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6140: Some piece of the order's configuration cannot be updated (the order should be cancelled and placed again)"
+    )
+  }
+}
+
+export class BorrowOrderExecutionDisabled extends Error {
+  static readonly code = 6141
+  readonly code = 6141
+  readonly name = "BorrowOrderExecutionDisabled"
+  readonly msg = "Execution of borrow orders is disabled"
+
+  constructor(readonly logs?: string[]) {
+    super("6141: Execution of borrow orders is disabled")
+  }
+}
+
+export class DebtReachedReserveDebtTerm extends Error {
+  static readonly code = 6142
+  readonly code = 6142
+  readonly name = "DebtReachedReserveDebtTerm"
+  readonly msg =
+    "Cannot increase the debt that has reached its end of term configured by the reserve"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6142: Cannot increase the debt that has reached its end of term configured by the reserve"
+    )
+  }
+}
+
+export class ExpectationNotMet extends Error {
+  static readonly code = 6143
+  readonly code = 6143
+  readonly name = "ExpectationNotMet"
+  readonly msg =
+    "The on-chain state does not meet expectation specified by the caller, so the operation must be aborted (to avoid race conditions)"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6143: The on-chain state does not meet expectation specified by the caller, so the operation must be aborted (to avoid race conditions)"
+    )
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 6000:
@@ -1948,6 +2098,28 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new ReserveHasNotReceivedInitialDeposit(logs)
     case 6132:
       return new CTokenUsageBlocked(logs)
+    case 6133:
+      return new CannotUseSameReserve(logs)
+    case 6134:
+      return new TransactionIncludesRestrictedPrograms(logs)
+    case 6135:
+      return new BorrowOrderDebtLiquidityMintMismatch(logs)
+    case 6136:
+      return new BorrowOrderMaxBorrowRateExceeded(logs)
+    case 6137:
+      return new BorrowOrderMinDebtTermInsufficient(logs)
+    case 6138:
+      return new BorrowOrderFillTimeLimitExceeded(logs)
+    case 6139:
+      return new ReserveDebtMaturityReached(logs)
+    case 6140:
+      return new NonUpdatableOrderConfiguration(logs)
+    case 6141:
+      return new BorrowOrderExecutionDisabled(logs)
+    case 6142:
+      return new DebtReachedReserveDebtTerm(logs)
+    case 6143:
+      return new ExpectationNotMet(logs)
   }
 
   return null

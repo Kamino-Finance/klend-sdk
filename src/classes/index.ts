@@ -1,4 +1,5 @@
 export * from './action';
+export * from './configItems';
 export * from './curve';
 export * from './fraction';
 export * from './market';

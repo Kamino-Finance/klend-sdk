@@ -19,7 +19,6 @@ export const DISCRIMINATOR = Buffer.from([130, 80, 38, 153, 80, 212, 182, 253])
 
 export interface IdlMissingTypesArgs {
   reserveFarmKind: types.ReserveFarmKindKind
-  assetTier: types.AssetTierKind
   feeCalculation: types.FeeCalculationKind
   reserveStatus: types.ReserveStatusKind
   updateConfigMode: types.UpdateConfigModeKind
@@ -36,7 +35,6 @@ export interface IdlMissingTypesAccounts {
 
 export const layout = borsh.struct([
   types.ReserveFarmKind.layout("reserveFarmKind"),
-  types.AssetTier.layout("assetTier"),
   types.FeeCalculation.layout("feeCalculation"),
   types.ReserveStatus.layout("reserveStatus"),
   types.UpdateConfigMode.layout("updateConfigMode"),
@@ -61,7 +59,6 @@ export function idlMissingTypes(
   const len = layout.encode(
     {
       reserveFarmKind: args.reserveFarmKind.toEncodable(),
-      assetTier: args.assetTier.toEncodable(),
       feeCalculation: args.feeCalculation.toEncodable(),
       reserveStatus: args.reserveStatus.toEncodable(),
       updateConfigMode: args.updateConfigMode.toEncodable(),

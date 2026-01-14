@@ -43,9 +43,7 @@ export class ObligationZP {
   /** The dangerous borrow value at the weighted average liquidation threshold (scaled fraction) */
   readonly unhealthyBorrowValueSf: BN
   /** The asset tier of the deposits */
-  readonly depositsAssetTiers: Array<number>
-  /** The asset tier of the borrows */
-  readonly borrowsAssetTiers: Array<number>
+  readonly paddingDeprecatedAssetTiers: Array<number>
   /** The elevation group id the obligation opted into. */
   readonly elevationGroup: number
   /** The number of obsolete reserves the obligation has a deposit in */
@@ -73,10 +71,15 @@ export class ObligationZP {
    */
   readonly autodeleverageMarginCallStartedTimestamp: BN
   /**
-   * Owner-defined, liquidator-executed orders applicable to this obligation.
+   * Owner-defined, permissionlessly-executed repay orders.
    * Typical use-cases would be a stop-loss and a take-profit (possibly co-existing).
    */
-  readonly orders: Array<types.ObligationOrder>
+  readonly obligationOrders: Array<types.ObligationOrder>
+  /**
+   * Owner-defined, permissionlessly-executed borrow order applicable to this obligation.
+   * Non-zeroed only on a newly-initialized fixed-rate, fixed-term obligation.
+   */
+  readonly borrowOrder: types.BorrowOrder
   readonly padding3: Array<BN> = new Array(0)
 
   static readonly layout = borsh.struct<ObligationZP>([
@@ -92,8 +95,7 @@ export class ObligationZP {
     borsh.u128("borrowedAssetsMarketValueSf"),
     borsh.u128("allowedBorrowValueSf"),
     borsh.u128("unhealthyBorrowValueSf"),
-    borsh.array(borsh.u8(), 8, "depositsAssetTiers"),
-    borsh.array(borsh.u8(), 5, "borrowsAssetTiers"),
+    borsh.array(borsh.u8(), 13, "paddingDeprecatedAssetTiers"),
     borsh.u8("elevationGroup"),
     borsh.u8("numOfObsoleteDepositReserves"),
     borsh.u8("hasDebt"),
@@ -105,7 +107,8 @@ export class ObligationZP {
     borsh.array(borsh.u8(), 4, "reserved"),
     borsh.u64("highestBorrowFactorPct"),
     borsh.u64("autodeleverageMarginCallStartedTimestamp"),
-    borsh.array(types.ObligationOrder.layout(), 2, "orders"),
+    borsh.array(types.ObligationOrder.layout(), 2, "obligationOrders"),
+    types.BorrowOrder.layout("borrowOrder"),
   ])
 
   constructor(fields: ObligationFields) {
@@ -127,8 +130,7 @@ export class ObligationZP {
     this.borrowedAssetsMarketValueSf = fields.borrowedAssetsMarketValueSf
     this.allowedBorrowValueSf = fields.allowedBorrowValueSf
     this.unhealthyBorrowValueSf = fields.unhealthyBorrowValueSf
-    this.depositsAssetTiers = fields.depositsAssetTiers
-    this.borrowsAssetTiers = fields.borrowsAssetTiers
+    this.paddingDeprecatedAssetTiers = fields.paddingDeprecatedAssetTiers
     this.elevationGroup = fields.elevationGroup
     this.numOfObsoleteDepositReserves = fields.numOfObsoleteDepositReserves
     this.hasDebt = fields.hasDebt
@@ -141,9 +143,10 @@ export class ObligationZP {
     this.highestBorrowFactorPct = fields.highestBorrowFactorPct
     this.autodeleverageMarginCallStartedTimestamp =
       fields.autodeleverageMarginCallStartedTimestamp
-    this.orders = fields.orders.map(
+    this.obligationOrders = fields.obligationOrders.map(
       (item) => new types.ObligationOrder({ ...item })
     )
+    this.borrowOrder = new types.BorrowOrder({ ...fields.borrowOrder })
     this.padding3 = new Array<BN>(0);
   }
 
@@ -212,8 +215,7 @@ export class ObligationZP {
       borrowedAssetsMarketValueSf: dec.borrowedAssetsMarketValueSf,
       allowedBorrowValueSf: dec.allowedBorrowValueSf,
       unhealthyBorrowValueSf: dec.unhealthyBorrowValueSf,
-      depositsAssetTiers: dec.depositsAssetTiers,
-      borrowsAssetTiers: dec.borrowsAssetTiers,
+      paddingDeprecatedAssetTiers: dec.paddingDeprecatedAssetTiers,
       elevationGroup: dec.elevationGroup,
       numOfObsoleteDepositReserves: dec.numOfObsoleteDepositReserves,
       hasDebt: dec.hasDebt,
@@ -226,11 +228,12 @@ export class ObligationZP {
       highestBorrowFactorPct: dec.highestBorrowFactorPct,
       autodeleverageMarginCallStartedTimestamp:
         dec.autodeleverageMarginCallStartedTimestamp,
-      orders: dec.orders.map(
+      obligationOrders: dec.obligationOrders.map(
         (
           item: any /* eslint-disable-line @typescript-eslint/no-explicit-any */
         ) => types.ObligationOrder.fromDecoded(item)
       ),
+      borrowOrder: types.BorrowOrder.fromDecoded(dec.borrowOrder),
       padding3: [],
     })
   }

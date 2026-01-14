@@ -8,7 +8,7 @@ export interface ReserveConfigFields {
   /** Status of the reserve Active/Obsolete/Hidden */
   status: number
   /** Asset tier -> 0 - regular (collateral & debt), 1 - isolated collateral, 2 - isolated debt */
-  assetTier: number
+  paddingDeprecatedAssetTier: number
   /** Flat rate that goes to the host */
   hostFixedInterestRateBps: number
   /** Starting bonus for deleveraging-related liquidations, in bps. */
@@ -105,13 +105,30 @@ export interface ReserveConfigFields {
    * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
    */
   deleveragingBonusIncreaseBpsPerDay: BN
+  /**
+   * The timestamp at which all [Obligation::borrows] using this reserve become liquidatable
+   * (on the same terms as reserve-wide deleveraging).
+   * Inactive when zeroed (i.e. debt never matures).
+   *
+   * Note: this feature is independent of [Self::debt_term_seconds] - the liquidation mechanism
+   * is based directly on the timestamp defined here, on Reserve's level.
+   */
+  debtMaturityTimestamp: BN
+  /**
+   * The duration after which any debt coming from this Reserve must be repaid.
+   * Inactive when zeroed (i.e. funds can be borrowed indefinitely).
+   *
+   * Note: this feature is independent of [Self::debt_maturity_timestamp] - the liquidation
+   * mechanism is based on the [ObligationLiquidity::first_borrowed_at_timestamp].
+   */
+  debtTermSeconds: BN
 }
 
 export interface ReserveConfigJSON {
   /** Status of the reserve Active/Obsolete/Hidden */
   status: number
   /** Asset tier -> 0 - regular (collateral & debt), 1 - isolated collateral, 2 - isolated debt */
-  assetTier: number
+  paddingDeprecatedAssetTier: number
   /** Flat rate that goes to the host */
   hostFixedInterestRateBps: number
   /** Starting bonus for deleveraging-related liquidations, in bps. */
@@ -208,6 +225,23 @@ export interface ReserveConfigJSON {
    * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
    */
   deleveragingBonusIncreaseBpsPerDay: string
+  /**
+   * The timestamp at which all [Obligation::borrows] using this reserve become liquidatable
+   * (on the same terms as reserve-wide deleveraging).
+   * Inactive when zeroed (i.e. debt never matures).
+   *
+   * Note: this feature is independent of [Self::debt_term_seconds] - the liquidation mechanism
+   * is based directly on the timestamp defined here, on Reserve's level.
+   */
+  debtMaturityTimestamp: string
+  /**
+   * The duration after which any debt coming from this Reserve must be repaid.
+   * Inactive when zeroed (i.e. funds can be borrowed indefinitely).
+   *
+   * Note: this feature is independent of [Self::debt_maturity_timestamp] - the liquidation
+   * mechanism is based on the [ObligationLiquidity::first_borrowed_at_timestamp].
+   */
+  debtTermSeconds: string
 }
 
 /** Reserve configuration values */
@@ -215,7 +249,7 @@ export class ReserveConfig {
   /** Status of the reserve Active/Obsolete/Hidden */
   readonly status: number
   /** Asset tier -> 0 - regular (collateral & debt), 1 - isolated collateral, 2 - isolated debt */
-  readonly assetTier: number
+  readonly paddingDeprecatedAssetTier: number
   /** Flat rate that goes to the host */
   readonly hostFixedInterestRateBps: number
   /** Starting bonus for deleveraging-related liquidations, in bps. */
@@ -312,10 +346,27 @@ export class ReserveConfig {
    * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
    */
   readonly deleveragingBonusIncreaseBpsPerDay: BN
+  /**
+   * The timestamp at which all [Obligation::borrows] using this reserve become liquidatable
+   * (on the same terms as reserve-wide deleveraging).
+   * Inactive when zeroed (i.e. debt never matures).
+   *
+   * Note: this feature is independent of [Self::debt_term_seconds] - the liquidation mechanism
+   * is based directly on the timestamp defined here, on Reserve's level.
+   */
+  readonly debtMaturityTimestamp: BN
+  /**
+   * The duration after which any debt coming from this Reserve must be repaid.
+   * Inactive when zeroed (i.e. funds can be borrowed indefinitely).
+   *
+   * Note: this feature is independent of [Self::debt_maturity_timestamp] - the liquidation
+   * mechanism is based on the [ObligationLiquidity::first_borrowed_at_timestamp].
+   */
+  readonly debtTermSeconds: BN
 
   constructor(fields: ReserveConfigFields) {
     this.status = fields.status
-    this.assetTier = fields.assetTier
+    this.paddingDeprecatedAssetTier = fields.paddingDeprecatedAssetTier
     this.hostFixedInterestRateBps = fields.hostFixedInterestRateBps
     this.minDeleveragingBonusBps = fields.minDeleveragingBonusBps
     this.blockCtokenUsage = fields.blockCtokenUsage
@@ -358,13 +409,15 @@ export class ReserveConfig {
       fields.borrowLimitAgainstThisCollateralInElevationGroup
     this.deleveragingBonusIncreaseBpsPerDay =
       fields.deleveragingBonusIncreaseBpsPerDay
+    this.debtMaturityTimestamp = fields.debtMaturityTimestamp
+    this.debtTermSeconds = fields.debtTermSeconds
   }
 
   static layout(property?: string) {
     return borsh.struct(
       [
         borsh.u8("status"),
-        borsh.u8("assetTier"),
+        borsh.u8("paddingDeprecatedAssetTier"),
         borsh.u16("hostFixedInterestRateBps"),
         borsh.u16("minDeleveragingBonusBps"),
         borsh.u8("blockCtokenUsage"),
@@ -399,6 +452,8 @@ export class ReserveConfig {
           "borrowLimitAgainstThisCollateralInElevationGroup"
         ),
         borsh.u64("deleveragingBonusIncreaseBpsPerDay"),
+        borsh.u64("debtMaturityTimestamp"),
+        borsh.u64("debtTermSeconds"),
       ],
       property
     )
@@ -408,7 +463,7 @@ export class ReserveConfig {
   static fromDecoded(obj: any) {
     return new ReserveConfig({
       status: obj.status,
-      assetTier: obj.assetTier,
+      paddingDeprecatedAssetTier: obj.paddingDeprecatedAssetTier,
       hostFixedInterestRateBps: obj.hostFixedInterestRateBps,
       minDeleveragingBonusBps: obj.minDeleveragingBonusBps,
       blockCtokenUsage: obj.blockCtokenUsage,
@@ -447,13 +502,15 @@ export class ReserveConfig {
         obj.borrowLimitAgainstThisCollateralInElevationGroup,
       deleveragingBonusIncreaseBpsPerDay:
         obj.deleveragingBonusIncreaseBpsPerDay,
+      debtMaturityTimestamp: obj.debtMaturityTimestamp,
+      debtTermSeconds: obj.debtTermSeconds,
     })
   }
 
   static toEncodable(fields: ReserveConfigFields) {
     return {
       status: fields.status,
-      assetTier: fields.assetTier,
+      paddingDeprecatedAssetTier: fields.paddingDeprecatedAssetTier,
       hostFixedInterestRateBps: fields.hostFixedInterestRateBps,
       minDeleveragingBonusBps: fields.minDeleveragingBonusBps,
       blockCtokenUsage: fields.blockCtokenUsage,
@@ -494,13 +551,15 @@ export class ReserveConfig {
         fields.borrowLimitAgainstThisCollateralInElevationGroup,
       deleveragingBonusIncreaseBpsPerDay:
         fields.deleveragingBonusIncreaseBpsPerDay,
+      debtMaturityTimestamp: fields.debtMaturityTimestamp,
+      debtTermSeconds: fields.debtTermSeconds,
     }
   }
 
   toJSON(): ReserveConfigJSON {
     return {
       status: this.status,
-      assetTier: this.assetTier,
+      paddingDeprecatedAssetTier: this.paddingDeprecatedAssetTier,
       hostFixedInterestRateBps: this.hostFixedInterestRateBps,
       minDeleveragingBonusBps: this.minDeleveragingBonusBps,
       blockCtokenUsage: this.blockCtokenUsage,
@@ -539,13 +598,15 @@ export class ReserveConfig {
         ),
       deleveragingBonusIncreaseBpsPerDay:
         this.deleveragingBonusIncreaseBpsPerDay.toString(),
+      debtMaturityTimestamp: this.debtMaturityTimestamp.toString(),
+      debtTermSeconds: this.debtTermSeconds.toString(),
     }
   }
 
   static fromJSON(obj: ReserveConfigJSON): ReserveConfig {
     return new ReserveConfig({
       status: obj.status,
-      assetTier: obj.assetTier,
+      paddingDeprecatedAssetTier: obj.paddingDeprecatedAssetTier,
       hostFixedInterestRateBps: obj.hostFixedInterestRateBps,
       minDeleveragingBonusBps: obj.minDeleveragingBonusBps,
       blockCtokenUsage: obj.blockCtokenUsage,
@@ -590,6 +651,8 @@ export class ReserveConfig {
       deleveragingBonusIncreaseBpsPerDay: new BN(
         obj.deleveragingBonusIncreaseBpsPerDay
       ),
+      debtMaturityTimestamp: new BN(obj.debtMaturityTimestamp),
+      debtTermSeconds: new BN(obj.debtTermSeconds),
     })
   }
 

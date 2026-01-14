@@ -1805,6 +1805,11 @@ export const MARKET_UPDATER = new ConfigUpdater(UpdateLendingMarketMode.fromDeco
   [UpdateLendingMarketMode.UpdateObligationOrderExecutionEnabled.kind]: config.obligationOrderExecutionEnabled,
   [UpdateLendingMarketMode.UpdateProposerAuthority.kind]: config.proposerAuthority,
   [UpdateLendingMarketMode.UpdatePriceTriggeredLiquidationDisabled.kind]: config.priceTriggeredLiquidationDisabled,
+  [UpdateLendingMarketMode.UpdateMatureReserveDebtLiquidationEnabled.kind]: config.matureReserveDebtLiquidationEnabled,
+  [UpdateLendingMarketMode.UpdateObligationBorrowDebtTermLiquidationEnabled.kind]:
+    config.obligationBorrowDebtTermLiquidationEnabled,
+  [UpdateLendingMarketMode.UpdateBorrowOrderCreationEnabled.kind]: config.borrowOrderCreationEnabled,
+  [UpdateLendingMarketMode.UpdateBorrowOrderExecutionEnabled.kind]: config.borrowOrderExecutionEnabled,  
 }));
 
 function parseForChangesMarketConfigAndGetIxs(

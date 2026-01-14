@@ -9,7 +9,17 @@ export interface ObligationLiquidityFields {
   borrowReserve: Address
   /** Borrow rate used for calculating interest (big scaled fraction) */
   cumulativeBorrowRateBsf: types.BigFractionBytesFields
-  padding: BN
+  /**
+   * The timestamp at which this debt was taken.
+   * More specifically: when the *first* borrow operation from this reserve happened.
+   * This means that:
+   * - adding debt of the same reserve does *not* change this timestamp,
+   * - repaying the entire debt of this reserve *does* reset this timestamp.
+   *
+   * Note: this field is *not* only metadata: it is used in the logic, e.g. for enforcing the
+   * fixed-term borrows (i.e. those induced by [ReserveConfig::debt_term_seconds]).
+   */
+  firstBorrowedAtTimestamp: BN
   /** Amount of liquidity borrowed plus interest (scaled fraction) */
   borrowedAmountSf: BN
   /** Liquidity market value in quote currency (scaled fraction) */
@@ -26,7 +36,17 @@ export interface ObligationLiquidityJSON {
   borrowReserve: string
   /** Borrow rate used for calculating interest (big scaled fraction) */
   cumulativeBorrowRateBsf: types.BigFractionBytesJSON
-  padding: string
+  /**
+   * The timestamp at which this debt was taken.
+   * More specifically: when the *first* borrow operation from this reserve happened.
+   * This means that:
+   * - adding debt of the same reserve does *not* change this timestamp,
+   * - repaying the entire debt of this reserve *does* reset this timestamp.
+   *
+   * Note: this field is *not* only metadata: it is used in the logic, e.g. for enforcing the
+   * fixed-term borrows (i.e. those induced by [ReserveConfig::debt_term_seconds]).
+   */
+  firstBorrowedAtTimestamp: string
   /** Amount of liquidity borrowed plus interest (scaled fraction) */
   borrowedAmountSf: string
   /** Liquidity market value in quote currency (scaled fraction) */
@@ -44,7 +64,17 @@ export class ObligationLiquidity {
   readonly borrowReserve: Address
   /** Borrow rate used for calculating interest (big scaled fraction) */
   readonly cumulativeBorrowRateBsf: types.BigFractionBytes
-  readonly padding: BN
+  /**
+   * The timestamp at which this debt was taken.
+   * More specifically: when the *first* borrow operation from this reserve happened.
+   * This means that:
+   * - adding debt of the same reserve does *not* change this timestamp,
+   * - repaying the entire debt of this reserve *does* reset this timestamp.
+   *
+   * Note: this field is *not* only metadata: it is used in the logic, e.g. for enforcing the
+   * fixed-term borrows (i.e. those induced by [ReserveConfig::debt_term_seconds]).
+   */
+  readonly firstBorrowedAtTimestamp: BN
   /** Amount of liquidity borrowed plus interest (scaled fraction) */
   readonly borrowedAmountSf: BN
   /** Liquidity market value in quote currency (scaled fraction) */
@@ -60,7 +90,7 @@ export class ObligationLiquidity {
     this.cumulativeBorrowRateBsf = new types.BigFractionBytes({
       ...fields.cumulativeBorrowRateBsf,
     })
-    this.padding = fields.padding
+    this.firstBorrowedAtTimestamp = fields.firstBorrowedAtTimestamp
     this.borrowedAmountSf = fields.borrowedAmountSf
     this.marketValueSf = fields.marketValueSf
     this.borrowFactorAdjustedMarketValueSf =
@@ -75,7 +105,7 @@ export class ObligationLiquidity {
       [
         borshAddress("borrowReserve"),
         types.BigFractionBytes.layout("cumulativeBorrowRateBsf"),
-        borsh.u64("padding"),
+        borsh.u64("firstBorrowedAtTimestamp"),
         borsh.u128("borrowedAmountSf"),
         borsh.u128("marketValueSf"),
         borsh.u128("borrowFactorAdjustedMarketValueSf"),
@@ -93,7 +123,7 @@ export class ObligationLiquidity {
       cumulativeBorrowRateBsf: types.BigFractionBytes.fromDecoded(
         obj.cumulativeBorrowRateBsf
       ),
-      padding: obj.padding,
+      firstBorrowedAtTimestamp: obj.firstBorrowedAtTimestamp,
       borrowedAmountSf: obj.borrowedAmountSf,
       marketValueSf: obj.marketValueSf,
       borrowFactorAdjustedMarketValueSf: obj.borrowFactorAdjustedMarketValueSf,
@@ -109,7 +139,7 @@ export class ObligationLiquidity {
       cumulativeBorrowRateBsf: types.BigFractionBytes.toEncodable(
         fields.cumulativeBorrowRateBsf
       ),
-      padding: fields.padding,
+      firstBorrowedAtTimestamp: fields.firstBorrowedAtTimestamp,
       borrowedAmountSf: fields.borrowedAmountSf,
       marketValueSf: fields.marketValueSf,
       borrowFactorAdjustedMarketValueSf:
@@ -124,7 +154,7 @@ export class ObligationLiquidity {
     return {
       borrowReserve: this.borrowReserve,
       cumulativeBorrowRateBsf: this.cumulativeBorrowRateBsf.toJSON(),
-      padding: this.padding.toString(),
+      firstBorrowedAtTimestamp: this.firstBorrowedAtTimestamp.toString(),
       borrowedAmountSf: this.borrowedAmountSf.toString(),
       marketValueSf: this.marketValueSf.toString(),
       borrowFactorAdjustedMarketValueSf:
@@ -141,7 +171,7 @@ export class ObligationLiquidity {
       cumulativeBorrowRateBsf: types.BigFractionBytes.fromJSON(
         obj.cumulativeBorrowRateBsf
       ),
-      padding: new BN(obj.padding),
+      firstBorrowedAtTimestamp: new BN(obj.firstBorrowedAtTimestamp),
       borrowedAmountSf: new BN(obj.borrowedAmountSf),
       marketValueSf: new BN(obj.marketValueSf),
       borrowFactorAdjustedMarketValueSf: new BN(

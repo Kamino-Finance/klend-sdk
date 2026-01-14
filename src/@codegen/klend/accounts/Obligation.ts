@@ -41,9 +41,7 @@ export interface ObligationFields {
   /** The dangerous borrow value at the weighted average liquidation threshold (scaled fraction) */
   unhealthyBorrowValueSf: BN
   /** The asset tier of the deposits */
-  depositsAssetTiers: Array<number>
-  /** The asset tier of the borrows */
-  borrowsAssetTiers: Array<number>
+  paddingDeprecatedAssetTiers: Array<number>
   /** The elevation group id the obligation opted into. */
   elevationGroup: number
   /** The number of obsolete reserves the obligation has a deposit in */
@@ -71,10 +69,15 @@ export interface ObligationFields {
    */
   autodeleverageMarginCallStartedTimestamp: BN
   /**
-   * Owner-defined, liquidator-executed orders applicable to this obligation.
+   * Owner-defined, permissionlessly-executed repay orders.
    * Typical use-cases would be a stop-loss and a take-profit (possibly co-existing).
    */
-  orders: Array<types.ObligationOrderFields>
+  obligationOrders: Array<types.ObligationOrderFields>
+  /**
+   * Owner-defined, permissionlessly-executed borrow order applicable to this obligation.
+   * Non-zeroed only on a newly-initialized fixed-rate, fixed-term obligation.
+   */
+  borrowOrder: types.BorrowOrderFields
   padding3: Array<BN>
 }
 
@@ -104,9 +107,7 @@ export interface ObligationJSON {
   /** The dangerous borrow value at the weighted average liquidation threshold (scaled fraction) */
   unhealthyBorrowValueSf: string
   /** The asset tier of the deposits */
-  depositsAssetTiers: Array<number>
-  /** The asset tier of the borrows */
-  borrowsAssetTiers: Array<number>
+  paddingDeprecatedAssetTiers: Array<number>
   /** The elevation group id the obligation opted into. */
   elevationGroup: number
   /** The number of obsolete reserves the obligation has a deposit in */
@@ -134,10 +135,15 @@ export interface ObligationJSON {
    */
   autodeleverageMarginCallStartedTimestamp: string
   /**
-   * Owner-defined, liquidator-executed orders applicable to this obligation.
+   * Owner-defined, permissionlessly-executed repay orders.
    * Typical use-cases would be a stop-loss and a take-profit (possibly co-existing).
    */
-  orders: Array<types.ObligationOrderJSON>
+  obligationOrders: Array<types.ObligationOrderJSON>
+  /**
+   * Owner-defined, permissionlessly-executed borrow order applicable to this obligation.
+   * Non-zeroed only on a newly-initialized fixed-rate, fixed-term obligation.
+   */
+  borrowOrder: types.BorrowOrderJSON
   padding3: Array<string>
 }
 
@@ -168,9 +174,7 @@ export class Obligation {
   /** The dangerous borrow value at the weighted average liquidation threshold (scaled fraction) */
   readonly unhealthyBorrowValueSf: BN
   /** The asset tier of the deposits */
-  readonly depositsAssetTiers: Array<number>
-  /** The asset tier of the borrows */
-  readonly borrowsAssetTiers: Array<number>
+  readonly paddingDeprecatedAssetTiers: Array<number>
   /** The elevation group id the obligation opted into. */
   readonly elevationGroup: number
   /** The number of obsolete reserves the obligation has a deposit in */
@@ -198,10 +202,15 @@ export class Obligation {
    */
   readonly autodeleverageMarginCallStartedTimestamp: BN
   /**
-   * Owner-defined, liquidator-executed orders applicable to this obligation.
+   * Owner-defined, permissionlessly-executed repay orders.
    * Typical use-cases would be a stop-loss and a take-profit (possibly co-existing).
    */
-  readonly orders: Array<types.ObligationOrder>
+  readonly obligationOrders: Array<types.ObligationOrder>
+  /**
+   * Owner-defined, permissionlessly-executed borrow order applicable to this obligation.
+   * Non-zeroed only on a newly-initialized fixed-rate, fixed-term obligation.
+   */
+  readonly borrowOrder: types.BorrowOrder
   readonly padding3: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -221,8 +230,7 @@ export class Obligation {
     borsh.u128("borrowedAssetsMarketValueSf"),
     borsh.u128("allowedBorrowValueSf"),
     borsh.u128("unhealthyBorrowValueSf"),
-    borsh.array(borsh.u8(), 8, "depositsAssetTiers"),
-    borsh.array(borsh.u8(), 5, "borrowsAssetTiers"),
+    borsh.array(borsh.u8(), 13, "paddingDeprecatedAssetTiers"),
     borsh.u8("elevationGroup"),
     borsh.u8("numOfObsoleteDepositReserves"),
     borsh.u8("hasDebt"),
@@ -234,8 +242,9 @@ export class Obligation {
     borsh.array(borsh.u8(), 4, "reserved"),
     borsh.u64("highestBorrowFactorPct"),
     borsh.u64("autodeleverageMarginCallStartedTimestamp"),
-    borsh.array(types.ObligationOrder.layout(), 2, "orders"),
-    borsh.array(borsh.u64(), 93, "padding3"),
+    borsh.array(types.ObligationOrder.layout(), 2, "obligationOrders"),
+    types.BorrowOrder.layout("borrowOrder"),
+    borsh.array(borsh.u64(), 73, "padding3"),
   ])
 
   constructor(fields: ObligationFields) {
@@ -257,8 +266,7 @@ export class Obligation {
     this.borrowedAssetsMarketValueSf = fields.borrowedAssetsMarketValueSf
     this.allowedBorrowValueSf = fields.allowedBorrowValueSf
     this.unhealthyBorrowValueSf = fields.unhealthyBorrowValueSf
-    this.depositsAssetTiers = fields.depositsAssetTiers
-    this.borrowsAssetTiers = fields.borrowsAssetTiers
+    this.paddingDeprecatedAssetTiers = fields.paddingDeprecatedAssetTiers
     this.elevationGroup = fields.elevationGroup
     this.numOfObsoleteDepositReserves = fields.numOfObsoleteDepositReserves
     this.hasDebt = fields.hasDebt
@@ -271,9 +279,10 @@ export class Obligation {
     this.highestBorrowFactorPct = fields.highestBorrowFactorPct
     this.autodeleverageMarginCallStartedTimestamp =
       fields.autodeleverageMarginCallStartedTimestamp
-    this.orders = fields.orders.map(
+    this.obligationOrders = fields.obligationOrders.map(
       (item) => new types.ObligationOrder({ ...item })
     )
+    this.borrowOrder = new types.BorrowOrder({ ...fields.borrowOrder })
     this.padding3 = fields.padding3
   }
 
@@ -346,8 +355,7 @@ export class Obligation {
       borrowedAssetsMarketValueSf: dec.borrowedAssetsMarketValueSf,
       allowedBorrowValueSf: dec.allowedBorrowValueSf,
       unhealthyBorrowValueSf: dec.unhealthyBorrowValueSf,
-      depositsAssetTiers: dec.depositsAssetTiers,
-      borrowsAssetTiers: dec.borrowsAssetTiers,
+      paddingDeprecatedAssetTiers: dec.paddingDeprecatedAssetTiers,
       elevationGroup: dec.elevationGroup,
       numOfObsoleteDepositReserves: dec.numOfObsoleteDepositReserves,
       hasDebt: dec.hasDebt,
@@ -360,11 +368,12 @@ export class Obligation {
       highestBorrowFactorPct: dec.highestBorrowFactorPct,
       autodeleverageMarginCallStartedTimestamp:
         dec.autodeleverageMarginCallStartedTimestamp,
-      orders: dec.orders.map(
+      obligationOrders: dec.obligationOrders.map(
         (
           item: any /* eslint-disable-line @typescript-eslint/no-explicit-any */
         ) => types.ObligationOrder.fromDecoded(item)
       ),
+      borrowOrder: types.BorrowOrder.fromDecoded(dec.borrowOrder),
       padding3: dec.padding3,
     })
   }
@@ -385,8 +394,7 @@ export class Obligation {
       borrowedAssetsMarketValueSf: this.borrowedAssetsMarketValueSf.toString(),
       allowedBorrowValueSf: this.allowedBorrowValueSf.toString(),
       unhealthyBorrowValueSf: this.unhealthyBorrowValueSf.toString(),
-      depositsAssetTiers: this.depositsAssetTiers,
-      borrowsAssetTiers: this.borrowsAssetTiers,
+      paddingDeprecatedAssetTiers: this.paddingDeprecatedAssetTiers,
       elevationGroup: this.elevationGroup,
       numOfObsoleteDepositReserves: this.numOfObsoleteDepositReserves,
       hasDebt: this.hasDebt,
@@ -399,7 +407,8 @@ export class Obligation {
       highestBorrowFactorPct: this.highestBorrowFactorPct.toString(),
       autodeleverageMarginCallStartedTimestamp:
         this.autodeleverageMarginCallStartedTimestamp.toString(),
-      orders: this.orders.map((item) => item.toJSON()),
+      obligationOrders: this.obligationOrders.map((item) => item.toJSON()),
+      borrowOrder: this.borrowOrder.toJSON(),
       padding3: this.padding3.map((item) => item.toString()),
     }
   }
@@ -426,8 +435,7 @@ export class Obligation {
       borrowedAssetsMarketValueSf: new BN(obj.borrowedAssetsMarketValueSf),
       allowedBorrowValueSf: new BN(obj.allowedBorrowValueSf),
       unhealthyBorrowValueSf: new BN(obj.unhealthyBorrowValueSf),
-      depositsAssetTiers: obj.depositsAssetTiers,
-      borrowsAssetTiers: obj.borrowsAssetTiers,
+      paddingDeprecatedAssetTiers: obj.paddingDeprecatedAssetTiers,
       elevationGroup: obj.elevationGroup,
       numOfObsoleteDepositReserves: obj.numOfObsoleteDepositReserves,
       hasDebt: obj.hasDebt,
@@ -441,7 +449,10 @@ export class Obligation {
       autodeleverageMarginCallStartedTimestamp: new BN(
         obj.autodeleverageMarginCallStartedTimestamp
       ),
-      orders: obj.orders.map((item) => types.ObligationOrder.fromJSON(item)),
+      obligationOrders: obj.obligationOrders.map((item) =>
+        types.ObligationOrder.fromJSON(item)
+      ),
+      borrowOrder: types.BorrowOrder.fromJSON(obj.borrowOrder),
       padding3: obj.padding3.map((item) => new BN(item)),
     })
   }

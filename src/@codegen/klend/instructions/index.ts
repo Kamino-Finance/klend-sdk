@@ -190,6 +190,13 @@ export type {
   SetObligationOrderArgs,
   SetObligationOrderAccounts,
 } from "./setObligationOrder"
+export { setBorrowOrder } from "./setBorrowOrder"
+export type {
+  SetBorrowOrderArgs,
+  SetBorrowOrderAccounts,
+} from "./setBorrowOrder"
+export { fillBorrowOrder } from "./fillBorrowOrder"
+export type { FillBorrowOrderAccounts } from "./fillBorrowOrder"
 export { initGlobalConfig } from "./initGlobalConfig"
 export type { InitGlobalConfigAccounts } from "./initGlobalConfig"
 export { updateGlobalConfig } from "./updateGlobalConfig"

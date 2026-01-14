@@ -275,7 +275,7 @@ export class KaminoObligation {
    * Returns obligation orders (including the null ones, i.e. non-active positions in the orders' array).
    */
   getOrders(): Array<KaminoObligationOrder | null> {
-    return this.state.orders.map((order) => KaminoObligationOrder.fromState(order));
+    return this.state.obligationOrders.map((order) => KaminoObligationOrder.fromState(order));
   }
 
   /**

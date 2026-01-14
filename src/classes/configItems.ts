@@ -1,6 +1,7 @@
 import { struct, Layout } from '@coral-xyz/borsh';
 import { blobEquals, orThrow, toJson } from './utils';
 import { Buffer } from 'buffer';
+import { UpdateConfigModeKind, UpdateConfigMode, ReserveConfig } from '../@codegen/klend/types';
 
 /**
  * An object literal specifying *all* "update mode" enum values (of type {@code M}) and their corresponding config items
@@ -235,6 +236,40 @@ export class ConfigUpdater<M extends BorshEnum, C> {
   }
 }
 
+/** Reserve config fields have cross-dependencies with each other.
+ *
+ * When several fields must be updated at once, this will ensure
+ * all intermediary states are valid.
+ */
+export class EntireReserveConfigUpdater extends ConfigUpdater<UpdateConfigModeKind, ReserveConfig> {
+  constructor(
+    itemMapBuilder: (
+      config: AnyConfigItem<ReserveConfig, ReserveConfig>
+    ) => ConfigItemMap<UpdateConfigModeKind, ReserveConfig>
+  ) {
+    super(UpdateConfigMode.fromDecoded, ReserveConfig, itemMapBuilder);
+  }
+
+  encodeAllUpdates(
+    currentConfig: ReserveConfig | undefined,
+    newConfig: ReserveConfig
+  ): EncodedConfigUpdate<UpdateConfigModeKind>[] {
+    const updates = super.encodeAllUpdates(currentConfig, newConfig);
+
+    // Determine if liquidation threshold is increasing (affects LTV/LiquidationThreshold ordering)
+    const currentLiquidationThreshold = currentConfig ? currentConfig.liquidationThresholdPct : 0;
+
+    updates.sort((left, right) => {
+      if (newConfig.liquidationThresholdPct > currentLiquidationThreshold) {
+        return priorityOf(left.mode, true) - priorityOf(right.mode, true);
+      }
+      return priorityOf(left.mode) - priorityOf(right.mode);
+    });
+
+    return updates;
+  }
+}
+
 /**
  * The update mode discriminator and the serialized value needed to construct an update ix.
  */
@@ -292,4 +327,52 @@ type Getter<C, A> = (config: C) => A;
 
 function toArray<T>(singleOrArray: SingleOrArray<T>): T[] {
   return Array.isArray(singleOrArray) ? singleOrArray : [singleOrArray];
+}
+
+// Lowest priority gets updated first
+function priorityOf(mode: UpdateConfigModeKind, liquidationThresholdIncreasing: boolean = false): number {
+  switch (mode.discriminator) {
+    case UpdateConfigMode.UpdateScopePriceFeed.discriminator:
+      return 0;
+    case UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator:
+      return 0;
+    case UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator:
+      return 0;
+    case UpdateConfigMode.UpdateTokenInfoLowerHeuristic.discriminator:
+      return 0;
+    case UpdateConfigMode.UpdateTokenInfoUpperHeuristic.discriminator:
+      return 0;
+    case UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator:
+      return 0;
+    case UpdateConfigMode.UpdateTokenInfoTwapDivergence.discriminator:
+      return 0;
+    case UpdateConfigMode.UpdateTokenInfoName.discriminator:
+      return 0;
+    case UpdateConfigMode.UpdateTokenInfoPriceMaxAge.discriminator:
+      return 0;
+    case UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator:
+      return 0;
+    case UpdateConfigMode.UpdateDeleveragingBonusIncreaseBpsPerDay.discriminator:
+      return priorityOf(new UpdateConfigMode.UpdateAutodeleverageEnabled()) - 1;
+    case UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.discriminator:
+      return priorityOf(new UpdateConfigMode.UpdateAutodeleverageEnabled()) - 1;
+    case UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.discriminator:
+      return priorityOf(new UpdateConfigMode.UpdateAutodeleverageEnabled()) - 1;
+    case UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator:
+      return 4;
+    case UpdateConfigMode.UpdateLoanToValuePct.discriminator:
+      return 11;
+    // LiquidationThreshold >= LTV must always hold
+    // If liquidation threshold is increasing, update it first
+    // All other cases, we update LTV first
+    case UpdateConfigMode.UpdateLiquidationThresholdPct.discriminator:
+      return priorityOf(new UpdateConfigMode.UpdateLoanToValuePct()) + (liquidationThresholdIncreasing ? -1 : 1);
+    // Always update last bc we cannot skip validation
+    case UpdateConfigMode.UpdateDepositLimit.discriminator:
+      return 63;
+    case UpdateConfigMode.UpdateBorrowLimit.discriminator:
+      return 63;
+    default:
+      return 10;
+  }
 }

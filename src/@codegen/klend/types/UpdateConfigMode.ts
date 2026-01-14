@@ -763,25 +763,25 @@ export class UpdateBorrowFactor {
   }
 }
 
-export interface UpdateAssetTierJSON {
-  kind: "UpdateAssetTier"
+export interface DeprecatedUpdateAssetTierJSON {
+  kind: "DeprecatedUpdateAssetTier"
 }
 
-export class UpdateAssetTier {
+export class DeprecatedUpdateAssetTier {
   static readonly discriminator = 33
-  static readonly kind = "UpdateAssetTier"
+  static readonly kind = "DeprecatedUpdateAssetTier"
   readonly discriminator = 33
-  readonly kind = "UpdateAssetTier"
+  readonly kind = "DeprecatedUpdateAssetTier"
 
-  toJSON(): UpdateAssetTierJSON {
+  toJSON(): DeprecatedUpdateAssetTierJSON {
     return {
-      kind: "UpdateAssetTier",
+      kind: "DeprecatedUpdateAssetTier",
     }
   }
 
   toEncodable() {
     return {
-      UpdateAssetTier: {},
+      DeprecatedUpdateAssetTier: {},
     }
   }
 }
@@ -1223,6 +1223,52 @@ export class UpdateBlockCTokenUsage {
   }
 }
 
+export interface UpdateDebtMaturityTimestampJSON {
+  kind: "UpdateDebtMaturityTimestamp"
+}
+
+export class UpdateDebtMaturityTimestamp {
+  static readonly discriminator = 53
+  static readonly kind = "UpdateDebtMaturityTimestamp"
+  readonly discriminator = 53
+  readonly kind = "UpdateDebtMaturityTimestamp"
+
+  toJSON(): UpdateDebtMaturityTimestampJSON {
+    return {
+      kind: "UpdateDebtMaturityTimestamp",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateDebtMaturityTimestamp: {},
+    }
+  }
+}
+
+export interface UpdateDebtTermSecondsJSON {
+  kind: "UpdateDebtTermSeconds"
+}
+
+export class UpdateDebtTermSeconds {
+  static readonly discriminator = 54
+  static readonly kind = "UpdateDebtTermSeconds"
+  readonly discriminator = 54
+  readonly kind = "UpdateDebtTermSeconds"
+
+  toJSON(): UpdateDebtTermSecondsJSON {
+    return {
+      kind: "UpdateDebtTermSeconds",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateDebtTermSeconds: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if (typeof obj !== "object") {
@@ -1328,8 +1374,8 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if ("UpdateBorrowFactor" in obj) {
     return new UpdateBorrowFactor()
   }
-  if ("UpdateAssetTier" in obj) {
-    return new UpdateAssetTier()
+  if ("DeprecatedUpdateAssetTier" in obj) {
+    return new DeprecatedUpdateAssetTier()
   }
   if ("UpdateElevationGroup" in obj) {
     return new UpdateElevationGroup()
@@ -1387,6 +1433,12 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   }
   if ("UpdateBlockCTokenUsage" in obj) {
     return new UpdateBlockCTokenUsage()
+  }
+  if ("UpdateDebtMaturityTimestamp" in obj) {
+    return new UpdateDebtMaturityTimestamp()
+  }
+  if ("UpdateDebtTermSeconds" in obj) {
+    return new UpdateDebtTermSeconds()
   }
 
   throw new Error("Invalid enum object")
@@ -1495,8 +1547,8 @@ export function fromJSON(
     case "UpdateBorrowFactor": {
       return new UpdateBorrowFactor()
     }
-    case "UpdateAssetTier": {
-      return new UpdateAssetTier()
+    case "DeprecatedUpdateAssetTier": {
+      return new DeprecatedUpdateAssetTier()
     }
     case "UpdateElevationGroup": {
       return new UpdateElevationGroup()
@@ -1555,6 +1607,12 @@ export function fromJSON(
     case "UpdateBlockCTokenUsage": {
       return new UpdateBlockCTokenUsage()
     }
+    case "UpdateDebtMaturityTimestamp": {
+      return new UpdateDebtMaturityTimestamp()
+    }
+    case "UpdateDebtTermSeconds": {
+      return new UpdateDebtTermSeconds()
+    }
   }
 }
 
@@ -1593,7 +1651,7 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateMinLiquidationBonusBps"),
     borsh.struct([], "UpdateDeleveragingMarginCallPeriod"),
     borsh.struct([], "UpdateBorrowFactor"),
-    borsh.struct([], "UpdateAssetTier"),
+    borsh.struct([], "DeprecatedUpdateAssetTier"),
     borsh.struct([], "UpdateElevationGroup"),
     borsh.struct([], "UpdateDeleveragingThresholdDecreaseBpsPerDay"),
     borsh.struct([], "DeprecatedUpdateMultiplierSideBoost"),
@@ -1613,6 +1671,8 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateProposerAuthorityLock"),
     borsh.struct([], "UpdateMinDeleveragingBonusBps"),
     borsh.struct([], "UpdateBlockCTokenUsage"),
+    borsh.struct([], "UpdateDebtMaturityTimestamp"),
+    borsh.struct([], "UpdateDebtTermSeconds"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

@@ -19,42 +19,17 @@ export interface UserStateFields {
   userId: BN
   farmState: Address
   owner: Address
-  /** Indicate if this user state is part of a delegated farm */
   isFarmDelegated: number
   padding0: Array<number>
-  /**
-   * Rewards tally used for computation of gained rewards
-   * (scaled from `Decimal` representation).
-   */
   rewardsTallyScaled: Array<BN>
-  /** Number of reward tokens ready for claim */
   rewardsIssuedUnclaimed: Array<BN>
   lastClaimTs: Array<BN>
-  /**
-   * User stake deposited and usable, generating rewards and fees.
-   * (scaled from `Decimal` representation).
-   */
   activeStakeScaled: BN
-  /**
-   * User stake deposited but not usable and not generating rewards yet.
-   * (scaled from `Decimal` representation).
-   */
   pendingDepositStakeScaled: BN
-  /**
-   * After this timestamp, pending user stake can be moved to user stake
-   * Initialized to now() + delayed user stake period
-   */
   pendingDepositStakeTs: BN
-  /**
-   * User deposits unstaked, pending for withdrawal, not usable and not generating rewards.
-   * (scaled from `Decimal` representation).
-   */
   pendingWithdrawalUnstakeScaled: BN
-  /** After this timestamp, user can withdraw their deposit. */
   pendingWithdrawalUnstakeTs: BN
-  /** User bump used for account address validation */
   bump: BN
-  /** Delegatee used for initialisation - useful to check against */
   delegatee: Address
   lastStakeTs: BN
   padding1: Array<BN>
@@ -64,42 +39,17 @@ export interface UserStateJSON {
   userId: string
   farmState: string
   owner: string
-  /** Indicate if this user state is part of a delegated farm */
   isFarmDelegated: number
   padding0: Array<number>
-  /**
-   * Rewards tally used for computation of gained rewards
-   * (scaled from `Decimal` representation).
-   */
   rewardsTallyScaled: Array<string>
-  /** Number of reward tokens ready for claim */
   rewardsIssuedUnclaimed: Array<string>
   lastClaimTs: Array<string>
-  /**
-   * User stake deposited and usable, generating rewards and fees.
-   * (scaled from `Decimal` representation).
-   */
   activeStakeScaled: string
-  /**
-   * User stake deposited but not usable and not generating rewards yet.
-   * (scaled from `Decimal` representation).
-   */
   pendingDepositStakeScaled: string
-  /**
-   * After this timestamp, pending user stake can be moved to user stake
-   * Initialized to now() + delayed user stake period
-   */
   pendingDepositStakeTs: string
-  /**
-   * User deposits unstaked, pending for withdrawal, not usable and not generating rewards.
-   * (scaled from `Decimal` representation).
-   */
   pendingWithdrawalUnstakeScaled: string
-  /** After this timestamp, user can withdraw their deposit. */
   pendingWithdrawalUnstakeTs: string
-  /** User bump used for account address validation */
   bump: string
-  /** Delegatee used for initialisation - useful to check against */
   delegatee: string
   lastStakeTs: string
   padding1: Array<string>
@@ -109,42 +59,17 @@ export class UserState {
   readonly userId: BN
   readonly farmState: Address
   readonly owner: Address
-  /** Indicate if this user state is part of a delegated farm */
   readonly isFarmDelegated: number
   readonly padding0: Array<number>
-  /**
-   * Rewards tally used for computation of gained rewards
-   * (scaled from `Decimal` representation).
-   */
   readonly rewardsTallyScaled: Array<BN>
-  /** Number of reward tokens ready for claim */
   readonly rewardsIssuedUnclaimed: Array<BN>
   readonly lastClaimTs: Array<BN>
-  /**
-   * User stake deposited and usable, generating rewards and fees.
-   * (scaled from `Decimal` representation).
-   */
   readonly activeStakeScaled: BN
-  /**
-   * User stake deposited but not usable and not generating rewards yet.
-   * (scaled from `Decimal` representation).
-   */
   readonly pendingDepositStakeScaled: BN
-  /**
-   * After this timestamp, pending user stake can be moved to user stake
-   * Initialized to now() + delayed user stake period
-   */
   readonly pendingDepositStakeTs: BN
-  /**
-   * User deposits unstaked, pending for withdrawal, not usable and not generating rewards.
-   * (scaled from `Decimal` representation).
-   */
   readonly pendingWithdrawalUnstakeScaled: BN
-  /** After this timestamp, user can withdraw their deposit. */
   readonly pendingWithdrawalUnstakeTs: BN
-  /** User bump used for account address validation */
   readonly bump: BN
-  /** Delegatee used for initialisation - useful to check against */
   readonly delegatee: Address
   readonly lastStakeTs: BN
   readonly padding1: Array<BN>

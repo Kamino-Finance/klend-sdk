@@ -37,7 +37,7 @@ import { FeeCalculation, Fees, ReserveDataType, ReserveFarmInfo, ReserveRewardYi
 import { Reserve, ReserveFields } from '../@codegen/klend/accounts';
 import { CurvePointFields, ReserveConfig, UpdateConfigMode, UpdateConfigModeKind } from '../@codegen/klend/types';
 import { calculateAPYFromAPR, getBorrowRate, lamportsToNumberDecimal, parseTokenSymbol, positiveOrZero } from './utils';
-import { CompositeConfigItem, encodeUsingLayout, ConfigUpdater } from './configItems';
+import { CompositeConfigItem, encodeUsingLayout, EntireReserveConfigUpdater } from './configItems';
 import { bfToDecimal, Fraction } from './fraction';
 import { ActionType } from './action';
 import { BorrowCapsAndCounters, ElevationGroupDescription, KaminoMarket } from './market';
@@ -1250,7 +1250,7 @@ export async function updateReserveConfigIx(
   return updateReserveConfig(args, accounts, undefined, programId);
 }
 
-export const RESERVE_CONFIG_UPDATER = new ConfigUpdater(UpdateConfigMode.fromDecoded, ReserveConfig, (config) => ({
+export const RESERVE_CONFIG_UPDATER = new EntireReserveConfigUpdater((config) => ({
   [UpdateConfigMode.UpdateLoanToValuePct.kind]: config.loanToValuePct,
   [UpdateConfigMode.UpdateMaxLiquidationBonusBps.kind]: config.maxLiquidationBonusBps,
   [UpdateConfigMode.UpdateLiquidationThresholdPct.kind]: config.liquidationThresholdPct,
@@ -1290,7 +1290,7 @@ export const RESERVE_CONFIG_UPDATER = new ConfigUpdater(UpdateConfigMode.fromDec
   [UpdateConfigMode.UpdateMinLiquidationBonusBps.kind]: config.minLiquidationBonusBps,
   [UpdateConfigMode.UpdateDeleveragingMarginCallPeriod.kind]: config.deleveragingMarginCallPeriodSecs,
   [UpdateConfigMode.UpdateBorrowFactor.kind]: config.borrowFactorPct,
-  [UpdateConfigMode.UpdateAssetTier.kind]: config.assetTier,
+  [UpdateConfigMode.DeprecatedUpdateAssetTier.kind]: [],
   [UpdateConfigMode.UpdateElevationGroup.kind]: config.elevationGroups,
   [UpdateConfigMode.UpdateDeleveragingThresholdDecreaseBpsPerDay.kind]: config.deleveragingThresholdDecreaseBpsPerDay,
   [UpdateConfigMode.DeprecatedUpdateMultiplierSideBoost.kind]: [], // deprecated
@@ -1311,8 +1311,11 @@ export const RESERVE_CONFIG_UPDATER = new ConfigUpdater(UpdateConfigMode.fromDec
   [UpdateConfigMode.UpdateProposerAuthorityLock.kind]: config.proposerAuthorityLocked,
   [UpdateConfigMode.UpdateMinDeleveragingBonusBps.kind]: config.minDeleveragingBonusBps,
   [UpdateConfigMode.UpdateBlockCTokenUsage.kind]: config.blockCtokenUsage,
+  [UpdateConfigMode.UpdateDebtMaturityTimestamp.kind]: config.debtMaturityTimestamp,
+  [UpdateConfigMode.UpdateDebtTermSeconds.kind]: config.debtTermSeconds,
 }));
 
+// TODO : this needs to be deprecated
 export async function updateEntireReserveConfigIx(
   signer: TransactionSigner,
   marketAddress: Address,
@@ -1348,19 +1351,25 @@ export function parseForChangesReserveConfigAndGetIxs(
   lendingMarketOwner: TransactionSigner = noopSigner(marketWithAddress.state.lendingMarketOwner)
 ): Promise<Instruction[]> {
   const encodedConfigUpdates = RESERVE_CONFIG_UPDATER.encodeAllUpdates(reserve?.config, reserveConfig);
-  encodedConfigUpdates.sort((left, right) => priorityOf(left.mode) - priorityOf(right.mode));
+  const filteredUpdates = encodedConfigUpdates.filter((encodedConfigUpdate) => {
+    if (isGlobalAdminOnly(encodedConfigUpdate.mode)) {
+      console.warn(`WARN: Skipping ${encodedConfigUpdate.mode.kind}. Global admin must update this separately.`);
+      return false;
+    }
+    return true;
+  });
   return Promise.all(
-    encodedConfigUpdates.map(async (encodedConfigUpdate) =>
-      updateReserveConfigIx(
-        lendingMarketOwner,
-        marketWithAddress.address,
-        reserveAddress,
-        encodedConfigUpdate.mode,
-        encodedConfigUpdate.value,
-        programId,
-        shouldSkipValidation(encodedConfigUpdate.mode, reserve)
+    filteredUpdates.map(async (encodedConfigUpdate) =>
+        updateReserveConfigIx(
+          lendingMarketOwner,
+          marketWithAddress.address,
+          reserveAddress,
+          encodedConfigUpdate.mode,
+          encodedConfigUpdate.value,
+          programId,
+          shouldSkipValidation(encodedConfigUpdate.mode, reserve)
+        )
       )
-    )
   );
 }
 
@@ -1369,30 +1378,39 @@ export type ReserveWithAddress = {
   state: Reserve;
 };
 
-const NON_VALIDATED_DISCRIMINATORS = [
-  UpdateConfigMode.UpdateScopePriceFeed.discriminator,
-  UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator,
-  UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator,
-  UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator,
-  UpdateConfigMode.UpdateTokenInfoTwapDivergence.discriminator,
-  UpdateConfigMode.UpdateTokenInfoPriceMaxAge.discriminator,
-  UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator,
+// Updating the deposit/borrow limit will automatically unblock usage and force validation inside the smart contract
+const DISCRIMINATORS_REQUIRING_CONFIG_VALIDATION = [
+  UpdateConfigMode.UpdateDepositLimit.discriminator,
+  UpdateConfigMode.UpdateBorrowLimit.discriminator,
 ];
 
 function shouldSkipValidation(mode: UpdateConfigModeKind, reserve: Reserve | undefined): boolean {
-  return (
-    NON_VALIDATED_DISCRIMINATORS.includes(mode.discriminator) &&
-    !reserve?.liquidity.availableAmount.gten(MIN_INITIAL_DEPOSIT)
-  );
+  if (DISCRIMINATORS_REQUIRING_CONFIG_VALIDATION.includes(mode.discriminator)) {
+    return false;
+  } else if (reserve == undefined) {
+    return true;
+  }
+  const isUsed = reserve.liquidity.availableAmount.gten(MIN_INITIAL_DEPOSIT);
+  const isUsageBlocked = reserve.config.depositLimit.isZero() && reserve.config.borrowLimit.isZero();
+  return isUsageBlocked && !isUsed;
 }
 
-function priorityOf(mode: UpdateConfigModeKind): number {
-  switch (mode.discriminator) {
-    case UpdateConfigMode.UpdateScopePriceFeed.discriminator:
-      return 0;
-    case UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator:
-      return 0;
-    default:
-      return 1;
+function isGlobalAdminOnly(mode: UpdateConfigModeKind): boolean {
+  for (const adminOnlyMode of GLOBAL_ADMIN_ONLY_MODES) {
+    if (mode.discriminator === adminOnlyMode.discriminator) {
+      return true;
+    }
   }
+  return false;
 }
+
+// These need to be skipped when updating the entire reserve config
+const GLOBAL_ADMIN_ONLY_MODES = [
+  UpdateConfigMode.UpdateProtocolTakeRate,
+  UpdateConfigMode.UpdateProtocolLiquidationFee,
+  UpdateConfigMode.UpdateHostFixedInterestRateBps,
+  UpdateConfigMode.UpdateProtocolOrderExecutionFee,
+  UpdateConfigMode.UpdateFeesOriginationFee,
+  UpdateConfigMode.UpdateFeesFlashLoanFee,
+  UpdateConfigMode.UpdateBlockCTokenUsage,
+];

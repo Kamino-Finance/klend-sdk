@@ -625,6 +625,98 @@ export class UpdatePriceTriggeredLiquidationDisabled {
   }
 }
 
+export interface UpdateMatureReserveDebtLiquidationEnabledJSON {
+  kind: "UpdateMatureReserveDebtLiquidationEnabled"
+}
+
+export class UpdateMatureReserveDebtLiquidationEnabled {
+  static readonly discriminator = 27
+  static readonly kind = "UpdateMatureReserveDebtLiquidationEnabled"
+  readonly discriminator = 27
+  readonly kind = "UpdateMatureReserveDebtLiquidationEnabled"
+
+  toJSON(): UpdateMatureReserveDebtLiquidationEnabledJSON {
+    return {
+      kind: "UpdateMatureReserveDebtLiquidationEnabled",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateMatureReserveDebtLiquidationEnabled: {},
+    }
+  }
+}
+
+export interface UpdateObligationBorrowDebtTermLiquidationEnabledJSON {
+  kind: "UpdateObligationBorrowDebtTermLiquidationEnabled"
+}
+
+export class UpdateObligationBorrowDebtTermLiquidationEnabled {
+  static readonly discriminator = 28
+  static readonly kind = "UpdateObligationBorrowDebtTermLiquidationEnabled"
+  readonly discriminator = 28
+  readonly kind = "UpdateObligationBorrowDebtTermLiquidationEnabled"
+
+  toJSON(): UpdateObligationBorrowDebtTermLiquidationEnabledJSON {
+    return {
+      kind: "UpdateObligationBorrowDebtTermLiquidationEnabled",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateObligationBorrowDebtTermLiquidationEnabled: {},
+    }
+  }
+}
+
+export interface UpdateBorrowOrderCreationEnabledJSON {
+  kind: "UpdateBorrowOrderCreationEnabled"
+}
+
+export class UpdateBorrowOrderCreationEnabled {
+  static readonly discriminator = 29
+  static readonly kind = "UpdateBorrowOrderCreationEnabled"
+  readonly discriminator = 29
+  readonly kind = "UpdateBorrowOrderCreationEnabled"
+
+  toJSON(): UpdateBorrowOrderCreationEnabledJSON {
+    return {
+      kind: "UpdateBorrowOrderCreationEnabled",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateBorrowOrderCreationEnabled: {},
+    }
+  }
+}
+
+export interface UpdateBorrowOrderExecutionEnabledJSON {
+  kind: "UpdateBorrowOrderExecutionEnabled"
+}
+
+export class UpdateBorrowOrderExecutionEnabled {
+  static readonly discriminator = 30
+  static readonly kind = "UpdateBorrowOrderExecutionEnabled"
+  readonly discriminator = 30
+  readonly kind = "UpdateBorrowOrderExecutionEnabled"
+
+  toJSON(): UpdateBorrowOrderExecutionEnabledJSON {
+    return {
+      kind: "UpdateBorrowOrderExecutionEnabled",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateBorrowOrderExecutionEnabled: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateLendingMarketModeKind {
   if (typeof obj !== "object") {
@@ -711,6 +803,18 @@ export function fromDecoded(obj: any): types.UpdateLendingMarketModeKind {
   }
   if ("UpdatePriceTriggeredLiquidationDisabled" in obj) {
     return new UpdatePriceTriggeredLiquidationDisabled()
+  }
+  if ("UpdateMatureReserveDebtLiquidationEnabled" in obj) {
+    return new UpdateMatureReserveDebtLiquidationEnabled()
+  }
+  if ("UpdateObligationBorrowDebtTermLiquidationEnabled" in obj) {
+    return new UpdateObligationBorrowDebtTermLiquidationEnabled()
+  }
+  if ("UpdateBorrowOrderCreationEnabled" in obj) {
+    return new UpdateBorrowOrderCreationEnabled()
+  }
+  if ("UpdateBorrowOrderExecutionEnabled" in obj) {
+    return new UpdateBorrowOrderExecutionEnabled()
   }
 
   throw new Error("Invalid enum object")
@@ -801,6 +905,18 @@ export function fromJSON(
     case "UpdatePriceTriggeredLiquidationDisabled": {
       return new UpdatePriceTriggeredLiquidationDisabled()
     }
+    case "UpdateMatureReserveDebtLiquidationEnabled": {
+      return new UpdateMatureReserveDebtLiquidationEnabled()
+    }
+    case "UpdateObligationBorrowDebtTermLiquidationEnabled": {
+      return new UpdateObligationBorrowDebtTermLiquidationEnabled()
+    }
+    case "UpdateBorrowOrderCreationEnabled": {
+      return new UpdateBorrowOrderCreationEnabled()
+    }
+    case "UpdateBorrowOrderExecutionEnabled": {
+      return new UpdateBorrowOrderExecutionEnabled()
+    }
   }
 }
 
@@ -833,6 +949,10 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateObligationOrderCreationEnabled"),
     borsh.struct([], "UpdateProposerAuthority"),
     borsh.struct([], "UpdatePriceTriggeredLiquidationDisabled"),
+    borsh.struct([], "UpdateMatureReserveDebtLiquidationEnabled"),
+    borsh.struct([], "UpdateObligationBorrowDebtTermLiquidationEnabled"),
+    borsh.struct([], "UpdateBorrowOrderCreationEnabled"),
+    borsh.struct([], "UpdateBorrowOrderExecutionEnabled"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

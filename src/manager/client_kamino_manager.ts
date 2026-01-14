@@ -2462,7 +2462,7 @@ function parseReserveConfigFromFile(reserveConfigFromFile: any): ReserveConfig {
     protocolLiquidationFeePct: reserveConfigFromFile.protocolLiquidationFeePct,
     protocolOrderExecutionFeePct: reserveConfigFromFile.protocolOrderExecutionFeePct,
     protocolTakeRatePct: reserveConfigFromFile.protocolTakeRatePct,
-    assetTier: reserveConfigFromFile.assetTier,
+    paddingDeprecatedAssetTier: 0,
     maxLiquidationBonusBps: reserveConfigFromFile.maxLiquidationBonusBps,
     badDebtLiquidationBonusBps: reserveConfigFromFile.badDebtLiquidationBonusBps,
     fees: {
@@ -2511,10 +2511,12 @@ function parseReserveConfigFromFile(reserveConfigFromFile: any): ReserveConfig {
     borrowLimitOutsideElevationGroup: new BN(reserveConfigFromFile.borrowLimitOutsideElevationGroup),
     borrowLimitAgainstThisCollateralInElevationGroup: parseReserveBorrowLimitAgainstCollInEmode(reserveConfigFromFile),
     deleveragingBonusIncreaseBpsPerDay: new BN(reserveConfigFromFile.deleveragingBonusIncreaseBpsPerDay),
-    reserved1: Array(1).fill(0),
+    reserved1: Array(6).fill(0),
     minDeleveragingBonusBps: 0,
     proposerAuthorityLocked: 0,
     blockCtokenUsage: 0,
+    debtMaturityTimestamp: new BN(reserveConfigFromFile.debtMaturityTimestamp),
+    debtTermSeconds: new BN(reserveConfigFromFile.debtTermSeconds),
   };
 
   return new ReserveConfig(reserveConfigFields);
@@ -2588,13 +2590,16 @@ function parseReserveConfigToFile(reserveConfig: ReserveConfig) {
 
   return {
     status: reserveConfig.status,
+    paddingDeprecatedAssetTier: reserveConfig.paddingDeprecatedAssetTier,
+    hostFixedInterestRateBps: reserveConfig.hostFixedInterestRateBps,
+    minDeleveragingBonusBps: reserveConfig.minDeleveragingBonusBps,
+    blockCtokenUsage: reserveConfig.blockCtokenUsage,
     loanToValuePct: reserveConfig.loanToValuePct,
     liquidationThresholdPct: reserveConfig.liquidationThresholdPct,
     minLiquidationBonusBps: reserveConfig.minLiquidationBonusBps,
     protocolLiquidationFeePct: reserveConfig.protocolLiquidationFeePct,
     protocolOrderExecutionFeePct: reserveConfig.protocolOrderExecutionFeePct,
     protocolTakeRatePct: reserveConfig.protocolTakeRatePct,
-    assetTier: reserveConfig.assetTier,
     maxLiquidationBonusBps: reserveConfig.maxLiquidationBonusBps,
     badDebtLiquidationBonusBps: reserveConfig.badDebtLiquidationBonusBps,
     fees: {
@@ -2628,14 +2633,15 @@ function parseReserveConfigToFile(reserveConfig: ReserveConfig) {
     deleveragingThresholdDecreaseBpsPerDay: reserveConfig.deleveragingThresholdDecreaseBpsPerDay.toString(),
     disableUsageAsCollOutsideEmode: reserveConfig.disableUsageAsCollOutsideEmode,
     utilizationLimitBlockBorrowingAbovePct: reserveConfig.utilizationLimitBlockBorrowingAbovePct,
-    hostFixedInterestRateBps: reserveConfig.hostFixedInterestRateBps,
     autodeleverageEnabled: reserveConfig.autodeleverageEnabled,
+    proposerAuthorityLocked: reserveConfig.proposerAuthorityLocked,
     borrowLimitOutsideElevationGroup: reserveConfig.borrowLimitOutsideElevationGroup.toString(),
     borrowLimitAgainstThisCollateralInElevationGroup:
       reserveConfig.borrowLimitAgainstThisCollateralInElevationGroup.map((entry) => entry.toString()),
     deleveragingBonusIncreaseBpsPerDay: reserveConfig.deleveragingBonusIncreaseBpsPerDay.toString(),
-    reserved1: Array(2).fill(0),
-    reserved2: Array(9).fill(0),
+    debtMaturityTimestamp: reserveConfig.debtMaturityTimestamp.toString(),
+    debtTermSeconds: reserveConfig.debtTermSeconds.toString(),
+    reserved1: reserveConfig.reserved1,
   };
 }
 
