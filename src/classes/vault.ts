@@ -958,6 +958,9 @@ export class KaminoVaultClient {
       mode.kind === new VaultConfigField.Farm().kind
     ) {
       const farmAddress = address(value);
+      if (farmAddress === DEFAULT_PUBLIC_KEY) {
+        return;
+      }
       const farmState = await FarmState.fetch(this.getConnection(), farmAddress);
       if (!farmState) {
         throw new Error(`Farm ${farmAddress.toString()} not found for FirstLossCapitalFarm`);
