@@ -3762,14 +3762,14 @@ export class KaminoVaultClient {
    * @param vaults - the vaults to get the token mints for
    * @param [vaultReservesMap] - the vault reserves map to get the reserves for; if not provided, the function will fetch the reserves
    * @param farmsMap - the farms map to get the farms for
-   * @returns a set of token mints
+   * @returns a map of token mints (keys) and number of decimals (values)
    */
   async getAllVaultsTokenMintsIncludingRewards(
     vaults: KaminoVault[],
     vaultReservesMap?: Map<Address, KaminoReserve>,
     farmsMap?: Map<Address, FarmState>
   ) {
-    const vaultsTokenMints = new Set<Address>();
+    const vaultsTokenMints = new Map<Address, number>();
 
     const kFarmsMap = farmsMap ? farmsMap : new Map<Address, FarmState>();
 
@@ -3778,7 +3778,7 @@ export class KaminoVaultClient {
 
     for (const vault of vaults) {
       const vaultState = await vault.getState();
-      vaultsTokenMints.add(vaultState.tokenMint);
+      vaultsTokenMints.set(vaultState.tokenMint, vaultState.tokenMintDecimals.toNumber());
       const hasFarm = await vault.hasFarm();
       if (hasFarm) {
         const farmAddress = vaultState.vaultFarm;
@@ -3788,7 +3788,7 @@ export class KaminoVaultClient {
           const farmState = kFarmsMap.get(farmAddress)!;
           farmState.rewardInfos.forEach((rewardInfo) => {
             if (rewardInfo.token.mint !== DEFAULT_PUBLIC_KEY) {
-              vaultsTokenMints.add(rewardInfo.token.mint);
+              vaultsTokenMints.set(rewardInfo.token.mint, rewardInfo.token.decimals.toNumber());
             }
           });
         }
@@ -3810,7 +3810,7 @@ export class KaminoVaultClient {
               const farmState = kFarmsMap.get(supplyFarm)!;
               farmState.rewardInfos.forEach((rewardInfo) => {
                 if (rewardInfo.token.mint !== DEFAULT_PUBLIC_KEY) {
-                  vaultsTokenMints.add(rewardInfo.token.mint);
+                  vaultsTokenMints.set(rewardInfo.token.mint, rewardInfo.token.decimals.toNumber());
                 }
               });
             }
@@ -3834,7 +3834,7 @@ export class KaminoVaultClient {
             const farmState = kFarmsMap.get(supplyFarm)!;
             farmState.rewardInfos.forEach((rewardInfo) => {
               if (rewardInfo.token.mint !== DEFAULT_PUBLIC_KEY) {
-                vaultsTokenMints.add(rewardInfo.token.mint);
+                vaultsTokenMints.set(rewardInfo.token.mint, rewardInfo.token.decimals.toNumber());
               }
             });
           }
@@ -3848,7 +3848,7 @@ export class KaminoVaultClient {
       if (farmState) {
         farmState.rewardInfos.forEach((rewardInfo) => {
           if (rewardInfo.token.mint !== DEFAULT_PUBLIC_KEY) {
-            vaultsTokenMints.add(rewardInfo.token.mint);
+            vaultsTokenMints.set(rewardInfo.token.mint, rewardInfo.token.decimals.toNumber());
           }
         });
       }

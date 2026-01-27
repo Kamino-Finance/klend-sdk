@@ -1453,7 +1453,7 @@ export class KaminoManager {
    * @param vaults - the vaults to get the token mints for
    * @param [vaultReservesMap] - the vault reserves map to get the reserves for; if not provided, the function will fetch the reserves
    * @param farmsMap - the farms map to get the farms for
-   * @returns a set of token mints
+   * @returns a map of token mints (keys) and number of decimals (values)
    */
   async getAllVaultsTokenMintsIncludingRewards(
     vaults: KaminoVault[],
@@ -1809,7 +1809,7 @@ export const MARKET_UPDATER = new ConfigUpdater(UpdateLendingMarketMode.fromDeco
   [UpdateLendingMarketMode.UpdateObligationBorrowDebtTermLiquidationEnabled.kind]:
     config.obligationBorrowDebtTermLiquidationEnabled,
   [UpdateLendingMarketMode.UpdateBorrowOrderCreationEnabled.kind]: config.borrowOrderCreationEnabled,
-  [UpdateLendingMarketMode.UpdateBorrowOrderExecutionEnabled.kind]: config.borrowOrderExecutionEnabled,  
+  [UpdateLendingMarketMode.UpdateBorrowOrderExecutionEnabled.kind]: config.borrowOrderExecutionEnabled,
 }));
 
 function parseForChangesMarketConfigAndGetIxs(
