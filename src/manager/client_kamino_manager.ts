@@ -5,6 +5,7 @@ import {
   AssetReserveConfigCli,
   calculateAPYFromAPR,
   createLookupTableIx,
+  DEFAULT_CU_PER_TX,
   DEFAULT_PUBLIC_KEY,
   DEFAULT_RECENT_SLOT_DURATION_MS,
   encodeTokenName,
@@ -471,9 +472,11 @@ async function main() {
     .requiredOption('--symbol <string>', 'The symbol of the kVault token')
     .requiredOption('--extraName <string>', 'The name of the kVault token, appended to the symbol')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, mode, symbol, extraName, staging }) => {
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async ({ vault, mode, symbol, extraName, staging, CU: cu }) => {
       const env = await initEnv(undefined, staging);
       const kVault = new KaminoVault(env.c.rpc, address(vault));
+      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
@@ -492,6 +495,7 @@ async function main() {
           ix,
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
+            computeUnits,
           }),
         ],
         mode,
@@ -508,9 +512,11 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, newAdmin, mode, staging }) => {
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async ({ vault, newAdmin, mode, staging, CU: cu }) => {
       const env = await initEnv(staging);
       const vaultAddress = address(vault);
+      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
@@ -539,6 +545,7 @@ async function main() {
           instructions.updateVaultConfigIx,
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
+            computeUnits,
           }),
         ],
         mode,
@@ -572,6 +579,7 @@ async function main() {
       `--error-on-override`,
       'If set, it will throw an error if the vault already has a farm, if you want to override it set errorOnOverride to false'
     )
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
     .action(
       async ({
         vault,
@@ -584,6 +592,7 @@ async function main() {
         globalAdmin,
         multisig,
         errorOnOverride,
+        CU: cu,
       }) => {
         if (mode === 'multisig' && !multisig) {
           throw new Error('If using multisig mode, multisig pubkey is required');
@@ -591,6 +600,7 @@ async function main() {
 
         const ms = multisig ? address(multisig) : undefined;
         const env = await initEnv(staging, ms);
+        const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
         const vaultAddress = address(vault);
 
         const kaminoManager = new KaminoManager(
@@ -637,6 +647,7 @@ async function main() {
             ...instructions.updateLUTIxs,
             ...getPriorityFeeAndCuIxs({
               priorityFeeMultiplier: 2500,
+              computeUnits,
             }),
           ],
           mode,
@@ -665,13 +676,15 @@ async function main() {
     )
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ reserve, whitelistMode, value, mode, globalAdmin, staging, multisig }) => {
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async ({ reserve, whitelistMode, value, mode, globalAdmin, staging, multisig, CU: cu }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig pubkey is required');
       }
 
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms);
+      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const reserveAddress = address(reserve);
 
       const kaminoManager = new KaminoManager(
@@ -714,6 +727,7 @@ async function main() {
           instruction,
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
+            computeUnits,
           }),
         ],
         mode,
@@ -747,14 +761,15 @@ async function main() {
     )
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ value, mode, globalAdmin, markets, staging, multisig }) => {
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async ({ value, mode, globalAdmin, markets, staging, multisig, CU: cu }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig pubkey is required');
       }
 
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms);
-
+      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const kaminoManager = new KaminoManager(
         env.c.rpc,
         DEFAULT_RECENT_SLOT_DURATION_MS,
@@ -844,6 +859,7 @@ async function main() {
               addAllocationInstruction,
               ...getPriorityFeeAndCuIxs({
                 priorityFeeMultiplier: 2500,
+                computeUnits,
               }),
             ],
             mode,
@@ -872,10 +888,11 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, feeBps, mode, staging }) => {
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async ({ vault, feeBps, mode, staging, CU: cu }) => {
       const env = await initEnv(staging);
       const vaultAddress = address(vault);
-
+      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const kaminoManager = new KaminoManager(
         env.c.rpc,
         DEFAULT_RECENT_SLOT_DURATION_MS,
@@ -901,6 +918,7 @@ async function main() {
           ...instructions.updateLUTIxs,
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
+            computeUnits,
           }),
         ],
         mode,
@@ -1053,9 +1071,11 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, feeBps, mode, staging }) => {
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async ({ vault, feeBps, mode, staging, CU: cu }) => {
       const env = await initEnv(staging);
       const vaultAddress = address(vault);
+      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
@@ -1082,6 +1102,7 @@ async function main() {
           ...instructions.updateLUTIxs,
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
+            computeUnits,
           }),
         ],
         mode,
@@ -1099,9 +1120,11 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, mode, staging }) => {
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async ({ vault, mode, staging, CU: cu }) => {
       const env = await initEnv(staging);
       const vaultAddress = address(vault);
+      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
@@ -1125,6 +1148,7 @@ async function main() {
           instructions.acceptVaultOwnershipIx,
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
+            computeUnits,
           }),
         ],
         mode,
@@ -1177,9 +1201,11 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, maxAmountToGiveUp, mode, staging, multisig }) => {
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async ({ vault, maxAmountToGiveUp, mode, staging, multisig, CU: cu }) => {
       const env = await initEnv(multisig, staging);
       const vaultAddress = address(vault);
+      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
@@ -1200,6 +1226,7 @@ async function main() {
           instruction,
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
+            computeUnits,
           }),
         ],
         mode,
@@ -1217,9 +1244,11 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, mode, staging }) => {
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async ({ vault, mode, staging, CU: cu }) => {
       const env = await initEnv(staging);
       const vaultAddress = address(vault);
+      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
@@ -1245,6 +1274,7 @@ async function main() {
           ...instructions,
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
+            computeUnits,
           }),
         ],
         mode,
@@ -1263,10 +1293,12 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, reserve, mode, staging }) => {
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async ({ vault, reserve, mode, staging, CU: cu }) => {
       const env = await initEnv(staging);
       const reserveAddress = address(reserve);
       const vaultAddress = address(vault);
+      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
@@ -1285,7 +1317,7 @@ async function main() {
         ...ixs,
         ...getPriorityFeeAndCuIxs({
           priorityFeeMultiplier: 2500,
-          computeUnits: 1_000_000,
+          computeUnits,
         }),
       ];
 
@@ -1354,83 +1386,88 @@ async function main() {
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
     .option(`--skip-lut-update`, 'If set, it will skip the LUT update')
-    .action(async ({ vault, reserve, mode, allocationWeight, allocationCap, staging, multisig, skipLutUpdate }) => {
-      if (mode === 'multisig' && !multisig) {
-        throw new Error('If using multisig mode, multisig is required');
-      }
-      const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
-      const reserveAddress = address(reserve);
-      const vaultAddress = address(vault);
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
-      const vaultState = await kaminoVault.getState();
-      const signer = await env.getSigner({ vaultState });
-      const shouldUpdateLut = skipLutUpdate ? false : true;
-      let allocationWeightValue: number;
-      let allocationCapDecimal: Decimal;
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(
+      async ({ vault, reserve, mode, allocationWeight, allocationCap, staging, multisig, skipLutUpdate, CU: cu }) => {
+        if (mode === 'multisig' && !multisig) {
+          throw new Error('If using multisig mode, multisig is required');
+        }
+        const ms = multisig ? address(multisig) : undefined;
+        const env = await initEnv(staging, ms);
+        const reserveAddress = address(reserve);
+        const vaultAddress = address(vault);
+        const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+        const vaultState = await kaminoVault.getState();
+        const signer = await env.getSigner({ vaultState });
+        const shouldUpdateLut = skipLutUpdate ? false : true;
+        const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
+        let allocationWeightValue: number;
+        let allocationCapDecimal: Decimal;
 
-      const kaminoManager = new KaminoManager(
-        env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
-        env.klendProgramId,
-        env.kvaultProgramId
-      );
-      const reserveState = await Reserve.fetch(env.c.rpc, reserveAddress, env.klendProgramId);
-      if (!reserveState) {
-        throw new Error('Reserve not found');
-      }
-
-      const existentAllocation = kaminoManager.getVaultAllocations(vaultState).get(reserveAddress);
-
-      if (allocationWeight) {
-        allocationWeightValue = Number(allocationWeight);
-      } else if (existentAllocation) {
-        allocationWeightValue = existentAllocation.targetWeight.toNumber();
-      } else {
-        throw new Error('Allocation weight is required');
-      }
-
-      if (allocationCap) {
-        allocationCapDecimal = new Decimal(allocationCap);
-      } else if (existentAllocation) {
-        allocationCapDecimal = existentAllocation.tokenAllocationCap.div(
-          new Decimal(10).pow(Number(vaultState.tokenMintDecimals.toString()))
+        const kaminoManager = new KaminoManager(
+          env.c.rpc,
+          DEFAULT_RECENT_SLOT_DURATION_MS,
+          env.klendProgramId,
+          env.kvaultProgramId
         );
-      } else {
-        throw new Error('Allocation cap is required');
+        const reserveState = await Reserve.fetch(env.c.rpc, reserveAddress, env.klendProgramId);
+        if (!reserveState) {
+          throw new Error('Reserve not found');
+        }
+
+        const existentAllocation = kaminoManager.getVaultAllocations(vaultState).get(reserveAddress);
+
+        if (allocationWeight) {
+          allocationWeightValue = Number(allocationWeight);
+        } else if (existentAllocation) {
+          allocationWeightValue = existentAllocation.targetWeight.toNumber();
+        } else {
+          throw new Error('Allocation weight is required');
+        }
+
+        if (allocationCap) {
+          allocationCapDecimal = new Decimal(allocationCap);
+        } else if (existentAllocation) {
+          allocationCapDecimal = existentAllocation.tokenAllocationCap.div(
+            new Decimal(10).pow(Number(vaultState.tokenMintDecimals.toString()))
+          );
+        } else {
+          throw new Error('Allocation cap is required');
+        }
+
+        console.log('allocationWeightValue', allocationWeightValue);
+        console.log('allocationCapDecimal', allocationCapDecimal.toString());
+
+        const reserveWithAddress: ReserveWithAddress = {
+          address: reserveAddress,
+          state: reserveState,
+        };
+        const firstReserveAllocationConfig = new ReserveAllocationConfig(
+          reserveWithAddress,
+          allocationWeightValue,
+          allocationCapDecimal
+        );
+
+        const instructions = await kaminoManager.updateVaultReserveAllocationIxs(
+          kaminoVault,
+          firstReserveAllocationConfig,
+          signer
+        );
+        const txInstructions = [
+          instructions.updateReserveAllocationIx,
+          ...getPriorityFeeAndCuIxs({
+            priorityFeeMultiplier: 2500,
+            computeUnits,
+          }),
+        ];
+        if (shouldUpdateLut) {
+          txInstructions.push(...instructions.updateLUTIxs);
+        }
+        await processTx(env.c, signer, txInstructions, mode, []);
+
+        mode === 'execute' && console.log('Vault allocation updated');
       }
-
-      console.log('allocationWeightValue', allocationWeightValue);
-      console.log('allocationCapDecimal', allocationCapDecimal.toString());
-
-      const reserveWithAddress: ReserveWithAddress = {
-        address: reserveAddress,
-        state: reserveState,
-      };
-      const firstReserveAllocationConfig = new ReserveAllocationConfig(
-        reserveWithAddress,
-        allocationWeightValue,
-        allocationCapDecimal
-      );
-
-      const instructions = await kaminoManager.updateVaultReserveAllocationIxs(
-        kaminoVault,
-        firstReserveAllocationConfig,
-        signer
-      );
-      const txInstructions = [
-        instructions.updateReserveAllocationIx,
-        ...getPriorityFeeAndCuIxs({
-          priorityFeeMultiplier: 2500,
-        }),
-      ];
-      if (shouldUpdateLut) {
-        txInstructions.push(...instructions.updateLUTIxs);
-      }
-      await processTx(env.c, signer, txInstructions, mode, []);
-
-      mode === 'execute' && console.log('Vault allocation updated');
-    });
+    );
 
   commands
     .command('deposit')
@@ -1442,12 +1479,14 @@ async function main() {
     )
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ vault, amount, mode, staging, multisig }) => {
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async ({ vault, amount, mode, staging, multisig, CU: cu }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms);
+      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const vaultAddress = address(vault);
 
       const kaminoManager = new KaminoManager(
@@ -1469,7 +1508,7 @@ async function main() {
           ...instructions,
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
-            computeUnits: 800_000,
+            computeUnits,
           }),
         ],
         mode,
@@ -1489,12 +1528,15 @@ async function main() {
     )
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ vault, amount, mode, staging, multisig }) => {
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async ({ vault, amount, mode, staging, multisig, CU: cu }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms);
+      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
+
       const signer = await env.getSigner();
       const vaultAddress = address(vault);
 
@@ -1528,7 +1570,7 @@ async function main() {
           ...withdrawIxs.postWithdrawIxs,
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
-            computeUnits: 800_000,
+            computeUnits,
           }),
         ],
         mode,
@@ -1547,12 +1589,14 @@ async function main() {
     )
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ vault, mode, staging, multisig }) => {
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async ({ vault, mode, staging, multisig, CU: cu }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms);
+      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const payer = await env.getSigner();
       const vaultAddress = address(vault);
 
@@ -1576,7 +1620,7 @@ async function main() {
             instructions[i],
             ...getPriorityFeeAndCuIxs({
               priorityFeeMultiplier: 2500,
-              computeUnits: 800_000,
+              computeUnits,
             }),
           ],
           mode,
@@ -1596,12 +1640,14 @@ async function main() {
     )
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ vault, reserve, mode, staging, multisig }) => {
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async ({ vault, reserve, mode, staging, multisig, CU: cu }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms);
+      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const vaultAddress = address(vault);
 
       const kaminoManager = new KaminoManager(
@@ -1633,7 +1679,7 @@ async function main() {
           ...instructions,
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
-            computeUnits: 800_000,
+            computeUnits,
           }),
         ],
         mode,

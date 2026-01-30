@@ -171,6 +171,8 @@ export const METADATA_PROGRAM_ID: Address = address('metaqbxxUerdq28cj1RbAWkYQm3
 
 export const INITIAL_DEPOSIT_LAMPORTS = 1000;
 
+export const DEFAULT_CU_PER_TX = 1_400_000;
+
 const addressEncoder = getAddressEncoder();
 const base58Decoder = getBase58Decoder();
 

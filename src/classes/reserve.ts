@@ -1360,16 +1360,16 @@ export function parseForChangesReserveConfigAndGetIxs(
   });
   return Promise.all(
     filteredUpdates.map(async (encodedConfigUpdate) =>
-        updateReserveConfigIx(
-          lendingMarketOwner,
-          marketWithAddress.address,
-          reserveAddress,
-          encodedConfigUpdate.mode,
-          encodedConfigUpdate.value,
-          programId,
-          shouldSkipValidation(encodedConfigUpdate.mode, reserve)
-        )
+      updateReserveConfigIx(
+        lendingMarketOwner,
+        marketWithAddress.address,
+        reserveAddress,
+        encodedConfigUpdate.mode,
+        encodedConfigUpdate.value,
+        programId,
+        shouldSkipValidation(encodedConfigUpdate.mode, reserve)
       )
+    )
   );
 }
 
