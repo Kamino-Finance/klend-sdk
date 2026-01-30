@@ -12,7 +12,6 @@ import { getKeypair } from '../utils/keypair';
 import { JLP_MARKET, JLP_MARKET_LUT, JLP_MINT, JUP_QUOTE_BUFFER_BPS, USDC_MINT } from '../utils/constants';
 import { executeUserSetupLutsTransactions, getMarket } from '../utils/helpers';
 import { getKaminoResources } from '../utils/kamino_resources';
-import { PublicKey } from '@solana/web3.js';
 import Decimal from 'decimal.js';
 import { Scope } from '@kamino-finance/scope-sdk/';
 import { KswapSdk, RouteOutput } from '@kamino-finance/kswap-sdk/dist';
@@ -29,7 +28,7 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
 
   const market = await getMarket({ rpc: c.rpc, marketPubkey: JLP_MARKET });
   const scope = new Scope('mainnet-beta', c.rpc);
-  const kswapSdk = new KswapSdk(KSWAP_API, c.legacyConnection);
+  const kswapSdk = new KswapSdk(KSWAP_API, c.rpc, c.wsRpc);
 
   const collTokenMint = JLP_MINT;
   const debtTokenMint = USDC_MINT;

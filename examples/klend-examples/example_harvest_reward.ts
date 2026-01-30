@@ -18,7 +18,12 @@ import { sendAndConfirmTx } from '../utils/tx';
   });
 
   // Get all farms that the user is eligible to harvest rewards from
-  let txInstructions = await farm.claimForUserForFarmAllRewardsIx(wallet, pyusdReserve.state.farmCollateral, true);
+  let txInstructions = await farm.claimForUserForFarmAllRewardsIx(
+    wallet,
+    wallet.address,
+    pyusdReserve.state.farmCollateral,
+    true
+  );
 
   const txHash = await sendAndConfirmTx(c, wallet, txInstructions, [], [], 'harvestReward');
   console.log('txHash', txHash);

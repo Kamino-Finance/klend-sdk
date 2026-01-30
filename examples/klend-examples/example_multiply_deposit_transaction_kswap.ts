@@ -27,7 +27,7 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
 
   const market = await getMarket({ rpc: c.rpc, marketPubkey: JLP_MARKET });
   const scope = new Scope('mainnet-beta', c.rpc);
-  const kswapSdk = new KswapSdk(KSWAP_API, c.legacyConnection);
+  const kswapSdk = new KswapSdk(KSWAP_API, c.rpc, c.wsRpc);
 
   const collTokenMint = JLP_MINT;
   const debtTokenMint = USDC_MINT;

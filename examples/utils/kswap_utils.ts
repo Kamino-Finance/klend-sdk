@@ -7,11 +7,10 @@ import {
   SwapIxsProvider,
   SwapQuoteProvider,
 } from '@kamino-finance/klend-sdk';
-import { KswapSdk, RouteOutput, RouteParams, RouterType } from '@kamino-finance/kswap-sdk/dist';
+import { KswapSdk, RouteOutput, RouteParams, RouterType } from '@kamino-finance/kswap-sdk';
 import Decimal from 'decimal.js';
 import { Address } from '@solana/kit';
-import { toLegacyPublicKey } from '@kamino-finance/klend-sdk/dist/utils/compat';
-import { fromLegacyInstructions, fromLegacyLookupTables } from './compat';
+import { loadRouterContext } from '@kamino-finance/kswap-sdk/src/swap_api_utils/RouterContext';
 
 export const KSWAP_API = 'https://api.kamino.finance/kswap';
 const ALLOWED_ROUTERS: RouterType[] = ['dflow', 'jupiter', 'jupiterU', 'okx', 'jupiterLite'];
@@ -35,7 +34,7 @@ export async function getTokenPriceFromBirdeye(
   inputMint: Address,
   outputMint: Address
 ): Promise<number> {
-  const prices = await kswapSdk.getBatchTokenPrices([toLegacyPublicKey(inputMint), toLegacyPublicKey(outputMint)]);
+  const prices = await kswapSdk.getBatchTokenPrices([inputMint, outputMint]);
 
   return prices[inputMint.toString()] / prices[outputMint.toString()];
 }
@@ -52,9 +51,9 @@ export function getKswapQuoter(
     klendAccounts: Array<Address>
   ): Promise<SwapQuote<RouteOutput>> => {
     const routeParams: RouteParams = {
-      executor: toLegacyPublicKey(executor),
-      tokenIn: toLegacyPublicKey(inputs.inputMint),
-      tokenOut: toLegacyPublicKey(inputs.outputMint),
+      executor: executor,
+      tokenIn: inputs.inputMint,
+      tokenOut: inputs.outputMint,
       amount: new BN(inputs.inputAmountLamports.toDP(0).toString()),
       maxSlippageBps: slippageBps,
       wrapAndUnwrapSol: false,
@@ -64,7 +63,8 @@ export function getKswapQuoter(
       includeLimoLogs: false,
     };
 
-    const routeOutputs = await kswapSdk.getAllRoutes(routeParams);
+    const routerContext = await loadRouterContext(kswapSdk.connection, inputs.inputMint, inputs.outputMint);
+    const routeOutputs = await kswapSdk.getAllRoutes(routeParams, routerContext);
 
     const bestRoute = routeOutputs.routes.reduce((best, current) => {
       const inAmountBest = new Decimal(best.amountsExactIn.amountIn.toString()).div(inputMintReserve.getMintFactor());
@@ -110,9 +110,9 @@ export function getKswapSwapper(
     quote: SwapQuote<RouteOutput>
   ): Promise<Array<SwapIxs<RouteOutput>>> => {
     const routeParams: RouteParams = {
-      executor: toLegacyPublicKey(executor),
-      tokenIn: toLegacyPublicKey(inputs.inputMint),
-      tokenOut: toLegacyPublicKey(inputs.outputMint),
+      executor: executor,
+      tokenIn: inputs.inputMint,
+      tokenOut: inputs.outputMint,
       amount: new BN(inputs.inputAmountLamports.toString()),
       maxSlippageBps: slippageBps,
       wrapAndUnwrapSol: false,
@@ -122,7 +122,8 @@ export function getKswapSwapper(
       includeLimoLogs: false,
     };
 
-    const routeOutputs = await kswapSdk.getAllRoutes(routeParams);
+    const routerContext = await loadRouterContext(kswapSdk.connection, inputs.inputMint, inputs.outputMint);
+    const routeOutputs = await kswapSdk.getAllRoutes(routeParams, routerContext);
 
     return routeOutputs.routes.map((routeOutput) => {
       const inAmount = new Decimal(routeOutput.amountsExactIn.amountIn.toString()).div(routeOutput.inputTokenDecimals!);
@@ -132,8 +133,8 @@ export function getKswapSwapper(
       const priceAInB = minAmountOut.div(inAmount);
       return {
         preActionIxs: [],
-        swapIxs: fromLegacyInstructions(...routeOutput.ixsRouter!),
-        lookupTables: fromLegacyLookupTables(...routeOutput.lookupTableAccounts!),
+        swapIxs: routeOutput.instructions!.swapIxs!,
+        lookupTables: routeOutput.lookupTableAccounts!,
         quote: {
           priceAInB: new Decimal(priceAInB),
           quoteResponse: routeOutput,

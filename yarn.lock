@@ -835,14 +835,14 @@
   resolved "https://registry.yarnpkg.com/@jup-ag/api/-/api-6.0.39.tgz#540c898c1ee74291450a71d8f4a5d36bb7e1287d"
   integrity sha512-cejW4IWf3dKM5ucmqu5jWtlPZ46LJJOCrx3s5vKmEIB+0X9ykSZsKkcIHFBCOqf3/lSbGyU7THZqXuxjKK9//g==
 
-"@kamino-finance/farms-sdk@3.2.14":
-  version "3.2.14"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-3.2.14.tgz#2f1d322ae14b698793528b75117ea03cf16fb57c"
-  integrity sha512-vfw6aIZWM8H5QDtgK1j9ZB6XSi7KGS008Ecp9aSYbERiczhVLLasB5Ggbsg710MGZgZ1TQ03DPt/qzWAS6wOCw==
+"@kamino-finance/farms-sdk@^3.2.24":
+  version "3.2.24"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-3.2.24.tgz#4e4794f4933275471783f1c2a2010f7236f0918e"
+  integrity sha512-zeStSvM6Ckd8t1BD5GM/jCz4mCyPc3TCozkI/CDp1ZWdDwP3F3bUb3itQ3wAZNMdxPLPFVoUC9QpmwBOzhs4GA==
   dependencies:
     "@coral-xyz/anchor" "^0.28.0"
     "@coral-xyz/borsh" "^0.28.0"
-    "@kamino-finance/kliquidity-sdk" "^8.4.0"
+    "@kamino-finance/kliquidity-sdk" "^8.5.7"
     "@kamino-finance/scope-sdk" "^9.1.0"
     "@solana-program/address-lookup-table" "^0.7.0"
     "@solana-program/compute-budget" "^0.8.0"
@@ -850,46 +850,16 @@
     "@solana-program/token" "^0.5.1"
     "@solana-program/token-2022" "^0.4.2"
     "@solana/compat" "^2.1.1"
-    "@solana/kit" "^2.1.1"
+    "@solana/kit" "^2.3.0"
     "@solana/sysvars" "^2.1.1"
     "@solana/web3.js" "^1.98.2"
     bn.js "^5.2.1"
     decimal.js "^10.4.3"
 
-"@kamino-finance/kliquidity-sdk@^8.4.0":
-  version "8.4.5"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/kliquidity-sdk/-/kliquidity-sdk-8.4.5.tgz#d569fae5ffde843cde9c9c22aa9467b68b3dd3bc"
-  integrity sha512-D7iYYLe4zJB2jfsX2aXbCqOqUXVX4CeKt488/3lvIrASY3lLHMe8bPdb5aVrNdgz+DcsN+HgfsM4hUD5iyZXYA==
-  dependencies:
-    "@coral-xyz/anchor" "^0.29.0"
-    "@coral-xyz/borsh" "^0.30.1"
-    "@hubbleprotocol/hubble-config" "^5.0.0"
-    "@jup-ag/api" "6.0.39"
-    "@kamino-finance/scope-sdk" "^9.1.0"
-    "@orca-so/common-sdk" "^0.6.11"
-    "@orca-so/whirlpools" "^2.0.0"
-    "@orca-so/whirlpools-core" "^2.0.0"
-    "@raydium-io/raydium-sdk-v2" "^0.1.126-alpha"
-    "@solana-program/address-lookup-table" "^0.7.0"
-    "@solana-program/compute-budget" "^0.7.0"
-    "@solana-program/system" "^0.7.0"
-    "@solana-program/token" "^0.5.1"
-    "@solana-program/token-2022" "^0.4.1"
-    "@solana/compat" "^2.1.1"
-    "@solana/kit" "^2.1.1"
-    "@solana/sysvars" "^2.1.1"
-    "@solana/web3.js" "^1.98.2"
-    axios "^1.8.4"
-    bn.js "^5.2.1"
-    bs58 "^6.0.0"
-    buffer-layout "^1.2.2"
-    decimal.js "^10.3.1"
-    fzstd "^0.1.1"
-
-"@kamino-finance/kliquidity-sdk@^8.5.3":
-  version "8.5.3"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/kliquidity-sdk/-/kliquidity-sdk-8.5.3.tgz#2d7e2e213d38e8a21a17774883bd1afb808e873f"
-  integrity sha512-vw1Kp0lCwV5uLcyFpUE7HkXLN73xk2+OdCAoU1qXMor1bdaBLQVQp5OLi0qD1SVsgqGugbwb0v5oTvpHkEhbEg==
+"@kamino-finance/kliquidity-sdk@^8.5.7", "@kamino-finance/kliquidity-sdk@^8.5.9":
+  version "8.5.9"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/kliquidity-sdk/-/kliquidity-sdk-8.5.9.tgz#b4eab5f1fa8d43958be537492da8fb751167f58f"
+  integrity sha512-YktkmlzVZzLj+eStcgTAbHAM63nNio6BY4pg1R2KiRBSIPVCYN4L7eNzR2XU9iiCDDCT+VTdKlRlzCdhh9rtPA==
   dependencies:
     "@coral-xyz/anchor" "^0.29.0"
     "@coral-xyz/borsh" "^0.30.1"
@@ -1251,7 +1221,7 @@
   resolved "https://registry.yarnpkg.com/@solana-program/system/-/system-0.8.0.tgz#8d08affc5188d0e434586c33126e407a21e19087"
   integrity sha512-/VJZjFoI+FMrsO5gPgktRIo6Sf/2pMEkkpA6grLtm4Xx52bQDo4fBvhA33FL+3pSf25yHcMcXwrKwqDk6/O1fw==
 
-"@solana-program/token-2022@^0.4.0", "@solana-program/token-2022@^0.4.1", "@solana-program/token-2022@^0.4.2":
+"@solana-program/token-2022@^0.4.0", "@solana-program/token-2022@^0.4.2":
   version "0.4.2"
   resolved "https://registry.yarnpkg.com/@solana-program/token-2022/-/token-2022-0.4.2.tgz#f90a638de82acb7933a114e884a24ac4be8ef635"
   integrity sha512-zIpR5t4s9qEU3hZKupzIBxJ6nUV5/UVyIT400tu9vT1HMs5JHxaTTsb5GUhYjiiTvNwU0MQavbwc4Dl29L0Xvw==

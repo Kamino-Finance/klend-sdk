@@ -5,11 +5,10 @@ import {
   KaminoManager,
   KaminoMarket,
   lamportsToDecimal,
-  UserState,
   VanillaObligation,
   WRAPPED_SOL_MINT,
 } from '@kamino-finance/klend-sdk';
-import { calculatePendingRewards, Farms, FarmState, getUserStatePDA } from '@kamino-finance/farms-sdk';
+import { calculatePendingRewards, Farms, FarmState, UserState, getUserStatePDA } from '@kamino-finance/farms-sdk';
 import { getConnectionPool } from '../utils/connection';
 import { Address, address } from '@solana/kit';
 

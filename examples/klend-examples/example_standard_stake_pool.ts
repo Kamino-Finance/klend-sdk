@@ -1,4 +1,3 @@
-import { PublicKey } from '@solana/web3.js';
 import { getConnectionPool } from '../utils/connection';
 import {
   findStakeProgramAddress,
@@ -31,7 +30,10 @@ import { fromLegacyPublicKey } from '@solana/compat';
   let validatorList = await getValidatorList(c.rpc, fromLegacyPublicKey(stakePool.validatorList));
   let activeValidators = 0;
   for (let [i, validator] of validatorList.validators.entries()) {
-    if (i < 5 || validator.voteAccountAddress.equals(new PublicKey('J1to2NAwajc8hD6E6kujdQiPn1Bbt2mGKKZLY9kSQKdB'))) {
+    if (
+      i < 5 ||
+      fromLegacyPublicKey(validator.voteAccountAddress) === address('J1to2NAwajc8hD6E6kujdQiPn1Bbt2mGKKZLY9kSQKdB')
+    ) {
       let stakeAccount = await findStakeProgramAddress(
         STAKE_POOL_PROGRAM_ID,
         fromLegacyPublicKey(validator.voteAccountAddress),

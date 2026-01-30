@@ -10,14 +10,12 @@ import {
   SolanaRpcSubscriptionsApi,
 } from '@solana/kit';
 import { getEnvOrThrow } from './env';
-import { Connection } from '@solana/web3.js';
 
 export const LOCALNET_RPC_URL = 'http://localhost:8899';
 
 export type ConnectionPool = {
   rpc: Rpc<SolanaRpcApi>;
   wsRpc: RpcSubscriptions<SolanaRpcSubscriptionsApi>;
-  legacyConnection: Connection;
 };
 
 export function getConnectionPool(): ConnectionPool {
@@ -34,11 +32,9 @@ export function getConnectionPool(): ConnectionPool {
   }
   const rpc = initRpc(rpcUrl.href);
   const ws = createSolanaRpcSubscriptions(wsUrl.href);
-  const legacyConnection = new Connection(RPC_ENDPOINT, 'processed');
   return {
     rpc,
     wsRpc: ws,
-    legacyConnection,
   };
 }
 

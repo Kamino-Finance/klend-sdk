@@ -6,7 +6,16 @@ import {
   SwapIxsProvider,
   SwapQuoteProvider,
 } from '@kamino-finance/klend-sdk';
-import { Account, address, Address, GetMultipleAccountsApi, Instruction, Rpc, SolanaRpcApi } from '@solana/kit';
+import {
+  Account,
+  AccountRole,
+  address,
+  Address,
+  GetMultipleAccountsApi,
+  Instruction,
+  Rpc,
+  SolanaRpcApi,
+} from '@solana/kit';
 import axios from 'axios';
 import {
   createJupiterApiClient,
@@ -21,7 +30,6 @@ import {
 } from '@jup-ag/api/dist/index.js';
 import Decimal from 'decimal.js';
 import { AddressLookupTable, fetchAllMaybeAddressLookupTable } from '@solana-program/address-lookup-table';
-import { getAccountRole } from './compat';
 
 const DEFAULT_MAX_ACCOUNTS_BUFFER = 2;
 const MAX_LOCKED_ACCOUNTS = 64;
@@ -329,4 +337,17 @@ export function transformResponseIx(ix: JupInstruction): Instruction {
 
 export function transformResponseIxs(ixs: JupInstruction[]): Instruction[] {
   return ixs.map((ix) => transformResponseIx(ix));
+}
+
+function getAccountRole({ isSigner, isMut }: { isSigner: boolean; isMut: boolean }): AccountRole {
+  if (isSigner && isMut) {
+    return AccountRole.WRITABLE_SIGNER;
+  }
+  if (isSigner && !isMut) {
+    return AccountRole.READONLY_SIGNER;
+  }
+  if (!isSigner && isMut) {
+    return AccountRole.WRITABLE;
+  }
+  return AccountRole.READONLY;
 }

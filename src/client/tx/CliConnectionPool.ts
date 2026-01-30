@@ -5,7 +5,6 @@ import {
   SolanaRpcApi,
   SolanaRpcSubscriptionsApi,
 } from '@solana/kit';
-import { Connection } from '@solana/web3.js';
 import { Chain, createCliRpc } from './rpc';
 
 export class CliConnectionPool {
@@ -15,8 +14,6 @@ export class CliConnectionPool {
 
   private readonly _chain: Chain;
 
-  private readonly _legacyConnection: Connection;
-
   private readonly _spam: boolean;
 
   constructor(chain: Chain) {
@@ -25,10 +22,6 @@ export class CliConnectionPool {
     this._rpc = createCliRpc(chain);
 
     this._wsRpc = createSolanaRpcSubscriptions(this.chain.wsEndpoint.url);
-
-    this._legacyConnection = new Connection(this.chain.endpoint.url, {
-      commitment: 'processed',
-    });
 
     this._spam = chain.name !== 'localnet';
   }
@@ -43,10 +36,6 @@ export class CliConnectionPool {
 
   get wsRpc(): RpcSubscriptions<SolanaRpcSubscriptionsApi> {
     return this._wsRpc;
-  }
-
-  get legacyConnection(): Connection {
-    return this._legacyConnection;
   }
 
   get shouldSpam(): boolean {

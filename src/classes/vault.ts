@@ -41,7 +41,6 @@ import {
   KaminoReserve,
   lamportsToDecimal,
   Reserve,
-  UserState,
   WRAPPED_SOL_MINT,
 } from '../lib';
 import {
@@ -150,7 +149,7 @@ import { fetchMaybeToken, findAssociatedTokenPda, getCloseAccountInstruction } f
 import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
 import { SYSVAR_INSTRUCTIONS_ADDRESS, SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 import { noopSigner } from '../utils/signer';
-import { Farms } from '@kamino-finance/farms-sdk';
+import { Farms, UserState } from '@kamino-finance/farms-sdk';
 import { computeReservesAllocation } from '../utils/vaultAllocation';
 import { getReserveFarmRewardsAPY } from '../utils/farmUtils';
 import { fetchKaminoCdnData } from '../utils/readCdnData';
@@ -4224,7 +4223,7 @@ export class KaminoVaultClient {
     if (totalPendingRewards.eq(0)) {
       return [];
     }
-    return farmClient.claimForUserForFarmAllRewardsIx(user, vaultState.vaultFarm, false);
+    return farmClient.claimForUserForFarmAllRewardsIx(user, user.address, vaultState.vaultFarm, false);
   }
 
   /**
@@ -4254,7 +4253,7 @@ export class KaminoVaultClient {
       return [];
     }
 
-    return farmClient.claimForUserForFarmAllRewardsIx(user, delegatedFarm, true, [delegatee]);
+    return farmClient.claimForUserForFarmAllRewardsIx(user, user.address, delegatedFarm, true, [delegatee]);
   }
 
   /**
@@ -4314,9 +4313,13 @@ export class KaminoVaultClient {
       if (totalPendingRewards.eq(0)) {
         continue;
       }
-      const ix = await farmClient.claimForUserForFarmAllRewardsIx(user, reserveState.state.farmCollateral, true, [
-        delegatee[0],
-      ]);
+      const ix = await farmClient.claimForUserForFarmAllRewardsIx(
+        user,
+        user.address,
+        reserveState.state.farmCollateral,
+        true,
+        [delegatee[0]]
+      );
       ixs.push(...ix);
     }
 

@@ -34,7 +34,7 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
   const targetLeverage = new Decimal(2); // 3x leverage/ 3x multiply
   const ogLeverage = new Decimal(3);
   const slippageBps = 30;
-  const kswapSdk = new KswapSdk(KSWAP_API, c.legacyConnection);
+  const kswapSdk = new KswapSdk(KSWAP_API, c.rpc, c.wsRpc);
 
   const kaminoResources = await getKaminoResources();
 

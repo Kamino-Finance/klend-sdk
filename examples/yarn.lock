@@ -277,14 +277,14 @@
   resolved "https://registry.yarnpkg.com/@jup-ag/api/-/api-6.0.39.tgz#540c898c1ee74291450a71d8f4a5d36bb7e1287d"
   integrity sha512-cejW4IWf3dKM5ucmqu5jWtlPZ46LJJOCrx3s5vKmEIB+0X9ykSZsKkcIHFBCOqf3/lSbGyU7THZqXuxjKK9//g==
 
-"@kamino-finance/farms-sdk@3.2.14":
-  version "3.2.14"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-3.2.14.tgz#2f1d322ae14b698793528b75117ea03cf16fb57c"
-  integrity sha512-vfw6aIZWM8H5QDtgK1j9ZB6XSi7KGS008Ecp9aSYbERiczhVLLasB5Ggbsg710MGZgZ1TQ03DPt/qzWAS6wOCw==
+"@kamino-finance/farms-sdk@^3.2.24":
+  version "3.2.24"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-3.2.24.tgz#4e4794f4933275471783f1c2a2010f7236f0918e"
+  integrity sha512-zeStSvM6Ckd8t1BD5GM/jCz4mCyPc3TCozkI/CDp1ZWdDwP3F3bUb3itQ3wAZNMdxPLPFVoUC9QpmwBOzhs4GA==
   dependencies:
     "@coral-xyz/anchor" "^0.28.0"
     "@coral-xyz/borsh" "^0.28.0"
-    "@kamino-finance/kliquidity-sdk" "^8.4.0"
+    "@kamino-finance/kliquidity-sdk" "^8.5.7"
     "@kamino-finance/scope-sdk" "^9.1.0"
     "@solana-program/address-lookup-table" "^0.7.0"
     "@solana-program/compute-budget" "^0.8.0"
@@ -292,28 +292,7 @@
     "@solana-program/token" "^0.5.1"
     "@solana-program/token-2022" "^0.4.2"
     "@solana/compat" "^2.1.1"
-    "@solana/kit" "^2.1.1"
-    "@solana/sysvars" "^2.1.1"
-    "@solana/web3.js" "^1.98.2"
-    bn.js "^5.2.1"
-    decimal.js "^10.4.3"
-
-"@kamino-finance/farms-sdk@^3.2.11":
-  version "3.2.13"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-3.2.13.tgz#40cc7ac8c75f1e660eada9be59d6946d4c0cf43e"
-  integrity sha512-oaS/qgI3fdointOj81Ov57TvrSYRiW/LgHrPb/UAe089K8h1N9yUSI5Q1oZOVQB4x906SIbgCv3rhkQO9TSGLA==
-  dependencies:
-    "@coral-xyz/anchor" "^0.28.0"
-    "@coral-xyz/borsh" "^0.28.0"
-    "@kamino-finance/kliquidity-sdk" "^8.4.0"
-    "@kamino-finance/scope-sdk" "^9.1.0"
-    "@solana-program/address-lookup-table" "^0.7.0"
-    "@solana-program/compute-budget" "^0.8.0"
-    "@solana-program/system" "^0.7.0"
-    "@solana-program/token" "^0.5.1"
-    "@solana-program/token-2022" "^0.4.2"
-    "@solana/compat" "^2.1.1"
-    "@solana/kit" "^2.1.1"
+    "@solana/kit" "^2.3.0"
     "@solana/sysvars" "^2.1.1"
     "@solana/web3.js" "^1.98.2"
     bn.js "^5.2.1"
@@ -323,10 +302,10 @@
   version "0.0.0"
   uid ""
 
-"@kamino-finance/kliquidity-sdk@^8.4.0", "@kamino-finance/kliquidity-sdk@^8.5.3":
-  version "8.5.3"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/kliquidity-sdk/-/kliquidity-sdk-8.5.3.tgz#2d7e2e213d38e8a21a17774883bd1afb808e873f"
-  integrity sha512-vw1Kp0lCwV5uLcyFpUE7HkXLN73xk2+OdCAoU1qXMor1bdaBLQVQp5OLi0qD1SVsgqGugbwb0v5oTvpHkEhbEg==
+"@kamino-finance/kliquidity-sdk@^8.5.7", "@kamino-finance/kliquidity-sdk@^8.5.9":
+  version "8.5.9"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/kliquidity-sdk/-/kliquidity-sdk-8.5.9.tgz#b4eab5f1fa8d43958be537492da8fb751167f58f"
+  integrity sha512-YktkmlzVZzLj+eStcgTAbHAM63nNio6BY4pg1R2KiRBSIPVCYN4L7eNzR2XU9iiCDDCT+VTdKlRlzCdhh9rtPA==
   dependencies:
     "@coral-xyz/anchor" "^0.29.0"
     "@coral-xyz/borsh" "^0.30.1"
@@ -352,37 +331,38 @@
     decimal.js "^10.3.1"
     fzstd "^0.1.1"
 
-"@kamino-finance/kswap-sdk@^1.3.0":
-  version "1.9.1"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/kswap-sdk/-/kswap-sdk-1.9.1.tgz#473f35a7157d72fd005209ca75e72d8355b348f6"
-  integrity sha512-ybPCmuob0vzzUhWzY4RtCVSRJSOVfh/9+z+Ys3Z0+WqrI2mEQx8G42UVbM/olQ1FMxEenAD5wCI0n1SuzCUlCA==
+"@kamino-finance/kswap-sdk@^2.4.3":
+  version "2.4.3"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/kswap-sdk/-/kswap-sdk-2.4.3.tgz#9202938dd8097a11bc741bf3357a5ea1c835a54f"
+  integrity sha512-axfHUgIuVjnRrgnWEBA/xCnlMvXwf3cI0jfbJrWgbqt/vAP4/rNqYWCyhMmuDYouLr1sL3Wio5/zfA+nbI6uxA==
   dependencies:
     "@coral-xyz/anchor" "^0.30.1"
-    "@kamino-finance/limo-sdk" "^1.1.0"
-    "@solana/spl-token" "^0.4.9"
-    "@solana/web3.js" "^1.98.2"
-    "@types/bn.js" "^5.1.6"
-    "@types/bs58" "^4.0.1"
+    "@kamino-finance/limo-sdk" "^2.0.0"
+    "@solana-program/address-lookup-table" "^0.7.0"
+    "@solana-program/compute-budget" "^0.8.0"
+    "@solana-program/system" "^0.7.0"
+    "@solana-program/token" "^0.5.1"
+    "@solana-program/token-2022" "^0.4.2"
+    "@solana/kit" "^2.3.0"
     "@types/crypto-js" "^4.2.2"
     axios "^1.7.3"
-    base58-js "1.0.5"
     bn.js "^5.2.1"
-    bs58 "^4.0.1"
     decimal.js "^10.4.3"
     dotenv "10.0.0"
     dotenv-expand "^12.0.2"
     winston "3.17.0"
 
-"@kamino-finance/limo-sdk@^1.1.0":
-  version "1.1.0"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/limo-sdk/-/limo-sdk-1.1.0.tgz#5294d4acaf54b4a6e1b040663dd3e2200a7dc060"
-  integrity sha512-CnKsJPhuiLL+xZRjW0Y3pqnVh9psh56Oth60iGMGTMY1j6wuBxAcxgUxxb4nmV4UsWYm5Ruy8HZBg22ygn7uQA==
+"@kamino-finance/limo-sdk@^2.0.0":
+  version "2.0.3"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/limo-sdk/-/limo-sdk-2.0.3.tgz#7ab3b9e61d9243c8e45dec1ee294d8f50cf56531"
+  integrity sha512-fNmKWgNpx8+Iong7NSCLpFzgKvuDTMCF7jy/KfmlFWGa4xLEdbpbM9fyVpYqZMSrqYbTzB2NOqJ858A7Vpj5dQ==
   dependencies:
     "@coral-xyz/anchor" "^0.28.0"
     "@coral-xyz/borsh" "^0.28.0"
-    "@solana/spl-token" "^0.4.9"
-    "@solana/web3.js" "^1.95.5"
-    base58-js "1.0.5"
+    "@solana-program/compute-budget" "^0.8.0"
+    "@solana-program/token" "^0.5.1"
+    "@solana-program/token-2022" "^0.4.2"
+    "@solana/kit" "^2.3.0"
     bn.js "^5.2.1"
     bs58 "^4.0.1"
     commander "^9.3.0"
@@ -997,7 +977,7 @@
     "@solana/spl-token-metadata" "^0.1.6"
     buffer "^6.0.3"
 
-"@solana/spl-token@^0.4.8", "@solana/spl-token@^0.4.9":
+"@solana/spl-token@^0.4.8":
   version "0.4.14"
   resolved "https://registry.yarnpkg.com/@solana/spl-token/-/spl-token-0.4.14.tgz#b86bc8a17f50e9680137b585eca5f5eb9d55c025"
   integrity sha512-u09zr96UBpX4U685MnvQsNzlvw9TiY005hk1vJmJr7gMJldoPG1eYU5/wNEyOA5lkMLiR/gOi9SFD4MefOYEsA==
@@ -1074,7 +1054,7 @@
     "@solana/rpc-types" "2.3.0"
     "@solana/transaction-messages" "2.3.0"
 
-"@solana/web3.js@^1.32.0", "@solana/web3.js@^1.68.0", "@solana/web3.js@^1.95.3", "@solana/web3.js@^1.95.5", "@solana/web3.js@^1.98.2":
+"@solana/web3.js@^1.32.0", "@solana/web3.js@^1.68.0", "@solana/web3.js@^1.95.3", "@solana/web3.js@^1.98.2":
   version "1.98.4"
   resolved "https://registry.yarnpkg.com/@solana/web3.js/-/web3.js-1.98.4.tgz#df51d78be9d865181ec5138b4e699d48e6895bbe"
   integrity sha512-vv9lfnvjUsRiq//+j5pBdXig0IQdtzA0BRZ3bXEP4KaIyF1CcaydWqgyzQgfZMNIsWNWmG+AUHwPy4AHOD6gpw==
@@ -1128,14 +1108,6 @@
   integrity sha512-DLbJ1BPqxvQhIGbeu8VbUC1DiAiahHtAYvA0ZEAa4P31F7IaArc8z3C3BRQdWX4mtLQuABG4yzp76ZrS02Ui1Q==
   dependencies:
     "@types/node" "*"
-
-"@types/bs58@^4.0.1":
-  version "4.0.4"
-  resolved "https://registry.yarnpkg.com/@types/bs58/-/bs58-4.0.4.tgz#49fbcb0c7db5f7cea26f0e0f61dc4a41a2445aab"
-  integrity sha512-0IEpMFXXQi2zXaXl9GJ3sRwQo0uEkD+yFOv+FnAU5lkPtcu6h61xb7jc2CFPEZ5BUOaiP13ThuGc9HD4R8lR5g==
-  dependencies:
-    "@types/node" "*"
-    base-x "^3.0.6"
 
 "@types/connect@^3.4.33":
   version "3.4.38"
@@ -1243,7 +1215,7 @@ axios@^1.1.3, axios@^1.6.8, axios@^1.7.3, axios@^1.8.4:
     form-data "^4.0.4"
     proxy-from-env "^1.1.0"
 
-base-x@^3.0.2, base-x@^3.0.6:
+base-x@^3.0.2:
   version "3.0.11"
   resolved "https://registry.yarnpkg.com/base-x/-/base-x-3.0.11.tgz#40d80e2a1aeacba29792ccc6c5354806421287ff"
   integrity sha512-xz7wQ8xDhdyP7tQxwdteLYeFfS68tSMNCZ/Y37WJ4bhGfKPpqEIlmIyueQHqOyoPhE6xNUqjzRr8ra0eF9VRvA==
@@ -1254,11 +1226,6 @@ base-x@^5.0.0:
   version "5.0.1"
   resolved "https://registry.yarnpkg.com/base-x/-/base-x-5.0.1.tgz#16bf35254be1df8aca15e36b7c1dda74b2aa6b03"
   integrity sha512-M7uio8Zt++eg3jPj+rHMfCC+IuygQHHCOU+IYsVtik6FWjuYpVt/+MRKcgsAMHh8mMFAwnB+Bs+mTrFiXjMzKg==
-
-base58-js@1.0.5:
-  version "1.0.5"
-  resolved "https://registry.yarnpkg.com/base58-js/-/base58-js-1.0.5.tgz#00697bff954aa85007fa45ce76b699b7960768cd"
-  integrity sha512-LkkAPP8Zu+c0SVNRTRVDyMfKVORThX+rCViget00xdgLRrKkClCTz1T7cIrpr69ShwV5XJuuoZvMvJ43yURwkA==
 
 base64-js@^1.3.1, base64-js@^1.5.1:
   version "1.5.1"
