@@ -39,6 +39,7 @@ import {
   getTransferWsolIxs,
   KaminoMarket,
   KaminoReserve,
+  KVaultGlobalConfig,
   lamportsToDecimal,
   Reserve,
   WRAPPED_SOL_MINT,
@@ -68,6 +69,9 @@ import {
   SellArgs,
   updateAdmin,
   UpdateAdminAccounts,
+  updateKVaultGlobalConfig,
+  UpdateKVaultGlobalConfigAccounts,
+  UpdateKVaultGlobalConfigArgs,
   updateReserveAllocation,
   UpdateReserveAllocationAccounts,
   UpdateReserveAllocationArgs,
@@ -83,7 +87,13 @@ import {
   withdrawPendingFees,
   WithdrawPendingFeesAccounts,
 } from '../@codegen/kvault/instructions';
-import { UpdateReserveWhitelistModeKind, VaultConfigField, VaultConfigFieldKind } from '../@codegen/kvault/types';
+import {
+  UpdateGlobalConfigMode,
+  UpdateKVaultGlobalConfigModeKind,
+  UpdateReserveWhitelistModeKind,
+  VaultConfigField,
+  VaultConfigFieldKind,
+} from '../@codegen/kvault/types';
 import { VaultState } from '../@codegen/kvault/accounts';
 import Decimal from 'decimal.js';
 import { bpsToPct, decodeVaultName, numberToLamportsDecimal, parseTokenSymbol, pubkeyHashMapToJson } from './utils';
@@ -153,6 +163,10 @@ import { Farms, UserState } from '@kamino-finance/farms-sdk';
 import { computeReservesAllocation } from '../utils/vaultAllocation';
 import { getReserveFarmRewardsAPY } from '../utils/farmUtils';
 import { fetchKaminoCdnData } from '../utils/readCdnData';
+import {
+  updateGlobalConfigAdmin,
+  UpdateGlobalConfigAdminAccounts,
+} from '../@codegen/kvault/instructions/updateGlobalConfigAdmin';
 
 export const kaminoVaultId = address('KvauGMspG5k6rtzrqqn7WNn3oZdyKqLKwK2XWQ8FLjd');
 export const kaminoVaultStagingId = address('stKvQfwRsQiKnLtMNVLHKS3exFJmZFsgfzBPWHECUYK');
@@ -298,6 +312,66 @@ export class KaminoVaultClient {
       this.getProgramID()
     );
     return ix;
+  }
+
+  /**
+   * This method updates the kvault global config
+   * @param mode - the mode to update the global config with
+   * @returns - an instruction to update the global config
+   */
+  async updateGlobalConfigIx(mode: string, value: string) {
+    console.log('in updateGlobalConfigIx');
+    let modeEnum: UpdateKVaultGlobalConfigModeKind;
+    switch (mode) {
+      case 'PendingAdmin': {
+        // Ensure value is a valid address string before converting
+        if (!value || value.length < 32) {
+          throw new Error(`Invalid address value: ${value}`);
+        }
+        const addr = address(value);
+        modeEnum = new UpdateGlobalConfigMode.PendingAdmin([addr]);
+        break;
+      }
+      case 'MinWithdrawalPenaltyLamports': {
+        modeEnum = new UpdateGlobalConfigMode.MinWithdrawalPenaltyLamports([new BN(value)]);
+        break;
+      }
+      case 'MinWithdrawalPenaltyBPS': {
+        modeEnum = new UpdateGlobalConfigMode.MinWithdrawalPenaltyBPS([new BN(value)]);
+        break;
+      }
+      default:
+        throw new Error(`Unknown update mode: ${mode}`);
+    }
+    const args: UpdateKVaultGlobalConfigArgs = {
+      update: modeEnum,
+    };
+
+    const globalConfigAddress = await getKvaultGlobalConfigPda(this.getProgramID());
+    const globalConfigState = await KVaultGlobalConfig.fetch(this.getConnection(), globalConfigAddress);
+    if (!globalConfigState) {
+      throw new Error('Global config not found');
+    }
+    const admin = globalConfigState.globalAdmin;
+    const accounts: UpdateKVaultGlobalConfigAccounts = {
+      globalAdmin: noopSigner(admin),
+      globalConfig: globalConfigAddress,
+    };
+    return updateKVaultGlobalConfig(args, accounts, undefined, this.getProgramID());
+  }
+
+  /**
+   * This method accepts the ownership of the global config
+   * @param admin - the admin of the transaction
+   * @returns - an instruction to accept the ownership of the global config
+   */
+  async acceptGlobalConfigOwnershipIx(admin: TransactionSigner) {
+    const globalConfigAddress = await getKvaultGlobalConfigPda(this.getProgramID());
+    const accounts: UpdateGlobalConfigAdminAccounts = {
+      pendingAdmin: admin,
+      globalConfig: globalConfigAddress,
+    };
+    return updateGlobalConfigAdmin(accounts, undefined, this.getProgramID());
   }
 
   /**

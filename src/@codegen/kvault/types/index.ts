@@ -110,11 +110,11 @@ export type {
 } from "./VaultAllocation"
 export { UpdateGlobalConfigMode }
 
-export type UpdateGlobalConfigModeKind =
+export type UpdateKVaultGlobalConfigModeKind =
   | UpdateGlobalConfigMode.PendingAdmin
   | UpdateGlobalConfigMode.MinWithdrawalPenaltyLamports
   | UpdateGlobalConfigMode.MinWithdrawalPenaltyBPS
-export type UpdateGlobalConfigModeJSON =
+export type UpdateKVaultGlobalConfigModeJSON =
   | UpdateGlobalConfigMode.PendingAdminJSON
   | UpdateGlobalConfigMode.MinWithdrawalPenaltyLamportsJSON
   | UpdateGlobalConfigMode.MinWithdrawalPenaltyBPSJSON

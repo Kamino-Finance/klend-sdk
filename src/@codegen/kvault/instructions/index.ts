@@ -51,7 +51,7 @@ export type { InitGlobalConfigAccounts as InitKVaultGlobalConfigAccounts } from 
 export { updateGlobalConfig as updateKVaultGlobalConfig } from "./updateGlobalConfig"
 export type {
   UpdateGlobalConfigArgs as UpdateKVaultGlobalConfigArgs,
-  UpdateGlobalConfigAccounts as UpdateKVaultGlobalConfigAccounts,
+  UpdateKVaultGlobalConfigAccounts as UpdateKVaultGlobalConfigAccounts,
 } from "./updateGlobalConfig"
 export { updateGlobalConfigAdmin as updateKVaultGlobalConfigAdmin } from "./updateGlobalConfigAdmin"
 export type { UpdateGlobalConfigAdminAccounts as UpdateKVaultGlobalConfigAdminAccounts } from "./updateGlobalConfigAdmin"

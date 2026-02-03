@@ -10,6 +10,7 @@ import {
   DEFAULT_RECENT_SLOT_DURATION_MS,
   encodeTokenName,
   extendLookupTableIxs,
+  getKvaultGlobalConfigPda,
   getMedianSlotDurationInMsFromLastEpochs,
   globalConfigPda,
   initLookupTableIx,
@@ -18,6 +19,7 @@ import {
   KaminoReserve,
   KaminoVault,
   KaminoVaultConfig,
+  KVaultGlobalConfig,
   lamportsToDecimal,
   LendingMarket,
   parseBooleanFlag,
@@ -358,6 +360,86 @@ async function main() {
         []
       );
       mode === 'execute' && console.log('KVault global config initialized');
+    });
+
+  commands
+    .command('update-kvault-global-config')
+    .requiredOption(
+      '--mode <string>',
+      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
+    )
+    .requiredOption('--field <string>', 'The field to update')
+    .requiredOption('--value <string>', 'The value to update the field to')
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .option('--signer-path <string>', 'If set, it will use the provided signer')
+    .action(async ({ mode, field, value, staging, multisig, signerPath }) => {
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+      const ms = multisig ? address(multisig) : undefined;
+      const env = await initEnv(staging, ms, signerPath);
+      const kaminoManager = new KaminoManager(
+        env.c.rpc,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        env.kvaultProgramId
+      );
+      let signer: TransactionSigner | undefined = undefined;
+      if (signerPath) {
+        signer = await parseKeypairFile(signerPath);
+      } else {
+        const globalConfigAddress = await getKvaultGlobalConfigPda(env.kvaultProgramId);
+        const globalConfigState = await KVaultGlobalConfig.fetch(env.c.rpc, globalConfigAddress);
+        if (!globalConfigState) {
+          throw new Error('Global config not found');
+        }
+        signer = noopSigner(address(globalConfigState.globalAdmin));
+      }
+
+      const vaultClient = kaminoManager.getKaminoVaultClient();
+      const ix = await vaultClient.updateGlobalConfigIx(field, value);
+      await processTx(env.c, signer, [ix, ...getPriorityFeeAndCuIxs({ priorityFeeMultiplier: 2500 })], mode, []);
+      mode === 'execute' && console.log(`Global config updated to ${value} for field ${field}`);
+    });
+
+  commands
+    .command('accept-kvault-global-config-ownership')
+    .requiredOption(
+      '--mode <string>',
+      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .option('--signer-path <string>', 'If set, it will use the provided signer')
+    .action(async ({ mode, staging, multisig, signerPath }) => {
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+      const ms = multisig ? address(multisig) : undefined;
+      const env = await initEnv(staging, ms);
+      const kaminoManager = new KaminoManager(
+        env.c.rpc,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        env.kvaultProgramId
+      );
+      let signer: TransactionSigner | undefined = undefined;
+      if (signerPath) {
+        signer = await parseKeypairFile(signerPath);
+      } else {
+        const globalConfigAddress = await getKvaultGlobalConfigPda(env.kvaultProgramId);
+        const globalConfigState = await KVaultGlobalConfig.fetch(env.c.rpc, globalConfigAddress);
+        if (!globalConfigState) {
+          throw new Error('Global config not found');
+        }
+        signer = noopSigner(address(globalConfigState.pendingAdmin));
+      }
+
+      const vaultClient = kaminoManager.getKaminoVaultClient();
+      const ix = await vaultClient.acceptGlobalConfigOwnershipIx(signer);
+      await processTx(env.c, signer, [ix, ...getPriorityFeeAndCuIxs({ priorityFeeMultiplier: 2500 })], mode, []);
+      mode === 'execute' && console.log('Global config ownership accepted');
     });
 
   commands

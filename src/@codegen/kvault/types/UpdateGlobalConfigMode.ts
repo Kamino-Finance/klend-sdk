@@ -110,7 +110,7 @@ export class MinWithdrawalPenaltyBPS {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function fromDecoded(obj: any): types.UpdateGlobalConfigModeKind {
+export function fromDecoded(obj: any): types.UpdateKVaultGlobalConfigModeKind {
   if (typeof obj !== "object") {
     throw new Error("Invalid enum object")
   }
@@ -132,8 +132,8 @@ export function fromDecoded(obj: any): types.UpdateGlobalConfigModeKind {
 }
 
 export function fromJSON(
-  obj: types.UpdateGlobalConfigModeJSON
-): types.UpdateGlobalConfigModeKind {
+  obj: types.UpdateKVaultGlobalConfigModeJSON
+): types.UpdateKVaultGlobalConfigModeKind {
   switch (obj.kind) {
     case "PendingAdmin": {
       return new PendingAdmin([address(obj.value[0])])

@@ -18,10 +18,10 @@ import { PROGRAM_ID } from "../programId"
 export const DISCRIMINATOR = Buffer.from([164, 84, 130, 189, 111, 58, 250, 200])
 
 export interface UpdateGlobalConfigArgs {
-  update: types.UpdateGlobalConfigModeKind
+  update: types.UpdateKVaultGlobalConfigModeKind
 }
 
-export interface UpdateGlobalConfigAccounts {
+export interface UpdateKVaultGlobalConfigAccounts {
   globalAdmin: TransactionSigner
   globalConfig: Address
 }
@@ -32,7 +32,7 @@ export const layout = borsh.struct([
 
 export function updateGlobalConfig(
   args: UpdateGlobalConfigArgs,
-  accounts: UpdateGlobalConfigAccounts,
+  accounts: UpdateKVaultGlobalConfigAccounts,
   remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
   programAddress: Address = PROGRAM_ID
 ) {

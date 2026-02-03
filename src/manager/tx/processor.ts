@@ -21,6 +21,7 @@ export async function processTx(
       await printSimulateTx(c, payer, ixs, luts);
       break;
     case 'multisig':
+      console.log('in multisig mode');
       await printMultisigTx(payer, ixs, luts);
       break;
     case 'print':
