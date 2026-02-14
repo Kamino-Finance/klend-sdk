@@ -823,6 +823,85 @@ async function main() {
     });
 
   commands
+    .command('whitelist-reserves')
+    .requiredOption(
+      '--reserves-file <string>',
+      'Path to a file containing newline-separated reserve addresses to whitelist'
+    )
+    .requiredOption(
+      `--mode <string>`,
+      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
+    )
+    .requiredOption(
+      '--global-admin <string>',
+      'Global admin signer (keypair path in execute/simulate modes, pubkey in multisig mode)'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async ({ reservesFile, mode, globalAdmin, staging, multisig, CU: cu }) => {
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig pubkey is required');
+      }
+
+      const ms = multisig ? address(multisig) : undefined;
+      const env = await initEnv(staging, ms);
+      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
+      const fileContent = fs.readFileSync(reservesFile, 'utf-8');
+      const reserveAddresses = fileContent
+        .split('\n')
+        .map((r: string) => r.trim())
+        .filter((r: string) => r.length > 0)
+        .map((r: string) => address(r));
+
+      const kaminoManager = new KaminoManager(
+        env.c.rpc,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        env.kvaultProgramId
+      );
+
+      let globalAdminSigner;
+      if (mode === 'multisig') {
+        globalAdminSigner = noopSigner(address(globalAdmin));
+      } else {
+        globalAdminSigner = await parseKeypairFile(globalAdmin as string);
+      }
+
+      const instructions: Instruction[] = [];
+      for (const reserveAddress of reserveAddresses) {
+        let instruction = await kaminoManager.addUpdateWhitelistedReserveIx(
+          reserveAddress,
+          new UpdateReserveWhitelistMode.Invest([1]),
+          globalAdminSigner
+        );
+        instructions.push(instruction);
+        instruction = await kaminoManager.addUpdateWhitelistedReserveIx(
+          reserveAddress,
+          new UpdateReserveWhitelistMode.AddAllocation([1]),
+          globalAdminSigner
+        );
+        instructions.push(instruction);
+      }
+
+      // batch the instructions in groups of 6
+      const batchSize = 6;
+      const batchInstructions: Instruction[][] = [];
+      for (let i = 0; i < instructions.length; i += batchSize) {
+        batchInstructions.push(instructions.slice(i, i + batchSize));
+      }
+      for (const batch of batchInstructions) {
+        await processTx(
+          env.c,
+          globalAdminSigner,
+          [...batch, ...getPriorityFeeAndCuIxs({ priorityFeeMultiplier: 2500, computeUnits })],
+          mode,
+          []
+        );
+      }
+    });
+
+  commands
     .command('backfill-whitelisted-reserves')
     .option(
       '--value <string>',
