@@ -72,13 +72,14 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ mode, staging, multisig }) => {
+    .action(async ({ mode, staging, devnet, multisig }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig pubkey is required');
       }
       const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
+      const env = await initEnv(staging, ms, undefined, undefined, devnet);
       const admin = await env.getSigner();
 
       const kaminoManager = new KaminoManager(
@@ -316,14 +317,15 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
     .option('--signer-path <string>', 'If set, it will use the provided signer')
-    .action(async ({ mode, staging, multisig, signerPath }) => {
+    .action(async ({ mode, staging, devnet, multisig, signerPath }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
       const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms, signerPath);
+      const env = await initEnv(staging, ms, signerPath, undefined, devnet);
       const kaminoManager = new KaminoManager(
         env.c.rpc,
         DEFAULT_RECENT_SLOT_DURATION_MS,
@@ -371,14 +373,15 @@ async function main() {
     .requiredOption('--field <string>', 'The field to update')
     .requiredOption('--value <string>', 'The value to update the field to')
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
     .option('--signer-path <string>', 'If set, it will use the provided signer')
-    .action(async ({ mode, field, value, staging, multisig, signerPath }) => {
+    .action(async ({ mode, field, value, staging, devnet, multisig, signerPath }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
       const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms, signerPath);
+      const env = await initEnv(staging, ms, signerPath, undefined, devnet);
       const kaminoManager = new KaminoManager(
         env.c.rpc,
         DEFAULT_RECENT_SLOT_DURATION_MS,
@@ -410,14 +413,15 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
     .option('--signer-path <string>', 'If set, it will use the provided signer')
-    .action(async ({ mode, staging, multisig, signerPath }) => {
+    .action(async ({ mode, staging, devnet, multisig, signerPath }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
       const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
+      const env = await initEnv(staging, ms, undefined, undefined, devnet);
       const kaminoManager = new KaminoManager(
         env.c.rpc,
         DEFAULT_RECENT_SLOT_DURATION_MS,
@@ -453,13 +457,14 @@ async function main() {
     .requiredOption('--tokenName <string>', 'The name of the token in the vault')
     .requiredOption('--extraTokenName <string>', 'The extra string appended to the token symbol')
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ mint, mode, name, tokenName, extraTokenName, staging, multisig }) => {
+    .action(async ({ mint, mode, name, tokenName, extraTokenName, staging, devnet, multisig }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
       const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
+      const env = await initEnv(staging, ms, undefined, undefined, devnet);
       const tokenMint = address(mint);
 
       const kaminoManager = new KaminoManager(
@@ -594,9 +599,10 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
-    .action(async ({ vault, newAdmin, mode, staging, CU: cu }) => {
-      const env = await initEnv(staging);
+    .action(async ({ vault, newAdmin, mode, staging, devnet, CU: cu }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const vaultAddress = address(vault);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
@@ -647,6 +653,7 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--skip-lut-update`, 'If set, it will skip the LUT update')
     .option(
       `--lutSigner <string>`,
@@ -669,6 +676,7 @@ async function main() {
         value,
         mode,
         staging,
+        devnet,
         skipLutUpdate,
         lutSigner,
         globalAdmin,
@@ -681,7 +689,7 @@ async function main() {
         }
 
         const ms = multisig ? address(multisig) : undefined;
-        const env = await initEnv(staging, ms);
+        const env = await initEnv(staging, ms, undefined, undefined, devnet);
         const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
         const vaultAddress = address(vault);
 
@@ -757,15 +765,16 @@ async function main() {
       'Global admin signer (keypair path in execute/simulate modes, pubkey in multisig mode)'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
-    .action(async ({ reserve, whitelistMode, value, mode, globalAdmin, staging, multisig, CU: cu }) => {
+    .action(async ({ reserve, whitelistMode, value, mode, globalAdmin, staging, devnet, multisig, CU: cu }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig pubkey is required');
       }
 
       const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
+      const env = await initEnv(staging, ms, undefined, undefined, devnet);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const reserveAddress = address(reserve);
 
@@ -921,15 +930,16 @@ async function main() {
       'Comma-separated list of market addresses. If not provided, all markets will be processed'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
-    .action(async ({ value, mode, globalAdmin, markets, staging, multisig, CU: cu }) => {
+    .action(async ({ value, mode, globalAdmin, markets, staging, devnet, multisig, CU: cu }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig pubkey is required');
       }
 
       const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
+      const env = await initEnv(staging, ms, undefined, undefined, devnet);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const kaminoManager = new KaminoManager(
         env.c.rpc,
@@ -1049,9 +1059,10 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
-    .action(async ({ vault, feeBps, mode, staging, CU: cu }) => {
-      const env = await initEnv(staging);
+    .action(async ({ vault, feeBps, mode, staging, devnet, CU: cu }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const vaultAddress = address(vault);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const kaminoManager = new KaminoManager(
@@ -1098,14 +1109,15 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
     .option(`--signer <string>`, 'If set, it will use the provided signer instead of the default one')
-    .action(async ({ lut, addresses, mode, staging, multisig, signer }) => {
+    .action(async ({ lut, addresses, mode, staging, devnet, multisig, signer }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
       const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
+      const env = await initEnv(staging, ms, undefined, undefined, devnet);
       const lutAddress = address(lut);
       let txSigner = await env.getSigner();
       // if the signer is provided (path to a keypair) we use it, otherwise we use the default one
@@ -1167,9 +1179,10 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--signer <string>`, 'If set, it will use the provided signer instead of the default one')
-    .action(async ({ vault, mode, staging, signer }) => {
-      const env = await initEnv(staging);
+    .action(async ({ vault, mode, staging, devnet, signer }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const vaultAddress = address(vault);
 
       const kaminoManager = new KaminoManager(
@@ -1232,9 +1245,10 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
-    .action(async ({ vault, feeBps, mode, staging, CU: cu }) => {
-      const env = await initEnv(staging);
+    .action(async ({ vault, feeBps, mode, staging, devnet, CU: cu }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const vaultAddress = address(vault);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
@@ -1281,9 +1295,10 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
-    .action(async ({ vault, mode, staging, CU: cu }) => {
-      const env = await initEnv(staging);
+    .action(async ({ vault, mode, staging, devnet, CU: cu }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const vaultAddress = address(vault);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
@@ -1405,9 +1420,10 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
-    .action(async ({ vault, mode, staging, CU: cu }) => {
-      const env = await initEnv(staging);
+    .action(async ({ vault, mode, staging, devnet, CU: cu }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const vaultAddress = address(vault);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
@@ -1454,9 +1470,10 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
-    .action(async ({ vault, reserve, mode, staging, CU: cu }) => {
-      const env = await initEnv(staging);
+    .action(async ({ vault, reserve, mode, staging, devnet, CU: cu }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const reserveAddress = address(reserve);
       const vaultAddress = address(vault);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
@@ -1500,13 +1517,14 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ vault, mode, staging, multisig }) => {
+    .action(async ({ vault, mode, staging, devnet, multisig }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
       const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
+      const env = await initEnv(staging, ms, undefined, undefined, devnet);
       const user = await env.getSigner();
       const vaultAddress = address(vault);
 
@@ -1545,16 +1563,28 @@ async function main() {
     .option('--allocation-weight <number>', 'Allocation weight')
     .option('--allocation-cap <string>', 'Allocation cap decimal value')
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
     .option(`--skip-lut-update`, 'If set, it will skip the LUT update')
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
     .action(
-      async ({ vault, reserve, mode, allocationWeight, allocationCap, staging, multisig, skipLutUpdate, CU: cu }) => {
+      async ({
+        vault,
+        reserve,
+        mode,
+        allocationWeight,
+        allocationCap,
+        staging,
+        devnet,
+        multisig,
+        skipLutUpdate,
+        CU: cu,
+      }) => {
         if (mode === 'multisig' && !multisig) {
           throw new Error('If using multisig mode, multisig is required');
         }
         const ms = multisig ? address(multisig) : undefined;
-        const env = await initEnv(staging, ms);
+        const env = await initEnv(staging, ms, undefined, undefined, devnet);
         const reserveAddress = address(reserve);
         const vaultAddress = address(vault);
         const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
@@ -1639,14 +1669,15 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
-    .action(async ({ vault, amount, mode, staging, multisig, CU: cu }) => {
+    .action(async ({ vault, amount, mode, staging, devnet, multisig, CU: cu }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
       const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
+      const env = await initEnv(staging, ms, undefined, undefined, devnet);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const vaultAddress = address(vault);
 
@@ -1688,14 +1719,15 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
-    .action(async ({ vault, amount, mode, staging, multisig, CU: cu }) => {
+    .action(async ({ vault, amount, mode, staging, devnet, multisig, CU: cu }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
       const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
+      const env = await initEnv(staging, ms, undefined, undefined, devnet);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
       const signer = await env.getSigner();
@@ -1749,14 +1781,15 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
-    .action(async ({ vault, mode, staging, multisig, CU: cu }) => {
+    .action(async ({ vault, mode, staging, devnet, multisig, CU: cu }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
       const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
+      const env = await initEnv(staging, ms, undefined, undefined, devnet);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const payer = await env.getSigner();
       const vaultAddress = address(vault);
@@ -1800,14 +1833,15 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
-    .action(async ({ vault, reserve, mode, staging, multisig, CU: cu }) => {
+    .action(async ({ vault, reserve, mode, staging, devnet, multisig, CU: cu }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
       const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
+      const env = await initEnv(staging, ms, undefined, undefined, devnet);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const vaultAddress = address(vault);
 
@@ -1870,8 +1904,9 @@ async function main() {
     .command('get-vault-colls')
     .requiredOption('--vault <string>', 'Vault address')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ vault, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
       const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
@@ -1894,9 +1929,10 @@ async function main() {
     .command('get-vault-overview')
     .requiredOption('--vault <string>', 'Vault address')
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--token-price <number>`, 'Vault token price in USD')
-    .action(async ({ vault, staging, tokenPrice }) => {
-      const env = await initEnv(staging);
+    .action(async ({ vault, staging, devnet, tokenPrice }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
       const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
@@ -1922,8 +1958,9 @@ async function main() {
     .requiredOption('--vault <string>', 'Vault address')
     .requiredOption('--token-price <number>', 'Vault token price in USD')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, tokenPrice, staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ vault, tokenPrice, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
       const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
@@ -1938,8 +1975,9 @@ async function main() {
     .requiredOption('--reserve <string>', 'Reserve address')
     .requiredOption('--token-price <number>', 'Reserve token price in USD')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ reserve, tokenPrice, staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ reserve, tokenPrice, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
       const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
@@ -1951,9 +1989,10 @@ async function main() {
   commands
     .command('get-vault-all-mints')
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--vault <string>`, 'Vault address')
-    .action(async ({ staging, vault }) => {
-      const env = await initEnv(staging);
+    .action(async ({ staging, devnet, vault }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
       const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
@@ -1969,8 +2008,9 @@ async function main() {
     .command('get-vault-allocation-distribution')
     .requiredOption('--vault <string>', 'Vault address')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ vault, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
       const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
@@ -1996,8 +2036,9 @@ async function main() {
     .requiredOption('--vault <string>', 'Vault address')
     .requiredOption('--wallet <string>', 'User wailt address')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, wallet, staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ vault, wallet, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
       const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
@@ -2015,8 +2056,9 @@ async function main() {
     .command('get-user-shares-all-vaults')
     .requiredOption('--wallet <string>', 'User wailt address')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ wallet, staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ wallet, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
       const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
@@ -2036,8 +2078,9 @@ async function main() {
     .command('get-tokens-per-share')
     .requiredOption('--vault <string>', 'Vault address')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ vault, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
       const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
@@ -2055,8 +2098,9 @@ async function main() {
     .command('print-vault')
     .requiredOption('--vault <string>', 'Vault address')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ vault, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
       const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
@@ -2153,8 +2197,9 @@ async function main() {
     .command('get-oracle-mappings')
     .requiredOption('--lending-market <string>', 'Lending Market Address')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ staging, lendingMarket }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ staging, devnet, lendingMarket }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const kaminoManager = new KaminoManager(
         env.c.rpc,
         DEFAULT_RECENT_SLOT_DURATION_MS,
@@ -2181,8 +2226,9 @@ async function main() {
   commands
     .command('get-all-vaults')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
       const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
@@ -2194,8 +2240,9 @@ async function main() {
     .command('get-all-vaults-for-token')
     .requiredOption('--token <string>', 'Token address')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ token, staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ token, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
       const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
@@ -2206,8 +2253,9 @@ async function main() {
   commands
     .command('get-all-vaults-pks')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const kaminoManager = new KaminoManager(
         env.c.rpc,
         DEFAULT_RECENT_SLOT_DURATION_MS,
@@ -2226,8 +2274,9 @@ async function main() {
     .command('get-simulated-interest-and-fees')
     .requiredOption('--vault <string>', 'Vault address')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ vault, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
 
       const vaultAddress = address(vault);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
@@ -2276,8 +2325,9 @@ async function main() {
     .command('compute-alloc')
     .requiredOption('--vault <string>', 'Vault address')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ vault, staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ vault, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
 
       const vaultAddress = address(vault);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
@@ -2352,8 +2402,9 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ lendingMarket, lendingMarketConfigPath, mode, staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ lendingMarket, lendingMarketConfigPath, mode, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const lendingMarketAddress = address(lendingMarket);
       const lendingMarketAccount = await KaminoMarket.load(
         env.c.rpc,
@@ -2412,8 +2463,9 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ lendingMarket, mode, staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ lendingMarket, mode, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const lendingMarketAddress = address(lendingMarket);
       const lendingMarketState = await KaminoMarket.load(
         env.c.rpc,
@@ -2470,8 +2522,9 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ lendingMarket, newName, mode, staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ lendingMarket, newName, mode, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const lendingMarketAddress = address(lendingMarket);
       const lendingMarketState = await KaminoMarket.load(
         env.c.rpc,
@@ -2538,8 +2591,9 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ reserve, mode, staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ reserve, mode, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const reserveAddress = address(reserve);
       const reserveState = await Reserve.fetch(env.c.rpc, reserveAddress, env.klendProgramId);
       if (!reserveState) {
@@ -2601,8 +2655,9 @@ async function main() {
     .command('get-market-or-vault-admin-info')
     .requiredOption('--address <string>', 'Address of the market or vault')
     .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ address: addr, staging }) => {
-      const env = await initEnv(staging);
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ address: addr, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const adminInfo = await KaminoManager.getMarketOrVaultAdminInfo(env.c.rpc, address(addr));
       console.log(adminInfo);
     });
@@ -2615,9 +2670,10 @@ async function main() {
       'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--user <string>`, 'User address')
-    .action(async ({ vault, mode, staging, user }) => {
-      const env = await initEnv(staging);
+    .action(async ({ vault, mode, staging, devnet, user }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const vaultAddress = address(vault);
       const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress);
       const kaminoManager = new KaminoManager(

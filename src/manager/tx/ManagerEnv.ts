@@ -8,7 +8,7 @@ import { noopSigner, parseKeypairFile } from './keypair';
 import { Chain } from './rpc';
 import { KaminoMarket } from '../../classes';
 import { FARMS_GLOBAL_CONFIG_MAINNET } from '../../classes/farm_utils';
-import { KVAULT_STAGING_PROGRAM_ID } from '../utils/consts';
+import { KVAULT_STAGING_PROGRAM_ID, KVAULT_DEVNET_PROGRAM_ID } from '../utils/consts';
 import { VaultState } from '../../@codegen/kvault/accounts';
 
 export type Cluster = 'localnet' | 'devnet' | 'mainnet-beta';
@@ -22,6 +22,7 @@ export type SignerConfig = {
 
 export type ProgramConfig = {
   staging?: boolean;
+  devnet?: boolean;
   klendProgramId?: Address;
   kvaultProgramId?: Address;
   farmsProgramId?: Address;
@@ -107,12 +108,17 @@ function defaultProgramConfig(programConfig: {
   farmsProgramId?: Address | undefined;
   farmsGlobalConfig?: Address | undefined;
   staging?: boolean | undefined;
+  devnet?: boolean | undefined;
 }): Required<ProgramConfig> {
   const stagingOpt = programConfig.staging ?? false;
+  const devnetOpt = programConfig.devnet ?? false;
   const config: Required<ProgramConfig> = {
     staging: stagingOpt,
+    devnet: devnetOpt,
     klendProgramId: programConfig?.klendProgramId ?? (stagingOpt ? KLEND_STAGING_PROGRAM_ID : KLEND_PROGRAM_ID),
-    kvaultProgramId: programConfig.kvaultProgramId ?? (stagingOpt ? KVAULT_STAGING_PROGRAM_ID : KVAULT_PROGRAM_ID),
+    kvaultProgramId:
+      programConfig.kvaultProgramId ??
+      (stagingOpt ? KVAULT_STAGING_PROGRAM_ID : devnetOpt ? KVAULT_DEVNET_PROGRAM_ID : KVAULT_PROGRAM_ID),
     farmsProgramId: programConfig?.farmsProgramId ?? FARMS_PROGRAM_ID,
     farmsGlobalConfig: programConfig?.farmsGlobalConfig ?? FARMS_GLOBAL_CONFIG_MAINNET,
   };
@@ -122,28 +128,43 @@ function defaultProgramConfig(programConfig: {
 export async function initEnv(
   staging: boolean = false,
   multisig: Address | undefined = undefined,
-  adminKeypairPath: string | undefined = process.env.ADMIN,
-  rpcUrl: string | undefined = process.env.RPC
+  adminKeypairPath: string | undefined = undefined,
+  rpcUrl: string | undefined = undefined,
+  devnet: boolean = false
 ): Promise<ManagerEnv> {
+  if (staging && devnet) {
+    throw new Error('Cannot use both --staging and --devnet at the same time');
+  }
+
   const config = defaultProgramConfig({
     staging,
+    devnet,
     klendProgramId: staging ? envAddress('KLEND_PROGRAM_ID_STAGING') : envAddress('KLEND_PROGRAM_ID_MAINNET'),
-    kvaultProgramId: staging ? envAddress('KVAULT_PROGRAM_ID_STAGING') : envAddress('KVAULT_PROGRAM_ID_MAINNET'),
+    kvaultProgramId: staging
+      ? envAddress('KVAULT_PROGRAM_ID_STAGING')
+      : devnet
+        ? envAddress('KVAULT_PROGRAM_ID_DEVNET')
+        : envAddress('KVAULT_PROGRAM_ID_MAINNET'),
   });
 
   let resolvedUrl: string;
   if (rpcUrl) {
     resolvedUrl = rpcUrl;
+  } else if (devnet && process.env.RPC_DEVNET) {
+    resolvedUrl = process.env.RPC_DEVNET;
+  } else if (process.env.RPC) {
+    resolvedUrl = process.env.RPC;
   } else {
     throw 'Must specify an RPC URL';
   }
 
+  const resolvedAdminPath = adminKeypairPath ?? (devnet ? process.env.ADMIN_DEVNET : process.env.ADMIN);
   let resolvedAdmin: TransactionSigner | undefined = undefined;
-  if (adminKeypairPath) {
-    resolvedAdmin = await parseKeypairFile(adminKeypairPath);
+  if (resolvedAdminPath) {
+    resolvedAdmin = await parseKeypairFile(resolvedAdminPath);
   }
 
-  const rpcChain = parseRpcChain(rpcUrl);
+  const rpcChain = parseRpcChain(resolvedUrl, devnet);
 
   const c = new ManagerConnectionPool(rpcChain);
   const multisigSigner = multisig ? noopSigner(multisig) : undefined;
@@ -171,7 +192,7 @@ export async function initEnv(
   return env;
 }
 
-function parseRpcChain(rpcUrl: string): Chain {
+function parseRpcChain(rpcUrl: string, devnet: boolean = false): Chain {
   let chain: Chain;
   if (rpcUrl === 'localnet') {
     chain = {
@@ -183,6 +204,19 @@ function parseRpcChain(rpcUrl: string): Chain {
       wsEndpoint: {
         name: 'localnet',
         url: 'ws://127.0.0.1:8900',
+      },
+      multicastEndpoints: [],
+    };
+  } else if (devnet) {
+    chain = {
+      name: 'devnet',
+      endpoint: {
+        url: rpcUrl,
+        name: 'devnet',
+      },
+      wsEndpoint: {
+        url: rpcUrl.replace('https:', 'wss:'),
+        name: 'devnet-ws',
       },
       multicastEndpoints: [],
     };
