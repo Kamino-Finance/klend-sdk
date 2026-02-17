@@ -68,11 +68,6 @@ export const SLOTS_PER_DAY = SLOTS_PER_HOUR * 24;
  */
 export const SLOTS_PER_YEAR = SLOTS_PER_DAY * 365;
 
-/**
- * Minimum bonus for autodeleverage liquidations in bps
- */
-export const MIN_AUTODELEVERAGE_BONUS_BPS = 50;
-
 export const SOL_DECIMALS = 9;
 
 export const BORROWS_LIMIT = 5;
