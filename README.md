@@ -1,4 +1,4 @@
-## Installation
+﻿## Installation
 
 ```shell
 # npm
@@ -17,82 +17,107 @@ This is the Kamino Lending Typescript SDK to interact with the Kamino Lend smart
 ### Reading data
 
 ```typescript
-// There are three levels of data you can request (and cache) about the lending market.
-// 1. Initalize market with parameters and metadata
-const market = await KaminoMarket.load(
-  connection,
-  address("7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF") // main market address. Defaults to 'Main' market
-);
-console.log(market.reserves.map((reserve) => reserve.config.loanToValueRatio));
+import {
+  KaminoMarket,
+  getMedianSlotDurationInMsFromLastEpochs,
+} from '@kamino-finance/klend-sdk';
+import {
+  address,
+  createDefaultRpcTransport,
+  createRpc,
+  createSolanaRpcApi,
+  DEFAULT_RPC_CONFIG,
+} from '@solana/kit';
 
-// 2. Refresh reserves
+// Create an RPC client
+const api = createSolanaRpcApi({ ...DEFAULT_RPC_CONFIG, defaultCommitment: 'processed' });
+const rpc = createRpc({ api, transport: createDefaultRpcTransport({ url: 'YOUR_RPC_URL' }) });
+
+// Get slot duration (required parameter)
+const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+
+// Load the market
+const market = await KaminoMarket.load(
+  rpc,
+  address("7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF"), // main market address
+  slotDuration
+);
+console.log(market.reserves.map((reserve) => reserve.state.config.loanToValuePct));
+
+// Refresh reserves
 await market.loadReserves();
 
 const usdcReserve = market.getReserve("USDC");
-console.log(usdcReserve?.stats.totalDepositsWads.toString());
-
+console.log(usdcReserve?.getTotalSupply().toString());
 
 // Refresh all cached data
-market.refreshAll();
+await market.refreshAll();
 
-const obligation = market.getObligationByWallet("WALLET_PK");
-console.log(obligation.stats.borrowLimit);
+const obligation = await market.getObligationByWallet(address("WALLET_ADDRESS"));
+console.log(obligation?.refreshedStats.borrowLimit.toString());
 ```
 
 ### Perform lending action
 
 ```typescript
+import { KaminoAction, VanillaObligation, PROGRAM_ID } from '@kamino-finance/klend-sdk';
+
 const kaminoAction = await KaminoAction.buildDepositTxns(
   kaminoMarket,
   amountBase,
-  symbol,
+  reserveMint, // Address of the token mint
+  walletSigner,
   new VanillaObligation(PROGRAM_ID),
 );
 
-const env = await initEnv('mainnet-beta');
-await sendTransactionFromAction(env, sendTransaction); // sendTransaction from wallet adapter or custom
+// Get the instructions from the action
+console.log('Setup instructions:', kaminoAction.setupIxsLabels);
+console.log('Lending instructions:', kaminoAction.lendingIxsLabels);
 ```
 
 ### Getting a vanilla obligation for a user
 ```ts
-  const kaminoMarket = await KaminoMarket.load(env.provider.connection, marketAddress, DEFAULT_RECENT_SLOT_DURATION_MS, programId);
+const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+const kaminoMarket = await KaminoMarket.load(rpc, marketAddress, slotDuration, programId);
 
-  const obligation = await kaminoMarket!.getUserVanillaObligation(user);
+const obligation = await kaminoMarket!.getUserVanillaObligation(user);
 
-  // to check the reserve is used in the obligation
-  const isReservePartOfObligation = kaminoMarket!.isReserveInObligation(obligation, reserve);
+// to check the reserve is used in the obligation
+const isReservePartOfObligation = kaminoMarket!.isReserveInObligation(obligation, reserve);
 ```
 
-### Getting a list of user obligations for a specific reserve 
+### Getting a list of user obligations for a specific reserve
 ```ts
-  const kaminoMarket = await KaminoMarket.load(env.provider.connection, marketAddress, DEFAULT_RECENT_SLOT_DURATION_MS, programId);
+const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+const kaminoMarket = await KaminoMarket.load(rpc, marketAddress, slotDuration, programId);
 
-  const obligations = await kaminoMarket!.getAllUserObligationsForReserve(user, reserve);
+const obligations = await kaminoMarket!.getAllUserObligationsForReserve(user, reserve);
 ```
 
 ### Getting a list of user obligations for a specific reserve with caching
 1. Fetch all user obligations, this should be cached as it takes longer to fetch
 ```ts
-  const kaminoMarket = await KaminoMarket.load(env.provider.connection, marketAddress, DEFAULT_RECENT_SLOT_DURATION_MS, programId); 
+const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+const kaminoMarket = await KaminoMarket.load(rpc, marketAddress, slotDuration, programId);
 
-  const allUserObligations = await kaminoMarket!.getAllUserObligations(user);
+const allUserObligations = await kaminoMarket!.getAllUserObligations(user);
 ```
 
-```ts 
-  allUserObligations.forEach(obligation  => {
-    if (obligation !== null) {
-      for (const deposits of obligation.deposits.keys()) {
-        if (deposits.equals(reserve)) {
-          finalObligations.push(obligation);
-        }
-      }
-      for (const borrows of obligation.borrows.keys()) {
-        if (borrows.equals(reserve)) {
-          finalObligations.push(obligation);
-        }
+```ts
+allUserObligations.forEach(obligation  => {
+  if (obligation !== null) {
+    for (const deposits of obligation.deposits.keys()) {
+      if (deposits.equals(reserve)) {
+        finalObligations.push(obligation);
       }
     }
-  });
+    for (const borrows of obligation.borrows.keys()) {
+      if (borrows.equals(reserve)) {
+        finalObligations.push(obligation);
+      }
+    }
+  }
+});
 ```
 
 ## CLI
@@ -158,4 +183,3 @@ yarn -s cli print-all-obligation-accounts --rpc <RPC> | jq -cn --stream 'fromstr
 ## Codegen
 * Copy the new `idl` from the kamino-lending program to `src/idl.json`
 * `yarn codegen`
-
