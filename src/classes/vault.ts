@@ -1349,7 +1349,15 @@ export class KaminoVaultClient {
     vaultReservesMap?: Map<Address, KaminoReserve>,
     farmState?: FarmState
   ): Promise<DepositIxs> {
-    return this.buildShareEntryIxs('deposit', user, vault, tokenAmount, vaultReservesMap, farmState);
+    let vaultFarmState = farmState;
+    const vaultState = await vault.getState();
+    if (!farmState && (await vault.hasFarm(vaultState))) {
+      const vaultFarmStateResult = await FarmState.fetch(this.getConnection(), vaultState.vaultFarm);
+      if (vaultFarmStateResult) {
+        vaultFarmState = vaultFarmStateResult;
+      }
+    }
+    return this.buildShareEntryIxs('deposit', user, vault, tokenAmount, vaultReservesMap, vaultFarmState);
   }
 
   async buySharesIxs(
@@ -1552,7 +1560,23 @@ export class KaminoVaultClient {
     vaultReservesMap?: Map<Address, KaminoReserve>,
     farmState?: FarmState
   ): Promise<WithdrawIxs> {
-    return this.buildShareExitIxs('withdraw', user, vault, shareAmountToWithdraw, slot, vaultReservesMap, farmState);
+    let vaultFarmState = farmState;
+    const vaultState = await vault.getState();
+    if (!farmState && (await vault.hasFarm(vaultState))) {
+      const vaultFarmStateResult = await FarmState.fetch(this.getConnection(), vaultState.vaultFarm);
+      if (vaultFarmStateResult) {
+        vaultFarmState = vaultFarmStateResult;
+      }
+    }
+    return this.buildShareExitIxs(
+      'withdraw',
+      user,
+      vault,
+      shareAmountToWithdraw,
+      slot,
+      vaultReservesMap,
+      vaultFarmState
+    );
   }
 
   /**
@@ -4477,8 +4501,8 @@ export class KaminoVault {
     return this.state;
   }
 
-  async hasFarm(): Promise<boolean> {
-    const state = await this.getState();
+  async hasFarm(vaultState?: VaultState): Promise<boolean> {
+    const state = vaultState ?? (await this.getState());
     return state.vaultFarm !== DEFAULT_PUBLIC_KEY;
   }
 
