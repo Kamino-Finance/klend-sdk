@@ -1,3 +1,4 @@
+import { ReserveWhitelistEntry } from '../@codegen/kvault/accounts';
 import { VaultState } from '../@codegen/kvault/accounts/VaultState';
 import { VaultAllocation } from '../@codegen/kvault/types/VaultAllocation';
 
@@ -53,5 +54,21 @@ export function decodeVaultState(data: Buffer): VaultState {
     allowAllocationsInWhitelistedReservesOnly: dec.allowAllocationsInWhitelistedReservesOnly,
     allowInvestInWhitelistedReservesOnly: dec.allowInvestInWhitelistedReservesOnly,
     padding4: dec.padding4,
+  });
+}
+
+export function decodeReserveWhitelistEntry(data: Buffer): ReserveWhitelistEntry {
+  if (!ReserveWhitelistEntry.discriminator.equals(data.slice(0, 8))) {
+    throw new Error('invalid account discriminator');
+  }
+
+  const dec = ReserveWhitelistEntry.layout.decode(data.slice(8));
+
+  return new ReserveWhitelistEntry({
+    tokenMint: dec.tokenMint,
+    reserve: dec.reserve,
+    whitelistAddAllocation: dec.whitelistAddAllocation,
+    whitelistInvest: dec.whitelistInvest,
+    padding: dec.padding,
   });
 }

@@ -94,7 +94,7 @@ import {
   VaultConfigField,
   VaultConfigFieldKind,
 } from '../@codegen/kvault/types';
-import { VaultState } from '../@codegen/kvault/accounts';
+import { ReserveWhitelistEntry, VaultState } from '../@codegen/kvault/accounts';
 import Decimal from 'decimal.js';
 import { bpsToPct, decodeVaultName, numberToLamportsDecimal, parseTokenSymbol, pubkeyHashMapToJson } from './utils';
 import { PROGRAM_ID } from '../@codegen/klend/programId';
@@ -154,7 +154,7 @@ import {
 } from './farm_utils';
 import { getCreateAccountInstruction, SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
 import { getInitializeKVaultSharesMetadataIx, getUpdateSharesMetadataIx, resolveMetadata } from '../utils/metadata';
-import { decodeVaultState } from '../utils/vault';
+import { decodeReserveWhitelistEntry, decodeVaultState } from '../utils/vault';
 import { fetchMaybeToken, findAssociatedTokenPda, getCloseAccountInstruction } from '@solana-program/token-2022';
 import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
 import { SYSVAR_INSTRUCTIONS_ADDRESS, SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
@@ -2765,6 +2765,298 @@ export class KaminoVaultClient {
     });
   }
 
+  /**
+   * This will return all the initialized whitelisted reserves accounts, including those that are not whitelisted but just have the PDA initialized
+   * @returns a map from mint to the whitelisted reserves for that mint
+   */
+  async getAllWhitelistedReserves(): Promise<Map<Address, ReserveWhitelistEntry[]>> {
+    const whitelistedReserves = await getProgramAccounts(
+      this.getConnection(),
+      this._kaminoVaultProgramId,
+      ReserveWhitelistEntry.layout.span + 8,
+      [
+        {
+          dataSize: BigInt(ReserveWhitelistEntry.layout.span + 8),
+        },
+        {
+          memcmp: {
+            offset: 0n,
+            bytes: base58Decoder.decode(ReserveWhitelistEntry.discriminator) as Base58EncodedBytes,
+            encoding: 'base58',
+          },
+        },
+      ]
+    );
+
+    // todo: after release when the account structure is updated optimize the implementation by reading directly the mint from whitelisted account
+    const whitelistedReservesMap: Map<Address, ReserveWhitelistEntry> = new Map();
+    const reservesSet: Set<Address> = new Set();
+    for (const whitelistedReserve of whitelistedReserves) {
+      const decodedAcc = decodeReserveWhitelistEntry(whitelistedReserve.data);
+      whitelistedReservesMap.set(decodedAcc.reserve, decodedAcc);
+      reservesSet.add(decodedAcc.reserve);
+    }
+
+    const reservesList: Address[] = Array.from(reservesSet);
+    const reservesState = await Reserve.fetchMultiple(this.getConnection(), reservesList, this._kaminoLendProgramId);
+
+    const mintToWhitelistedReservesMap: Map<Address, ReserveWhitelistEntry[]> = new Map();
+    const reservesWithState = reservesList.map((reserve, index) => [reserve, reservesState[index]] as const);
+    for (const [reserve, reserveState] of reservesWithState) {
+      if (!reserveState) {
+        continue;
+      }
+      const mintPubkey = reserveState.liquidity.mintPubkey;
+      if (!mintToWhitelistedReservesMap.has(mintPubkey)) {
+        mintToWhitelistedReservesMap.set(mintPubkey, []);
+      }
+      mintToWhitelistedReservesMap.get(mintPubkey)!.push(whitelistedReservesMap.get(reserve)!);
+    }
+
+    return mintToWhitelistedReservesMap;
+  }
+
+  /**
+   * This will return all the whitelisted reserves for the given mint; if a ReserveWhitelistEntry exists it doesn't mean it is whitelisted, the fields of the struct has to be read;
+   * If multiple mints are needed it is recommended to call getAllWhitelistedReserves instead;
+   * @param mint - the mint to get the whitelisted reserves for
+   * @returns a list of whitelisted reserves
+   */
+  async getAllWhitelistedReservesForMint(mint: Address): Promise<ReserveWhitelistEntry[]> {
+    // todo: use the impl below once the account structure is updated
+    // const whitelistedReserves = await getProgramAccounts(
+    //   this.getConnection(),
+    //   this._kaminoVaultProgramId,
+    //   ReserveWhitelistEntry.layout.span + 8,
+    //   [
+    //     {
+    //       dataSize: BigInt(ReserveWhitelistEntry.layout.span + 8),
+    //     },
+    //     {
+    //       memcmp: {
+    //         offset: 0n,
+    //         bytes: base58Decoder.decode(ReserveWhitelistEntry.discriminator) as Base58EncodedBytes,
+    //         encoding: 'base58',
+    //       },
+    //     },
+    //     {
+    //       memcmp: {
+    //         offset: 8n, // tokenMint offset: 8 discriminator
+    //         bytes: mint.toString() as Base58EncodedBytes,
+    //         encoding: 'base58',
+    //       },
+    //     },
+    //   ]
+    // );
+
+    // return whitelistedReserves.map((whitelistedReserve) => decodeReserveWhitelistEntry(whitelistedReserve.data));
+
+    const whitelistedReserves = await this.getAllWhitelistedReserves();
+    return whitelistedReserves.get(mint) || [];
+  }
+
+  /**
+   * This will return all the whitelisted reserves for the given markets
+   * @param markets - the markets to get the whitelisted reserves for; if not provided, no whitelisted reserves will be fetched; for getting all whitelisted reserves use getAllWhitelistedReserves
+   * @returns a map from market address to a map from reserve address to the whitelisting status
+   */
+  async getAllWhitelistedReservesForMarkets(
+    markets?: KaminoMarket[]
+  ): Promise<Map<Address, Map<Address, ReserveWhitelistEntry>>> {
+    const whitelistedReservesMap: Map<Address, Map<Address, ReserveWhitelistEntry>> = new Map();
+    if (!markets || markets.length === 0) {
+      return whitelistedReservesMap;
+    }
+
+    // Aggregate all active reserves from provided markets
+    const allReserves: KaminoReserve[] = [];
+    for (const market of markets) {
+      if (market.reservesActive) {
+        for (const reserve of market.reservesActive.values()) {
+          allReserves.push(reserve);
+        }
+      }
+    }
+
+    const whitelistMap = await this.fetchReservesWhitelistEntries(allReserves);
+
+    // Group by market
+    for (const reserve of allReserves) {
+      const entry = whitelistMap.get(reserve.address)!;
+      if (!whitelistedReservesMap.has(reserve.state.lendingMarket)) {
+        whitelistedReservesMap.set(reserve.state.lendingMarket, new Map());
+      }
+      whitelistedReservesMap.get(reserve.state.lendingMarket)!.set(reserve.address, entry);
+    }
+
+    return whitelistedReservesMap;
+  }
+
+  /**
+   * This will return the whitelisting status for the given reserves
+   * @param reserves - the reserves to get the whitelisting status for
+   * @returns a map from reserve address to the whitelisting status
+   */
+  async getReservesWhitelistingStatus(reserves: KaminoReserve[]): Promise<Map<Address, ReserveWhitelistEntry>> {
+    return this.fetchReservesWhitelistEntries(reserves);
+  }
+
+  /**
+   * Fetches the on-chain ReserveWhitelistEntry for each reserve. If the account does not exist,
+   * a default entry with whitelistAddAllocation=0 and whitelistInvest=0 is used.
+   * @param reserves - the reserves to fetch whitelist entries for
+   * @returns a map from reserve address to ReserveWhitelistEntry
+   */
+  private async fetchReservesWhitelistEntries(reserves: KaminoReserve[]): Promise<Map<Address, ReserveWhitelistEntry>> {
+    const whitelistMap = new Map<Address, ReserveWhitelistEntry>();
+    if (!reserves || reserves.length === 0) {
+      return whitelistMap;
+    }
+
+    const allReservesWhitelistPDAs = await getReservesWhitelistPDAs(
+      reserves.map((reserve) => reserve.address),
+      this._kaminoVaultProgramId
+    );
+
+    const accountsArrays = await batchFetch(allReservesWhitelistPDAs, async (chunk) => {
+      const response = await this.getConnection().getMultipleAccounts(chunk, { commitment: 'processed' }).send();
+      return response.value;
+    });
+
+    const allWhitelistEntriesAccounts = accountsArrays.flat();
+
+    for (let i = 0; i < reserves.length; i++) {
+      const reserve = reserves[i];
+      const accountInfo = allWhitelistEntriesAccounts[i];
+      let entry: ReserveWhitelistEntry = new ReserveWhitelistEntry({
+        tokenMint: reserve.state.liquidity.mintPubkey,
+        reserve: reserve.address,
+        whitelistAddAllocation: 0,
+        whitelistInvest: 0,
+        padding: [],
+      });
+      if (accountInfo) {
+        entry = decodeReserveWhitelistEntry(Buffer.from(accountInfo.data[0], 'base64'));
+      }
+      whitelistMap.set(reserve.address, entry);
+    }
+
+    return whitelistMap;
+  }
+
+  /**
+   * This will return a map from each vault to the reserves that are not fully whitelisted (allocation + invest) but are part of the vault allocation.
+   * Duplicate vaults (by address) are deduplicated.
+   * @param vaults - the vaults to get the not whitelisted reserves in allocation for
+   * @returns a map from vault address to the list of reserve addresses that are not fully whitelisted
+   */
+  async getReservesNotWhitelistedInAllocations(vaults: KaminoVault[]): Promise<Map<Address, Address[]>> {
+    const result = new Map<Address, Address[]>();
+    if (!vaults || vaults.length === 0) {
+      return result;
+    }
+
+    const dedupedVaults = deduplicateVaults(vaults);
+    const { vaultAllocations, whitelistMap } = await this.fetchVaultsAllocationsAndWhitelistStatus(dedupedVaults);
+
+    for (const vault of dedupedVaults) {
+      const notWhitelisted: Address[] = [];
+      const reservesInAlloc = vaultAllocations.get(vault.address)!;
+      for (const reserve of reservesInAlloc.keys()) {
+        if (
+          whitelistMap.get(reserve)?.whitelistAddAllocation === 0 ||
+          whitelistMap.get(reserve)?.whitelistInvest === 0
+        ) {
+          notWhitelisted.push(reserve);
+        }
+      }
+      result.set(vault.address, notWhitelisted);
+    }
+
+    return result;
+  }
+
+  /**
+   * This will return a map from each vault to the reserves that are not matching the vault whitelisting requirements (allocation and invest) but are part of the vault allocation.
+   * Duplicate vaults (by address) are deduplicated.
+   * @param vaults - the vaults to get the not whitelisted reserves in allocation for
+   * @returns a map from each vault to the reserves that are not whitelisted as requested (allocation + invest) and their whitelisting status
+   */
+  async getReservesAllocationsNotMatchingVaultWhitelistingRequirements(
+    vaults: KaminoVault[]
+  ): Promise<Map<Address, Map<Address, ReserveWhitelistEntry>>> {
+    const result = new Map<Address, Map<Address, ReserveWhitelistEntry>>();
+    if (!vaults || vaults.length === 0) {
+      return result;
+    }
+
+    const dedupedVaults = deduplicateVaults(vaults);
+    const { vaultAllocations, whitelistMap } = await this.fetchVaultsAllocationsAndWhitelistStatus(dedupedVaults);
+
+    for (const vault of dedupedVaults) {
+      result.set(vault.address, new Map());
+
+      const vaultState = await vault.getState();
+      const vaultRequiresAllocationWhitelisted = vaultState.allowAllocationsInWhitelistedReservesOnly === 1;
+      const vaultRequiresInvestWhitelisted = vaultState.allowInvestInWhitelistedReservesOnly === 1;
+      if (!vaultRequiresAllocationWhitelisted && !vaultRequiresInvestWhitelisted) {
+        continue;
+      }
+
+      const reservesInAlloc = vaultAllocations.get(vault.address)!;
+      for (const reserve of reservesInAlloc.keys()) {
+        const whitelistEntry = whitelistMap.get(reserve)!;
+        const allocationWhitelistedNotMet =
+          vaultRequiresAllocationWhitelisted && whitelistEntry.whitelistAddAllocation === 0;
+        const investWhitelistedNotMet = vaultRequiresInvestWhitelisted && whitelistEntry.whitelistInvest === 0;
+        if (allocationWhitelistedNotMet || investWhitelistedNotMet) {
+          result.get(vault.address)!.set(reserve, whitelistEntry);
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Collects all reserve addresses across vault allocations, initializes their KaminoReserve state,
+   * and fetches whitelist entries for all of them. Also caches the per-vault allocation maps to avoid
+   * redundant calls.
+   * @param vaults - the vaults to collect allocations from
+   * @returns the per-vault allocation maps and a global reserve-to-whitelist-entry map
+   */
+  private async fetchVaultsAllocationsAndWhitelistStatus(vaults: KaminoVault[]): Promise<{
+    vaultAllocations: Map<Address, Map<Address, ReserveAllocationOverview>>;
+    whitelistMap: Map<Address, ReserveWhitelistEntry>;
+  }> {
+    const vaultAllocations = new Map<Address, Map<Address, ReserveAllocationOverview>>();
+    const allReserveAddresses = new Set<Address>();
+
+    // load all vault states in parallel so vault.getVaultAllocations() below won't do any additional rpc calls
+    Promise.all(
+      vaults.map(async (vault) => {
+        vault.getState();
+      })
+    );
+    for (const vault of vaults) {
+      const allocations = await vault.getVaultAllocations();
+      vaultAllocations.set(vault.address, allocations);
+      for (const reserve of allocations.keys()) {
+        allReserveAddresses.add(reserve);
+      }
+    }
+
+    const reservesAddressList = Array.from(allReserveAddresses);
+    const reserves = await Promise.all(
+      reservesAddressList.map((reserve) =>
+        KaminoReserve.initializeFromAddress(reserve, this.getConnection(), this.recentSlotDurationMs)
+      )
+    );
+    const whitelistMap = await this.fetchReservesWhitelistEntries(reserves);
+
+    return { vaultAllocations, whitelistMap };
+  }
+
   private async getVaultsStates(vaults: Address[]): Promise<Array<VaultState | null>> {
     return await VaultState.fetchMultiple(this.getConnection(), vaults, this._kaminoVaultProgramId);
   }
@@ -4761,6 +5053,21 @@ async function getReserveWhitelistEntryIfExists(
     commitment: 'processed',
   });
   return reserveWhitelistEntryAccount.exists ? some(reserveWhitelistEntry) : none<Address>();
+}
+
+async function getReservesWhitelistPDAs(reserves: Address[], kaminoVaultProgramId: Address): Promise<Address[]> {
+  return Promise.all(reserves.map((reserve) => getReserveWhitelistEntryPda(reserve, kaminoVaultProgramId)));
+}
+
+function deduplicateVaults(vaults: KaminoVault[]): KaminoVault[] {
+  const seen = new Set<Address>();
+  return vaults.filter((vault) => {
+    if (seen.has(vault.address)) {
+      return false;
+    }
+    seen.add(vault.address);
+    return true;
+  });
 }
 
 function parseVaultAdmin(vault: VaultState, signer?: TransactionSigner) {
