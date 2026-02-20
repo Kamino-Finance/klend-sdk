@@ -91,6 +91,7 @@ import {
   UpdateVaultConfigIxs,
   UserSharesForVault,
   VaultComputedAllocation,
+  VaultReleaseCheckResult,
   WithdrawAndBlockReserveIxs,
   WithdrawIxs,
 } from './vault_types';
@@ -1716,6 +1717,15 @@ export class KaminoManager {
       lendingMarket: marketWithAddress.address,
     };
     return updateLendingMarketOwner(accounts, undefined, this._kaminoLendProgramId);
+  }
+
+  /**
+   * Check if a vault has all the needed criteria to be released
+   * @param vault - the vault to check
+   * @returns the release check result with errors, warnings, and success flag
+   */
+  async checkVaultReleaseStatus(vault: KaminoVault): Promise<VaultReleaseCheckResult> {
+    return this._vaultClient.checkVaultReleaseStatus(vault);
   }
 
   /**

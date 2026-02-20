@@ -87,3 +87,9 @@ export type CreateVaultFarm = {
   setupFarmIxs: Instruction[];
   updateFarmIxs: Instruction[];
 };
+
+export type VaultReleaseCheckResult = {
+  errors: string[];
+  warnings: string[];
+  success: boolean;
+};

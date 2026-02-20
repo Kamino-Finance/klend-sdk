@@ -2662,6 +2662,39 @@ async function main() {
       console.log(adminInfo);
     });
 
+  // example:  yarn kamino-manager get-market-or-vault-admin-info --address A2wsxhA7pF4B2UKVfXocb6TAAP9ipfPJam6oMKgDE5BK
+  commands
+    .command('check-vault-release-status')
+    .requiredOption('--vault <string>', 'Vault address')
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ vault, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+      const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
+      const kaminoVault = new KaminoVault(env.c.rpc, address(vault), undefined, env.kvaultProgramId, slotDuration);
+
+      const result = await kaminoManager.checkVaultReleaseStatus(kaminoVault);
+
+      if (result.errors.length > 0) {
+        console.log('\nErrors:');
+        for (const error of result.errors) {
+          console.log(`  ❌ ${error}`);
+        }
+      }
+      if (result.warnings.length > 0) {
+        console.log('\nWarnings:');
+        for (const warning of result.warnings) {
+          console.log(`  ⚠️  ${warning}`);
+        }
+      }
+      if (result.success) {
+        console.log('\n✅ Vault is ready for release');
+      } else {
+        console.log('\n❌ Vault is NOT ready for release');
+      }
+    });
+
   commands
     .command('claim-rewards-for-vault')
     .requiredOption('--vault <string>', 'Vault address')

@@ -129,6 +129,7 @@ import {
   UpdateVaultConfigIxs,
   UserSharesForVault,
   VaultComputedAllocation,
+  VaultReleaseCheckResult,
   WithdrawAndBlockReserveIxs,
   WithdrawIxs,
 } from './vault_types';
@@ -163,6 +164,8 @@ import { Farms, UserState } from '@kamino-finance/farms-sdk';
 import { computeReservesAllocation } from '../utils/vaultAllocation';
 import { getReserveFarmRewardsAPY } from '../utils/farmUtils';
 import { fetchKaminoCdnData } from '../utils/readCdnData';
+import { walletIsSquadsMultisig } from '../utils/multisig';
+import { RiskManagerInfo } from '../models/cdn';
 import {
   updateGlobalConfigAdmin,
   UpdateGlobalConfigAdminAccounts,
@@ -253,12 +256,131 @@ export class KaminoVaultClient {
         return undefined;
       }
 
-      const parsed: CdnResources = { delegatedVaultFarms };
+      const riskManagers = raw['mainnet-beta']?.riskManagers ?? {};
+      const parsed: CdnResources = { delegatedVaultFarms, riskManagers };
       this._cdnResources = parsed;
       return parsed;
     })();
 
     return this._cdnResourcesPromise;
+  }
+
+  /**
+   * Check if a vault has all the needed criteria to be released
+   * - owner is multisig
+   * - vaultFarm is set and it is a farm that is valid
+   * - FLC farm is set and it is a farm that is valid (warning if not)
+   * - check shares token metadata is set
+   * - Check min deposit is not 0
+   * - Check the vault has at least one allocation
+   * - Check there are allocations with weight > 0 and cap > 0 (and give warning for each allocation which doesn't have cap == u64::MAX)
+   * - Check CDN (using loadCdnResourcesOnce) that the vaultAdmin exists in the list of admins and has a description
+   * @param vault - the vault to check
+   * @returns - a promise that resolves to the release status of the vault
+   */
+  async checkVaultReleaseStatus(vault: KaminoVault): Promise<VaultReleaseCheckResult> {
+    const result: VaultReleaseCheckResult = {
+      errors: [],
+      warnings: [],
+      success: true,
+    };
+
+    const vaultState = await vault.getState();
+
+    // 1. Check owner is multisig
+    try {
+      const isMultisig = await walletIsSquadsMultisig(vaultState.vaultAdminAuthority);
+      if (!isMultisig) {
+        result.errors.push(`Vault admin ${vaultState.vaultAdminAuthority} is not a Squads multisig`);
+      }
+    } catch (e) {
+      result.errors.push(`Failed to check if vault admin ${vaultState.vaultAdminAuthority} is a multisig: ${e}`);
+    }
+
+    // 2. Check vaultFarm is set and valid
+    if (vaultState.vaultFarm === DEFAULT_PUBLIC_KEY) {
+      result.errors.push('Vault farm is not set');
+    } else {
+      const farmState = await FarmState.fetch(this._rpc, vaultState.vaultFarm);
+      if (!farmState) {
+        result.errors.push(`Vault farm ${vaultState.vaultFarm} could not be fetched (invalid or does not exist)`);
+      }
+    }
+
+    // 3. Check FLC farm is set and valid (warning if not)
+    if (vaultState.firstLossCapitalFarm === DEFAULT_PUBLIC_KEY) {
+      result.warnings.push('First loss capital farm is not set');
+    } else {
+      const flcFarmState = await FarmState.fetch(this._rpc, vaultState.firstLossCapitalFarm);
+      if (!flcFarmState) {
+        result.warnings.push(
+          `First loss capital farm ${vaultState.firstLossCapitalFarm} could not be fetched (invalid or does not exist)`
+        );
+      } else {
+        if (!(await this.isFlcFarmValid(flcFarmState, vaultState))) {
+          result.warnings.push(`First loss capital farm ${vaultState.firstLossCapitalFarm} is not valid`);
+        }
+      }
+    }
+
+    // 4. Check shares token metadata is set
+    const [sharesMintMetadata] = await getKVaultSharesMetadataPda(vaultState.sharesMint);
+    const metadataAccount = await fetchEncodedAccount(this._rpc, sharesMintMetadata, { commitment: 'processed' });
+    if (!metadataAccount.exists) {
+      result.errors.push(`Shares token metadata not set for shares mint ${vaultState.sharesMint}`);
+    }
+
+    // 5. Check min deposit is not 0
+    if (vaultState.minDepositAmount.isZero()) {
+      result.errors.push('Min deposit amount is 0');
+    }
+
+    // 6. Check the vault has at least one allocation
+    const activeAllocations = vaultState.vaultAllocationStrategy.filter(
+      (allocation) => allocation.reserve !== DEFAULT_PUBLIC_KEY
+    );
+    if (activeAllocations.length === 0) {
+      result.errors.push('Vault has no allocations');
+    }
+
+    // 7. Check allocations have weight > 0 and cap > 0, warn if cap != u64::MAX
+    for (const allocation of activeAllocations) {
+      if (allocation.targetAllocationWeight.isZero()) {
+        result.errors.push(`Allocation for reserve ${allocation.reserve} has weight 0`);
+      }
+      if (allocation.tokenAllocationCap.isZero()) {
+        result.errors.push(`Allocation for reserve ${allocation.reserve} has cap 0`);
+      } else if (allocation.tokenAllocationCap.toString() !== U64_MAX) {
+        result.warnings.push(
+          `Allocation for reserve ${
+            allocation.reserve
+          } has cap ${allocation.tokenAllocationCap.toString()} (not u64::MAX)`
+        );
+      }
+    }
+
+    // 9. Check CDN that the vault admin exists in riskManagers and has a description
+    const cdnResources = await this.loadCdnResourcesOnce();
+    if (!cdnResources) {
+      result.errors.push('Could not fetch CDN resources to verify vault admin');
+    } else {
+      const adminEntries = cdnResources.riskManagers[vaultState.vaultAdminAuthority];
+      if (!adminEntries || adminEntries.length === 0) {
+        result.errors.push(`Vault admin ${vaultState.vaultAdminAuthority} not found in CDN riskManagers`);
+      } else {
+        const hasDescription = adminEntries.some(
+          (entry: RiskManagerInfo) => entry.description && entry.description.trim().length > 0
+        );
+        if (!hasDescription) {
+          result.errors.push(
+            `Vault admin ${vaultState.vaultAdminAuthority} found in CDN riskManagers but has no description`
+          );
+        }
+      }
+    }
+
+    result.success = result.errors.length === 0;
+    return result;
   }
 
   /**
