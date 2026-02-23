@@ -3375,16 +3375,16 @@ export class KaminoVaultClient {
       fetchKaminoCdnData(),
     ]);
     const kaminoReserves = new Map<Address, KaminoReserve>();
-    reservesAndOracles.forEach(([reserve, oracle], index) => {
+    reservesAndOracles.forEach(([{ address: reserveAddress, state: reserve }, oracle]) => {
       if (!oracle) {
         throw Error(
-          `Could not find oracle for ${parseTokenSymbol(reserve.config.tokenInfo.name)} (${
-            vaultReservesAddresses[index]
-          }) reserve in market ${reserve.lendingMarket}`
+          `Could not find oracle for ${parseTokenSymbol(
+            reserve.config.tokenInfo.name
+          )} (${reserveAddress}) reserve in market ${reserve.lendingMarket}`
         );
       }
       const kaminoReserve = KaminoReserve.initialize(
-        vaultReservesAddresses[index],
+        reserveAddress,
         reserve,
         oracle,
         this.getConnection(),
@@ -3449,10 +3449,10 @@ export class KaminoVaultClient {
       missingReservesStates,
       oracleAccounts
     );
-    missingReservesAndOracles.forEach(([reserve, oracle], index) => {
+    missingReservesAndOracles.forEach(([{ address: reserveAddress, state: reserve }, oracle]) => {
       const fetchedReserve = new KaminoReserve(
         reserve,
-        missingReserveAddresses[index]!, // Set maintains order
+        reserveAddress,
         oracle!,
         this.getConnection(),
         this.recentSlotDurationMs

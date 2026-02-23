@@ -975,16 +975,15 @@ export class KaminoManager {
         console.log(`Market ${pubkey.toString()} ${parseTokenSymbol(market.name)} has no reserves`);
       } else {
         const reservesAndOracles = getTokenOracleDataSync(allOracleAccounts, reserves);
-        reservesAndOracles.forEach(([reserve, oracle], index) => {
+        reservesAndOracles.forEach(([{ address: reserveAddress, state: reserve }, oracle]) => {
           if (!oracle) {
             console.log('Manager > getAllMarkets: oracle not found for reserve', reserve.config.tokenInfo.name);
             return;
           }
 
-          const { address, state } = reserves[index];
           const kaminoReserve = KaminoReserve.initialize(
-            address,
-            state,
+            reserveAddress,
+            reserve,
             oracle,
             this.getRpc(),
             this.recentSlotDurationMs,

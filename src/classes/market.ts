@@ -500,16 +500,16 @@ export class KaminoMarket {
       fetchKaminoCdnData(),
     ]);
     const kaminoReserves = new Map<Address, KaminoReserve>();
-    reservesAndOracles.forEach(([reserve, oracle], index) => {
+    reservesAndOracles.forEach(([{ address: reserveAddress, state: reserve }, oracle]) => {
       if (!oracle) {
         throw Error(
-          `Could not find oracle for ${parseTokenSymbol(reserve.config.tokenInfo.name)} (${
-            addresses[index]
-          }) reserve in market ${reserve.lendingMarket}`
+          `Could not find oracle for ${parseTokenSymbol(
+            reserve.config.tokenInfo.name
+          )} (${reserveAddress}) reserve in market ${reserve.lendingMarket}`
         );
       }
       const kaminoReserve = KaminoReserve.initialize(
-        addresses[index],
+        reserveAddress,
         reserve,
         oracle,
         this.rpc,
@@ -1693,13 +1693,11 @@ export type KlendPrices = {
   switchboard: KaminoPrices;
 };
 
-export async function getReservesForMarket(
+export async function getReserveStatesForMarket(
   marketAddress: Address,
   rpc: Rpc<KaminoReserveRpcApi>,
-  programId: Address,
-  recentSlotDurationMs: number,
-  oracleAccounts?: AllOracleAccounts
-): Promise<Map<Address, KaminoReserve>> {
+  programId: Address
+): Promise<ReserveWithAddress[]> {
   const reserves = await rpc
     .getProgramAccounts(programId, {
       filters: [
@@ -1717,7 +1715,7 @@ export async function getReservesForMarket(
       encoding: 'base64',
     })
     .send();
-  const deserializedReserves: ReserveWithAddress[] = reserves.map((reserve) => {
+  return reserves.map((reserve) => {
     if (reserve.account === null) {
       throw new Error(`Reserve account ${reserve.pubkey} does not exist`);
     }
@@ -1732,21 +1730,31 @@ export async function getReservesForMarket(
       state: reserveAccount,
     };
   });
+}
+
+export async function getReservesForMarket(
+  marketAddress: Address,
+  rpc: Rpc<KaminoReserveRpcApi>,
+  programId: Address,
+  recentSlotDurationMs: number,
+  oracleAccounts?: AllOracleAccounts
+): Promise<Map<Address, KaminoReserve>> {
+  const deserializedReserves: ReserveWithAddress[] = await getReserveStatesForMarket(marketAddress, rpc, programId);
   const [reservesAndOracles, cdnResourcesData] = await Promise.all([
     getTokenOracleData(rpc, deserializedReserves, oracleAccounts),
     fetchKaminoCdnData(),
   ]);
   const reservesByAddress = new Map<Address, KaminoReserve>();
-  reservesAndOracles.forEach(([reserve, oracle], index) => {
+  reservesAndOracles.forEach(([{ address: reserveAddress, state: reserve }, oracle]) => {
     if (!oracle) {
       throw Error(
-        `Could not find oracle for ${parseTokenSymbol(reserve.config.tokenInfo.name)} (${
-          reserves[index].pubkey
-        }) reserve in market ${reserve.lendingMarket}`
+        `Could not find oracle for ${parseTokenSymbol(
+          reserve.config.tokenInfo.name
+        )} (${reserveAddress}) reserve in market ${reserve.lendingMarket}`
       );
     }
     const kaminoReserve = KaminoReserve.initialize(
-      reserves[index].pubkey,
+      reserveAddress,
       reserve,
       oracle,
       rpc,

@@ -43,12 +43,16 @@ export type ScopePriceRefreshConfig = {
   scopeConfigurations: [Address, Configuration][];
 };
 
-export function getTokenOracleDataSync(allOracleAccounts: AllOracleAccounts, reserves: ReserveWithAddress[]) {
-  const tokenOracleDataForReserves: Array<[Reserve, TokenOracleData | undefined]> = [];
+export function getTokenOracleDataSync(
+  allOracleAccounts: AllOracleAccounts,
+  reserves: ReserveWithAddress[]
+): Array<[ReserveWithAddress, TokenOracleData | undefined]> {
+  const tokenOracleDataForReserves: Array<[ReserveWithAddress, TokenOracleData | undefined]> = [];
   const pythCache = new Map<Address, PythPrices>();
   const switchboardCache = new Map<Address, CandidatePrice>();
   const scopeCache = new Map<Address, OraclePrices>();
-  for (const { address, state: reserve } of reserves) {
+  for (const reserveWithAddress of reserves) {
+    const { address, state: reserve } = reserveWithAddress;
     let currentBest: CandidatePrice | undefined = undefined;
     const oracle = {
       pythAddress: reserve.config.tokenInfo.pythConfiguration.price,
@@ -90,7 +94,7 @@ export function getTokenOracleDataSync(allOracleAccounts: AllOracleAccounts, res
       console.error(
         `No price found for reserve: ${reserveSymbol ?? 'unknown'} (${address}) in market: ${reserve.lendingMarket}`
       );
-      tokenOracleDataForReserves.push([reserve, undefined]);
+      tokenOracleDataForReserves.push([reserveWithAddress, undefined]);
       continue;
     }
     const tokenOracleData: TokenOracleData = {
@@ -100,7 +104,7 @@ export function getTokenOracleDataSync(allOracleAccounts: AllOracleAccounts, res
       timestamp: currentBest.timestamp,
       valid: currentBest.valid,
     };
-    tokenOracleDataForReserves.push([reserve, tokenOracleData]);
+    tokenOracleDataForReserves.push([reserveWithAddress, tokenOracleData]);
   }
   return tokenOracleDataForReserves;
 }
@@ -110,7 +114,7 @@ export async function getTokenOracleData(
   rpc: Rpc<GetMultipleAccountsApi>,
   reserves: ReserveWithAddress[],
   oracleAccounts?: AllOracleAccounts
-): Promise<Array<[Reserve, TokenOracleData | undefined]>> {
+): Promise<Array<[ReserveWithAddress, TokenOracleData | undefined]>> {
   const allOracleAccounts =
     oracleAccounts ??
     (await getAllOracleAccounts(
