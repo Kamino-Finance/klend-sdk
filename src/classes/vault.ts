@@ -3644,6 +3644,40 @@ export class KaminoVaultClient {
     };
   }
 
+  /** Retrieves the maximum instant withdrawable amount for a vault based on the available liquidity in the vault allocations
+   * @param vault - the kamino vault to get the maximum instant withdrawable amount for
+   * @returns the maximum instant withdrawable amount for the vault
+   */
+  async getMaxInstantWithdrawableAmount(
+    vault: KaminoVault,
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    slot?: Slot
+  ): Promise<Decimal> {
+    const latestSlot = slot ? slot : await this.getConnection().getSlot().send();
+    const vaultState = await vault.getState();
+    const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
+
+    let maxWithdrawableAmount = new Decimal(vaultState.tokenAvailable.toString());
+    const allocations = this.getVaultAllocations(vaultState);
+    for (const [reserveAddress, allocation] of allocations) {
+      if (reserveAddress === DEFAULT_PUBLIC_KEY) {
+        continue;
+      }
+      const reserve = vaultReservesState.get(reserveAddress);
+      if (reserve === undefined) {
+        throw new Error(`Reserve ${reserveAddress} not found`);
+      }
+      const reserveAvailableLiquidity = reserve.getLiquidityAvailableAmount();
+      const investedInReserve = allocation.ctokenAllocation.div(
+        reserve.getEstimatedCollateralExchangeRate(latestSlot, 0)
+      );
+      const instantWithdrawableAmount = Decimal.min(reserveAvailableLiquidity, investedInReserve);
+      maxWithdrawableAmount = maxWithdrawableAmount.add(instantWithdrawableAmount);
+    }
+
+    return maxWithdrawableAmount;
+  }
+
   /**
    * This will return an VaultOverview object that encapsulates all the information about the vault, including the holdings, reserves details, theoretical APY, utilization ratio and total borrowed amount
    * @param vault - the kamino vault to get available liquidity to withdraw for
@@ -3715,6 +3749,7 @@ export class KaminoVaultClient {
       tokensPrices
     );
     const vaultFlcFarmStatsPromise = this.getVaultFlcFarmStats(vault);
+    const vaultWithdrawPenaltiesPromise = this.getVaultWithdrawPenalties(vault);
 
     // all the async part of the functions above just read the vaultReservesState which is read beforehand, so excepting vaultCollateralsPromise they should do no additional network calls
     const [
@@ -3728,6 +3763,7 @@ export class KaminoVaultClient {
       vaultReservesFarmIncentives,
       vaultDelegatedFarmIncentives,
       vaultFlcFarmStats,
+      vaultWithdrawPenalties,
     ] = await Promise.all([
       vaultHoldingsWithUSDValuePromise,
       vaultTheoreticalAPYPromise,
@@ -3739,6 +3775,7 @@ export class KaminoVaultClient {
       vaultReservesFarmIncentivesPromise,
       vaultDelegatedFarmIncentivesPromise,
       vaultFlcFarmStatsPromise,
+      vaultWithdrawPenaltiesPromise,
     ]);
 
     return {
@@ -3756,6 +3793,39 @@ export class KaminoVaultClient {
       totalSupplied: totalInvestedAndBorrowed.totalInvested,
       totalSuppliedUSD: totalInvestedAndBorrowed.totalInvested.mul(vaultTokenPrice),
       flcFarmStats: vaultFlcFarmStats,
+      withdrawalPenalties: vaultWithdrawPenalties,
+    };
+  }
+
+  /**
+   * This will return the withdrawal penalties for a vault
+   * @param vault - the kamino vault to get the withdrawal penalties for
+   * @param globalConfig - the global config to use for the withdrawal penalties. Optional. If not provided, the function will fetch the global config from the connection
+   * @returns the withdrawal penalties for the vault, in lamports and bps; for each withdraw the penalty is computed and the bax between fixed amount and bps amount is taken
+   */
+  async getVaultWithdrawPenalties(vault: KaminoVault, globalConfig?: KVaultGlobalConfig): Promise<WithdrawPenalties> {
+    const vaultState = await vault.getState();
+    const globalConfigState = globalConfig
+      ? globalConfig
+      : await KVaultGlobalConfig.fetch(this.getConnection(), await getKvaultGlobalConfigPda(this.getProgramID()));
+    if (!globalConfigState) {
+      throw new Error('KVault Global config not found');
+    }
+    const vaultWithdrawalPenaltyLamports = new Decimal(vaultState.withdrawalPenaltyLamports.toString());
+    const globalWithdrawalPenaltyLamports = new Decimal(globalConfigState.withdrawalPenaltyLamports.toString());
+    const withdrawalPenaltyLamports = vaultWithdrawalPenaltyLamports.gt(globalWithdrawalPenaltyLamports)
+      ? vaultWithdrawalPenaltyLamports
+      : globalWithdrawalPenaltyLamports;
+
+    const vaultWithdrawalPenaltyBps = new Decimal(vaultState.withdrawalPenaltyBps.toString());
+    const globalWithdrawalPenaltyBps = new Decimal(globalConfigState.withdrawalPenaltyBps.toString());
+    const withdrawalPenaltyBps = vaultWithdrawalPenaltyBps.gt(globalWithdrawalPenaltyBps)
+      ? vaultWithdrawalPenaltyBps
+      : globalWithdrawalPenaltyBps;
+
+    return {
+      withdrawalPenaltyLamports: withdrawalPenaltyLamports,
+      withdrawalPenaltyBps: withdrawalPenaltyBps,
     };
   }
 
@@ -5317,6 +5387,7 @@ export type VaultOverview = {
   totalSuppliedUSD: Decimal;
   utilizationRatio: Decimal;
   flcFarmStats: FlcFarmStats | undefined;
+  withdrawalPenalties: WithdrawPenalties;
 };
 
 export type VaultReservesFarmsIncentives = {
@@ -5384,4 +5455,9 @@ type BuildReserveExitIxsParams = {
   slot: Slot;
   vaultReservesMap?: Map<Address, KaminoReserve>;
   builder: ReserveExitInstructionBuilder;
+};
+
+export type WithdrawPenalties = {
+  withdrawalPenaltyLamports: Decimal;
+  withdrawalPenaltyBps: Decimal;
 };
