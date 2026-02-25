@@ -992,7 +992,10 @@ export class KaminoVaultClient {
       const reserveAllocationConfig = new ReserveAllocationConfig(
         reserveWithAddress,
         0,
-        new Decimal(existingReserveAllocation.tokenAllocationCap.toString())
+        lamportsToDecimal(
+          new Decimal(existingReserveAllocation.tokenAllocationCap.toString()),
+          reserveWithAddress.state.liquidity.mintDecimals.toNumber()
+        )
       );
 
       // update allocation to have 0 weight and 0 cap
@@ -2033,10 +2036,11 @@ export class KaminoVaultClient {
     if (allReserves.length === 0) {
       throw new Error('No reserves found for the vault, please select at least one reserve for the vault');
     }
-    const [allReservesStateMap, computedReservesAllocation] = await Promise.all([
+    const [allReservesStateMap, computedReservesAllocationTokens] = await Promise.all([
       this.loadVaultReserves(vaultState),
       this.getVaultComputedReservesAllocation(vaultState),
     ]);
+
     const tokenProgram = await getAccountOwner(this.getConnection(), vaultState.tokenMint);
     const [{ createAtaIx }] = await createAtasIdempotent(payer, [{ mint: vaultState.tokenMint, tokenProgram }]);
     // compute total vault holdings and expected distribution based on weights
@@ -2047,17 +2051,22 @@ export class KaminoVaultClient {
     for (let index = 0; index < allReserves.length; index++) {
       const reservePubkey = allReserves[index];
       const reserveState = allReservesStateMap.get(reservePubkey)!;
-      const computedAllocation = computedReservesAllocation.targetReservesAllocation.get(reservePubkey)!;
+      const computedAllocationTokens = computedReservesAllocationTokens.targetReservesAllocation.get(reservePubkey)!;
+      const computedAllocationLamports = numberToLamportsDecimal(
+        computedAllocationTokens,
+        vaultState.tokenMintDecimals.toNumber()
+      );
       const currentCTokenAllocation = curentVaultAllocations.get(reservePubkey)!.ctokenAllocation;
       const currentAllocationCap = curentVaultAllocations.get(reservePubkey)!.tokenAllocationCap;
 
       const reserveCollExchangeRate = reserveState.getCollateralExchangeRate();
+      const reserveAllocationLamports = currentCTokenAllocation.div(reserveCollExchangeRate);
       const reserveAllocationLiquidityAmount = lamportsToDecimal(
         currentCTokenAllocation.div(reserveCollExchangeRate),
         vaultState.tokenMintDecimals.toNumber()
       );
 
-      const diffInReserveTokens = computedAllocation.sub(reserveAllocationLiquidityAmount);
+      const diffInReserveTokens = computedAllocationTokens.sub(reserveAllocationLiquidityAmount);
       const diffInReserveLamports = collToLamportsDecimal(diffInReserveTokens, vaultState.tokenMintDecimals.toNumber());
       // it is possible that the tokens to invest are > minInvestAmountLamports but the ctokens it represent are 0, which will make an invest move 0 tokens
       const diffInCtokenLamports = reserveCollExchangeRate.mul(diffInReserveLamports.abs());
@@ -2066,11 +2075,13 @@ export class KaminoVaultClient {
       // if the diff for the reserve is smaller than the min invest amount, we do not need to invest or disinvest
       const minInvestAmountLamports = new Decimal(minInvestAmount.toString());
       if (actualDiffInLamports.gt(minInvestAmountLamports) || skipComputationChecks) {
-        if (computedAllocation.lt(reserveAllocationLiquidityAmount)) {
+        if (computedAllocationTokens.lt(reserveAllocationLiquidityAmount)) {
           reservesToDisinvestFrom.push(reservePubkey);
         } else {
-          const actualTarget = currentAllocationCap.gt(computedAllocation) ? computedAllocation : currentAllocationCap;
-          const lamportsToAddToReserve = actualTarget.sub(reserveAllocationLiquidityAmount);
+          const actualTargetLamports = currentAllocationCap.gt(computedAllocationLamports)
+            ? computedAllocationLamports
+            : currentAllocationCap;
+          const lamportsToAddToReserve = actualTargetLamports.sub(reserveAllocationLamports);
           if (lamportsToAddToReserve.gt(minInvestAmountLamports)) {
             reservesToInvestInto.push(reservePubkey);
           }
@@ -2552,6 +2563,7 @@ export class KaminoVaultClient {
   ): Promise<VaultComputedAllocation> {
     // 1. Read the states
     const holdings = await this.getVaultHoldings(vaultState, slot, vaultReserves, currentSlot);
+    const tokenMintDecimals = vaultState.tokenMintDecimals.toNumber();
 
     // if there are no vault reserves or all have weight 0 everything has to be in Available
     const allReservesPubkeys = this.getVaultReserves(vaultState);
@@ -2571,15 +2583,22 @@ export class KaminoVaultClient {
       };
     }
 
-    const initialVaultAllocations = this.getVaultAllocations(vaultState);
+    const initialVaultAllocations = new Map<Address, ReserveAllocationOverview>();
+    reservesAllocations.forEach((allocation, reserve) => {
+      initialVaultAllocations.set(reserve, {
+        targetWeight: allocation.targetWeight,
+        tokenAllocationCap: lamportsToDecimal(allocation.tokenAllocationCap, tokenMintDecimals),
+        ctokenAllocation: allocation.ctokenAllocation,
+      });
+    });
 
     // 2. Compute the allocation
     return this.computeReservesAllocation(
       holdings.totalAUMIncludingFees.sub(holdings.pendingFees),
       new Decimal(vaultState.unallocatedWeight.toString()),
-      new Decimal(vaultState.unallocatedTokensCap.toString()),
+      lamportsToDecimal(new Decimal(vaultState.unallocatedTokensCap.toString()), tokenMintDecimals),
       initialVaultAllocations,
-      vaultState.tokenMintDecimals.toNumber()
+      tokenMintDecimals
     );
   }
 
