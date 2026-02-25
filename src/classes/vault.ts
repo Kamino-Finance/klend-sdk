@@ -1472,7 +1472,8 @@ export class KaminoVaultClient {
     vault: KaminoVault,
     tokenAmount: Decimal,
     vaultReservesMap?: Map<Address, KaminoReserve>,
-    farmState?: FarmState
+    farmState?: FarmState,
+    payer?: TransactionSigner
   ): Promise<DepositIxs> {
     let vaultFarmState = farmState;
     const vaultState = await vault.getState();
@@ -1482,7 +1483,7 @@ export class KaminoVaultClient {
         vaultFarmState = vaultFarmStateResult;
       }
     }
-    return this.buildShareEntryIxs('deposit', user, vault, tokenAmount, vaultReservesMap, vaultFarmState);
+    return this.buildShareEntryIxs('deposit', user, vault, tokenAmount, vaultReservesMap, vaultFarmState, payer);
   }
 
   async buySharesIxs(
@@ -1490,9 +1491,10 @@ export class KaminoVaultClient {
     vault: KaminoVault,
     tokenAmount: Decimal,
     vaultReservesMap?: Map<Address, KaminoReserve>,
-    farmState?: FarmState
+    farmState?: FarmState,
+    payer?: TransactionSigner
   ): Promise<DepositIxs> {
-    return this.buildShareEntryIxs('buy', user, vault, tokenAmount, vaultReservesMap, farmState);
+    return this.buildShareEntryIxs('buy', user, vault, tokenAmount, vaultReservesMap, farmState, payer);
   }
 
   private async buildShareEntryIxs(
@@ -1501,7 +1503,8 @@ export class KaminoVaultClient {
     vault: KaminoVault,
     tokenAmount: Decimal,
     vaultReservesMap?: Map<Address, KaminoReserve>,
-    farmState?: FarmState
+    farmState?: FarmState,
+    payer?: TransactionSigner
   ): Promise<DepositIxs> {
     const vaultState = await vault.getState();
 
@@ -1515,7 +1518,7 @@ export class KaminoVaultClient {
           mint: WRAPPED_SOL_MINT,
           tokenProgram: TOKEN_PROGRAM_ADDRESS,
         },
-      ]);
+      ], payer);
       createAtasIxs.push(createWsolAtaIxn);
       const transferWsolIxs = getTransferWsolIxs(
         user,
@@ -1532,7 +1535,7 @@ export class KaminoVaultClient {
         mint: vaultState.sharesMint,
         tokenProgram: TOKEN_PROGRAM_ADDRESS,
       },
-    ]);
+    ], payer);
     createAtasIxs.push(createSharesAtaIxs);
 
     const eventAuthority = await getEventAuthorityPda(this._kaminoVaultProgramId);
@@ -1683,7 +1686,8 @@ export class KaminoVaultClient {
     shareAmountToWithdraw: Decimal,
     slot: Slot,
     vaultReservesMap?: Map<Address, KaminoReserve>,
-    farmState?: FarmState
+    farmState?: FarmState,
+    payer?: TransactionSigner
   ): Promise<WithdrawIxs> {
     let vaultFarmState = farmState;
     const vaultState = await vault.getState();
@@ -1700,7 +1704,8 @@ export class KaminoVaultClient {
       shareAmountToWithdraw,
       slot,
       vaultReservesMap,
-      vaultFarmState
+      vaultFarmState,
+      payer
     );
   }
 
@@ -1720,9 +1725,10 @@ export class KaminoVaultClient {
     shareAmountToWithdraw: Decimal,
     slot: Slot,
     vaultReservesMap?: Map<Address, KaminoReserve>,
-    farmState?: FarmState
+    farmState?: FarmState,
+    payer?: TransactionSigner
   ): Promise<WithdrawIxs> {
-    return this.buildShareExitIxs('sell', user, vault, shareAmountToWithdraw, slot, vaultReservesMap, farmState);
+    return this.buildShareExitIxs('sell', user, vault, shareAmountToWithdraw, slot, vaultReservesMap, farmState, payer);
   }
 
   private async buildShareExitIxs(
@@ -1732,7 +1738,8 @@ export class KaminoVaultClient {
     shareAmountToWithdraw: Decimal,
     slot: Slot,
     vaultReservesMap?: Map<Address, KaminoReserve>,
-    farmState?: FarmState
+    farmState?: FarmState,
+    payer?: TransactionSigner
   ): Promise<WithdrawIxs> {
     const vaultState = await vault.getState();
     const hasFarm = await vault.hasFarm();
@@ -1783,7 +1790,7 @@ export class KaminoVaultClient {
           mint: vaultState.sharesMint,
           tokenProgram: TOKEN_PROGRAM_ADDRESS,
         },
-      ]);
+      ], payer);
       withdrawIxs.unstakeFromFarmIfNeededIxs.push(createAtaIx);
       let shareLamportsToWithdraw = new Decimal(U64_MAX.toString());
       if (!withdrawAllShares) {
@@ -1844,10 +1851,11 @@ export class KaminoVaultClient {
         slot,
         vaultReservesMap,
         builder: reserveExitBuilder,
+        payer,
       });
       withdrawIxs.withdrawIxs = withdrawFromVaultIxs;
     } else {
-      const withdrawFromVaultIxs = await this.withdrawFromAvailableIxs(user, vault, sharesToWithdraw);
+      const withdrawFromVaultIxs = await this.withdrawFromAvailableIxs(user, vault, sharesToWithdraw, payer);
       withdrawIxs.withdrawIxs = withdrawFromVaultIxs;
     }
 
@@ -1885,7 +1893,8 @@ export class KaminoVaultClient {
   private async withdrawFromAvailableIxs(
     user: TransactionSigner,
     vault: KaminoVault,
-    shareAmount: Decimal
+    shareAmount: Decimal,
+    payer?: TransactionSigner
   ): Promise<Instruction[]> {
     const vaultState = await vault.getState();
 
@@ -1895,7 +1904,7 @@ export class KaminoVaultClient {
         mint: vaultState.tokenMint,
         tokenProgram: vaultState.tokenProgram,
       },
-    ]);
+    ], payer);
 
     const shareLamportsToWithdraw = collToLamportsDecimal(shareAmount, vaultState.sharesMintDecimals.toNumber());
     const withdrawFromAvailableIxn = await this.withdrawFromAvailableIx(
@@ -1919,6 +1928,7 @@ export class KaminoVaultClient {
     slot,
     vaultReservesMap,
     builder,
+    payer,
   }: BuildReserveExitIxsParams): Promise<Instruction[]> {
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
     const userSharesAta = await getAssociatedTokenAddress(vaultState.sharesMint, user.address);
@@ -1927,7 +1937,7 @@ export class KaminoVaultClient {
         mint: vaultState.tokenMint,
         tokenProgram: vaultState.tokenProgram,
       },
-    ]);
+    ], payer);
 
     const withdrawAllShares = shareAmount.gte(allUserShares);
     const actualSharesToWithdraw = shareAmount.lte(allUserShares) ? shareAmount : allUserShares;
@@ -5100,12 +5110,13 @@ export class KaminoVault {
     user: TransactionSigner,
     tokenAmount: Decimal,
     vaultReservesMap?: Map<Address, KaminoReserve>,
-    farmState?: FarmState
+    farmState?: FarmState,
+    payer?: TransactionSigner
   ): Promise<DepositIxs> {
     if (vaultReservesMap) {
       this.vaultReservesStateCache = vaultReservesMap;
     }
-    return this.client.depositIxs(user, this, tokenAmount, this.vaultReservesStateCache, farmState);
+    return this.client.depositIxs(user, this, tokenAmount, this.vaultReservesStateCache, farmState, payer);
   }
 
   /**
@@ -5115,6 +5126,7 @@ export class KaminoVault {
    * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
    * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
+   * @param [payer] - optional parameter to pass a different payer for ATA creation rent. If not provided, the user will be used
    * @returns an array of instructions to create missing ATAs if needed and the withdraw instructions
    */
   async withdrawIxs(
@@ -5122,7 +5134,8 @@ export class KaminoVault {
     shareAmount: Decimal,
     slot?: Slot,
     vaultReservesMap?: Map<Address, KaminoReserve>,
-    farmState?: FarmState
+    farmState?: FarmState,
+    payer?: TransactionSigner
   ): Promise<WithdrawIxs> {
     if (vaultReservesMap) {
       this.vaultReservesStateCache = vaultReservesMap;
@@ -5130,7 +5143,7 @@ export class KaminoVault {
 
     const currentSlot = slot ?? (await this.client.getConnection().getSlot({ commitment: 'confirmed' }).send());
 
-    return this.client.withdrawIxs(user, this, shareAmount, currentSlot, this.vaultReservesStateCache, farmState);
+    return this.client.withdrawIxs(user, this, shareAmount, currentSlot, this.vaultReservesStateCache, farmState, payer);
   }
 }
 
@@ -5474,6 +5487,7 @@ type BuildReserveExitIxsParams = {
   slot: Slot;
   vaultReservesMap?: Map<Address, KaminoReserve>;
   builder: ReserveExitInstructionBuilder;
+  payer?: TransactionSigner;
 };
 
 export type WithdrawPenalties = {

@@ -585,9 +585,10 @@ export class KaminoManager {
     vault: KaminoVault,
     tokenAmount: Decimal,
     vaultReservesMap?: Map<Address, KaminoReserve>,
-    farmState?: FarmState
+    farmState?: FarmState,
+    payer?: TransactionSigner
   ): Promise<DepositIxs> {
-    return this._vaultClient.depositIxs(user, vault, tokenAmount, vaultReservesMap, farmState);
+    return this._vaultClient.depositIxs(user, vault, tokenAmount, vaultReservesMap, farmState, payer);
   }
 
   /**
@@ -597,6 +598,7 @@ export class KaminoManager {
    * @param tokenAmount - token amount to be swapped for shares, in decimals (will be converted in lamports)
    * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
+   * @param [payer] - optional parameter to pass a different payer for ATA creation rent. If not provided, the user will be used
    * @returns - an instance of DepositIxs which contains the instructions to buy shares in vault and the instructions to stake the shares in the farm if the vault has a farm
    */
   async buyVaultSharesIxs(
@@ -604,9 +606,10 @@ export class KaminoManager {
     vault: KaminoVault,
     tokenAmount: Decimal,
     vaultReservesMap?: Map<Address, KaminoReserve>,
-    farmState?: FarmState
+    farmState?: FarmState,
+    payer?: TransactionSigner
   ): Promise<DepositIxs> {
-    return this._vaultClient.buySharesIxs(user, vault, tokenAmount, vaultReservesMap, farmState);
+    return this._vaultClient.buySharesIxs(user, vault, tokenAmount, vaultReservesMap, farmState, payer);
   }
 
   /**
@@ -757,9 +760,10 @@ export class KaminoManager {
     shareAmount: Decimal,
     slot: Slot,
     vaultReservesMap?: Map<Address, KaminoReserve>,
-    farmState?: FarmState
+    farmState?: FarmState,
+    payer?: TransactionSigner
   ): Promise<WithdrawIxs> {
-    return this._vaultClient.withdrawIxs(user, vault, shareAmount, slot, vaultReservesMap, farmState);
+    return this._vaultClient.withdrawIxs(user, vault, shareAmount, slot, vaultReservesMap, farmState, payer);
   }
 
   /**
@@ -770,6 +774,7 @@ export class KaminoManager {
    * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
    * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
+   * @param [payer] - optional parameter to pass a different payer for ATA creation rent. If not provided, the user will be used
    * @returns an array of instructions to create missing ATAs if needed and the withdraw instructions
    */
   async sellVaultSharesIxs(
@@ -778,9 +783,10 @@ export class KaminoManager {
     shareAmount: Decimal,
     slot: Slot,
     vaultReservesMap?: Map<Address, KaminoReserve>,
-    farmState?: FarmState
+    farmState?: FarmState,
+    payer?: TransactionSigner
   ): Promise<WithdrawIxs> {
-    return this._vaultClient.sellSharesIxs(user, vault, shareAmount, slot, vaultReservesMap, farmState);
+    return this._vaultClient.sellSharesIxs(user, vault, shareAmount, slot, vaultReservesMap, farmState, payer);
   }
 
   /**

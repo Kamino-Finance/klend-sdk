@@ -114,12 +114,14 @@ export const getAtasWithCreateIxsIfMissing = async (
 
 export async function createAtasIdempotent(
   user: TransactionSigner,
-  mints: Array<{ mint: Address; tokenProgram: Address }>
+  mints: Array<{ mint: Address; tokenProgram: Address }>,
+  payer?: TransactionSigner
 ): Promise<Array<{ ata: Address; createAtaIx: Instruction }>> {
+  const ataPayer = payer ?? user;
   const res: Array<{ ata: Address; createAtaIx: Instruction }> = [];
   for (const mint of mints) {
     const [ata, createAtaIx] = await createAssociatedTokenAccountIdempotentInstruction(
-      user,
+      ataPayer,
       mint.mint,
       user.address,
       mint.tokenProgram

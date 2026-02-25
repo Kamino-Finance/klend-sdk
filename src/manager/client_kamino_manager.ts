@@ -1672,7 +1672,8 @@ async function main() {
     .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
-    .action(async ({ vault, amount, mode, staging, devnet, multisig, CU: cu }) => {
+    .option(`--feePayer <string>`, 'Path to fee payer keypair file. If provided, this account pays tx fees and ATA rent instead of the user')
+    .action(async ({ vault, amount, mode, staging, devnet, multisig, CU: cu, feePayer: feePayerPath }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
@@ -1689,13 +1690,15 @@ async function main() {
       );
 
       const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
-      const payer = await env.getSigner();
-      const depositInstructions = await kaminoManager.depositToVaultIxs(payer, kaminoVault, amount);
+      const user = await env.getSigner();
+      const feePayer = feePayerPath ? await parseKeypairFile(feePayerPath) : undefined;
+      const txPayer = feePayer ?? user;
+      const depositInstructions = await kaminoManager.depositToVaultIxs(user, kaminoVault, amount, undefined, undefined, feePayer);
       const instructions = [...depositInstructions.depositIxs, ...depositInstructions.stakeInFarmIfNeededIxs];
 
       await processTx(
         env.c,
-        payer,
+        txPayer,
         [
           ...instructions,
           ...getPriorityFeeAndCuIxs({
@@ -1722,7 +1725,8 @@ async function main() {
     .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
-    .action(async ({ vault, amount, mode, staging, devnet, multisig, CU: cu }) => {
+    .option(`--feePayer <string>`, 'Path to fee payer keypair file. If provided, this account pays tx fees and ATA rent instead of the user')
+    .action(async ({ vault, amount, mode, staging, devnet, multisig, CU: cu, feePayer: feePayerPath }) => {
       if (mode === 'multisig' && !multisig) {
         throw new Error('If using multisig mode, multisig is required');
       }
@@ -1730,7 +1734,9 @@ async function main() {
       const env = await initEnv(staging, ms, undefined, undefined, devnet);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
-      const signer = await env.getSigner();
+      const user = await env.getSigner();
+      const feePayer = feePayerPath ? await parseKeypairFile(feePayerPath) : undefined;
+      const txPayer = feePayer ?? user;
       const vaultAddress = address(vault);
 
       const kaminoManager = new KaminoManager(
@@ -1748,15 +1754,18 @@ async function main() {
       }
       const lookupTables = await fetchAllAddressLookupTable(env.c.rpc, lookupTableAddresses);
       const withdrawIxs = await kaminoManager.withdrawFromVaultIxs(
-        signer,
+        user,
         kaminoVault,
         new Decimal(amount),
-        await env.c.rpc.getSlot({ commitment: 'confirmed' }).send()
+        await env.c.rpc.getSlot({ commitment: 'confirmed' }).send(),
+        undefined,
+        undefined,
+        feePayer
       );
 
       await processTx(
         env.c,
-        signer,
+        txPayer,
         [
           ...withdrawIxs.unstakeFromFarmIfNeededIxs,
           ...withdrawIxs.withdrawIxs,
