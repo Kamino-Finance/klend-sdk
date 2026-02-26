@@ -9,6 +9,7 @@ import {
   WAD,
   RewardInfo,
   RewardType,
+  collToLamportsDecimal,
 } from '@kamino-finance/farms-sdk';
 import {
   address,
@@ -141,8 +142,13 @@ export async function getUserSharesInTokensStakedInFarm(
     return new Decimal(0);
   }
 
-  // if the user state exists, return the user shares
-  return farmClient.getUserTokensInUndelegatedFarm(user, farm, farmTokenDecimals);
+  // if the user state exists, return the user shares if it is more than 1 lamport
+  const stakedTokens = await farmClient.getUserTokensInUndelegatedFarm(user, farm, farmTokenDecimals);
+  const stakedLamports = collToLamportsDecimal(stakedTokens, farmTokenDecimals);
+  if (stakedLamports.lt(new Decimal(1))) {
+    return new Decimal(0);
+  }
+  return stakedTokens;
 }
 
 export async function setVaultIdForFarmIx(
@@ -161,8 +167,18 @@ export async function setVaultIdForFarmIx(
   );
 }
 
+/**
+ * Returns the number of shares the user has in the farm, in tokens. If less than 1 lamport is staked, returns 0.
+ * @param userState - the user's state in the farm
+ * @param tokenDecimals - the decimals of the farm token
+ * @returns the number of shares the user has in the farm, in tokens
+ */
 export function getSharesInFarmUserPosition(userState: UserState, tokenDecimals: number): Decimal {
-  return lamportsToCollDecimal(new Decimal(scaleDownWads(userState.activeStakeScaled)), tokenDecimals);
+  const stakedLamports = new Decimal(scaleDownWads(userState.activeStakeScaled));
+  if (stakedLamports.lt(new Decimal(1))) {
+    return new Decimal(0);
+  }
+  return lamportsToCollDecimal(stakedLamports, tokenDecimals);
 }
 
 export type SetupFarmIxsWithFarm = {
