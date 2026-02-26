@@ -134,7 +134,12 @@ export async function createAtasIdempotent(
   return res;
 }
 
-export function getTransferWsolIxs(owner: TransactionSigner, ata: Address, amountLamports: Lamports) {
+export function getTransferWsolIxs(
+  owner: TransactionSigner,
+  ata: Address,
+  amountLamports: Lamports,
+  tokenProgram: Address = TOKEN_PROGRAM_ADDRESS
+) {
   const ixs: Instruction[] = [];
 
   ixs.push(
@@ -150,7 +155,7 @@ export function getTransferWsolIxs(owner: TransactionSigner, ata: Address, amoun
       {
         account: ata,
       },
-      { programAddress: TOKEN_PROGRAM_ADDRESS }
+      { programAddress: tokenProgram }
     )
   );
 
@@ -198,24 +203,25 @@ export type CreateWsolAtaIxs = {
 export const createWsolAtaIfMissing = async (
   rpc: Rpc<GetAccountInfoApi & GetTokenAccountBalanceApi>,
   amount: Decimal,
-  owner: TransactionSigner
+  owner: TransactionSigner,
+  tokenProgram: Address = TOKEN_PROGRAM_ADDRESS
 ): Promise<CreateWsolAtaIxs> => {
   const createIxs: Instruction[] = [];
   const closeIxs: Instruction[] = [];
 
-  const wsolAta: Address = await getAssociatedTokenAddress(WRAPPED_SOL_MINT, owner.address, TOKEN_PROGRAM_ADDRESS);
+  const wsolAta: Address = await getAssociatedTokenAddress(WRAPPED_SOL_MINT, owner.address, tokenProgram);
 
   const solDeposit = amount;
   const wsolAtaAccountInfo: MaybeAccount<Token> = await fetchMaybeToken(rpc, wsolAta);
   // This checks if we need to create it
-  if (wsolAtaAccountInfo.exists) {
+  if (!wsolAtaAccountInfo.exists) {
     createIxs.push(
       getCreateAssociatedTokenIdempotentInstruction({
         owner: owner.address,
         payer: owner,
         ata: wsolAta,
         mint: WRAPPED_SOL_MINT,
-        tokenProgram: TOKEN_PROGRAM_ADDRESS,
+        tokenProgram: tokenProgram,
       })
     );
   }
@@ -223,7 +229,7 @@ export const createWsolAtaIfMissing = async (
   let wsolExistingBalanceLamports = new Decimal(0);
   try {
     if (wsolAtaAccountInfo.exists) {
-      const uiAmount = (await getTokenAccountBalanceDecimal(rpc, WRAPPED_SOL_MINT, owner.address)).toNumber();
+      const uiAmount = (await getTokenAccountBalanceDecimal(rpc, WRAPPED_SOL_MINT, owner.address, tokenProgram)).toNumber();
       wsolExistingBalanceLamports = collToLamportsDecimal(new Decimal(uiAmount), DECIMALS_SOL);
     }
   } catch (err) {
@@ -247,7 +253,7 @@ export const createWsolAtaIfMissing = async (
         {
           account: wsolAta,
         },
-        { programAddress: TOKEN_PROGRAM_ADDRESS }
+        { programAddress: tokenProgram }
       )
     );
   }
@@ -259,7 +265,7 @@ export const createWsolAtaIfMissing = async (
         account: wsolAta,
         destination: owner.address,
       },
-      { programAddress: TOKEN_PROGRAM_ADDRESS }
+      { programAddress: tokenProgram }
     )
   );
 

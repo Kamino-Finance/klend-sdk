@@ -47,6 +47,7 @@ import BN from 'bn.js';
 import Decimal from 'decimal.js';
 import { FarmState } from '@kamino-finance/farms-sdk';
 import { PROGRAM_ID } from '../@codegen/klend/programId';
+import { PROGRAM_ID as FARMS_PROGRAM_ID } from '@kamino-finance/farms-sdk/dist/@codegen/farms/programId';
 import { Scope, U16_MAX } from '@kamino-finance/scope-sdk';
 import { OraclePrices } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts/OraclePrices';
 import { Fraction } from './fraction';
@@ -89,6 +90,8 @@ export class KaminoMarket {
 
   readonly programId: Address;
 
+  readonly farmsProgramId: Address;
+
   private readonly recentSlotDurationMs: number;
 
   // scope feeds used by all market reserves
@@ -100,7 +103,8 @@ export class KaminoMarket {
     marketAddress: Address,
     reserves: Map<Address, KaminoReserve>,
     recentSlotDurationMs: number,
-    programId: Address = PROGRAM_ID
+    programId: Address = PROGRAM_ID,
+    farmsProgramId: Address = FARMS_PROGRAM_ID
   ) {
     if (recentSlotDurationMs <= 0) {
       throw new Error('Recent slot duration cannot be 0');
@@ -112,6 +116,7 @@ export class KaminoMarket {
     this.reserves = reserves;
     this.reservesActive = getReservesActive(this.reserves);
     this.programId = programId;
+    this.farmsProgramId = farmsProgramId;
     this.recentSlotDurationMs = recentSlotDurationMs;
     this.scopeFeeds = new Set(
       Array.from(this.reserves.values())
@@ -149,7 +154,8 @@ export class KaminoMarket {
     marketAddress: Address,
     recentSlotDurationMs: number,
     programId: Address = PROGRAM_ID,
-    withReserves: boolean = true
+    withReserves: boolean = true,
+    farmsProgramId: Address = FARMS_PROGRAM_ID
   ) {
     const market = await LendingMarket.fetch(rpc, marketAddress, programId);
 
@@ -161,7 +167,7 @@ export class KaminoMarket {
       ? await getReservesForMarket(marketAddress, rpc, programId, recentSlotDurationMs)
       : new Map<Address, KaminoReserve>();
 
-    return new KaminoMarket(rpc, market, marketAddress, reserves, recentSlotDurationMs, programId);
+    return new KaminoMarket(rpc, market, marketAddress, reserves, recentSlotDurationMs, programId, farmsProgramId);
   }
 
   static loadWithReserves(
@@ -170,9 +176,10 @@ export class KaminoMarket {
     reserves: Map<Address, KaminoReserve>,
     marketAddress: Address,
     recentSlotDurationMs: number,
-    programId: Address = PROGRAM_ID
+    programId: Address = PROGRAM_ID,
+    farmsProgramId: Address = FARMS_PROGRAM_ID
   ) {
-    return new KaminoMarket(connection, market, marketAddress, reserves, recentSlotDurationMs, programId);
+    return new KaminoMarket(connection, market, marketAddress, reserves, recentSlotDurationMs, programId, farmsProgramId);
   }
 
   static async loadMultiple(
@@ -181,7 +188,8 @@ export class KaminoMarket {
     recentSlotDurationMs: number,
     programId: Address = PROGRAM_ID,
     withReserves: boolean = true,
-    oracleAccounts?: AllOracleAccounts
+    oracleAccounts?: AllOracleAccounts,
+    farmsProgramId: Address = FARMS_PROGRAM_ID
   ) {
     const marketStates = await batchFetch(markets, (market) =>
       LendingMarket.fetchMultiple(connection, market, programId)
@@ -200,7 +208,7 @@ export class KaminoMarket {
 
       kaminoMarkets.set(
         marketAddress,
-        new KaminoMarket(connection, market, marketAddress, marketReserves, recentSlotDurationMs, programId)
+        new KaminoMarket(connection, market, marketAddress, marketReserves, recentSlotDurationMs, programId, farmsProgramId)
       );
     }
     return kaminoMarkets;
@@ -211,7 +219,8 @@ export class KaminoMarket {
     markets: Address[],
     reserves: Map<Address, Map<Address, KaminoReserve>>,
     recentSlotDurationMs: number,
-    programId: Address = PROGRAM_ID
+    programId: Address = PROGRAM_ID,
+    farmsProgramId: Address = FARMS_PROGRAM_ID
   ) {
     const marketStates = await batchFetch(markets, (market) =>
       LendingMarket.fetchMultiple(connection, market, programId)
@@ -231,7 +240,7 @@ export class KaminoMarket {
       }
       kaminoMarkets.set(
         marketAddress,
-        new KaminoMarket(connection, market, marketAddress, marketReserves, recentSlotDurationMs, programId)
+        new KaminoMarket(connection, market, marketAddress, marketReserves, recentSlotDurationMs, programId, farmsProgramId)
       );
     }
     return kaminoMarkets;
@@ -649,7 +658,7 @@ export class KaminoMarket {
     totalInvestmentUsd: Decimal,
     getRewardPrice: (mint: Address) => Promise<number>
   ): Promise<ReserveRewardInfo> {
-    const farmState = await FarmState.fetch(this.getRpc(), farmAddress);
+    const farmState = await FarmState.fetch(this.getRpc(), farmAddress, this.farmsProgramId);
     if (!farmState) {
       throw Error(`Could not parse farm state. ${farmAddress}`);
     }

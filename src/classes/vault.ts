@@ -146,6 +146,7 @@ import {
 import { getAccountsInLut, initLookupTableIx, insertIntoLookupTableIxs } from '../utils';
 import {
   FARMS_ADMIN_MAINNET,
+  FARMS_GLOBAL_CONFIG_DEVNET,
   FARMS_GLOBAL_CONFIG_MAINNET,
   getFarmStakeIxs,
   getFarmUnstakeAndWithdrawIxs,
@@ -199,6 +200,7 @@ export class KaminoVaultClient {
   private readonly _rpc: Rpc<SolanaRpcApi>;
   private readonly _kaminoVaultProgramId: Address;
   private readonly _kaminoLendProgramId: Address;
+  private readonly _farmsProgramId?: Address;
   recentSlotDurationMs: number;
 
   // CDN cache
@@ -210,12 +212,14 @@ export class KaminoVaultClient {
     recentSlotDurationMs: number,
     kaminoVaultprogramId?: Address,
     kaminoLendProgramId?: Address,
-    cdnResources?: CdnResources
+    cdnResources?: CdnResources,
+    farmsProgramId?: Address
   ) {
     this._rpc = rpc;
     this.recentSlotDurationMs = recentSlotDurationMs;
     this._kaminoVaultProgramId = kaminoVaultprogramId ? kaminoVaultprogramId : kaminoVaultId;
     this._kaminoLendProgramId = kaminoLendProgramId ? kaminoLendProgramId : PROGRAM_ID;
+    this._farmsProgramId = farmsProgramId;
     this._cdnResources = cdnResources;
   }
 
@@ -502,7 +506,8 @@ export class KaminoVaultClient {
    * @returns vault: the keypair of the vault, used to sign the initialization transaction; initVaultIxs: a struct with ixs to initialize the vault and its lookup table + populateLUTIxs, a list to populate the lookup table which has to be executed in a separate transaction
    */
   async createVaultIxs(
-    vaultConfig: KaminoVaultConfig
+    vaultConfig: KaminoVaultConfig,
+    useDevnetFarms: boolean = false
   ): Promise<{ vault: TransactionSigner; lut: Address; initVaultIxs: InitVaultIxs }> {
     const vaultState = await generateKeyPairSigner();
     const size = BigInt(VaultState.layout.span + 8);
@@ -538,7 +543,8 @@ export class KaminoVaultClient {
       const { wsolAta, createAtaIxs, closeAtaIxs } = await createWsolAtaIfMissing(
         this.getConnection(),
         new Decimal(VAULT_INITIAL_DEPOSIT),
-        vaultConfig.admin
+        vaultConfig.admin,
+        vaultConfig.tokenMintProgramId
       );
       adminTokenAccount = wsolAta;
 
@@ -569,11 +575,17 @@ export class KaminoVaultClient {
     };
     const initVaultIx = initVault(initVaultAccounts, undefined, this._kaminoVaultProgramId);
 
-    const createVaultFarm = await this.createVaultFarm(vaultConfig.admin, vaultState.address, sharesMint);
+    const createVaultFarm = await this.createVaultFarm(
+      vaultConfig.admin,
+      vaultState.address,
+      sharesMint,
+      useDevnetFarms
+    );
 
     // create and set up the vault lookup table
     const [createLUTIx, lut] = await initLookupTableIx(vaultConfig.admin, slot);
 
+    const farmsGlobalConfig = useDevnetFarms ? FARMS_GLOBAL_CONFIG_DEVNET : FARMS_GLOBAL_CONFIG_MAINNET;
     const accountsToBeInserted: Address[] = [
       vaultConfig.admin.address,
       vaultState.address,
@@ -587,7 +599,7 @@ export class KaminoVaultClient {
       this._kaminoLendProgramId,
       SYSVAR_INSTRUCTIONS_ADDRESS,
       createVaultFarm.farm.address,
-      FARMS_GLOBAL_CONFIG_MAINNET,
+      farmsGlobalConfig,
     ];
     const insertIntoLUTIxs = await insertIntoLookupTableIxs(
       this.getConnection(),
@@ -647,7 +659,9 @@ export class KaminoVaultClient {
       sharesMint,
       baseVaultAuthority,
       vaultConfig.vaultTokenSymbol,
-      vaultConfig.vaultTokenName
+      vaultConfig.vaultTokenName,
+      undefined,
+      this._kaminoVaultProgramId
     );
 
     return {
@@ -676,12 +690,14 @@ export class KaminoVaultClient {
   async createVaultFarm(
     signer: TransactionSigner,
     vaultAddress: Address,
-    vaultSharesMint: Address
+    vaultSharesMint: Address,
+    useDevnetFarms: boolean = false
   ): Promise<CreateVaultFarm> {
-    const farmsSDK = new Farms(this._rpc);
+    const farmsSDK = new Farms(this._rpc, this._farmsProgramId);
 
+    const globalConfig = useDevnetFarms ? FARMS_GLOBAL_CONFIG_DEVNET : FARMS_GLOBAL_CONFIG_MAINNET;
     const farm = await generateKeyPairSigner();
-    const ixs = await farmsSDK.createFarmIxs(signer, farm, FARMS_GLOBAL_CONFIG_MAINNET, vaultSharesMint);
+    const ixs = await farmsSDK.createFarmIxs(signer, farm, globalConfig, vaultSharesMint);
 
     const updatePendingFarmAdminIx = await farmsSDK.updateFarmConfigIx(
       signer,
@@ -729,15 +745,38 @@ export class KaminoVaultClient {
     sharesMint: Address,
     baseVaultAuthority: Address,
     tokenName: string,
-    extraName: string
+    extraName: string,
+    metadataProgramId: Address = METADATA_PROGRAM_ID,
+    kvaultProgramId?: Address
   ) {
-    const [sharesMintMetadata] = await getKVaultSharesMetadataPda(sharesMint);
+    const kvaultProgramIdToUse = kvaultProgramId ?? this._kaminoVaultProgramId;
+    const [sharesMintMetadata] = await getKVaultSharesMetadataPda(sharesMint, metadataProgramId);
 
     const { name, symbol, uri } = resolveMetadata(sharesMint, extraName, tokenName);
 
     const ix = !(await fetchEncodedAccount(rpc, sharesMintMetadata, { commitment: 'processed' })).exists
-      ? await getInitializeKVaultSharesMetadataIx(vaultAdmin, vault, sharesMint, baseVaultAuthority, name, symbol, uri)
-      : await getUpdateSharesMetadataIx(vaultAdmin, vault, sharesMint, baseVaultAuthority, name, symbol, uri);
+      ? await getInitializeKVaultSharesMetadataIx(
+          vaultAdmin,
+          vault,
+          sharesMint,
+          baseVaultAuthority,
+          name,
+          symbol,
+          uri,
+          metadataProgramId,
+          kvaultProgramIdToUse
+        )
+      : await getUpdateSharesMetadataIx(
+          vaultAdmin,
+          vault,
+          sharesMint,
+          baseVaultAuthority,
+          name,
+          symbol,
+          uri,
+          metadataProgramId,
+          kvaultProgramIdToUse
+        );
 
     return ix;
   }
@@ -1123,7 +1162,7 @@ export class KaminoVaultClient {
         const keysToAddToLUT = [address(value)];
         // if the farm already exist we want to read its state to add it to the LUT
         try {
-          const farmState = await FarmState.fetch(this.getConnection(), keysToAddToLUT[0]);
+          const farmState = await FarmState.fetch(this.getConnection(), keysToAddToLUT[0], this._farmsProgramId);
           keysToAddToLUT.push(
             farmState!.farmVault,
             farmState!.farmVaultsAuthority,
@@ -1152,6 +1191,398 @@ export class KaminoVaultClient {
     return updateVaultConfigIxs;
   }
 
+  /**
+   * Update the vault performance fee (in bps).
+   * @param vault - vault to update
+   * @param feeBps - performance fee in basis points
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultPerfFeeIxs(
+    vault: KaminoVault,
+    feeBps: BN | number | string,
+    vaultAdminAuthority?: TransactionSigner
+  ): Promise<UpdateVaultConfigIxs> {
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.PerformanceFeeBps(),
+      feeBps.toString(),
+      vaultAdminAuthority
+    );
+  }
+
+  /**
+   * Update the vault management fee (in bps).
+   * @param vault - vault to update
+   * @param feeBps - management fee in basis points
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultMgmtFeeIxs(
+    vault: KaminoVault,
+    feeBps: BN | number | string,
+    vaultAdminAuthority?: TransactionSigner
+  ): Promise<UpdateVaultConfigIxs> {
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.ManagementFeeBps(),
+      feeBps.toString(),
+      vaultAdminAuthority
+    );
+  }
+
+  /**
+   * Update the pending admin for the vault (step 1/2 of the ownership transfer).
+   * @param vault - vault to update
+   * @param newAdmin - new pending admin pubkey
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @param [lutIxsSigner] - signer for LUT updates when adding the new admin
+   * @param [skipLutUpdate] - if true, the LUT update instructions are not returned
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultPendingAdminIxs(
+    vault: KaminoVault,
+    newAdmin: Address,
+    vaultAdminAuthority?: TransactionSigner,
+    lutIxsSigner?: TransactionSigner,
+    skipLutUpdate: boolean = false
+  ): Promise<UpdateVaultConfigIxs> {
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.PendingVaultAdmin(),
+      newAdmin,
+      vaultAdminAuthority,
+      lutIxsSigner,
+      skipLutUpdate
+    );
+  }
+
+  /**
+   * Update the vault name.
+   * @param vault - vault to update
+   * @param name - new vault name
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultNameIxs(
+    vault: KaminoVault,
+    name: string,
+    vaultAdminAuthority?: TransactionSigner
+  ): Promise<UpdateVaultConfigIxs> {
+    return this.updateVaultConfigIxs(vault, new VaultConfigField.Name(), name, vaultAdminAuthority);
+  }
+
+  /**
+   * Update the vault lookup table address.
+   * @param vault - vault to update
+   * @param lookupTable - new LUT address
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultLookupTableIxs(
+    vault: KaminoVault,
+    lookupTable: Address,
+    vaultAdminAuthority?: TransactionSigner
+  ): Promise<UpdateVaultConfigIxs> {
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.LookupTable(),
+      lookupTable,
+      vaultAdminAuthority
+    );
+  }
+
+  /**
+   * Update the vault allocation admin.
+   * @param vault - vault to update
+   * @param allocationAdmin - new allocation admin pubkey
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultAllocationAdminIxs(
+    vault: KaminoVault,
+    allocationAdmin: Address,
+    vaultAdminAuthority?: TransactionSigner
+  ): Promise<UpdateVaultConfigIxs> {
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.AllocationAdmin(),
+      allocationAdmin,
+      vaultAdminAuthority
+    );
+  }
+
+  /**
+   * Update the vault unallocated weight.
+   * @param vault - vault to update
+   * @param unallocatedWeight - new unallocated weight
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultUnallocatedWeightIxs(
+    vault: KaminoVault,
+    unallocatedWeight: BN | number | string,
+    vaultAdminAuthority?: TransactionSigner
+  ): Promise<UpdateVaultConfigIxs> {
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.UnallocatedWeight(),
+      unallocatedWeight.toString(),
+      vaultAdminAuthority
+    );
+  }
+
+  /**
+   * Update the vault unallocated tokens cap.
+   * @param vault - vault to update
+   * @param unallocatedTokensCap - new unallocated tokens cap
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultUnallocatedTokensCapIxs(
+    vault: KaminoVault,
+    unallocatedTokensCap: BN | number | string,
+    vaultAdminAuthority?: TransactionSigner
+  ): Promise<UpdateVaultConfigIxs> {
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.UnallocatedTokensCap(),
+      unallocatedTokensCap.toString(),
+      vaultAdminAuthority
+    );
+  }
+
+  /**
+   * Update the vault farm address.
+   * @param vault - vault to update
+   * @param farm - farm address
+   * @param [errorOnOverride] - if true, it will throw if the vault already has a farm
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @param [lutIxsSigner] - signer for LUT updates when adding the farm
+   * @param [skipLutUpdate] - if true, the LUT update instructions are not returned
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultFarmIxs(
+    vault: KaminoVault,
+    farm: Address,
+    errorOnOverride: boolean = true,
+    vaultAdminAuthority?: TransactionSigner,
+    lutIxsSigner?: TransactionSigner,
+    skipLutUpdate: boolean = false
+  ): Promise<UpdateVaultConfigIxs> {
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.Farm(),
+      farm,
+      vaultAdminAuthority,
+      lutIxsSigner,
+      skipLutUpdate,
+      errorOnOverride
+    );
+  }
+
+  /**
+   * Update the first loss capital farm address.
+   * @param vault - vault to update
+   * @param farm - farm address
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultFirstLossCapitalFarmIxs(
+    vault: KaminoVault,
+    farm: Address,
+    vaultAdminAuthority?: TransactionSigner
+  ): Promise<UpdateVaultConfigIxs> {
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.FirstLossCapitalFarm(),
+      farm,
+      vaultAdminAuthority
+    );
+  }
+
+  /**
+   * Update the vault min deposit amount (in lamports).
+   * @param vault - vault to update
+   * @param minDepositAmount - new minimum deposit amount
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultMinDepositAmountIxs(
+    vault: KaminoVault,
+    minDepositAmount: BN | number | string,
+    vaultAdminAuthority?: TransactionSigner
+  ): Promise<UpdateVaultConfigIxs> {
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.MinDepositAmount(),
+      minDepositAmount.toString(),
+      vaultAdminAuthority
+    );
+  }
+
+  /**
+   * Update the vault min withdraw amount (in lamports).
+   * @param vault - vault to update
+   * @param minWithdrawAmount - new minimum withdraw amount
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultMinWithdrawAmountIxs(
+    vault: KaminoVault,
+    minWithdrawAmount: BN | number | string,
+    vaultAdminAuthority?: TransactionSigner
+  ): Promise<UpdateVaultConfigIxs> {
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.MinWithdrawAmount(),
+      minWithdrawAmount.toString(),
+      vaultAdminAuthority
+    );
+  }
+
+  /**
+   * Update the vault min invest amount (in lamports).
+   * @param vault - vault to update
+   * @param minInvestAmount - new minimum invest amount
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultMinInvestAmountIxs(
+    vault: KaminoVault,
+    minInvestAmount: BN | number | string,
+    vaultAdminAuthority?: TransactionSigner
+  ): Promise<UpdateVaultConfigIxs> {
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.MinInvestAmount(),
+      minInvestAmount.toString(),
+      vaultAdminAuthority
+    );
+  }
+
+  /**
+   * Update the vault min invest delay (in slots).
+   * @param vault - vault to update
+   * @param minInvestDelaySlots - new minimum invest delay in slots
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultMinInvestDelaySlotsIxs(
+    vault: KaminoVault,
+    minInvestDelaySlots: BN | number | string,
+    vaultAdminAuthority?: TransactionSigner
+  ): Promise<UpdateVaultConfigIxs> {
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.MinInvestDelaySlots(),
+      minInvestDelaySlots.toString(),
+      vaultAdminAuthority
+    );
+  }
+
+  /**
+   * Update the vault crank fund fee per reserve (in lamports).
+   * @param vault - vault to update
+   * @param crankFundFeePerReserve - new fee per reserve
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultCrankFundFeePerReserveIxs(
+    vault: KaminoVault,
+    crankFundFeePerReserve: BN | number | string,
+    vaultAdminAuthority?: TransactionSigner
+  ): Promise<UpdateVaultConfigIxs> {
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.CrankFundFeePerReserve(),
+      crankFundFeePerReserve.toString(),
+      vaultAdminAuthority
+    );
+  }
+
+  /**
+   * Update the vault withdrawal penalty (in lamports).
+   * @param vault - vault to update
+   * @param withdrawalPenaltyLamports - new withdrawal penalty amount
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultWithdrawalPenaltyLamportsIxs(
+    vault: KaminoVault,
+    withdrawalPenaltyLamports: BN | number | string,
+    vaultAdminAuthority?: TransactionSigner
+  ): Promise<UpdateVaultConfigIxs> {
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.WithdrawalPenaltyLamports(),
+      withdrawalPenaltyLamports.toString(),
+      vaultAdminAuthority
+    );
+  }
+
+  /**
+   * Update the vault withdrawal penalty (in bps).
+   * @param vault - vault to update
+   * @param withdrawalPenaltyBps - new withdrawal penalty bps
+   * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultWithdrawalPenaltyBpsIxs(
+    vault: KaminoVault,
+    withdrawalPenaltyBps: BN | number | string,
+    vaultAdminAuthority?: TransactionSigner
+  ): Promise<UpdateVaultConfigIxs> {
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.WithdrawalPenaltyBps(),
+      withdrawalPenaltyBps.toString(),
+      vaultAdminAuthority
+    );
+  }
+
+  /**
+   * Update whether allocations are restricted to whitelisted reserves only.
+   * @param vault - vault to update
+   * @param allowWhitelistedOnly - true to restrict, false to allow any reserve
+   * @param [adminAuthority] - signer; pass global admin when setting to false
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultAllowAllocationsInWhitelistedReservesOnlyIxs(
+    vault: KaminoVault,
+    allowWhitelistedOnly: boolean | string,
+    adminAuthority?: TransactionSigner
+  ): Promise<UpdateVaultConfigIxs> {
+    const value = typeof allowWhitelistedOnly === 'boolean' ? allowWhitelistedOnly.toString() : allowWhitelistedOnly;
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.AllowAllocationsInWhitelistedReservesOnly(),
+      value,
+      adminAuthority
+    );
+  }
+
+  /**
+   * Update whether invest is restricted to whitelisted reserves only.
+   * @param vault - vault to update
+   * @param allowWhitelistedOnly - true to restrict, false to allow any reserve
+   * @param [adminAuthority] - signer; pass global admin when setting to false
+   * @returns - a struct containing the update instruction and optional LUT updates
+   */
+  async updateVaultAllowInvestInWhitelistedReservesOnlyIxs(
+    vault: KaminoVault,
+    allowWhitelistedOnly: boolean | string,
+    adminAuthority?: TransactionSigner
+  ): Promise<UpdateVaultConfigIxs> {
+    const value = typeof allowWhitelistedOnly === 'boolean' ? allowWhitelistedOnly.toString() : allowWhitelistedOnly;
+    return this.updateVaultConfigIxs(
+      vault,
+      new VaultConfigField.AllowInvestInWhitelistedReservesOnly(),
+      value,
+      adminAuthority
+    );
+  }
+
   async updateVaultConfigValidations(mode: VaultConfigFieldKind, value: string, vaultState: VaultState) {
     if (
       mode.kind === new VaultConfigField.FirstLossCapitalFarm().kind ||
@@ -1161,7 +1592,7 @@ export class KaminoVaultClient {
       if (farmAddress === DEFAULT_PUBLIC_KEY) {
         return;
       }
-      const farmState = await FarmState.fetch(this.getConnection(), farmAddress);
+      const farmState = await FarmState.fetch(this.getConnection(), farmAddress, this._farmsProgramId);
       if (!farmState) {
         throw new Error(`Farm ${farmAddress.toString()} not found for FirstLossCapitalFarm`);
       }
@@ -1377,10 +1808,11 @@ export class KaminoVaultClient {
    */
   async withdrawPendingFeesIxs(
     vault: KaminoVault,
-    slot: Slot,
+    currentSlot?: Slot,
     vaultReservesMap?: Map<Address, KaminoReserve>,
     vaultAdminAuthority?: TransactionSigner
   ): Promise<Instruction[]> {
+    const slot = currentSlot ?? (await this.getConnection().getSlot({ commitment: 'confirmed' }).send());
     const vaultState: VaultState = await vault.getState();
     const vaultAdmin = parseVaultAdmin(vaultState, vaultAdminAuthority);
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
@@ -1478,7 +1910,7 @@ export class KaminoVaultClient {
     let vaultFarmState = farmState;
     const vaultState = await vault.getState();
     if (!farmState && (await vault.hasFarm(vaultState))) {
-      const vaultFarmStateResult = await FarmState.fetch(this.getConnection(), vaultState.vaultFarm);
+      const vaultFarmStateResult = await FarmState.fetch(this.getConnection(), vaultState.vaultFarm, this._farmsProgramId);
       if (vaultFarmStateResult) {
         vaultFarmState = vaultFarmStateResult;
       }
@@ -1516,7 +1948,7 @@ export class KaminoVaultClient {
       const [{ ata: wsolAta, createAtaIx: createWsolAtaIxn }] = await createAtasIdempotent(user, [
         {
           mint: WRAPPED_SOL_MINT,
-          tokenProgram: TOKEN_PROGRAM_ADDRESS,
+          tokenProgram: tokenProgramID,
         },
       ], payer);
       createAtasIxs.push(createWsolAtaIxn);
@@ -1525,7 +1957,8 @@ export class KaminoVaultClient {
         wsolAta,
         lamports(
           BigInt(numberToLamportsDecimal(tokenAmount, vaultState.tokenMintDecimals.toNumber()).ceil().toString())
-        )
+        ),
+        tokenProgramID
       );
       createAtasIxs.push(...transferWsolIxs);
     }
@@ -1692,7 +2125,7 @@ export class KaminoVaultClient {
     let vaultFarmState = farmState;
     const vaultState = await vault.getState();
     if (!farmState && (await vault.hasFarm(vaultState))) {
-      const vaultFarmStateResult = await FarmState.fetch(this.getConnection(), vaultState.vaultFarm);
+      const vaultFarmStateResult = await FarmState.fetch(this.getConnection(), vaultState.vaultFarm, this._farmsProgramId);
       if (vaultFarmStateResult) {
         vaultFarmState = vaultFarmStateResult;
       }
@@ -2687,7 +3120,7 @@ export class KaminoVaultClient {
     const vaults = vaultsOverride ? vaultsOverride : await this.getAllVaults();
 
     // read all user shares stake in vault farms
-    const farmClient = new Farms(this.getConnection());
+    const farmClient = new Farms(this.getConnection(), this._farmsProgramId);
     const allUserFarmStates = await farmClient.getAllUserStatesForUser(user);
     const allUserFarmStatesMap = new Map<Address, UserState>();
     allUserFarmStates.forEach((userFarmState) => {
@@ -3502,7 +3935,10 @@ export class KaminoVaultClient {
         const fetchedLendingMarket = await KaminoMarket.load(
           this.getConnection(),
           reserve.state.lendingMarket,
-          DEFAULT_RECENT_SLOT_DURATION_MS
+          DEFAULT_RECENT_SLOT_DURATION_MS,
+          this._kaminoLendProgramId,
+          true,
+          this._farmsProgramId
         );
         if (!fetchedLendingMarket) {
           throw Error(`Could not fetch lending market ${reserve.state.lendingMarket}`);
@@ -3739,7 +4175,7 @@ export class KaminoVaultClient {
     );
 
     const slotForOverview = slot ? slot : await this.getConnection().getSlot().send();
-    const farmsClient = new Farms(this.getConnection());
+    const farmsClient = new Farms(this.getConnection(), this._farmsProgramId);
 
     const vaultTheoreticalAPYPromise = this.getVaultTheoreticalAPY(vaultState, slotForOverview, vaultReservesState);
     const vaultActualAPYPromise = this.getVaultActualAPY(vaultState, slotForOverview, vaultReservesState);
@@ -3934,7 +4370,7 @@ export class KaminoVaultClient {
       delegatedFarmsAddresses.push(...Array.from(vaultsWithDelegatedFarms.values()));
     }
 
-    const farmsSDK = new Farms(this.getConnection());
+    const farmsSDK = new Farms(this.getConnection(), this._farmsProgramId);
     const delegatedFarmsStates = await farmsSDK.fetchMultipleFarmStatesWithCheckedSize(delegatedFarmsAddresses);
 
     const cumulativeRewardsPerToken = new Map<Address, Decimal>();
@@ -4291,7 +4727,7 @@ export class KaminoVaultClient {
         totalIncentivesApy: 0,
       };
     }
-    const kFarmsClient = farmsClient ? farmsClient : new Farms(this.getConnection());
+    const kFarmsClient = farmsClient ? farmsClient : new Farms(this.getConnection(), this._farmsProgramId);
     const farmState = await FarmState.fetch(
       kFarmsClient.getConnection(),
       vaultState.vaultFarm,
@@ -4349,7 +4785,7 @@ export class KaminoVaultClient {
     const sharePrice = tokensPerShare.mul(vaultTokenPrice);
     const stakedTokenMintDecimals = vaultState.sharesMintDecimals.toNumber();
 
-    const kFarmsClient = farmsClient ? farmsClient : new Farms(this.getConnection());
+    const kFarmsClient = farmsClient ? farmsClient : new Farms(this.getConnection(), this._farmsProgramId);
     const farmState = await FarmState.fetch(kFarmsClient.getConnection(), delegatedFarm, kFarmsClient.getProgramID());
 
     if (!farmState) {
@@ -4455,7 +4891,7 @@ export class KaminoVaultClient {
     });
 
     // fetch the missing farms
-    const missingFarmsStates = await FarmState.fetchMultiple(this.getConnection(), Array.from(farmsToFetch));
+    const missingFarmsStates = await FarmState.fetchMultiple(this.getConnection(), Array.from(farmsToFetch), this._farmsProgramId);
     missingFarmsStates.forEach((farmState) => {
       if (farmState) {
         farmState.rewardInfos.forEach((rewardInfo) => {
@@ -4491,7 +4927,7 @@ export class KaminoVaultClient {
     const vaultReservesFarmsIncentives = new Map<Address, FarmIncentives>();
     let totalIncentivesApy = new Decimal(0);
 
-    const kFarmsClient = farmsClient ? farmsClient : new Farms(this.getConnection());
+    const kFarmsClient = farmsClient ? farmsClient : new Farms(this.getConnection(), this._farmsProgramId);
     for (const reserveAddress of vaultReservesAddresses) {
       if (reserveAddress === DEFAULT_PUBLIC_KEY) {
         continue;
@@ -4540,9 +4976,9 @@ export class KaminoVaultClient {
       return undefined;
     }
 
-    const kFarmsClient = new Farms(this.getConnection());
+    const kFarmsClient = new Farms(this.getConnection(), this._farmsProgramId);
 
-    const flcFarmState = await FarmState.fetch(this.getConnection(), vaultState.firstLossCapitalFarm);
+    const flcFarmState = await FarmState.fetch(this.getConnection(), vaultState.firstLossCapitalFarm, this._farmsProgramId);
 
     if (!flcFarmState) {
       return undefined;
@@ -4607,9 +5043,9 @@ export class KaminoVaultClient {
       return new Map<Address, Decimal>();
     }
 
-    const farmClient = new Farms(this.getConnection());
+    const farmClient = new Farms(this.getConnection(), this._farmsProgramId);
     const userState = await getUserStatePDA(farmClient.getProgramID(), vaultState.vaultFarm, user);
-    return getUserPendingRewardsInFarm(this.getConnection(), userState, vaultState.vaultFarm);
+    return getUserPendingRewardsInFarm(this.getConnection(), userState, vaultState.vaultFarm, this._farmsProgramId);
   }
 
   /// reads the pending rewards for a user in a delegated vault farm
@@ -4625,7 +5061,7 @@ export class KaminoVaultClient {
       return new Map<Address, Decimal>();
     }
 
-    const farmClient = new Farms(this.getConnection());
+    const farmClient = new Farms(this.getConnection(), this._farmsProgramId);
     const userState = await this.computeUserStatePDAForUserInDelegatedVaultFarm(
       farmClient.getProgramID(),
       vaultAddress,
@@ -4633,7 +5069,7 @@ export class KaminoVaultClient {
       user
     );
 
-    return getUserPendingRewardsInFarm(this.getConnection(), userState, delegatedFarm);
+    return getUserPendingRewardsInFarm(this.getConnection(), userState, delegatedFarm, this._farmsProgramId);
   }
 
   /// gets the delegated farm for a vault
@@ -4694,7 +5130,7 @@ export class KaminoVaultClient {
       .filter((reserve) => reserve !== DEFAULT_PUBLIC_KEY);
     const pendingRewardsPerToken: Map<Address, Decimal> = new Map();
 
-    const farmClient = new Farms(this.getConnection());
+    const farmClient = new Farms(this.getConnection(), this._farmsProgramId);
     for (const reserveAddress of vaultReserves) {
       const reserveState = vaultReservesState.get(reserveAddress);
       if (!reserveState) {
@@ -4720,7 +5156,8 @@ export class KaminoVaultClient {
       const pendingRewards = await getUserPendingRewardsInFarm(
         this.getConnection(),
         userState,
-        reserveState.state.farmCollateral
+        reserveState.state.farmCollateral,
+        this._farmsProgramId
       );
       pendingRewards.forEach((reward, token) => {
         const existingReward = pendingRewardsPerToken.get(token);
@@ -4824,7 +5261,7 @@ export class KaminoVaultClient {
       return [];
     }
 
-    const farmClient = new Farms(this.getConnection());
+    const farmClient = new Farms(this.getConnection(), this._farmsProgramId);
     const pendingRewardsInVaultFarm = await this.getUserPendingRewardsInVaultFarm(user.address, vault);
     // if there are no pending rewards of their total is 0 no ix is needed
     const totalPendingRewards = Array.from(pendingRewardsInVaultFarm.values()).reduce(
@@ -4849,7 +5286,7 @@ export class KaminoVaultClient {
       return [];
     }
 
-    const farmClient = new Farms(this.getConnection());
+    const farmClient = new Farms(this.getConnection(), this._farmsProgramId);
 
     const delegatee = await this.computeDelegateeForUserInDelegatedFarm(
       farmClient.getProgramID(),
@@ -4888,7 +5325,7 @@ export class KaminoVaultClient {
       .filter((reserve) => reserve !== DEFAULT_PUBLIC_KEY);
 
     const ixs: Instruction[] = [];
-    const farmClient = new Farms(this.getConnection());
+    const farmClient = new Farms(this.getConnection(), this._farmsProgramId);
     for (const reserveAddress of vaultReserves) {
       const reserveState = vaultReservesState.get(reserveAddress);
       if (!reserveState) {
@@ -4915,7 +5352,8 @@ export class KaminoVaultClient {
       const pendingRewards = await getUserPendingRewardsInFarm(
         this.getConnection(),
         userState,
-        reserveState.state.farmCollateral
+        reserveState.state.farmCollateral,
+        this._farmsProgramId
       );
       const totalPendingRewards = Array.from(pendingRewards.values()).reduce(
         (acc, reward) => acc.add(reward),

@@ -811,19 +811,19 @@ export class KaminoReserve {
     return calculateAPYFromAPR(this.calculateBorrowAPR(currentSlot, 0));
   }
 
-  async loadFarmStates() {
+  async loadFarmStates(farmsProgramId?: Address) {
     if (!this.farmData.fetched) {
       const farmStates: FarmAndKey[] = [];
       const debtFarmAddress = this.getDebtFarmAddress();
       if (isSome(debtFarmAddress)) {
-        const farmState = await FarmState.fetch(this.rpc, debtFarmAddress.value);
+        const farmState = await FarmState.fetch(this.rpc, debtFarmAddress.value, farmsProgramId);
         if (farmState !== null) {
           farmStates.push({ farmState, key: debtFarmAddress.value });
         }
       }
       const collateralFarmAddress = this.getCollateralFarmAddress();
       if (isSome(collateralFarmAddress)) {
-        const farmState = await FarmState.fetch(this.rpc, collateralFarmAddress.value);
+        const farmState = await FarmState.fetch(this.rpc, collateralFarmAddress.value, farmsProgramId);
         if (farmState !== null) {
           farmStates.push({ farmState, key: collateralFarmAddress.value });
         }
@@ -833,13 +833,13 @@ export class KaminoReserve {
     }
   }
 
-  async getRewardYields(prices: KaminoPrices): Promise<ReserveRewardYield[]> {
+  async getRewardYields(prices: KaminoPrices, farmsProgramId?: Address): Promise<ReserveRewardYield[]> {
     const { stats } = this;
     if (!stats) {
       throw Error('KaminoMarket must call loadReserves.');
     }
 
-    await this.loadFarmStates();
+    await this.loadFarmStates(farmsProgramId);
     const yields: ReserveRewardYield[] = [];
     for (const farmAndKey of this.farmData.farms) {
       const isDebtReward = this.state.farmDebt === farmAndKey.key;

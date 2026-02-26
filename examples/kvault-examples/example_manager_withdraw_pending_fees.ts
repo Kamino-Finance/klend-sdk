@@ -13,7 +13,6 @@ import { sendAndConfirmTx } from '../utils/tx';
 
   const withdrawPendingFeesIxs = await kaminoManager.withdrawPendingFeesIxs(
     vault,
-    await c.rpc.getSlot({ commitment: 'confirmed' }).send()
   );
 
   // read the vault state so we can use the LUT in the tx

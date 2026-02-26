@@ -26,6 +26,7 @@ import { DEFAULT_PUBLIC_KEY } from '../utils';
 import { getScopePricesFromFarm } from '@kamino-finance/farms-sdk/dist/utils/option';
 
 export const FARMS_GLOBAL_CONFIG_MAINNET: Address = address('6UodrBjL2ZreDy7QdR4YV1oxqMBjVYSEyrFpctqqwGwL');
+export const FARMS_GLOBAL_CONFIG_DEVNET: Address = address('5AnzjL3J8FKpQuC1VN7ABRwrFTjdsuaoWEyxYz68rZFb');
 export const FARMS_ADMIN_MAINNET: Address = address('BbM3mbcLsa3QcYEVx8iovwfKaA1iZ6DK5fEbbtHwS3N8');
 
 export async function getFarmStakeIxs(
@@ -33,14 +34,15 @@ export async function getFarmStakeIxs(
   user: TransactionSigner,
   lamportsToStake: Decimal,
   farmAddress: Address,
-  fetchedFarmState?: FarmState
+  fetchedFarmState?: FarmState,
+  farmsProgramId?: Address
 ): Promise<Instruction[]> {
-  const farmState = fetchedFarmState ? fetchedFarmState : await FarmState.fetch(rpc, farmAddress);
+  const farmState = fetchedFarmState ? fetchedFarmState : await FarmState.fetch(rpc, farmAddress, farmsProgramId);
   if (!farmState) {
     throw new Error(`Farm state not found for ${farmAddress}`);
   }
 
-  const farmClient = new Farms(rpc);
+  const farmClient = new Farms(rpc, farmsProgramId);
   const scopePricesArg = getScopePricesFromFarm(farmState);
 
   const stakeIxs: Instruction[] = [];
@@ -57,8 +59,13 @@ export async function getFarmStakeIxs(
   return stakeIxs;
 }
 
-export async function getFarmUserStatePDA(rpc: Rpc<SolanaRpcApi>, user: Address, farm: Address): Promise<Address> {
-  const farmClient = new Farms(rpc);
+export async function getFarmUserStatePDA(
+  rpc: Rpc<SolanaRpcApi>,
+  user: Address,
+  farm: Address,
+  farmsProgramId?: Address
+): Promise<Address> {
+  const farmClient = new Farms(rpc, farmsProgramId);
   return getUserStatePDA(farmClient.getProgramID(), farm, user);
 }
 
@@ -67,14 +74,15 @@ export async function getFarmUnstakeIx(
   user: TransactionSigner,
   lamportsToUnstake: Decimal,
   farmAddress: Address,
-  fetchedFarmState?: FarmState
+  fetchedFarmState?: FarmState,
+  farmsProgramId?: Address
 ): Promise<Instruction> {
-  const farmState = fetchedFarmState ? fetchedFarmState : await FarmState.fetch(rpc, farmAddress);
+  const farmState = fetchedFarmState ? fetchedFarmState : await FarmState.fetch(rpc, farmAddress, farmsProgramId);
   if (!farmState) {
     throw new Error(`Farm state not found for ${farmAddress}`);
   }
 
-  const farmClient = new Farms(rpc);
+  const farmClient = new Farms(rpc, farmsProgramId);
   const scopePricesArg = getScopePricesFromFarm(farmState);
   const scaledLamportsToUnstake = lamportsToUnstake.floor().mul(WAD);
   return farmClient.unstakeIx(user, farmAddress, scaledLamportsToUnstake, scopePricesArg);
@@ -85,9 +93,10 @@ export async function getFarmWithdrawUnstakedDepositIx(
   rpc: Rpc<SolanaRpcApi>,
   user: TransactionSigner,
   farm: Address,
-  stakeTokenMint: Address
+  stakeTokenMint: Address,
+  farmsProgramId?: Address
 ): Promise<Instruction> {
-  const farmClient = new Farms(rpc);
+  const farmClient = new Farms(rpc, farmsProgramId);
   const userState = await getUserStatePDA(farmClient.getProgramID(), farm, user.address);
   return farmClient.withdrawUnstakedDepositIx(user, userState, farm, stakeTokenMint);
 }
@@ -97,26 +106,29 @@ export async function getFarmUnstakeAndWithdrawIxs(
   user: TransactionSigner,
   lamportsToUnstake: Decimal,
   farmAddress: Address,
-  fetchedFarmState?: FarmState
+  fetchedFarmState?: FarmState,
+  farmsProgramId?: Address
 ): Promise<UnstakeAndWithdrawFromFarmIxs> {
-  const farmState = fetchedFarmState ? fetchedFarmState : await FarmState.fetch(connection, farmAddress);
+  const farmState = fetchedFarmState ? fetchedFarmState : await FarmState.fetch(connection, farmAddress, farmsProgramId);
   if (!farmState) {
     throw new Error(`Farm state not found for ${farmAddress}`);
   }
 
-  const unstakeIx = await getFarmUnstakeIx(connection, user, lamportsToUnstake, farmAddress, farmState);
-  const withdrawIx = await getFarmWithdrawUnstakedDepositIx(connection, user, farmAddress, farmState.token.mint);
+  const unstakeIx = await getFarmUnstakeIx(connection, user, lamportsToUnstake, farmAddress, farmState, farmsProgramId);
+  const withdrawIx = await getFarmWithdrawUnstakedDepositIx(connection, user, farmAddress, farmState.token.mint, farmsProgramId);
   return { unstakeIx, withdrawIx };
 }
 
 export async function getSetupFarmIxsWithFarm(
   connection: Rpc<SolanaRpcApi>,
   farmAdmin: TransactionSigner,
-  farmTokenMint: Address
+  farmTokenMint: Address,
+  farmsGlobalConfig: Address = FARMS_GLOBAL_CONFIG_MAINNET,
+  farmsProgramId?: Address
 ): Promise<SetupFarmIxsWithFarm> {
-  const farmClient = new Farms(connection);
+  const farmClient = new Farms(connection, farmsProgramId);
   const farm = await generateKeyPairSigner();
-  const ixs = await farmClient.createFarmIxs(farmAdmin, farm, FARMS_GLOBAL_CONFIG_MAINNET, farmTokenMint);
+  const ixs = await farmClient.createFarmIxs(farmAdmin, farm, farmsGlobalConfig, farmTokenMint);
   return { farm, setupFarmIxs: ixs };
 }
 
@@ -132,9 +144,10 @@ export async function getUserSharesInTokensStakedInFarm(
   rpc: Rpc<SolanaRpcApi>,
   user: Address,
   farm: Address,
-  farmTokenDecimals: number
+  farmTokenDecimals: number,
+  farmsProgramId?: Address
 ): Promise<Decimal> {
-  const farmClient = new Farms(rpc);
+  const farmClient = new Farms(rpc, farmsProgramId);
   const userStatePDA = await getUserStatePDA(farmClient.getProgramID(), farm, user);
   // if the user state does not exist, return 0
   const userState = await fetchEncodedAccount(rpc, userStatePDA);
@@ -155,9 +168,10 @@ export async function setVaultIdForFarmIx(
   rpc: Rpc<SolanaRpcApi>,
   farmAdmin: TransactionSigner,
   farm: Address,
-  vault: Address
+  vault: Address,
+  farmsProgramId?: Address
 ): Promise<Instruction> {
-  const farmClient = new Farms(rpc);
+  const farmClient = new Farms(rpc, farmsProgramId);
   return farmClient.updateFarmConfigIx(
     farmAdmin,
     farm,
@@ -234,11 +248,12 @@ export function getRewardPerTimeUnitSecond(reward: RewardInfo, farmTotalStakeLam
 export async function getUserPendingRewardsInFarm(
   rpc: Rpc<SolanaRpcApi>,
   userStateAddress: Address,
-  farm: Address
+  farm: Address,
+  farmsProgramId?: Address
 ): Promise<Map<Address, Decimal>> {
   const pendingRewardsPerToken: Map<Address, Decimal> = new Map();
 
-  const farmClient = new Farms(rpc);
+  const farmClient = new Farms(rpc, farmsProgramId);
   // if the user state does not exist, return 0
   const userStateAccountInfo = await fetchEncodedAccount(rpc, userStateAddress);
   if (!userStateAccountInfo.exists) {
@@ -246,7 +261,7 @@ export async function getUserPendingRewardsInFarm(
   }
   const userState = UserState.decode(Buffer.from(userStateAccountInfo.data));
 
-  const farmState = await FarmState.fetch(rpc, farm);
+  const farmState = await FarmState.fetch(rpc, farm, farmsProgramId);
   if (!farmState) {
     throw new Error(`Farm state not found for ${farm}`);
   }

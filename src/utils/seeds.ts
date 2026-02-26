@@ -267,10 +267,14 @@ export async function programDataPda(programId: Address = PROGRAM_ID): Promise<A
  * @param obligation
  * @returns pda
  */
-export async function obligationFarmStatePda(farm: Address, obligation: Address): Promise<Address> {
+export async function obligationFarmStatePda(
+  farm: Address,
+  obligation: Address,
+  farmsProgramId: Address = FARMS_PROGRAM_ID
+): Promise<Address> {
   const [address] = await getProgramDerivedAddress({
     seeds: [Buffer.from(BASE_SEED_USER_STATE), addressEncoder.encode(farm), addressEncoder.encode(obligation)],
-    programAddress: FARMS_PROGRAM_ID,
+    programAddress: farmsProgramId,
   });
   return address;
 }
@@ -280,9 +284,12 @@ export async function obligationFarmStatePda(farm: Address, obligation: Address)
  * @param mint
  * @returns [pda, bump]
  */
-export async function getKVaultSharesMetadataPda(mint: Address): Promise<ProgramDerivedAddress> {
+export async function getKVaultSharesMetadataPda(
+  mint: Address,
+  metadataProgramId: Address = METADATA_PROGRAM_ID
+): Promise<ProgramDerivedAddress> {
   return getProgramDerivedAddress({
-    seeds: [Buffer.from(METADATA_SEED), addressEncoder.encode(METADATA_PROGRAM_ID), addressEncoder.encode(mint)],
-    programAddress: METADATA_PROGRAM_ID,
+    seeds: [Buffer.from(METADATA_SEED), addressEncoder.encode(metadataProgramId), addressEncoder.encode(mint)],
+    programAddress: metadataProgramId,
   });
 }

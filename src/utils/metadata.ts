@@ -60,9 +60,11 @@ export async function getInitializeKVaultSharesMetadataIx(
   baseVaultAuthority: Address,
   name: string,
   symbol: string,
-  uri: string
+  uri: string,
+  metadataProgramId: Address = METADATA_PROGRAM_ID,
+  kvaultProgramId?: Address
 ): Promise<Instruction> {
-  const [sharesMintMetadata] = await getKVaultSharesMetadataPda(sharesMint);
+  const [sharesMintMetadata] = await getKVaultSharesMetadataPda(sharesMint, metadataProgramId);
 
   const args: InitializeSharesMetadataArgs = {
     name,
@@ -78,10 +80,10 @@ export async function getInitializeKVaultSharesMetadataIx(
     sharesMetadata: sharesMintMetadata,
     systemProgram: SYSTEM_PROGRAM_ADDRESS,
     rent: SYSVAR_RENT_ADDRESS,
-    metadataProgram: METADATA_PROGRAM_ID,
+    metadataProgram: metadataProgramId,
   };
 
-  const ix = initializeSharesMetadata(args, accounts);
+  const ix = initializeSharesMetadata(args, accounts, undefined, kvaultProgramId);
   return ix;
 }
 
@@ -92,9 +94,11 @@ export async function getUpdateSharesMetadataIx(
   baseVaultAuthority: Address,
   name: string,
   symbol: string,
-  uri: string
+  uri: string,
+  metadataProgramId: Address = METADATA_PROGRAM_ID,
+  kvaultProgramId?: Address
 ): Promise<Instruction> {
-  const [sharesMintMetadata] = await getKVaultSharesMetadataPda(sharesMint);
+  const [sharesMintMetadata] = await getKVaultSharesMetadataPda(sharesMint, metadataProgramId);
 
   const args: UpdateSharesMetadataArgs = {
     name,
@@ -107,9 +111,9 @@ export async function getUpdateSharesMetadataIx(
     vaultState: vault,
     baseVaultAuthority,
     sharesMetadata: sharesMintMetadata,
-    metadataProgram: METADATA_PROGRAM_ID,
+    metadataProgram: metadataProgramId,
   };
 
-  const ix = updateSharesMetadata(args, accounts);
+  const ix = updateSharesMetadata(args, accounts, undefined, kvaultProgramId);
   return ix;
 }

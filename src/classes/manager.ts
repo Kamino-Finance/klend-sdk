@@ -117,6 +117,7 @@ export class KaminoManager {
   private readonly _rpc: Rpc<SolanaRpcApi>;
   private readonly _kaminoVaultProgramId: Address;
   private readonly _kaminoLendProgramId: Address;
+  private readonly _farmsProgramId?: Address;
   private readonly _vaultClient: KaminoVaultClient;
   recentSlotDurationMs: number;
 
@@ -125,18 +126,21 @@ export class KaminoManager {
     recentSlotDurationMs?: number,
     kaminoLendProgramId?: Address,
     kaminoVaultProgramId?: Address,
-    cdnResources?: CdnResources
+    cdnResources?: CdnResources,
+    farmsProgramId?: Address
   ) {
     this._rpc = rpc;
     this.recentSlotDurationMs = recentSlotDurationMs ?? DEFAULT_RECENT_SLOT_DURATION_MS;
     this._kaminoVaultProgramId = kaminoVaultProgramId ? kaminoVaultProgramId : kaminoVaultId;
     this._kaminoLendProgramId = kaminoLendProgramId ? kaminoLendProgramId : PROGRAM_ID;
+    this._farmsProgramId = farmsProgramId;
     this._vaultClient = new KaminoVaultClient(
       rpc,
       this.recentSlotDurationMs,
       this._kaminoVaultProgramId,
       this._kaminoLendProgramId,
-      cdnResources
+      cdnResources,
+      farmsProgramId
     );
   }
 
@@ -248,9 +252,10 @@ export class KaminoManager {
    * @returns vault: the keypair of the vault, used to sign the initialization transaction; initVaultIxs: a struct with ixs to initialize the vault and its lookup table + populateLUTIxs, a list to populate the lookup table which has to be executed in a separate transaction
    */
   async createVaultIxs(
-    vaultConfig: KaminoVaultConfig
+    vaultConfig: KaminoVaultConfig,
+    useDevnetFarms: boolean = false
   ): Promise<{ vault: TransactionSigner; lut: Address; initVaultIxs: InitVaultIxs }> {
-    return this._vaultClient.createVaultIxs(vaultConfig);
+    return this._vaultClient.createVaultIxs(vaultConfig, useDevnetFarms);
   }
 
   /**
@@ -278,7 +283,14 @@ export class KaminoManager {
    * @param extraName - the extra string appended to the prefix("Kamino Vault USDC <extraName>")
    * @returns - an instruction to set the shares metadata for the vault
    */
-  async getSetSharesMetadataIx(authority: TransactionSigner, vault: KaminoVault, tokenName: string, extraName: string) {
+  async getSetSharesMetadataIx(
+    authority: TransactionSigner,
+    vault: KaminoVault,
+    tokenName: string,
+    extraName: string,
+    metadataProgramId?: Address,
+    kvaultProgramId?: Address
+  ) {
     const vaultState = await vault.getState();
     return this._vaultClient.getSetSharesMetadataIx(
       this._rpc,
@@ -287,7 +299,9 @@ export class KaminoManager {
       vaultState.sharesMint,
       vaultState.baseVaultAuthority,
       tokenName,
-      extraName
+      extraName,
+      metadataProgramId,
+      kvaultProgramId
     );
   }
 
@@ -798,7 +812,7 @@ export class KaminoManager {
    */
   async withdrawPendingFeesIxs(
     vault: KaminoVault,
-    slot: Slot,
+    slot?: Slot,
     vaultAdminAuthority?: TransactionSigner
   ): Promise<Instruction[]> {
     return this._vaultClient.withdrawPendingFeesIxs(vault, slot, undefined, vaultAdminAuthority);
@@ -1491,7 +1505,7 @@ export class KaminoManager {
       reserve,
       reserveTokenPrice,
       this._kaminoLendProgramId,
-      farmsClient ? farmsClient : new Farms(this._rpc),
+      farmsClient ? farmsClient : new Farms(this._rpc, this._farmsProgramId),
       slot ? slot : await this.getRpc().getSlot().send(),
       reserveState
     );

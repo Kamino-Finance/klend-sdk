@@ -69,7 +69,6 @@ import { getTokenIdsForScopeRefresh, KaminoMarket } from './market';
 import { isKaminoObligation, KaminoObligation } from './obligation';
 import { KaminoReserve } from './reserve';
 import { ReserveFarmKind } from '../@codegen/klend/types';
-import { PROGRAM_ID as FARMS_PROGRAM_ID } from '@kamino-finance/farms-sdk/dist/@codegen/farms/programId';
 import { Reserve } from '../@codegen/klend/accounts';
 import { VanillaObligation } from '../utils/ObligationType';
 import { Scope } from '@kamino-finance/scope-sdk';
@@ -1287,7 +1286,8 @@ export class KaminoAction {
   async addDepositIxV2() {
     const { collateralFarmAccounts: farmsAccounts } = await KaminoAction.getFarmAccountsForReserve(
       await this.getObligationPda(),
-      this.reserve
+      this.reserve,
+      this.kaminoMarket.farmsProgramId
     );
     this.lendingIxsLabels.push(`depositReserveLiquidityAndObligationCollateralV2`);
     this.lendingIxs.push(
@@ -1313,7 +1313,7 @@ export class KaminoAction {
             instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
           },
           farmsAccounts,
-          farmsProgram: FARMS_PROGRAM_ID,
+          farmsProgram: this.kaminoMarket.farmsProgramId,
         },
         undefined,
         this.kaminoMarket.programId
@@ -1349,7 +1349,8 @@ export class KaminoAction {
     const obligationAddress = await this.getObligationPda();
     const { collateralFarmAccounts: farmsAccounts } = await KaminoAction.getFarmAccountsForReserve(
       obligationAddress,
-      this.reserve
+      this.reserve,
+      this.kaminoMarket.farmsProgramId
     );
 
     this.lendingIxsLabels.push(`depositObligationCollateralV2`);
@@ -1371,7 +1372,7 @@ export class KaminoAction {
           },
           lendingMarketAuthority: await this.kaminoMarket.getLendingMarketAuthority(),
           farmsAccounts,
-          farmsProgram: FARMS_PROGRAM_ID,
+          farmsProgram: this.kaminoMarket.farmsProgramId,
         },
         undefined,
         this.kaminoMarket.programId
@@ -1433,7 +1434,8 @@ export class KaminoAction {
     const obligationAddress = await this.getObligationPda();
     const { debtFarmAccounts: farmsAccounts } = await KaminoAction.getFarmAccountsForReserve(
       obligationAddress,
-      this.reserve
+      this.reserve,
+      this.kaminoMarket.farmsProgramId
     );
 
     let borrowIx = borrowObligationLiquidityV2(
@@ -1456,7 +1458,7 @@ export class KaminoAction {
           instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
         },
         farmsAccounts,
-        farmsProgram: FARMS_PROGRAM_ID,
+        farmsProgram: this.kaminoMarket.farmsProgramId,
       },
       undefined,
       this.kaminoMarket.programId
@@ -1506,7 +1508,8 @@ export class KaminoAction {
     const obligationAddress = await this.getObligationPda();
     const { collateralFarmAccounts: farmsAccounts } = await KaminoAction.getFarmAccountsForReserve(
       obligationAddress,
-      this.reserve
+      this.reserve,
+      this.kaminoMarket.farmsProgramId
     );
     this.lendingIxsLabels.push(`withdrawObligationCollateralAndRedeemReserveCollateralV2`);
     this.lendingIxs.push(
@@ -1532,7 +1535,7 @@ export class KaminoAction {
             instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
           },
           farmsAccounts: farmsAccounts,
-          farmsProgram: FARMS_PROGRAM_ID,
+          farmsProgram: this.kaminoMarket.farmsProgramId,
         },
         undefined,
         this.kaminoMarket.programId
@@ -1593,7 +1596,8 @@ export class KaminoAction {
 
     const { debtFarmAccounts: farmsAccounts } = await KaminoAction.getFarmAccountsForReserve(
       obligationAddress,
-      this.reserve
+      this.reserve,
+      this.kaminoMarket.farmsProgramId
     );
 
     const depositReserveAccountMetas: AccountMeta[] = depositReservesList.map((reserve) => {
@@ -1618,7 +1622,7 @@ export class KaminoAction {
         },
         lendingMarketAuthority: await this.kaminoMarket.getLendingMarketAuthority(),
         farmsAccounts,
-        farmsProgram: FARMS_PROGRAM_ID,
+        farmsProgram: this.kaminoMarket.farmsProgramId,
       },
       undefined,
       this.kaminoMarket.programId
@@ -1663,9 +1667,10 @@ export class KaminoAction {
 
     const { collateralFarmAccounts } = await KaminoAction.getFarmAccountsForReserve(
       obligationAddress,
-      this.outflowReserve
+      this.outflowReserve,
+      this.kaminoMarket.farmsProgramId
     );
-    const { debtFarmAccounts } = await KaminoAction.getFarmAccountsForReserve(obligationAddress, this.reserve);
+    const { debtFarmAccounts } = await KaminoAction.getFarmAccountsForReserve(obligationAddress, this.reserve, this.kaminoMarket.farmsProgramId);
 
     let repayAndWithdrawIx = repayAndWithdrawAndRedeem(
       {
@@ -1702,7 +1707,7 @@ export class KaminoAction {
         },
         collateralFarmsAccounts: collateralFarmAccounts,
         debtFarmsAccounts: debtFarmAccounts,
-        farmsProgram: FARMS_PROGRAM_ID,
+        farmsProgram: this.kaminoMarket.farmsProgramId,
       },
       undefined,
       this.kaminoMarket.programId
@@ -1743,11 +1748,13 @@ export class KaminoAction {
 
     const { collateralFarmAccounts: depositFarmsAccounts } = await KaminoAction.getFarmAccountsForReserve(
       obligationAddress,
-      this.reserve
+      this.reserve,
+      this.kaminoMarket.farmsProgramId
     );
     const { collateralFarmAccounts: withdrawFarmsAccounts } = await KaminoAction.getFarmAccountsForReserve(
       obligationAddress,
-      this.outflowReserve
+      this.outflowReserve,
+      this.kaminoMarket.farmsProgramId
     );
 
     const lendingMarketAuthority = await this.kaminoMarket.getLendingMarketAuthority();
@@ -1791,7 +1798,7 @@ export class KaminoAction {
         },
         depositFarmsAccounts,
         withdrawFarmsAccounts,
-        farmsProgram: FARMS_PROGRAM_ID,
+        farmsProgram: this.kaminoMarket.farmsProgramId,
       },
       undefined,
       this.kaminoMarket.programId
@@ -1884,7 +1891,8 @@ export class KaminoAction {
     const obligationAddress = await this.getObligationPda();
     const { collateralFarmAccounts: collateralFarmsAccounts } = await KaminoAction.getFarmAccountsForReserve(
       obligationAddress,
-      this.reserve
+      this.reserve,
+      this.kaminoMarket.farmsProgramId
     );
 
     this.lendingIxsLabels.push(`depositReserveLiquidityAndObligationCollateralV2`);
@@ -1912,7 +1920,7 @@ export class KaminoAction {
             instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
           },
           farmsAccounts: collateralFarmsAccounts,
-          farmsProgram: FARMS_PROGRAM_ID,
+          farmsProgram: this.kaminoMarket.farmsProgramId,
         },
         undefined,
         this.kaminoMarket.programId
@@ -1937,7 +1945,8 @@ export class KaminoAction {
 
     const { debtFarmAccounts: debtFarmsAccounts } = await KaminoAction.getFarmAccountsForReserve(
       obligationAddress,
-      this.outflowReserve
+      this.outflowReserve,
+      this.kaminoMarket.farmsProgramId
     );
 
     let borrowIx = borrowObligationLiquidityV2(
@@ -1960,7 +1969,7 @@ export class KaminoAction {
           instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
         },
         farmsAccounts: debtFarmsAccounts,
-        farmsProgram: FARMS_PROGRAM_ID,
+        farmsProgram: this.kaminoMarket.farmsProgramId,
       },
       undefined,
       this.kaminoMarket.programId
@@ -2065,7 +2074,8 @@ export class KaminoAction {
 
     const { debtFarmAccounts: debtFarmsAccounts } = await KaminoAction.getFarmAccountsForReserve(
       obligationAddress,
-      this.reserve
+      this.reserve,
+      this.kaminoMarket.farmsProgramId
     );
 
     let repayIx = repayObligationLiquidityV2(
@@ -2086,7 +2096,7 @@ export class KaminoAction {
         },
         lendingMarketAuthority: await this.kaminoMarket.getLendingMarketAuthority(),
         farmsAccounts: debtFarmsAccounts,
-        farmsProgram: FARMS_PROGRAM_ID,
+        farmsProgram: this.kaminoMarket.farmsProgramId,
       },
       [],
       this.kaminoMarket.programId
@@ -2111,7 +2121,8 @@ export class KaminoAction {
 
     const { collateralFarmAccounts: collateralFarmsAccounts } = await KaminoAction.getFarmAccountsForReserve(
       obligationAddress,
-      this.outflowReserve
+      this.outflowReserve,
+      this.kaminoMarket.farmsProgramId
     );
 
     this.lendingIxs.push(
@@ -2137,7 +2148,7 @@ export class KaminoAction {
             instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
           },
           farmsAccounts: collateralFarmsAccounts,
-          farmsProgram: FARMS_PROGRAM_ID,
+          farmsProgram: this.kaminoMarket.farmsProgramId,
         },
         undefined,
         this.kaminoMarket.programId
@@ -2220,11 +2231,13 @@ export class KaminoAction {
     const obligationAddress = await this.getObligationPda();
     const { collateralFarmAccounts: collateralFarmsAccounts } = await KaminoAction.getFarmAccountsForReserve(
       obligationAddress,
-      this.outflowReserve
+      this.outflowReserve,
+      this.kaminoMarket.farmsProgramId
     );
     const { debtFarmAccounts: debtFarmsAccounts } = await KaminoAction.getFarmAccountsForReserve(
       await this.getObligationPda(),
-      this.reserve
+      this.reserve,
+      this.kaminoMarket.farmsProgramId
     );
 
     let liquidateIx = liquidateObligationAndRedeemReserveCollateralV2(
@@ -2259,7 +2272,7 @@ export class KaminoAction {
         },
         debtFarmsAccounts,
         collateralFarmsAccounts,
-        farmsProgram: FARMS_PROGRAM_ID,
+        farmsProgram: this.kaminoMarket.farmsProgramId,
       },
       [],
       this.kaminoMarket.programId
@@ -2880,7 +2893,7 @@ export class KaminoAction {
         farms.push([
           ReserveFarmKind.Collateral,
           kaminoReserve.state.farmCollateral,
-          await obligationFarmStatePda(kaminoReserve.state.farmCollateral, obligationAddress),
+          await obligationFarmStatePda(kaminoReserve.state.farmCollateral, obligationAddress, this.kaminoMarket.farmsProgramId),
           kaminoReserve,
         ]);
       }
@@ -2888,7 +2901,7 @@ export class KaminoAction {
         farms.push([
           ReserveFarmKind.Debt,
           kaminoReserve.state.farmDebt,
-          await obligationFarmStatePda(kaminoReserve.state.farmDebt, obligationAddress),
+          await obligationFarmStatePda(kaminoReserve.state.farmDebt, obligationAddress, this.kaminoMarket.farmsProgramId),
           kaminoReserve,
         ]);
       }
@@ -2907,7 +2920,7 @@ export class KaminoAction {
           obligationFarmUserState: arg[2],
           lendingMarket: this.kaminoMarket.getAddress(),
         },
-        farmsProgram: FARMS_PROGRAM_ID,
+        farmsProgram: this.kaminoMarket.farmsProgramId,
         rent: SYSVAR_RENT_ADDRESS,
         systemProgram: SYSTEM_PROGRAM_ADDRESS,
       };
@@ -2973,7 +2986,7 @@ export class KaminoAction {
 
     const obligationAddress = await this.getObligationPda();
     if (mode === ReserveFarmKind.Collateral && isNotNullPubkey(reserve.state.farmCollateral)) {
-      const pda = await obligationFarmStatePda(reserve.state.farmCollateral, obligationAddress);
+      const pda = await obligationFarmStatePda(reserve.state.farmCollateral, obligationAddress, this.kaminoMarket.farmsProgramId);
       const account = await fetchEncodedAccount(this.kaminoMarket.getRpc(), pda);
       if (!account.exists) {
         farms.push([ReserveFarmKind.Collateral.discriminator, reserve.state.farmCollateral, pda]);
@@ -2981,7 +2994,7 @@ export class KaminoAction {
     }
 
     if (mode === ReserveFarmKind.Debt && isNotNullPubkey(reserve.state.farmDebt)) {
-      const pda = await obligationFarmStatePda(reserve.state.farmDebt, obligationAddress);
+      const pda = await obligationFarmStatePda(reserve.state.farmDebt, obligationAddress, this.kaminoMarket.farmsProgramId);
       const account = await fetchEncodedAccount(this.kaminoMarket.getRpc(), pda);
       if (!account.exists) {
         farms.push([ReserveFarmKind.Debt.discriminator, reserve.state.farmDebt, pda]);
@@ -3000,7 +3013,7 @@ export class KaminoAction {
         reserveFarmState: arg[1],
         obligationFarm: arg[2],
         lendingMarket: this.kaminoMarket.getAddress(),
-        farmsProgram: FARMS_PROGRAM_ID,
+        farmsProgram: this.kaminoMarket.farmsProgramId,
         rent: SYSVAR_RENT_ADDRESS,
         systemProgram: SYSTEM_PROGRAM_ADDRESS,
       };
@@ -3568,7 +3581,8 @@ export class KaminoAction {
 
   private static async getFarmAccountsForReserve(
     obligationAddress: Address,
-    reserve: KaminoReserve
+    reserve: KaminoReserve,
+    farmsProgramId?: Address
   ): Promise<{
     debtFarmAccounts: {
       obligationFarmUserState: Option<Address>;
@@ -3589,7 +3603,7 @@ export class KaminoAction {
     };
     if (isSome(collateralFarmAddress)) {
       collateralFarmAccounts = {
-        obligationFarmUserState: some(await obligationFarmStatePda(collateralFarmAddress.value, obligationAddress)),
+        obligationFarmUserState: some(await obligationFarmStatePda(collateralFarmAddress.value, obligationAddress, farmsProgramId)),
         reserveFarmState: collateralFarmAddress,
       };
     }
@@ -3603,7 +3617,7 @@ export class KaminoAction {
     const debtFarmAddress = reserve.getDebtFarmAddress();
     if (isSome(debtFarmAddress)) {
       debtFarmAccounts = {
-        obligationFarmUserState: some(await obligationFarmStatePda(debtFarmAddress.value, obligationAddress)),
+        obligationFarmUserState: some(await obligationFarmStatePda(debtFarmAddress.value, obligationAddress, farmsProgramId)),
         reserveFarmState: debtFarmAddress,
       };
     }

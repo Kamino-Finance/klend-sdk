@@ -7,8 +7,13 @@ import { STAGING_PROGRAM_ID as KLEND_STAGING_PROGRAM_ID } from '../../utils/cons
 import { noopSigner, parseKeypairFile } from './keypair';
 import { Chain } from './rpc';
 import { KaminoMarket } from '../../classes';
-import { FARMS_GLOBAL_CONFIG_MAINNET } from '../../classes/farm_utils';
-import { KVAULT_STAGING_PROGRAM_ID, KVAULT_DEVNET_PROGRAM_ID } from '../utils/consts';
+import { FARMS_GLOBAL_CONFIG_MAINNET, FARMS_GLOBAL_CONFIG_DEVNET } from '../../classes/farm_utils';
+import {
+  KVAULT_STAGING_PROGRAM_ID,
+  KVAULT_DEVNET_PROGRAM_ID,
+  FARMS_STAGING_PROGRAM_ID,
+  FARMS_DEVNET_PROGRAM_ID,
+} from '../utils/consts';
 import { VaultState } from '../../@codegen/kvault/accounts';
 
 export type Cluster = 'localnet' | 'devnet' | 'mainnet-beta';
@@ -119,8 +124,12 @@ function defaultProgramConfig(programConfig: {
     kvaultProgramId:
       programConfig.kvaultProgramId ??
       (stagingOpt ? KVAULT_STAGING_PROGRAM_ID : devnetOpt ? KVAULT_DEVNET_PROGRAM_ID : KVAULT_PROGRAM_ID),
-    farmsProgramId: programConfig?.farmsProgramId ?? FARMS_PROGRAM_ID,
-    farmsGlobalConfig: programConfig?.farmsGlobalConfig ?? FARMS_GLOBAL_CONFIG_MAINNET,
+    farmsProgramId:
+      programConfig?.farmsProgramId ??
+      (stagingOpt ? FARMS_STAGING_PROGRAM_ID : devnetOpt ? FARMS_DEVNET_PROGRAM_ID : FARMS_PROGRAM_ID),
+    farmsGlobalConfig:
+      programConfig?.farmsGlobalConfig ??
+      (devnetOpt ? FARMS_GLOBAL_CONFIG_DEVNET : FARMS_GLOBAL_CONFIG_MAINNET),
   };
   return config;
 }
