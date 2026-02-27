@@ -957,7 +957,7 @@ export class KaminoManager {
     }
 
     // Get all reserves
-    const allReserveAccounts = getAllReserveAccounts(this.getRpc());
+    const allReserveAccounts = getAllReserveAccounts(this.getRpc(), programId);
     const reservePairs: [Address, Reserve][] = [];
     for await (const pair of allReserveAccounts) {
       reservePairs.push(pair);

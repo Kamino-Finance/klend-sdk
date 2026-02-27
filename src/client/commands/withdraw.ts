@@ -1,22 +1,28 @@
 import BN from 'bn.js';
-import { getProgramId, VanillaObligation } from '../../utils';
+import { VanillaObligation } from '../../utils';
 import { KaminoAction } from '../../classes';
 import { Scope } from '@kamino-finance/scope-sdk';
 import { CliEnv, SendTxMode } from '../tx/CliEnv';
-import { getMarket, STAGING_LENDING_MARKET } from '../services/market';
+import { getMarket } from '../services/market';
 import { processTx } from '../tx/processor';
+import { Address } from '@solana/kit';
 
-export async function withdraw(env: CliEnv, mode: SendTxMode, token: string, depositAmount: BN): Promise<void> {
+export async function withdraw(
+  env: CliEnv,
+  mode: SendTxMode,
+  token: string,
+  withdrawAmount: BN,
+  marketAddress: Address
+): Promise<void> {
   const signer = await env.getSigner();
-  const programId = getProgramId('staging');
-  const kaminoMarket = await getMarket(env.c.rpc, programId);
-  const scope = new Scope('mainnet-beta', env.c.rpc);
+  const kaminoMarket = await getMarket(env.c.rpc, marketAddress, env.klendProgramId);
+  const scope = new Scope(env.cluster, env.c.rpc);
   const kaminoAction = await KaminoAction.buildWithdrawTxns(
     kaminoMarket,
-    depositAmount,
+    withdrawAmount,
     kaminoMarket.getReserveBySymbol(token)!.getLiquidityMint(),
     signer,
-    new VanillaObligation(STAGING_LENDING_MARKET),
+    new VanillaObligation(marketAddress),
     true,
     { scope, scopeConfigurations: await scope.getAllConfigurations() }
   );

@@ -1,10 +1,14 @@
-import { getProgramId } from '../../utils';
 import { getMarket } from '../services/market';
-import { address, Rpc, SolanaRpcApi } from '@solana/kit';
+import { address, Address, Rpc, SolanaRpcApi } from '@solana/kit';
 
-export async function printReserve(rpc: Rpc<SolanaRpcApi>, reserve?: string, symbol?: string): Promise<void> {
-  const programId = getProgramId('staging');
-  const kaminoMarket = await getMarket(rpc, programId);
+export async function printReserve(
+  rpc: Rpc<SolanaRpcApi>,
+  marketAddress: Address,
+  programId: Address,
+  reserve?: string,
+  symbol?: string
+): Promise<void> {
+  const kaminoMarket = await getMarket(rpc, marketAddress, programId);
   const result = reserve
     ? kaminoMarket.getReserveByAddress(address(reserve))
     : kaminoMarket.getReserveBySymbol(symbol!);

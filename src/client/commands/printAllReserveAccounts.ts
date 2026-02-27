@@ -1,10 +1,10 @@
 import { getAllReserveAccounts } from '../../utils';
-import { GetProgramAccountsApi, Rpc } from '@solana/kit';
+import { Address, GetProgramAccountsApi, Rpc } from '@solana/kit';
 
-export async function printAllReserveAccounts(rpc: Rpc<GetProgramAccountsApi>): Promise<void> {
+export async function printAllReserveAccounts(rpc: Rpc<GetProgramAccountsApi>, programId?: Address): Promise<void> {
   let count = 0;
   const logItems: { address: string; value: string; index: number }[] = [];
-  for await (const [address, reserveAccount] of getAllReserveAccounts(rpc)) {
+  for await (const [address, reserveAccount] of getAllReserveAccounts(rpc, programId)) {
     count++;
     const logItem = {
       address: address.toString(),

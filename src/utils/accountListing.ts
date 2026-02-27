@@ -5,12 +5,13 @@ import { PROGRAM_ID } from '../@codegen/klend/programId';
 const base58Decoder = getBase58Decoder();
 
 export async function* getAllObligationAccounts(
-  connection: Rpc<GetProgramAccountsApi>
+  connection: Rpc<GetProgramAccountsApi>,
+  programId: Address = PROGRAM_ID
 ): AsyncGenerator<[Address, Obligation], void, unknown> {
   // Poor-man's paging...
   for (let i = 0; i < 256; i++) {
     const obligations = await connection
-      .getProgramAccounts(PROGRAM_ID, {
+      .getProgramAccounts(programId, {
         filters: [
           {
             dataSize: BigInt(Obligation.layout.span + 8),
@@ -40,11 +41,12 @@ export async function* getAllObligationAccounts(
 }
 
 export async function* getAllReserveAccounts(
-  rpc: Rpc<GetProgramAccountsApi>
+  rpc: Rpc<GetProgramAccountsApi>,
+  programId: Address = PROGRAM_ID
 ): AsyncGenerator<[Address, Reserve], void, unknown> {
   // due to relatively low count of reserves, we technically don't really need a generator, but let's keep it consistent within this file
   const reserves = await rpc
-    .getProgramAccounts(PROGRAM_ID, {
+    .getProgramAccounts(programId, {
       filters: [
         {
           dataSize: BigInt(Reserve.layout.span + 8),
