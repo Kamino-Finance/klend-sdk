@@ -49,6 +49,49 @@ export interface OrderOpportunity {
 // All condition types:
 
 /**
+ * A condition that is always met, regardless of the obligation's state.
+ *
+ * The SC requires the threshold to be zero and the execution bonus to be constant (min == max)
+ */
+export class Always implements OrderCondition {
+  constructor(_threshold?: Decimal.Value) {}
+
+  threshold(): Decimal {
+    return new Decimal(0);
+  }
+
+  evaluate(_obligation: KaminoObligation): ConditionHit | null {
+    return { normalizedDistanceFromThreshold: null };
+  }
+}
+
+/**
+ * A condition met when the obligation's LTV is within the given threshold of its liquidation LTV.
+ *
+ * Hit when `liquidationLtv - userLtv < conditionThreshold`.
+ *
+ * Example: If an obligation liquidates at LTV = 81%, then `LiquidationLtvCloserThan(0.06)`
+ * becomes executable when LTV > 75%.
+ */
+export class LiquidationLtvCloserThan implements OrderCondition {
+  readonly diffToLiquidationLtv: Decimal;
+
+  constructor(diffToLiquidationLtv: Decimal.Value) {
+    this.diffToLiquidationLtv = new Decimal(diffToLiquidationLtv);
+  }
+
+  threshold(): Decimal {
+    return this.diffToLiquidationLtv;
+  }
+
+  evaluate(obligation: KaminoObligation): ConditionHit | null {
+    const liquidationLtv = obligation.liquidationLtv();
+    const effectiveThreshold = Decimal.max(liquidationLtv.sub(this.diffToLiquidationLtv), new Decimal(0));
+    return evaluateStopLoss(obligation.loanToValue(), effectiveThreshold, liquidationLtv);
+  }
+}
+
+/**
  * A condition met when obligation's overall "User LTV" is strictly higher than the given threshold.
  */
 export class UserLtvAbove implements OrderCondition {
@@ -226,6 +269,8 @@ const CONDITION_TO_TYPE_ID = new Map<OrderConditionConstructor, number>([
   [UserLtvBelow, 2],
   [DebtCollPriceRatioAbove, 3],
   [DebtCollPriceRatioBelow, 4],
+  [Always, 5],
+  [LiquidationLtvCloserThan, 6]
 ]);
 
 const OPPORTUNITY_TO_TYPE_ID = new Map<OrderOpportunityConstructor, number>([
@@ -415,16 +460,14 @@ export class KaminoObligationOrder {
    * (which ensures that order execution improves LTV).
    */
   private calculateExecutionBonusRate(conditionHit: ConditionHit, obligation: KaminoObligation): Decimal {
-    const interpolatedBonusRate = interpolateBonusRate(
-      conditionHit.normalizedDistanceFromThreshold,
-      this.minExecutionBonusRate,
-      this.maxExecutionBonusRate
-    );
+    const theoreticalBonusRate = conditionHit.normalizedDistanceFromThreshold !== null
+      ? interpolateBonusRate(conditionHit.normalizedDistanceFromThreshold, this.minExecutionBonusRate, this.maxExecutionBonusRate)
+      : this.minExecutionBonusRate; // constant bonus (min == max enforced by SC)
     // In order to ensure that LTV improves on order execution, we apply the same heuristic formula as for the regular
     // liquidations. Please note that we deliberately use the `obligation.noBfLoanToValue()`, which is consistent with
     // the smart contract's calculation:
     const diffToBadDebt = new Decimal(1).sub(obligation.noBfLoanToValue());
-    return Decimal.min(interpolatedBonusRate, diffToBadDebt);
+    return Decimal.min(theoreticalBonusRate, diffToBadDebt);
   }
 }
 
@@ -472,8 +515,11 @@ export type ConditionHit = {
    *  - when current LTV = 82% (i.e. some number in-between), this normalized distance is `0.6`.
    *
    *  In other words: this is a `[0; 1]` measure of how hard the condition threshold is crossed.
+   *
+   *  May be `null` if the condition type does not meaningfully define "distance from threshold"
+   *  (e.g. {@link Always} is always met, regardless of any "current value" or "extreme value").
    */
-  normalizedDistanceFromThreshold: Decimal;
+  normalizedDistanceFromThreshold: Decimal | null;
 };
 
 /**
