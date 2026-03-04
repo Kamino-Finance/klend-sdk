@@ -45,6 +45,9 @@ import { Fraction } from '../classes/fraction';
 import Decimal from 'decimal.js';
 import BN from 'bn.js';
 import { PythConfiguration, SwitchboardConfiguration, UpdateReserveWhitelistMode } from '../@codegen/kvault/types';
+import { ReserveWhitelistEntry } from '../@codegen/kvault/accounts';
+import { getReserveWhitelistEntryPda } from '../classes/vault';
+import { getMarketsFromApi } from '../utils/api';
 import * as fs from 'fs';
 import { MarketWithAddress } from '../utils/managerTypes';
 import { ManagementFeeBps, PendingVaultAdmin, PerformanceFeeBps } from '../@codegen/kvault/types/VaultConfigField';
@@ -1073,6 +1076,115 @@ async function main() {
       console.log(`\nBackfill complete!`);
       console.log(`Success: ${successCount} reserves (both modes set)`);
       console.log(`Errors: ${errorCount}`);
+    });
+
+  commands
+    .command('is-reserve-whitelisted')
+    .requiredOption('--reserve <string>', 'Reserve address to check')
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ reserve, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const reserveAddress = address(reserve);
+
+      const pda = await getReserveWhitelistEntryPda(reserveAddress, env.kvaultProgramId);
+      const entry = await ReserveWhitelistEntry.fetch(env.c.rpc, pda, env.kvaultProgramId);
+
+      if (!entry) {
+        console.log(`Reserve ${reserveAddress}`);
+        console.log(`  PDA: ${pda} (not initialized)`);
+        console.log(`  whitelistInvest: 0`);
+        console.log(`  whitelistAddAllocation: 0`);
+      } else {
+        console.log(`Reserve ${reserveAddress}`);
+        console.log(`  PDA: ${pda}`);
+        console.log(`  tokenMint: ${entry.tokenMint}`);
+        console.log(`  whitelistInvest: ${entry.whitelistInvest}`);
+        console.log(`  whitelistAddAllocation: ${entry.whitelistAddAllocation}`);
+      }
+    });
+
+  commands
+    .command('check-whitelist-for-mint')
+    .requiredOption('--mint <string>', 'Token mint address to check across all UI markets')
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ mint, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const tokenMint = address(mint);
+
+      const marketsConfig = await getMarketsFromApi({ api: { programId: env.klendProgramId } });
+      console.log(`Found ${marketsConfig.length} UI markets from CDN\n`);
+
+      const markets = await Promise.all(
+        marketsConfig.map(async (cfg) => {
+          const market = await KaminoMarket.load(
+            env.c.rpc,
+            address(cfg.lendingMarket),
+            DEFAULT_RECENT_SLOT_DURATION_MS,
+            env.klendProgramId
+          );
+          return { cfg, market };
+        })
+      );
+
+      // Collect all reserves for this mint across all markets
+      const reserveEntries: { marketName: string; marketAddress: string; reserveAddress: Address; symbol: string }[] =
+        [];
+      for (const { cfg, market } of markets) {
+        if (!market) continue;
+        const reserve = market.getReserveByMint(tokenMint);
+        if (reserve) {
+          reserveEntries.push({
+            marketName: cfg.name,
+            marketAddress: cfg.lendingMarket,
+            reserveAddress: reserve.address,
+            symbol: reserve.symbol,
+          });
+        }
+      }
+
+      if (reserveEntries.length === 0) {
+        console.log(`No reserves found for mint ${tokenMint} in any UI market`);
+        return;
+      }
+
+      // Derive all PDAs and batch-fetch whitelist entries
+      const pdas = await Promise.all(
+        reserveEntries.map((e) => getReserveWhitelistEntryPda(e.reserveAddress, env.kvaultProgramId))
+      );
+      const entries = await ReserveWhitelistEntry.fetchMultiple(env.c.rpc, pdas, env.kvaultProgramId);
+
+      let missingCount = 0;
+      for (let i = 0; i < reserveEntries.length; i++) {
+        const r = reserveEntries[i];
+        const entry = entries[i];
+        const pda = pdas[i];
+
+        const invest = entry ? entry.whitelistInvest : 0;
+        const addAlloc = entry ? entry.whitelistAddAllocation : 0;
+        const pdaStatus = entry ? 'initialized' : 'NOT initialized';
+        const isMissing = !entry || invest === 0 || addAlloc === 0;
+
+        if (isMissing) {
+          missingCount++;
+          console.log(
+            `[MISSING] ${r.symbol} reserve ${r.reserveAddress} in market "${r.marketName}" (${r.marketAddress})`
+          );
+          console.log(`  PDA: ${pda} (${pdaStatus})`);
+          console.log(`  whitelistInvest: ${invest}`);
+          console.log(`  whitelistAddAllocation: ${addAlloc}`);
+          console.log('');
+        }
+      }
+
+      if (missingCount === 0) {
+        console.log(
+          `All ${reserveEntries.length} reserves for mint ${tokenMint} are fully whitelisted (Invest + AddAllocation)`
+        );
+      } else {
+        console.log(`${missingCount}/${reserveEntries.length} reserves need whitelisting`);
+      }
     });
 
   commands
