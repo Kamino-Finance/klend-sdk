@@ -1390,7 +1390,7 @@ function shouldSkipValidation(mode: UpdateConfigModeKind, reserve: Reserve | und
   } else if (reserve == undefined) {
     return true;
   }
-  const isUsed = reserve.liquidity.availableAmount.gten(MIN_INITIAL_DEPOSIT);
+  const isUsed = reserve.liquidity.availableAmount.gtn(MIN_INITIAL_DEPOSIT);
   const isUsageBlocked = reserve.config.depositLimit.isZero() && reserve.config.borrowLimit.isZero();
   return isUsageBlocked && !isUsed;
 }
