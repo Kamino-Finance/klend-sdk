@@ -391,9 +391,10 @@ export class KaminoVaultClient {
    * Prints a vault in a human readable form
    * @param vaultPubkey - the address of the vault
    * @param [vaultState] - optional parameter to pass the vault state directly; this will save a network call
+   * @param [slot] - optional slot to use for calculations; if not provided, the latest confirmed slot will be fetched
    * @returns - void; prints the vault to the console
    */
-  async printVault(vaultPubkey: Address, vaultState?: VaultState) {
+  async printVault(vaultPubkey: Address, vaultState?: VaultState, slot?: Slot) {
     const vault = vaultState ? vaultState : await VaultState.fetch(this.getConnection(), vaultPubkey);
 
     if (!vault) {
@@ -403,9 +404,9 @@ export class KaminoVaultClient {
 
     const kaminoVault = KaminoVault.loadWithClientAndState(this, vaultPubkey, vault);
     const vaultName = this.decodeVaultName(vault.name);
-    const slot = await this.getConnection().getSlot({ commitment: 'confirmed' }).send();
-    const tokensPerShare = await this.getTokensPerShareSingleVault(kaminoVault, slot);
-    const holdings = await this.getVaultHoldings(vault, slot);
+    const currentSlot = slot ?? (await this.getConnection().getSlot({ commitment: 'confirmed' }).send());
+    const tokensPerShare = await this.getTokensPerShareSingleVault(kaminoVault, currentSlot);
+    const holdings = await this.getVaultHoldings(vault, currentSlot);
 
     const sharesIssued = new Decimal(vault.sharesIssued.toString()!).div(
       new Decimal(vault.sharesMintDecimals.toString())
@@ -503,11 +504,14 @@ export class KaminoVaultClient {
   /**
    * This method will create a vault with a given config. The config can be changed later on, but it is recommended to set it up correctly from the start
    * @param vaultConfig - the config object used to create a vault
+   * @param [useDevnetFarms] - whether to use devnet farms
+   * @param [slot] - optional slot to use for lookup table creation; if not provided, the latest finalized slot will be fetched
    * @returns vault: the keypair of the vault, used to sign the initialization transaction; initVaultIxs: a struct with ixs to initialize the vault and its lookup table + populateLUTIxs, a list to populate the lookup table which has to be executed in a separate transaction
    */
   async createVaultIxs(
     vaultConfig: KaminoVaultConfig,
-    useDevnetFarms: boolean = false
+    useDevnetFarms: boolean = false,
+    slot?: Slot
   ): Promise<{ vault: TransactionSigner; lut: Address; initVaultIxs: InitVaultIxs }> {
     const vaultState = await generateKeyPairSigner();
     const size = BigInt(VaultState.layout.span + 8);
@@ -520,8 +524,8 @@ export class KaminoVaultClient {
       newAccount: vaultState,
     });
 
-    const [slot, [tokenVault], [baseVaultAuthority], [sharesMint]] = await Promise.all([
-      this.getConnection().getSlot({ commitment: 'finalized' }).send(),
+    const [resolvedSlot, [tokenVault], [baseVaultAuthority], [sharesMint]] = await Promise.all([
+      slot ? Promise.resolve(slot) : this.getConnection().getSlot({ commitment: 'finalized' }).send(),
       getProgramDerivedAddress({
         seeds: [Buffer.from(TOKEN_VAULT_SEED), addressEncoder.encode(vaultState.address)],
         programAddress: this._kaminoVaultProgramId,
@@ -583,7 +587,7 @@ export class KaminoVaultClient {
     );
 
     // create and set up the vault lookup table
-    const [createLUTIx, lut] = await initLookupTableIx(vaultConfig.admin, slot);
+    const [createLUTIx, lut] = await initLookupTableIx(vaultConfig.admin, resolvedSlot);
 
     const farmsGlobalConfig = useDevnetFarms ? FARMS_GLOBAL_CONFIG_DEVNET : FARMS_GLOBAL_CONFIG_MAINNET;
     const accountsToBeInserted: Address[] = [
@@ -1284,12 +1288,7 @@ export class KaminoVaultClient {
     lookupTable: Address,
     vaultAdminAuthority?: TransactionSigner
   ): Promise<UpdateVaultConfigIxs> {
-    return this.updateVaultConfigIxs(
-      vault,
-      new VaultConfigField.LookupTable(),
-      lookupTable,
-      vaultAdminAuthority
-    );
+    return this.updateVaultConfigIxs(vault, new VaultConfigField.LookupTable(), lookupTable, vaultAdminAuthority);
   }
 
   /**
@@ -1393,12 +1392,7 @@ export class KaminoVaultClient {
     farm: Address,
     vaultAdminAuthority?: TransactionSigner
   ): Promise<UpdateVaultConfigIxs> {
-    return this.updateVaultConfigIxs(
-      vault,
-      new VaultConfigField.FirstLossCapitalFarm(),
-      farm,
-      vaultAdminAuthority
-    );
+    return this.updateVaultConfigIxs(vault, new VaultConfigField.FirstLossCapitalFarm(), farm, vaultAdminAuthority);
   }
 
   /**
@@ -1711,11 +1705,13 @@ export class KaminoVaultClient {
    * This function creates the instruction for the `pendingAdmin` of the vault to accept to become the owner of the vault (step 2/2 of the ownership transfer)
    * @param vault - vault to change the ownership for
    * @param [pendingAdmin] - pending vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @param [slot] - optional slot to use for lookup table creation; if not provided, the latest finalized slot will be fetched
    * @returns - an instruction to accept the ownership of the vault and a list of instructions to update the lookup table
    */
   async acceptVaultOwnershipIxs(
     vault: KaminoVault,
-    pendingAdmin?: TransactionSigner
+    pendingAdmin?: TransactionSigner,
+    slot?: Slot
   ): Promise<AcceptVaultOwnershipIxs> {
     const vaultState: VaultState = await vault.getState();
     const signer = parseVaultPendingAdmin(vaultState, pendingAdmin);
@@ -1735,7 +1731,7 @@ export class KaminoVaultClient {
     const lutIxs: Instruction[] = [];
     const [initNewLutIx, newLut] = await initLookupTableIx(
       signer,
-      await this.getConnection().getSlot({ commitment: 'finalized' }).send()
+      slot ?? (await this.getConnection().getSlot({ commitment: 'finalized' }).send())
     );
 
     const insertIntoLUTIxs = await insertIntoLookupTableIxs(
@@ -1910,7 +1906,11 @@ export class KaminoVaultClient {
     let vaultFarmState = farmState;
     const vaultState = await vault.getState();
     if (!farmState && (await vault.hasFarm(vaultState))) {
-      const vaultFarmStateResult = await FarmState.fetch(this.getConnection(), vaultState.vaultFarm, this._farmsProgramId);
+      const vaultFarmStateResult = await FarmState.fetch(
+        this.getConnection(),
+        vaultState.vaultFarm,
+        this._farmsProgramId
+      );
       if (vaultFarmStateResult) {
         vaultFarmState = vaultFarmStateResult;
       }
@@ -1945,12 +1945,16 @@ export class KaminoVaultClient {
     const createAtasIxs: Instruction[] = [];
     const closeAtasIxs: Instruction[] = [];
     if (vaultState.tokenMint === WRAPPED_SOL_MINT) {
-      const [{ ata: wsolAta, createAtaIx: createWsolAtaIxn }] = await createAtasIdempotent(user, [
-        {
-          mint: WRAPPED_SOL_MINT,
-          tokenProgram: tokenProgramID,
-        },
-      ], payer);
+      const [{ ata: wsolAta, createAtaIx: createWsolAtaIxn }] = await createAtasIdempotent(
+        user,
+        [
+          {
+            mint: WRAPPED_SOL_MINT,
+            tokenProgram: tokenProgramID,
+          },
+        ],
+        payer
+      );
       createAtasIxs.push(createWsolAtaIxn);
       const transferWsolIxs = getTransferWsolIxs(
         user,
@@ -1963,12 +1967,16 @@ export class KaminoVaultClient {
       createAtasIxs.push(...transferWsolIxs);
     }
 
-    const [{ ata: userSharesAta, createAtaIx: createSharesAtaIxs }] = await createAtasIdempotent(user, [
-      {
-        mint: vaultState.sharesMint,
-        tokenProgram: TOKEN_PROGRAM_ADDRESS,
-      },
-    ], payer);
+    const [{ ata: userSharesAta, createAtaIx: createSharesAtaIxs }] = await createAtasIdempotent(
+      user,
+      [
+        {
+          mint: vaultState.sharesMint,
+          tokenProgram: TOKEN_PROGRAM_ADDRESS,
+        },
+      ],
+      payer
+    );
     createAtasIxs.push(createSharesAtaIxs);
 
     const eventAuthority = await getEventAuthorityPda(this._kaminoVaultProgramId);
@@ -2125,7 +2133,11 @@ export class KaminoVaultClient {
     let vaultFarmState = farmState;
     const vaultState = await vault.getState();
     if (!farmState && (await vault.hasFarm(vaultState))) {
-      const vaultFarmStateResult = await FarmState.fetch(this.getConnection(), vaultState.vaultFarm, this._farmsProgramId);
+      const vaultFarmStateResult = await FarmState.fetch(
+        this.getConnection(),
+        vaultState.vaultFarm,
+        this._farmsProgramId
+      );
       if (vaultFarmStateResult) {
         vaultFarmState = vaultFarmStateResult;
       }
@@ -2218,12 +2230,16 @@ export class KaminoVaultClient {
     const sharesInAtaAreEnoughForWithdraw = sharesToWithdraw.lte(userSharesAtaBalance);
     if (hasFarm && !sharesInAtaAreEnoughForWithdraw && userSharesInFarm.gt(0)) {
       // if we need to unstake we need to make sure share ata is created
-      const [{ createAtaIx }] = await createAtasIdempotent(user, [
-        {
-          mint: vaultState.sharesMint,
-          tokenProgram: TOKEN_PROGRAM_ADDRESS,
-        },
-      ], payer);
+      const [{ createAtaIx }] = await createAtasIdempotent(
+        user,
+        [
+          {
+            mint: vaultState.sharesMint,
+            tokenProgram: TOKEN_PROGRAM_ADDRESS,
+          },
+        ],
+        payer
+      );
       withdrawIxs.unstakeFromFarmIfNeededIxs.push(createAtaIx);
       let shareLamportsToWithdraw = new Decimal(U64_MAX.toString());
       if (!withdrawAllShares) {
@@ -2332,12 +2348,16 @@ export class KaminoVaultClient {
     const vaultState = await vault.getState();
 
     const userSharesAta = await getAssociatedTokenAddress(vaultState.sharesMint, user.address);
-    const [{ ata: userTokenAta, createAtaIx }] = await createAtasIdempotent(user, [
-      {
-        mint: vaultState.tokenMint,
-        tokenProgram: vaultState.tokenProgram,
-      },
-    ], payer);
+    const [{ ata: userTokenAta, createAtaIx }] = await createAtasIdempotent(
+      user,
+      [
+        {
+          mint: vaultState.tokenMint,
+          tokenProgram: vaultState.tokenProgram,
+        },
+      ],
+      payer
+    );
 
     const shareLamportsToWithdraw = collToLamportsDecimal(shareAmount, vaultState.sharesMintDecimals.toNumber());
     const withdrawFromAvailableIxn = await this.withdrawFromAvailableIx(
@@ -2365,12 +2385,16 @@ export class KaminoVaultClient {
   }: BuildReserveExitIxsParams): Promise<Instruction[]> {
     const vaultReservesState = vaultReservesMap ? vaultReservesMap : await this.loadVaultReserves(vaultState);
     const userSharesAta = await getAssociatedTokenAddress(vaultState.sharesMint, user.address);
-    const [{ ata: userTokenAta, createAtaIx }] = await createAtasIdempotent(user, [
-      {
-        mint: vaultState.tokenMint,
-        tokenProgram: vaultState.tokenProgram,
-      },
-    ], payer);
+    const [{ ata: userTokenAta, createAtaIx }] = await createAtasIdempotent(
+      user,
+      [
+        {
+          mint: vaultState.tokenMint,
+          tokenProgram: vaultState.tokenProgram,
+        },
+      ],
+      payer
+    );
 
     const withdrawAllShares = shareAmount.gte(allUserShares);
     const actualSharesToWithdraw = shareAmount.lte(allUserShares) ? shareAmount : allUserShares;
@@ -2889,12 +2913,14 @@ export class KaminoVaultClient {
    * @param authority - vault admin
    * @param vault the vault to sync and set the LUT for if needed
    * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [slot] - optional slot to use for lookup table creation; if not provided, the latest confirmed slot will be fetched
    * @returns a struct that contains a list of ix to create the LUT and assign it to the vault if needed + a list of ixs to insert all the accounts in the LUT
    */
   async syncVaultLookupTableIxs(
     authority: TransactionSigner,
     vault: KaminoVault,
-    vaultReservesMap?: Map<Address, KaminoReserve>
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    slot?: Slot
   ): Promise<SyncVaultLUTIxs> {
     const vaultState = await vault.getState();
     const allAccountsToBeInserted = [
@@ -2943,7 +2969,7 @@ export class KaminoVaultClient {
     const setupLUTIfNeededIxs: Instruction[] = [];
     let lut = vaultState.vaultLookupTable;
     if (lut === DEFAULT_PUBLIC_KEY) {
-      const recentSlot = await this.getConnection().getSlot({ commitment: 'confirmed' }).send();
+      const recentSlot = slot ?? (await this.getConnection().getSlot({ commitment: 'confirmed' }).send());
       const [ix, address] = await initLookupTableIx(authority, recentSlot);
       setupLUTIfNeededIxs.push(ix);
       lut = address;
@@ -4174,7 +4200,7 @@ export class KaminoVaultClient {
       currentSlot
     );
 
-    const slotForOverview = slot ? slot : await this.getConnection().getSlot().send();
+    const slotForOverview = currentSlot ?? slot ?? (await this.getConnection().getSlot().send());
     const farmsClient = new Farms(this.getConnection(), this._farmsProgramId);
 
     const vaultTheoreticalAPYPromise = this.getVaultTheoreticalAPY(vaultState, slotForOverview, vaultReservesState);
@@ -4560,8 +4586,7 @@ export class KaminoVaultClient {
    * Simulate the current holdings of the vault and the earned interest
    * @param vaultState the kamino vault state to get simulated holdings and earnings for
    * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
-   * @param [currentSlot] - the current slot. Optional. If not provided it will fetch the current slot
-   * @param slot - latest slot
+   * @param [slot] - the current slot. Optional. If not provided it will fetch the current slot
    * @param [previousNetAUM] - the previous AUM of the vault to compute the earned interest relative to this value. Optional. If not provided the function will estimate the total AUM at the slot of the last state update on chain
    * @param [currentSlot] - the latest confirmed slot. Optional. If provided the function will be  faster as it will not have to fetch the latest slot
    * @returns a struct of simulated vault holdings and earned interest
@@ -4584,9 +4609,14 @@ export class KaminoVaultClient {
       pendingFees = lamportsToDecimal(new Fraction(vaultState.pendingFeesSf).toDecimal(), tokenDecimals);
     }
 
-    const latestSlot = slot ? slot : await this.getConnection().getSlot({ commitment: 'confirmed' }).send();
+    let fetchedLatestSlot: Slot | undefined = undefined;
+    if (!slot || !currentSlot) {
+      fetchedLatestSlot = await this.getConnection().getSlot({ commitment: 'confirmed' }).send();
+    }
+    const latestSlot = slot ? slot : fetchedLatestSlot!;
+    const latestCurrentSlot = currentSlot ? currentSlot : fetchedLatestSlot!;
 
-    const currentHoldings = await this.getVaultHoldings(vaultState, latestSlot, vaultReservesMap, currentSlot);
+    const currentHoldings = await this.getVaultHoldings(vaultState, latestSlot, vaultReservesMap, latestCurrentSlot);
     const earnedInterest = currentHoldings.totalAUMIncludingFees.sub(prevAUM).sub(pendingFees);
 
     return {
@@ -4600,12 +4630,20 @@ export class KaminoVaultClient {
    * @param vaultState the kamino vault state to get simulated fees for
    * @param [simulatedCurrentHoldingsWithInterest] the simulated holdings and interest earned by the vault. Optional
    * @param [currentTimestamp] the current date. Optional. If not provided it will fetch the current unix timestamp
+   * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [slot] - the slot at which to compute the fees. Optional. If not provided it will fetch the current slot
+   * @param [previousNetAUM] - the previous AUM of the vault to compute the fees relative to this value. Optional. If not provided the function will estimate the total AUM at the slot of the last state update on chain
+   * @param [currentSlot] - the latest confirmed slot. Optional. If provided the function will be  faster as it will not have to fetch the latest slot
    * @returns a VaultFees struct of simulated management and interest fees
    */
   async calculateSimulatedFees(
     vaultState: VaultState,
     simulatedCurrentHoldingsWithInterest?: SimulatedVaultHoldingsWithEarnedInterest,
-    currentTimestamp?: Date
+    currentTimestamp?: Date,
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    slot?: Slot,
+    previousNetAUM?: Decimal,
+    currentSlot?: Slot
   ): Promise<VaultFees> {
     const timestampNowInSeconds = currentTimestamp ? currentTimestamp.valueOf() / 1000 : Date.now() / 1000;
     const timestampLastUpdate = vaultState.lastFeeChargeTimestamp.toNumber();
@@ -4613,7 +4651,13 @@ export class KaminoVaultClient {
 
     const simulatedCurrentHoldings = simulatedCurrentHoldingsWithInterest
       ? simulatedCurrentHoldingsWithInterest
-      : await this.calculateSimulatedHoldingsWithInterest(vaultState);
+      : await this.calculateSimulatedHoldingsWithInterest(
+          vaultState,
+          vaultReservesMap,
+          slot,
+          previousNetAUM,
+          currentSlot
+        );
 
     const performanceFee = simulatedCurrentHoldings.earnedInterest.mul(
       new Decimal(vaultState.performanceFeeBps.toString()).div(FullBPSDecimal)
@@ -4891,7 +4935,11 @@ export class KaminoVaultClient {
     });
 
     // fetch the missing farms
-    const missingFarmsStates = await FarmState.fetchMultiple(this.getConnection(), Array.from(farmsToFetch), this._farmsProgramId);
+    const missingFarmsStates = await FarmState.fetchMultiple(
+      this.getConnection(),
+      Array.from(farmsToFetch),
+      this._farmsProgramId
+    );
     missingFarmsStates.forEach((farmState) => {
       if (farmState) {
         farmState.rewardInfos.forEach((rewardInfo) => {
@@ -4978,7 +5026,11 @@ export class KaminoVaultClient {
 
     const kFarmsClient = new Farms(this.getConnection(), this._farmsProgramId);
 
-    const flcFarmState = await FarmState.fetch(this.getConnection(), vaultState.firstLossCapitalFarm, this._farmsProgramId);
+    const flcFarmState = await FarmState.fetch(
+      this.getConnection(),
+      vaultState.firstLossCapitalFarm,
+      this._farmsProgramId
+    );
 
     if (!flcFarmState) {
       return undefined;
@@ -5522,7 +5574,11 @@ export class KaminoVault {
     }
 
     const latestSlot = slot ?? (await this.client.getConnection().getSlot({ commitment: 'confirmed' }).send());
-    const tokensPerShare = await this.client.getTokensPerShareSingleVault(this.state!, latestSlot);
+    const tokensPerShare = await this.client.getTokensPerShareSingleVault(
+      this.state!,
+      latestSlot,
+      this.vaultReservesStateCache
+    );
     return tokensPerShare;
   }
 
@@ -5581,7 +5637,15 @@ export class KaminoVault {
 
     const currentSlot = slot ?? (await this.client.getConnection().getSlot({ commitment: 'confirmed' }).send());
 
-    return this.client.withdrawIxs(user, this, shareAmount, currentSlot, this.vaultReservesStateCache, farmState, payer);
+    return this.client.withdrawIxs(
+      user,
+      this,
+      shareAmount,
+      currentSlot,
+      this.vaultReservesStateCache,
+      farmState,
+      payer
+    );
   }
 }
 

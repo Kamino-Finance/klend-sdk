@@ -128,8 +128,7 @@ function defaultProgramConfig(programConfig: {
       programConfig?.farmsProgramId ??
       (stagingOpt ? FARMS_STAGING_PROGRAM_ID : devnetOpt ? FARMS_DEVNET_PROGRAM_ID : FARMS_PROGRAM_ID),
     farmsGlobalConfig:
-      programConfig?.farmsGlobalConfig ??
-      (devnetOpt ? FARMS_GLOBAL_CONFIG_DEVNET : FARMS_GLOBAL_CONFIG_MAINNET),
+      programConfig?.farmsGlobalConfig ?? (devnetOpt ? FARMS_GLOBAL_CONFIG_DEVNET : FARMS_GLOBAL_CONFIG_MAINNET),
   };
   return config;
 }
@@ -152,8 +151,8 @@ export async function initEnv(
     kvaultProgramId: staging
       ? envAddress('KVAULT_PROGRAM_ID_STAGING')
       : devnet
-        ? envAddress('KVAULT_PROGRAM_ID_DEVNET')
-        : envAddress('KVAULT_PROGRAM_ID_MAINNET'),
+      ? envAddress('KVAULT_PROGRAM_ID_DEVNET')
+      : envAddress('KVAULT_PROGRAM_ID_MAINNET'),
   });
 
   let resolvedUrl: string;

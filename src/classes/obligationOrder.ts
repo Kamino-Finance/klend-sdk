@@ -270,7 +270,7 @@ const CONDITION_TO_TYPE_ID = new Map<OrderConditionConstructor, number>([
   [DebtCollPriceRatioAbove, 3],
   [DebtCollPriceRatioBelow, 4],
   [Always, 5],
-  [LiquidationLtvCloserThan, 6]
+  [LiquidationLtvCloserThan, 6],
 ]);
 
 const OPPORTUNITY_TO_TYPE_ID = new Map<OrderOpportunityConstructor, number>([
@@ -460,9 +460,14 @@ export class KaminoObligationOrder {
    * (which ensures that order execution improves LTV).
    */
   private calculateExecutionBonusRate(conditionHit: ConditionHit, obligation: KaminoObligation): Decimal {
-    const theoreticalBonusRate = conditionHit.normalizedDistanceFromThreshold !== null
-      ? interpolateBonusRate(conditionHit.normalizedDistanceFromThreshold, this.minExecutionBonusRate, this.maxExecutionBonusRate)
-      : this.minExecutionBonusRate; // constant bonus (min == max enforced by SC)
+    const theoreticalBonusRate =
+      conditionHit.normalizedDistanceFromThreshold !== null
+        ? interpolateBonusRate(
+            conditionHit.normalizedDistanceFromThreshold,
+            this.minExecutionBonusRate,
+            this.maxExecutionBonusRate
+          )
+        : this.minExecutionBonusRate; // constant bonus (min == max enforced by SC)
     // In order to ensure that LTV improves on order execution, we apply the same heuristic formula as for the regular
     // liquidations. Please note that we deliberately use the `obligation.noBfLoanToValue()`, which is consistent with
     // the smart contract's calculation:

@@ -179,7 +179,15 @@ export class KaminoMarket {
     programId: Address = PROGRAM_ID,
     farmsProgramId: Address = FARMS_PROGRAM_ID
   ) {
-    return new KaminoMarket(connection, market, marketAddress, reserves, recentSlotDurationMs, programId, farmsProgramId);
+    return new KaminoMarket(
+      connection,
+      market,
+      marketAddress,
+      reserves,
+      recentSlotDurationMs,
+      programId,
+      farmsProgramId
+    );
   }
 
   static async loadMultiple(
@@ -208,7 +216,15 @@ export class KaminoMarket {
 
       kaminoMarkets.set(
         marketAddress,
-        new KaminoMarket(connection, market, marketAddress, marketReserves, recentSlotDurationMs, programId, farmsProgramId)
+        new KaminoMarket(
+          connection,
+          market,
+          marketAddress,
+          marketReserves,
+          recentSlotDurationMs,
+          programId,
+          farmsProgramId
+        )
       );
     }
     return kaminoMarkets;
@@ -240,7 +256,15 @@ export class KaminoMarket {
       }
       kaminoMarkets.set(
         marketAddress,
-        new KaminoMarket(connection, market, marketAddress, marketReserves, recentSlotDurationMs, programId, farmsProgramId)
+        new KaminoMarket(
+          connection,
+          market,
+          marketAddress,
+          marketReserves,
+          recentSlotDurationMs,
+          programId,
+          farmsProgramId
+        )
       );
     }
     return kaminoMarkets;

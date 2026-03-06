@@ -109,13 +109,21 @@ export async function getFarmUnstakeAndWithdrawIxs(
   fetchedFarmState?: FarmState,
   farmsProgramId?: Address
 ): Promise<UnstakeAndWithdrawFromFarmIxs> {
-  const farmState = fetchedFarmState ? fetchedFarmState : await FarmState.fetch(connection, farmAddress, farmsProgramId);
+  const farmState = fetchedFarmState
+    ? fetchedFarmState
+    : await FarmState.fetch(connection, farmAddress, farmsProgramId);
   if (!farmState) {
     throw new Error(`Farm state not found for ${farmAddress}`);
   }
 
   const unstakeIx = await getFarmUnstakeIx(connection, user, lamportsToUnstake, farmAddress, farmState, farmsProgramId);
-  const withdrawIx = await getFarmWithdrawUnstakedDepositIx(connection, user, farmAddress, farmState.token.mint, farmsProgramId);
+  const withdrawIx = await getFarmWithdrawUnstakedDepositIx(
+    connection,
+    user,
+    farmAddress,
+    farmState.token.mint,
+    farmsProgramId
+  );
   return { unstakeIx, withdrawIx };
 }
 

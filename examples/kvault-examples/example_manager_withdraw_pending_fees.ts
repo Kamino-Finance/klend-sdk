@@ -11,9 +11,7 @@ import { sendAndConfirmTx } from '../utils/tx';
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
   const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
 
-  const withdrawPendingFeesIxs = await kaminoManager.withdrawPendingFeesIxs(
-    vault,
-  );
+  const withdrawPendingFeesIxs = await kaminoManager.withdrawPendingFeesIxs(vault);
 
   // read the vault state so we can use the LUT in the tx
   const vaultState = await vault.getState();

@@ -229,7 +229,9 @@ export const createWsolAtaIfMissing = async (
   let wsolExistingBalanceLamports = new Decimal(0);
   try {
     if (wsolAtaAccountInfo.exists) {
-      const uiAmount = (await getTokenAccountBalanceDecimal(rpc, WRAPPED_SOL_MINT, owner.address, tokenProgram)).toNumber();
+      const uiAmount = (
+        await getTokenAccountBalanceDecimal(rpc, WRAPPED_SOL_MINT, owner.address, tokenProgram)
+      ).toNumber();
       wsolExistingBalanceLamports = collToLamportsDecimal(new Decimal(uiAmount), DECIMALS_SOL);
     }
   } catch (err) {

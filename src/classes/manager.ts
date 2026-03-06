@@ -253,9 +253,10 @@ export class KaminoManager {
    */
   async createVaultIxs(
     vaultConfig: KaminoVaultConfig,
-    useDevnetFarms: boolean = false
+    useDevnetFarms: boolean = false,
+    slot?: Slot
   ): Promise<{ vault: TransactionSigner; lut: Address; initVaultIxs: InitVaultIxs }> {
-    return this._vaultClient.createVaultIxs(vaultConfig, useDevnetFarms);
+    return this._vaultClient.createVaultIxs(vaultConfig, useDevnetFarms, slot);
   }
 
   /**
@@ -363,13 +364,15 @@ export class KaminoManager {
    * @param kaminoVault - vault to remove the reserve from
    * @param reserveAddress - reserve to remove from the vault allocation strategy
    * @param [reserveState] - optional parameter to pass a reserve state. If not provided, the reserve will be fetched from the connection
+   * @param [currentSlot] - optional slot. If not provided, the latest confirmed slot will be fetched
    * @returns - an array of instructions to set the reserve allocation to 0, invest the reserve if it has tokens, and remove the reserve from the allocation
    */
   async fullRemoveReserveFromVaultIxs(
     signer: TransactionSigner,
     kaminoVault: KaminoVault,
     reserveAddress: Address,
-    reserveState?: Reserve
+    reserveState?: Reserve,
+    currentSlot?: Slot
   ): Promise<Instruction[]> {
     const connection = this.getRpc();
     const vaultState = await kaminoVault.getState();
@@ -393,7 +396,7 @@ export class KaminoManager {
       reserveAddress,
       connection,
       this.recentSlotDurationMs,
-      reserveState
+      fetchedReserveState
     );
 
     const reserveAllocationConfig = new ReserveAllocationConfig(reserveWithAddress, 0, new Decimal(0));
@@ -409,7 +412,7 @@ export class KaminoManager {
 
     const ixs = [setAllocationToZeroIx.updateReserveAllocationIx];
 
-    const slot = await connection.getSlot({ commitment: 'confirmed' }).send();
+    const slot = currentSlot ?? (await connection.getSlot({ commitment: 'confirmed' }).send());
     const suppliedInReserve = this.getSuppliedInReserve(vaultState, slot, kaminoReserve);
     if (suppliedInReserve.gt(new Decimal(0))) {
       ixs.push(...investIx);
@@ -473,14 +476,15 @@ export class KaminoManager {
   /**
    * This method retruns the reserve config for a given reserve
    * @param reserve - reserve to get the config for
+   * @param [reserveState] - optional reserve state. If provided, the fetch will be skipped
    * @returns - the reserve config
    */
-  async getReserveConfig(reserve: Address): Promise<ReserveConfig> {
-    const reserveState = await Reserve.fetch(this._rpc, reserve);
-    if (!reserveState) {
+  async getReserveConfig(reserve: Address, reserveState?: Reserve): Promise<ReserveConfig> {
+    const state = reserveState ?? (await Reserve.fetch(this._rpc, reserve));
+    if (!state) {
       throw new Error('Reserve not found');
     }
-    return reserveState.config;
+    return state.config;
   }
 
   /**
@@ -738,9 +742,10 @@ export class KaminoManager {
    */
   async acceptVaultOwnershipIxs(
     vault: KaminoVault,
-    pendingAdmin?: TransactionSigner
+    pendingAdmin?: TransactionSigner,
+    slot?: Slot
   ): Promise<AcceptVaultOwnershipIxs> {
-    return this._vaultClient.acceptVaultOwnershipIxs(vault, pendingAdmin);
+    return this._vaultClient.acceptVaultOwnershipIxs(vault, pendingAdmin, slot);
   }
 
   /**
@@ -808,14 +813,16 @@ export class KaminoManager {
    * @param vault - vault for which the admin withdraws the pending fees
    * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
    * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
+   * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @returns - list of instructions to withdraw all pending fees, including the ATA creation instructions if needed
    */
   async withdrawPendingFeesIxs(
     vault: KaminoVault,
     slot?: Slot,
-    vaultAdminAuthority?: TransactionSigner
+    vaultAdminAuthority?: TransactionSigner,
+    vaultReservesMap?: Map<Address, KaminoReserve>
   ): Promise<Instruction[]> {
-    return this._vaultClient.withdrawPendingFeesIxs(vault, slot, undefined, vaultAdminAuthority);
+    return this._vaultClient.withdrawPendingFeesIxs(vault, slot, vaultReservesMap, vaultAdminAuthority);
   }
 
   /**
@@ -845,9 +852,10 @@ export class KaminoManager {
   async syncVaultLUTIxs(
     authority: TransactionSigner,
     vault: KaminoVault,
-    vaultReserves?: Map<Address, KaminoReserve>
+    vaultReserves?: Map<Address, KaminoReserve>,
+    slot?: Slot
   ): Promise<SyncVaultLUTIxs> {
-    return this._vaultClient.syncVaultLookupTableIxs(authority, vault, vaultReserves);
+    return this._vaultClient.syncVaultLookupTableIxs(authority, vault, vaultReserves, slot);
   }
 
   /**
@@ -1214,8 +1222,8 @@ export class KaminoManager {
    * @param [vaultState] - optional parameter to pass the vault state directly; this will save a network call
    * @returns - void; prints the vault to the console
    */
-  async printVault(vaultPubkey: Address, vaultState?: VaultState) {
-    return this._vaultClient.printVault(vaultPubkey, vaultState);
+  async printVault(vaultPubkey: Address, vaultState?: VaultState, slot?: Slot) {
+    return this._vaultClient.printVault(vaultPubkey, vaultState, slot);
   }
 
   /**
@@ -1347,14 +1355,30 @@ export class KaminoManager {
    * @param vaultState the kamino vault state to get simulated fees for
    * @param simulatedCurrentHoldingsWithInterest optional; the simulated holdings and interest earned by the vault
    * @param [currentTimestamp] the current date. Optional. If not provided it will fetch the current unix timestamp
+   * @param [vaultReservesMap] - hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
+   * @param [slot] - the slot at which to compute the fees. Optional. If not provided it will fetch the current slot
+   * @param [previousNetAUM] - the previous AUM of the vault to compute the fees relative to this value. Optional. If not provided the function will estimate the total AUM at the slot of the last state update on chain
+   * @param [currentSlot] - the latest confirmed slot. Optional. If provided the function will be  faster as it will not have to fetch the latest slot
    * @returns a struct of simulated management and interest fees
    */
   async calculateSimulatedFees(
     vaultState: VaultState,
     simulatedCurrentHoldingsWithInterest?: SimulatedVaultHoldingsWithEarnedInterest,
-    currentTimestamp?: Date
+    currentTimestamp?: Date,
+    vaultReservesMap?: Map<Address, KaminoReserve>,
+    slot?: Slot,
+    previousNetAUM?: Decimal,
+    currentSlot?: Slot
   ): Promise<VaultFees> {
-    return this._vaultClient.calculateSimulatedFees(vaultState, simulatedCurrentHoldingsWithInterest, currentTimestamp);
+    return this._vaultClient.calculateSimulatedFees(
+      vaultState,
+      simulatedCurrentHoldingsWithInterest,
+      currentTimestamp,
+      vaultReservesMap,
+      slot,
+      previousNetAUM,
+      currentSlot
+    );
   }
 
   /**
@@ -1381,9 +1405,10 @@ export class KaminoManager {
     vault: KaminoVault,
     vaultTokenPrice: Decimal,
     farmsClient?: Farms,
-    slot?: Slot
+    slot?: Slot,
+    tokensPrices?: Map<Address, Decimal>
   ): Promise<FarmIncentives> {
-    return this._vaultClient.getVaultRewardsAPY(vault, vaultTokenPrice, farmsClient, slot);
+    return this._vaultClient.getVaultRewardsAPY(vault, vaultTokenPrice, farmsClient, slot, tokensPrices);
   }
 
   /**
@@ -1398,9 +1423,10 @@ export class KaminoManager {
     vault: KaminoVault,
     vaultTokenPrice: Decimal,
     farmsClient?: Farms,
-    slot?: Slot
+    slot?: Slot,
+    tokensPrices?: Map<Address, Decimal>
   ): Promise<FarmIncentives> {
-    return this._vaultClient.getVaultDelegatedFarmRewardsAPY(vault, vaultTokenPrice, farmsClient, slot);
+    return this._vaultClient.getVaultDelegatedFarmRewardsAPY(vault, vaultTokenPrice, farmsClient, slot, tokensPrices);
   }
 
   /**

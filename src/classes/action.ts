@@ -1670,7 +1670,11 @@ export class KaminoAction {
       this.outflowReserve,
       this.kaminoMarket.farmsProgramId
     );
-    const { debtFarmAccounts } = await KaminoAction.getFarmAccountsForReserve(obligationAddress, this.reserve, this.kaminoMarket.farmsProgramId);
+    const { debtFarmAccounts } = await KaminoAction.getFarmAccountsForReserve(
+      obligationAddress,
+      this.reserve,
+      this.kaminoMarket.farmsProgramId
+    );
 
     let repayAndWithdrawIx = repayAndWithdrawAndRedeem(
       {
@@ -2893,7 +2897,11 @@ export class KaminoAction {
         farms.push([
           ReserveFarmKind.Collateral,
           kaminoReserve.state.farmCollateral,
-          await obligationFarmStatePda(kaminoReserve.state.farmCollateral, obligationAddress, this.kaminoMarket.farmsProgramId),
+          await obligationFarmStatePda(
+            kaminoReserve.state.farmCollateral,
+            obligationAddress,
+            this.kaminoMarket.farmsProgramId
+          ),
           kaminoReserve,
         ]);
       }
@@ -2901,7 +2909,11 @@ export class KaminoAction {
         farms.push([
           ReserveFarmKind.Debt,
           kaminoReserve.state.farmDebt,
-          await obligationFarmStatePda(kaminoReserve.state.farmDebt, obligationAddress, this.kaminoMarket.farmsProgramId),
+          await obligationFarmStatePda(
+            kaminoReserve.state.farmDebt,
+            obligationAddress,
+            this.kaminoMarket.farmsProgramId
+          ),
           kaminoReserve,
         ]);
       }
@@ -2986,7 +2998,11 @@ export class KaminoAction {
 
     const obligationAddress = await this.getObligationPda();
     if (mode === ReserveFarmKind.Collateral && isNotNullPubkey(reserve.state.farmCollateral)) {
-      const pda = await obligationFarmStatePda(reserve.state.farmCollateral, obligationAddress, this.kaminoMarket.farmsProgramId);
+      const pda = await obligationFarmStatePda(
+        reserve.state.farmCollateral,
+        obligationAddress,
+        this.kaminoMarket.farmsProgramId
+      );
       const account = await fetchEncodedAccount(this.kaminoMarket.getRpc(), pda);
       if (!account.exists) {
         farms.push([ReserveFarmKind.Collateral.discriminator, reserve.state.farmCollateral, pda]);
@@ -2994,7 +3010,11 @@ export class KaminoAction {
     }
 
     if (mode === ReserveFarmKind.Debt && isNotNullPubkey(reserve.state.farmDebt)) {
-      const pda = await obligationFarmStatePda(reserve.state.farmDebt, obligationAddress, this.kaminoMarket.farmsProgramId);
+      const pda = await obligationFarmStatePda(
+        reserve.state.farmDebt,
+        obligationAddress,
+        this.kaminoMarket.farmsProgramId
+      );
       const account = await fetchEncodedAccount(this.kaminoMarket.getRpc(), pda);
       if (!account.exists) {
         farms.push([ReserveFarmKind.Debt.discriminator, reserve.state.farmDebt, pda]);
@@ -3603,7 +3623,9 @@ export class KaminoAction {
     };
     if (isSome(collateralFarmAddress)) {
       collateralFarmAccounts = {
-        obligationFarmUserState: some(await obligationFarmStatePda(collateralFarmAddress.value, obligationAddress, farmsProgramId)),
+        obligationFarmUserState: some(
+          await obligationFarmStatePda(collateralFarmAddress.value, obligationAddress, farmsProgramId)
+        ),
         reserveFarmState: collateralFarmAddress,
       };
     }
@@ -3617,7 +3639,9 @@ export class KaminoAction {
     const debtFarmAddress = reserve.getDebtFarmAddress();
     if (isSome(debtFarmAddress)) {
       debtFarmAccounts = {
-        obligationFarmUserState: some(await obligationFarmStatePda(debtFarmAddress.value, obligationAddress, farmsProgramId)),
+        obligationFarmUserState: some(
+          await obligationFarmStatePda(debtFarmAddress.value, obligationAddress, farmsProgramId)
+        ),
         reserveFarmState: debtFarmAddress,
       };
     }
