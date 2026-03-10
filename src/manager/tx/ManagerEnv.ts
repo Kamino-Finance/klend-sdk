@@ -1,4 +1,4 @@
-import { address, Address, TransactionSigner } from '@solana/kit';
+import { Address, TransactionSigner } from '@solana/kit';
 import { ManagerConnectionPool } from './ManagerConnectionPool';
 import { PROGRAM_ID as KLEND_PROGRAM_ID } from '../../@codegen/klend/programId';
 import { PROGRAM_ID as KVAULT_PROGRAM_ID } from '../../@codegen/kvault/programId';
@@ -107,30 +107,66 @@ export class ManagerEnv {
   }
 }
 
-function defaultProgramConfig(programConfig: {
-  klendProgramId?: Address | undefined;
-  kvaultProgramId?: Address | undefined;
-  farmsProgramId?: Address | undefined;
-  farmsGlobalConfig?: Address | undefined;
-  staging?: boolean | undefined;
-  devnet?: boolean | undefined;
-}): Required<ProgramConfig> {
-  const stagingOpt = programConfig.staging ?? false;
-  const devnetOpt = programConfig.devnet ?? false;
-  const config: Required<ProgramConfig> = {
-    staging: stagingOpt,
-    devnet: devnetOpt,
-    klendProgramId: programConfig?.klendProgramId ?? (stagingOpt ? KLEND_STAGING_PROGRAM_ID : KLEND_PROGRAM_ID),
-    kvaultProgramId:
-      programConfig.kvaultProgramId ??
-      (stagingOpt ? KVAULT_STAGING_PROGRAM_ID : devnetOpt ? KVAULT_DEVNET_PROGRAM_ID : KVAULT_PROGRAM_ID),
-    farmsProgramId:
-      programConfig?.farmsProgramId ??
-      (stagingOpt ? FARMS_STAGING_PROGRAM_ID : devnetOpt ? FARMS_DEVNET_PROGRAM_ID : FARMS_PROGRAM_ID),
-    farmsGlobalConfig:
-      programConfig?.farmsGlobalConfig ?? (devnetOpt ? FARMS_GLOBAL_CONFIG_DEVNET : FARMS_GLOBAL_CONFIG_MAINNET),
+function resolveProgramId(
+  explicit: Address | undefined,
+  ids: { staging: Address; devnet?: Address; mainnet: Address },
+  staging: boolean,
+  devnet: boolean
+): Address {
+  if (explicit) return explicit;
+  if (staging) return ids.staging;
+  if (devnet && ids.devnet) return ids.devnet;
+  return ids.mainnet;
+}
+
+function defaultProgramConfig(programConfig: ProgramConfig): Required<ProgramConfig> {
+  const staging = programConfig.staging ?? false;
+  const devnet = programConfig.devnet ?? false;
+
+  return {
+    staging,
+    devnet,
+    klendProgramId: resolveProgramId(
+      programConfig.klendProgramId,
+      {
+        staging: KLEND_STAGING_PROGRAM_ID,
+        mainnet: KLEND_PROGRAM_ID,
+        devnet: KLEND_PROGRAM_ID,
+      },
+      staging,
+      devnet
+    ),
+    kvaultProgramId: resolveProgramId(
+      programConfig.kvaultProgramId,
+      {
+        staging: KVAULT_STAGING_PROGRAM_ID,
+        devnet: KVAULT_DEVNET_PROGRAM_ID,
+        mainnet: KVAULT_PROGRAM_ID,
+      },
+      staging,
+      devnet
+    ),
+    farmsProgramId: resolveProgramId(
+      programConfig.farmsProgramId,
+      {
+        staging: FARMS_STAGING_PROGRAM_ID,
+        devnet: FARMS_DEVNET_PROGRAM_ID,
+        mainnet: FARMS_PROGRAM_ID,
+      },
+      staging,
+      devnet
+    ),
+    farmsGlobalConfig: resolveProgramId(
+      programConfig.farmsGlobalConfig,
+      {
+        staging: FARMS_GLOBAL_CONFIG_MAINNET,
+        devnet: FARMS_GLOBAL_CONFIG_DEVNET,
+        mainnet: FARMS_GLOBAL_CONFIG_MAINNET,
+      },
+      staging,
+      devnet
+    ),
   };
-  return config;
 }
 
 export async function initEnv(
@@ -147,12 +183,6 @@ export async function initEnv(
   const config = defaultProgramConfig({
     staging,
     devnet,
-    klendProgramId: staging ? envAddress('KLEND_PROGRAM_ID_STAGING') : envAddress('KLEND_PROGRAM_ID_MAINNET'),
-    kvaultProgramId: staging
-      ? envAddress('KVAULT_PROGRAM_ID_STAGING')
-      : devnet
-      ? envAddress('KVAULT_PROGRAM_ID_DEVNET')
-      : envAddress('KVAULT_PROGRAM_ID_MAINNET'),
   });
 
   let resolvedUrl: string;
@@ -243,11 +273,4 @@ function parseRpcChain(rpcUrl: string, devnet: boolean = false): Chain {
     };
   }
   return chain;
-}
-
-function envAddress(env: string): Address | undefined {
-  if (process.env[env]) {
-    return address(process.env[env]);
-  }
-  return undefined;
 }

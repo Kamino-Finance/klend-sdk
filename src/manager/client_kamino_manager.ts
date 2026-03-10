@@ -2121,7 +2121,7 @@ async function main() {
     .requiredOption('--vault <string>', 'Vault address')
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--devnet`, 'If true, will use devnet programs and RPC')
-    .option(`--token-price <number>`, 'Vault token price in USD')
+    .requiredOption(`--token-price <number>`, 'Vault token price in USD')
     .action(async ({ vault, staging, devnet, tokenPrice }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
