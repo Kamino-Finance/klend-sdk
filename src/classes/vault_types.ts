@@ -1,4 +1,5 @@
-import { Address, Instruction, TransactionSigner } from '@solana/kit';
+import { AccountMeta, Address, Instruction, TransactionSigner } from '@solana/kit';
+import { DepositAccounts, WithdrawAccounts, WithdrawFromAvailableAccounts } from '../@codegen/kvault/instructions';
 import Decimal from 'decimal.js/decimal';
 
 /** the populateLUTIxs should be executed in a separate transaction as we cannot create and populate a lookup table in the same tx */
@@ -92,4 +93,16 @@ export type VaultReleaseCheckResult = {
   errors: string[];
   warnings: string[];
   success: boolean;
+};
+
+export type AllDepositAccounts = {
+  depositAccounts: DepositAccounts;
+  remainingAccounts: AccountMeta[];
+  stakeSharesIxs?: Instruction[];
+};
+
+export type AllWithdrawAccounts = {
+  withdrawAccounts: WithdrawAccounts | WithdrawFromAvailableAccounts;
+  remainingAccounts: AccountMeta[];
+  unstakeSharesIxs?: Instruction[];
 };
