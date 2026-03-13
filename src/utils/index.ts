@@ -17,3 +17,4 @@ export * from './rpc';
 export * from './map';
 export * from './parse';
 export * from './obligations';
+export * from './deriveUserAccounts';
