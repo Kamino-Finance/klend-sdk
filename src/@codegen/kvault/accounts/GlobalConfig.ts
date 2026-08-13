@@ -90,7 +90,7 @@ export class GlobalConfig {
       }
       if (info.programAddress !== programId) {
         throw new Error(
-          `GlobalConfigFields account ${info.address} belongs to wrong program ${info.programAddress}, expected ${programId}`
+          `KVaultGlobalConfigFields account ${info.address} belongs to wrong program ${info.programAddress}, expected ${programId}`
         )
       }
 

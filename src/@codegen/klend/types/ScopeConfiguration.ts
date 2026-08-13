@@ -5,29 +5,20 @@ import * as borsh from "@coral-xyz/borsh"
 import { borshAddress } from "../utils"
 
 export interface ScopeConfigurationFields {
-  /** Pubkey of the scope price feed (disabled if `null` or `default`) */
   priceFeed: Address
-  /** This is the scope_id price chain that results in a price for the token */
   priceChain: Array<number>
-  /** This is the scope_id price chain for the twap */
   twapChain: Array<number>
 }
 
 export interface ScopeConfigurationJSON {
-  /** Pubkey of the scope price feed (disabled if `null` or `default`) */
   priceFeed: string
-  /** This is the scope_id price chain that results in a price for the token */
   priceChain: Array<number>
-  /** This is the scope_id price chain for the twap */
   twapChain: Array<number>
 }
 
 export class ScopeConfiguration {
-  /** Pubkey of the scope price feed (disabled if `null` or `default`) */
   readonly priceFeed: Address
-  /** This is the scope_id price chain that results in a price for the token */
   readonly priceChain: Array<number>
-  /** This is the scope_id price chain for the twap */
   readonly twapChain: Array<number>
 
   constructor(fields: ScopeConfigurationFields) {

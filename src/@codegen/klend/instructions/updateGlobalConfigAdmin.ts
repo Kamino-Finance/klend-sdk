@@ -20,6 +20,7 @@ export const DISCRIMINATOR = Buffer.from([184, 87, 23, 193, 156, 238, 175, 119])
 export interface UpdateGlobalConfigAdminAccounts {
   pendingAdmin: TransactionSigner
   globalConfig: Address
+  instructionSysvarAccount: Address
 }
 
 export function updateGlobalConfigAdmin(
@@ -34,6 +35,7 @@ export function updateGlobalConfigAdmin(
       signer: accounts.pendingAdmin,
     },
     { address: accounts.globalConfig, role: 1 },
+    { address: accounts.instructionSysvarAccount, role: 0 },
     ...remainingAccounts,
   ]
   const data = DISCRIMINATOR

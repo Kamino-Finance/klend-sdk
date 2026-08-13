@@ -11,12 +11,15 @@ import BN from 'bn.js';
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
   const kaminoVault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
+  const vaultState = await kaminoVault.getState();
+  const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
 
   const newUnallocatedWeight = new BN(1999);
   const unallocatedCapLamports = new BN(1000);
 
   const ixs = await kaminoManager.updateVaultUnallocatedWeightAndCapIxs(
     kaminoVault,
+    vaultReservesMap,
     user,
     newUnallocatedWeight,
     unallocatedCapLamports

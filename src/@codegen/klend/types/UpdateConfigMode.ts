@@ -556,25 +556,25 @@ export class UpdateBorrowRateCurve {
   }
 }
 
-export interface UpdateEntireReserveConfigJSON {
-  kind: "UpdateEntireReserveConfig"
+export interface DeprecatedUpdateEntireReserveConfigJSON {
+  kind: "DeprecatedUpdateEntireReserveConfig"
 }
 
-export class UpdateEntireReserveConfig {
+export class DeprecatedUpdateEntireReserveConfig {
   static readonly discriminator = 24
-  static readonly kind = "UpdateEntireReserveConfig"
+  static readonly kind = "DeprecatedUpdateEntireReserveConfig"
   readonly discriminator = 24
-  readonly kind = "UpdateEntireReserveConfig"
+  readonly kind = "DeprecatedUpdateEntireReserveConfig"
 
-  toJSON(): UpdateEntireReserveConfigJSON {
+  toJSON(): DeprecatedUpdateEntireReserveConfigJSON {
     return {
-      kind: "UpdateEntireReserveConfig",
+      kind: "DeprecatedUpdateEntireReserveConfig",
     }
   }
 
   toEncodable() {
     return {
-      UpdateEntireReserveConfig: {},
+      DeprecatedUpdateEntireReserveConfig: {},
     }
   }
 }
@@ -1269,6 +1269,98 @@ export class UpdateDebtTermSeconds {
   }
 }
 
+export interface UpdateEarlyRepayRemainingInterestPctJSON {
+  kind: "UpdateEarlyRepayRemainingInterestPct"
+}
+
+export class UpdateEarlyRepayRemainingInterestPct {
+  static readonly discriminator = 55
+  static readonly kind = "UpdateEarlyRepayRemainingInterestPct"
+  readonly discriminator = 55
+  readonly kind = "UpdateEarlyRepayRemainingInterestPct"
+
+  toJSON(): UpdateEarlyRepayRemainingInterestPctJSON {
+    return {
+      kind: "UpdateEarlyRepayRemainingInterestPct",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateEarlyRepayRemainingInterestPct: {},
+    }
+  }
+}
+
+export interface UpdateReserveEmergencyModeJSON {
+  kind: "UpdateReserveEmergencyMode"
+}
+
+export class UpdateReserveEmergencyMode {
+  static readonly discriminator = 56
+  static readonly kind = "UpdateReserveEmergencyMode"
+  readonly discriminator = 56
+  readonly kind = "UpdateReserveEmergencyMode"
+
+  toJSON(): UpdateReserveEmergencyModeJSON {
+    return {
+      kind: "UpdateReserveEmergencyMode",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateReserveEmergencyMode: {},
+    }
+  }
+}
+
+export interface UpdateRewardsAmountPerSlotJSON {
+  kind: "UpdateRewardsAmountPerSlot"
+}
+
+export class UpdateRewardsAmountPerSlot {
+  static readonly discriminator = 57
+  static readonly kind = "UpdateRewardsAmountPerSlot"
+  readonly discriminator = 57
+  readonly kind = "UpdateRewardsAmountPerSlot"
+
+  toJSON(): UpdateRewardsAmountPerSlotJSON {
+    return {
+      kind: "UpdateRewardsAmountPerSlot",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateRewardsAmountPerSlot: {},
+    }
+  }
+}
+
+export interface UpdateReservePermissionedOpsJSON {
+  kind: "UpdateReservePermissionedOps"
+}
+
+export class UpdateReservePermissionedOps {
+  static readonly discriminator = 58
+  static readonly kind = "UpdateReservePermissionedOps"
+  readonly discriminator = 58
+  readonly kind = "UpdateReservePermissionedOps"
+
+  toJSON(): UpdateReservePermissionedOpsJSON {
+    return {
+      kind: "UpdateReservePermissionedOps",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateReservePermissionedOps: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if (typeof obj !== "object") {
@@ -1347,8 +1439,8 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if ("UpdateBorrowRateCurve" in obj) {
     return new UpdateBorrowRateCurve()
   }
-  if ("UpdateEntireReserveConfig" in obj) {
-    return new UpdateEntireReserveConfig()
+  if ("DeprecatedUpdateEntireReserveConfig" in obj) {
+    return new DeprecatedUpdateEntireReserveConfig()
   }
   if ("UpdateDebtWithdrawalCap" in obj) {
     return new UpdateDebtWithdrawalCap()
@@ -1440,6 +1532,18 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if ("UpdateDebtTermSeconds" in obj) {
     return new UpdateDebtTermSeconds()
   }
+  if ("UpdateEarlyRepayRemainingInterestPct" in obj) {
+    return new UpdateEarlyRepayRemainingInterestPct()
+  }
+  if ("UpdateReserveEmergencyMode" in obj) {
+    return new UpdateReserveEmergencyMode()
+  }
+  if ("UpdateRewardsAmountPerSlot" in obj) {
+    return new UpdateRewardsAmountPerSlot()
+  }
+  if ("UpdateReservePermissionedOps" in obj) {
+    return new UpdateReservePermissionedOps()
+  }
 
   throw new Error("Invalid enum object")
 }
@@ -1520,8 +1624,8 @@ export function fromJSON(
     case "UpdateBorrowRateCurve": {
       return new UpdateBorrowRateCurve()
     }
-    case "UpdateEntireReserveConfig": {
-      return new UpdateEntireReserveConfig()
+    case "DeprecatedUpdateEntireReserveConfig": {
+      return new DeprecatedUpdateEntireReserveConfig()
     }
     case "UpdateDebtWithdrawalCap": {
       return new UpdateDebtWithdrawalCap()
@@ -1613,6 +1717,18 @@ export function fromJSON(
     case "UpdateDebtTermSeconds": {
       return new UpdateDebtTermSeconds()
     }
+    case "UpdateEarlyRepayRemainingInterestPct": {
+      return new UpdateEarlyRepayRemainingInterestPct()
+    }
+    case "UpdateReserveEmergencyMode": {
+      return new UpdateReserveEmergencyMode()
+    }
+    case "UpdateRewardsAmountPerSlot": {
+      return new UpdateRewardsAmountPerSlot()
+    }
+    case "UpdateReservePermissionedOps": {
+      return new UpdateReservePermissionedOps()
+    }
   }
 }
 
@@ -1642,7 +1758,7 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateSwitchboardFeed"),
     borsh.struct([], "UpdateSwitchboardTwapFeed"),
     borsh.struct([], "UpdateBorrowRateCurve"),
-    borsh.struct([], "UpdateEntireReserveConfig"),
+    borsh.struct([], "DeprecatedUpdateEntireReserveConfig"),
     borsh.struct([], "UpdateDebtWithdrawalCap"),
     borsh.struct([], "UpdateDepositWithdrawalCap"),
     borsh.struct([], "DeprecatedUpdateDebtWithdrawalCapCurrentTotal"),
@@ -1673,6 +1789,10 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateBlockCTokenUsage"),
     borsh.struct([], "UpdateDebtMaturityTimestamp"),
     borsh.struct([], "UpdateDebtTermSeconds"),
+    borsh.struct([], "UpdateEarlyRepayRemainingInterestPct"),
+    borsh.struct([], "UpdateReserveEmergencyMode"),
+    borsh.struct([], "UpdateRewardsAmountPerSlot"),
+    borsh.struct([], "UpdateReservePermissionedOps"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

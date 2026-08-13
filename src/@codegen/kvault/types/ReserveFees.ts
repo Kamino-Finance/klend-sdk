@@ -5,66 +5,20 @@ import * as borsh from "@coral-xyz/borsh"
 import { borshAddress } from "../utils"
 
 export interface ReserveFeesFields {
-  /**
-   * Fee assessed on `BorrowObligationLiquidity`, as scaled fraction (60 bits fractional part)
-   * Must be between `0` and `2^60`, such that `2^60 = 1`.  A few examples for
-   * clarity:
-   * 1% = (1 << 60) / 100 = 11529215046068470
-   * 0.01% (1 basis point) = 115292150460685
-   * 0.00001% (Aave origination fee) = 115292150461
-   */
   originationFeeSf: BN
-  /**
-   * Fee for flash loan, expressed as scaled fraction.
-   * 0.3% (Aave flash loan fee) = 0.003 * 2^60 = 3458764513820541
-   */
   flashLoanFeeSf: BN
-  /** Used for allignment */
   padding: Array<number>
 }
 
 export interface ReserveFeesJSON {
-  /**
-   * Fee assessed on `BorrowObligationLiquidity`, as scaled fraction (60 bits fractional part)
-   * Must be between `0` and `2^60`, such that `2^60 = 1`.  A few examples for
-   * clarity:
-   * 1% = (1 << 60) / 100 = 11529215046068470
-   * 0.01% (1 basis point) = 115292150460685
-   * 0.00001% (Aave origination fee) = 115292150461
-   */
   originationFeeSf: string
-  /**
-   * Fee for flash loan, expressed as scaled fraction.
-   * 0.3% (Aave flash loan fee) = 0.003 * 2^60 = 3458764513820541
-   */
   flashLoanFeeSf: string
-  /** Used for allignment */
   padding: Array<number>
 }
 
-/**
- * Additional fee information on a reserve
- *
- * These exist separately from interest accrual fees, and are specifically for the program owner
- * and referral fee. The fees are paid out as a percentage of liquidity token amounts during
- * repayments and liquidations.
- */
 export class ReserveFees {
-  /**
-   * Fee assessed on `BorrowObligationLiquidity`, as scaled fraction (60 bits fractional part)
-   * Must be between `0` and `2^60`, such that `2^60 = 1`.  A few examples for
-   * clarity:
-   * 1% = (1 << 60) / 100 = 11529215046068470
-   * 0.01% (1 basis point) = 115292150460685
-   * 0.00001% (Aave origination fee) = 115292150461
-   */
   readonly originationFeeSf: BN
-  /**
-   * Fee for flash loan, expressed as scaled fraction.
-   * 0.3% (Aave flash loan fee) = 0.003 * 2^60 = 3458764513820541
-   */
   readonly flashLoanFeeSf: BN
-  /** Used for allignment */
   readonly padding: Array<number>
 
   constructor(fields: ReserveFeesFields) {

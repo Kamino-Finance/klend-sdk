@@ -9,6 +9,7 @@ export interface BorrowOrderConfigArgsFields {
   maxBorrowRateBps: number
   minDebtTermSeconds: BN
   fillableUntilTimestamp: BN
+  enableAutoRolloverOnFilledBorrows: boolean
 }
 
 export interface BorrowOrderConfigArgsJSON {
@@ -16,20 +17,23 @@ export interface BorrowOrderConfigArgsJSON {
   maxBorrowRateBps: number
   minDebtTermSeconds: string
   fillableUntilTimestamp: string
+  enableAutoRolloverOnFilledBorrows: boolean
 }
 
-/** A subset of [BorrowOrderConfig] excluding the accounts passed via [SetBorrowOrder]. */
 export class BorrowOrderConfigArgs {
   readonly remainingDebtAmount: BN
   readonly maxBorrowRateBps: number
   readonly minDebtTermSeconds: BN
   readonly fillableUntilTimestamp: BN
+  readonly enableAutoRolloverOnFilledBorrows: boolean
 
   constructor(fields: BorrowOrderConfigArgsFields) {
     this.remainingDebtAmount = fields.remainingDebtAmount
     this.maxBorrowRateBps = fields.maxBorrowRateBps
     this.minDebtTermSeconds = fields.minDebtTermSeconds
     this.fillableUntilTimestamp = fields.fillableUntilTimestamp
+    this.enableAutoRolloverOnFilledBorrows =
+      fields.enableAutoRolloverOnFilledBorrows
   }
 
   static layout(property?: string) {
@@ -39,6 +43,7 @@ export class BorrowOrderConfigArgs {
         borsh.u32("maxBorrowRateBps"),
         borsh.u64("minDebtTermSeconds"),
         borsh.u64("fillableUntilTimestamp"),
+        borsh.bool("enableAutoRolloverOnFilledBorrows"),
       ],
       property
     )
@@ -51,6 +56,7 @@ export class BorrowOrderConfigArgs {
       maxBorrowRateBps: obj.maxBorrowRateBps,
       minDebtTermSeconds: obj.minDebtTermSeconds,
       fillableUntilTimestamp: obj.fillableUntilTimestamp,
+      enableAutoRolloverOnFilledBorrows: obj.enableAutoRolloverOnFilledBorrows,
     })
   }
 
@@ -60,6 +66,8 @@ export class BorrowOrderConfigArgs {
       maxBorrowRateBps: fields.maxBorrowRateBps,
       minDebtTermSeconds: fields.minDebtTermSeconds,
       fillableUntilTimestamp: fields.fillableUntilTimestamp,
+      enableAutoRolloverOnFilledBorrows:
+        fields.enableAutoRolloverOnFilledBorrows,
     }
   }
 
@@ -69,6 +77,7 @@ export class BorrowOrderConfigArgs {
       maxBorrowRateBps: this.maxBorrowRateBps,
       minDebtTermSeconds: this.minDebtTermSeconds.toString(),
       fillableUntilTimestamp: this.fillableUntilTimestamp.toString(),
+      enableAutoRolloverOnFilledBorrows: this.enableAutoRolloverOnFilledBorrows,
     }
   }
 
@@ -78,6 +87,7 @@ export class BorrowOrderConfigArgs {
       maxBorrowRateBps: obj.maxBorrowRateBps,
       minDebtTermSeconds: new BN(obj.minDebtTermSeconds),
       fillableUntilTimestamp: new BN(obj.fillableUntilTimestamp),
+      enableAutoRolloverOnFilledBorrows: obj.enableAutoRolloverOnFilledBorrows,
     })
   }
 

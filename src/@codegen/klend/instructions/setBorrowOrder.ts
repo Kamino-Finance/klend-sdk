@@ -23,24 +23,13 @@ export interface SetBorrowOrderArgs {
 }
 
 export interface SetBorrowOrderAccounts {
-  /** The [Self::obligation]'s owner. */
   owner: TransactionSigner
-  /** The obligation to set the [BorrowOrder] on. */
   obligation: Address
-  /** The [Self::obligation]'s market - needed only to validate the borrow orders' feature flag. */
   lendingMarket: Address
-  /**
-   * The [BorrowOrder::filled_debt_destination] to set on order creation. Not editable on order
-   * updates.
-   * Ignored when cancelling the order.
-   */
+  reserve: Address
   filledDebtDestination: Address
-  /**
-   * The [BorrowOrder::debt_liquidity_mint] to set on order creation. Not editable on order
-   * updates.
-   * Ignored when cancelling the order.
-   */
   debtLiquidityMint: Address
+  instructionSysvarAccount: Address
   eventAuthority: Address
   program: Address
 }
@@ -60,8 +49,10 @@ export function setBorrowOrder(
     { address: accounts.owner.address, role: 2, signer: accounts.owner },
     { address: accounts.obligation, role: 1 },
     { address: accounts.lendingMarket, role: 0 },
+    { address: accounts.reserve, role: 0 },
     { address: accounts.filledDebtDestination, role: 0 },
     { address: accounts.debtLiquidityMint, role: 0 },
+    { address: accounts.instructionSysvarAccount, role: 0 },
     { address: accounts.eventAuthority, role: 0 },
     { address: accounts.program, role: 0 },
     ...remainingAccounts,

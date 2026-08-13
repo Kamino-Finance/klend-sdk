@@ -31,6 +31,7 @@ export interface IdlMissingTypesAccounts {
   globalConfig: Address
   lendingMarket: Address
   reserve: Address
+  instructionSysvarAccount: Address
 }
 
 export const layout = borsh.struct([
@@ -53,6 +54,7 @@ export function idlMissingTypes(
     { address: accounts.globalConfig, role: 0 },
     { address: accounts.lendingMarket, role: 0 },
     { address: accounts.reserve, role: 1 },
+    { address: accounts.instructionSysvarAccount, role: 0 },
     ...remainingAccounts,
   ]
   const buffer = Buffer.alloc(1000)

@@ -16,201 +16,101 @@ import * as types from "../types" // eslint-disable-line @typescript-eslint/no-u
 import { PROGRAM_ID } from "../programId"
 
 export interface ObligationFields {
-  /** Version of the struct */
   tag: BN
-  /** Last update to collateral, liquidity, or their market values */
   lastUpdate: types.LastUpdateFields
-  /** Lending market address */
   lendingMarket: Address
-  /** Owner authority which can borrow liquidity */
   owner: Address
-  /** Deposited collateral for the obligation, unique by deposit reserve address */
   deposits: Array<types.ObligationCollateralFields>
-  /** Worst LTV for the collaterals backing the loan, represented as a percentage */
   lowestReserveDepositLiquidationLtv: BN
-  /** Market value of deposits (scaled fraction) */
   depositedValueSf: BN
-  /** Borrowed liquidity for the obligation, unique by borrow reserve address */
   borrows: Array<types.ObligationLiquidityFields>
-  /** Risk adjusted market value of borrows/debt (sum of price * borrowed_amount * borrow_factor) (scaled fraction) */
   borrowFactorAdjustedDebtValueSf: BN
-  /** Market value of borrows - used for max_liquidatable_borrowed_amount (scaled fraction) */
   borrowedAssetsMarketValueSf: BN
-  /** The maximum borrow value at the weighted average loan to value ratio (scaled fraction) */
   allowedBorrowValueSf: BN
-  /** The dangerous borrow value at the weighted average liquidation threshold (scaled fraction) */
   unhealthyBorrowValueSf: BN
-  /** The asset tier of the deposits */
   paddingDeprecatedAssetTiers: Array<number>
-  /** The elevation group id the obligation opted into. */
   elevationGroup: number
-  /** The number of obsolete reserves the obligation has a deposit in */
   numOfObsoleteDepositReserves: number
-  /** Marked = 1 if borrows array is not empty, 0 = borrows empty */
   hasDebt: number
-  /** Wallet address of the referrer */
   referrer: Address
-  /** Marked = 1 if borrowing disabled, 0 = borrowing enabled */
   borrowingDisabled: number
-  /**
-   * A target LTV set by the risk council when marking this obligation for deleveraging.
-   * Only effective when `deleveraging_margin_call_started_slot != 0`.
-   */
   autodeleverageTargetLtvPct: number
-  /** The lowest max LTV found amongst the collateral deposits */
   lowestReserveDepositMaxLtvPct: number
-  /** The number of obsolete reserves the obligation has a borrow in */
   numOfObsoleteBorrowReserves: number
+  ownershipTransferState: number
   reserved: Array<number>
   highestBorrowFactorPct: BN
-  /**
-   * A timestamp at which the risk council most-recently marked this obligation for deleveraging.
-   * Zero if not currently subject to deleveraging.
-   */
   autodeleverageMarginCallStartedTimestamp: BN
-  /**
-   * Owner-defined, permissionlessly-executed repay orders.
-   * Typical use-cases would be a stop-loss and a take-profit (possibly co-existing).
-   */
   obligationOrders: Array<types.ObligationOrderFields>
-  /**
-   * Owner-defined, permissionlessly-executed borrow order applicable to this obligation.
-   * Non-zeroed only on a newly-initialized fixed-rate, fixed-term obligation.
-   */
-  borrowOrder: types.BorrowOrderFields
+  headBorrowOrder: types.BorrowOrderFields
+  pendingOwner: Address
+  tailBorrowOrders: Array<types.BorrowOrderFields>
   padding3: Array<BN>
 }
 
 export interface ObligationJSON {
-  /** Version of the struct */
   tag: string
-  /** Last update to collateral, liquidity, or their market values */
   lastUpdate: types.LastUpdateJSON
-  /** Lending market address */
   lendingMarket: string
-  /** Owner authority which can borrow liquidity */
   owner: string
-  /** Deposited collateral for the obligation, unique by deposit reserve address */
   deposits: Array<types.ObligationCollateralJSON>
-  /** Worst LTV for the collaterals backing the loan, represented as a percentage */
   lowestReserveDepositLiquidationLtv: string
-  /** Market value of deposits (scaled fraction) */
   depositedValueSf: string
-  /** Borrowed liquidity for the obligation, unique by borrow reserve address */
   borrows: Array<types.ObligationLiquidityJSON>
-  /** Risk adjusted market value of borrows/debt (sum of price * borrowed_amount * borrow_factor) (scaled fraction) */
   borrowFactorAdjustedDebtValueSf: string
-  /** Market value of borrows - used for max_liquidatable_borrowed_amount (scaled fraction) */
   borrowedAssetsMarketValueSf: string
-  /** The maximum borrow value at the weighted average loan to value ratio (scaled fraction) */
   allowedBorrowValueSf: string
-  /** The dangerous borrow value at the weighted average liquidation threshold (scaled fraction) */
   unhealthyBorrowValueSf: string
-  /** The asset tier of the deposits */
   paddingDeprecatedAssetTiers: Array<number>
-  /** The elevation group id the obligation opted into. */
   elevationGroup: number
-  /** The number of obsolete reserves the obligation has a deposit in */
   numOfObsoleteDepositReserves: number
-  /** Marked = 1 if borrows array is not empty, 0 = borrows empty */
   hasDebt: number
-  /** Wallet address of the referrer */
   referrer: string
-  /** Marked = 1 if borrowing disabled, 0 = borrowing enabled */
   borrowingDisabled: number
-  /**
-   * A target LTV set by the risk council when marking this obligation for deleveraging.
-   * Only effective when `deleveraging_margin_call_started_slot != 0`.
-   */
   autodeleverageTargetLtvPct: number
-  /** The lowest max LTV found amongst the collateral deposits */
   lowestReserveDepositMaxLtvPct: number
-  /** The number of obsolete reserves the obligation has a borrow in */
   numOfObsoleteBorrowReserves: number
+  ownershipTransferState: number
   reserved: Array<number>
   highestBorrowFactorPct: string
-  /**
-   * A timestamp at which the risk council most-recently marked this obligation for deleveraging.
-   * Zero if not currently subject to deleveraging.
-   */
   autodeleverageMarginCallStartedTimestamp: string
-  /**
-   * Owner-defined, permissionlessly-executed repay orders.
-   * Typical use-cases would be a stop-loss and a take-profit (possibly co-existing).
-   */
   obligationOrders: Array<types.ObligationOrderJSON>
-  /**
-   * Owner-defined, permissionlessly-executed borrow order applicable to this obligation.
-   * Non-zeroed only on a newly-initialized fixed-rate, fixed-term obligation.
-   */
-  borrowOrder: types.BorrowOrderJSON
+  headBorrowOrder: types.BorrowOrderJSON
+  pendingOwner: string
+  tailBorrowOrders: Array<types.BorrowOrderJSON>
   padding3: Array<string>
 }
 
-/** Lending market obligation state */
 export class Obligation {
-  /** Version of the struct */
   readonly tag: BN
-  /** Last update to collateral, liquidity, or their market values */
   readonly lastUpdate: types.LastUpdate
-  /** Lending market address */
   readonly lendingMarket: Address
-  /** Owner authority which can borrow liquidity */
   readonly owner: Address
-  /** Deposited collateral for the obligation, unique by deposit reserve address */
   readonly deposits: Array<types.ObligationCollateral>
-  /** Worst LTV for the collaterals backing the loan, represented as a percentage */
   readonly lowestReserveDepositLiquidationLtv: BN
-  /** Market value of deposits (scaled fraction) */
   readonly depositedValueSf: BN
-  /** Borrowed liquidity for the obligation, unique by borrow reserve address */
   readonly borrows: Array<types.ObligationLiquidity>
-  /** Risk adjusted market value of borrows/debt (sum of price * borrowed_amount * borrow_factor) (scaled fraction) */
   readonly borrowFactorAdjustedDebtValueSf: BN
-  /** Market value of borrows - used for max_liquidatable_borrowed_amount (scaled fraction) */
   readonly borrowedAssetsMarketValueSf: BN
-  /** The maximum borrow value at the weighted average loan to value ratio (scaled fraction) */
   readonly allowedBorrowValueSf: BN
-  /** The dangerous borrow value at the weighted average liquidation threshold (scaled fraction) */
   readonly unhealthyBorrowValueSf: BN
-  /** The asset tier of the deposits */
   readonly paddingDeprecatedAssetTiers: Array<number>
-  /** The elevation group id the obligation opted into. */
   readonly elevationGroup: number
-  /** The number of obsolete reserves the obligation has a deposit in */
   readonly numOfObsoleteDepositReserves: number
-  /** Marked = 1 if borrows array is not empty, 0 = borrows empty */
   readonly hasDebt: number
-  /** Wallet address of the referrer */
   readonly referrer: Address
-  /** Marked = 1 if borrowing disabled, 0 = borrowing enabled */
   readonly borrowingDisabled: number
-  /**
-   * A target LTV set by the risk council when marking this obligation for deleveraging.
-   * Only effective when `deleveraging_margin_call_started_slot != 0`.
-   */
   readonly autodeleverageTargetLtvPct: number
-  /** The lowest max LTV found amongst the collateral deposits */
   readonly lowestReserveDepositMaxLtvPct: number
-  /** The number of obsolete reserves the obligation has a borrow in */
   readonly numOfObsoleteBorrowReserves: number
+  readonly ownershipTransferState: number
   readonly reserved: Array<number>
   readonly highestBorrowFactorPct: BN
-  /**
-   * A timestamp at which the risk council most-recently marked this obligation for deleveraging.
-   * Zero if not currently subject to deleveraging.
-   */
   readonly autodeleverageMarginCallStartedTimestamp: BN
-  /**
-   * Owner-defined, permissionlessly-executed repay orders.
-   * Typical use-cases would be a stop-loss and a take-profit (possibly co-existing).
-   */
   readonly obligationOrders: Array<types.ObligationOrder>
-  /**
-   * Owner-defined, permissionlessly-executed borrow order applicable to this obligation.
-   * Non-zeroed only on a newly-initialized fixed-rate, fixed-term obligation.
-   */
-  readonly borrowOrder: types.BorrowOrder
+  readonly headBorrowOrder: types.BorrowOrder
+  readonly pendingOwner: Address
+  readonly tailBorrowOrders: Array<types.BorrowOrder>
   readonly padding3: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -239,12 +139,15 @@ export class Obligation {
     borsh.u8("autodeleverageTargetLtvPct"),
     borsh.u8("lowestReserveDepositMaxLtvPct"),
     borsh.u8("numOfObsoleteBorrowReserves"),
-    borsh.array(borsh.u8(), 4, "reserved"),
+    borsh.u8("ownershipTransferState"),
+    borsh.array(borsh.u8(), 3, "reserved"),
     borsh.u64("highestBorrowFactorPct"),
     borsh.u64("autodeleverageMarginCallStartedTimestamp"),
     borsh.array(types.ObligationOrder.layout(), 2, "obligationOrders"),
-    types.BorrowOrder.layout("borrowOrder"),
-    borsh.array(borsh.u64(), 73, "padding3"),
+    types.BorrowOrder.layout("headBorrowOrder"),
+    borshAddress("pendingOwner"),
+    borsh.array(types.BorrowOrder.layout(), 2, "tailBorrowOrders"),
+    borsh.array(borsh.u64(), 29, "padding3"),
   ])
 
   constructor(fields: ObligationFields) {
@@ -275,6 +178,7 @@ export class Obligation {
     this.autodeleverageTargetLtvPct = fields.autodeleverageTargetLtvPct
     this.lowestReserveDepositMaxLtvPct = fields.lowestReserveDepositMaxLtvPct
     this.numOfObsoleteBorrowReserves = fields.numOfObsoleteBorrowReserves
+    this.ownershipTransferState = fields.ownershipTransferState
     this.reserved = fields.reserved
     this.highestBorrowFactorPct = fields.highestBorrowFactorPct
     this.autodeleverageMarginCallStartedTimestamp =
@@ -282,7 +186,11 @@ export class Obligation {
     this.obligationOrders = fields.obligationOrders.map(
       (item) => new types.ObligationOrder({ ...item })
     )
-    this.borrowOrder = new types.BorrowOrder({ ...fields.borrowOrder })
+    this.headBorrowOrder = new types.BorrowOrder({ ...fields.headBorrowOrder })
+    this.pendingOwner = fields.pendingOwner
+    this.tailBorrowOrders = fields.tailBorrowOrders.map(
+      (item) => new types.BorrowOrder({ ...item })
+    )
     this.padding3 = fields.padding3
   }
 
@@ -364,6 +272,7 @@ export class Obligation {
       autodeleverageTargetLtvPct: dec.autodeleverageTargetLtvPct,
       lowestReserveDepositMaxLtvPct: dec.lowestReserveDepositMaxLtvPct,
       numOfObsoleteBorrowReserves: dec.numOfObsoleteBorrowReserves,
+      ownershipTransferState: dec.ownershipTransferState,
       reserved: dec.reserved,
       highestBorrowFactorPct: dec.highestBorrowFactorPct,
       autodeleverageMarginCallStartedTimestamp:
@@ -373,7 +282,13 @@ export class Obligation {
           item: any /* eslint-disable-line @typescript-eslint/no-explicit-any */
         ) => types.ObligationOrder.fromDecoded(item)
       ),
-      borrowOrder: types.BorrowOrder.fromDecoded(dec.borrowOrder),
+      headBorrowOrder: types.BorrowOrder.fromDecoded(dec.headBorrowOrder),
+      pendingOwner: dec.pendingOwner,
+      tailBorrowOrders: dec.tailBorrowOrders.map(
+        (
+          item: any /* eslint-disable-line @typescript-eslint/no-explicit-any */
+        ) => types.BorrowOrder.fromDecoded(item)
+      ),
       padding3: dec.padding3,
     })
   }
@@ -403,12 +318,15 @@ export class Obligation {
       autodeleverageTargetLtvPct: this.autodeleverageTargetLtvPct,
       lowestReserveDepositMaxLtvPct: this.lowestReserveDepositMaxLtvPct,
       numOfObsoleteBorrowReserves: this.numOfObsoleteBorrowReserves,
+      ownershipTransferState: this.ownershipTransferState,
       reserved: this.reserved,
       highestBorrowFactorPct: this.highestBorrowFactorPct.toString(),
       autodeleverageMarginCallStartedTimestamp:
         this.autodeleverageMarginCallStartedTimestamp.toString(),
       obligationOrders: this.obligationOrders.map((item) => item.toJSON()),
-      borrowOrder: this.borrowOrder.toJSON(),
+      headBorrowOrder: this.headBorrowOrder.toJSON(),
+      pendingOwner: this.pendingOwner,
+      tailBorrowOrders: this.tailBorrowOrders.map((item) => item.toJSON()),
       padding3: this.padding3.map((item) => item.toString()),
     }
   }
@@ -444,6 +362,7 @@ export class Obligation {
       autodeleverageTargetLtvPct: obj.autodeleverageTargetLtvPct,
       lowestReserveDepositMaxLtvPct: obj.lowestReserveDepositMaxLtvPct,
       numOfObsoleteBorrowReserves: obj.numOfObsoleteBorrowReserves,
+      ownershipTransferState: obj.ownershipTransferState,
       reserved: obj.reserved,
       highestBorrowFactorPct: new BN(obj.highestBorrowFactorPct),
       autodeleverageMarginCallStartedTimestamp: new BN(
@@ -452,7 +371,11 @@ export class Obligation {
       obligationOrders: obj.obligationOrders.map((item) =>
         types.ObligationOrder.fromJSON(item)
       ),
-      borrowOrder: types.BorrowOrder.fromJSON(obj.borrowOrder),
+      headBorrowOrder: types.BorrowOrder.fromJSON(obj.headBorrowOrder),
+      pendingOwner: address(obj.pendingOwner),
+      tailBorrowOrders: obj.tailBorrowOrders.map((item) =>
+        types.BorrowOrder.fromJSON(item)
+      ),
       padding3: obj.padding3.map((item) => new BN(item)),
     })
   }

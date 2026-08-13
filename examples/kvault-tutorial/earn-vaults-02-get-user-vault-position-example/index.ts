@@ -9,7 +9,8 @@ const vault = new KaminoVault(
 const user = address('EZC9wzVCvihCsCHEMGADYdsRhcpdRYWzSCZAVegSCfqY');
 
 const shares = await vault.getUserShares(user);
-const rate = await vault.getExchangeRate();
+const slot = await vault.client.getConnection().getSlot().send();
+const rate = await vault.getExchangeRate(slot);
 
 console.log({
   shares: shares.totalShares.toString(),

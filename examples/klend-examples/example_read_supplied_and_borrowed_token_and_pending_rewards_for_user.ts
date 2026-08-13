@@ -8,7 +8,13 @@ import {
   VanillaObligation,
   WRAPPED_SOL_MINT,
 } from '@kamino-finance/klend-sdk';
-import { calculatePendingRewards, Farms, FarmState, UserState, getUserStatePDA } from '@kamino-finance/farms-sdk';
+import {
+  calculatePendingRewards,
+  Farms,
+  fetchMaybeFarmState,
+  fetchMaybeUserState,
+  getUserStatePDA,
+} from '@kamino-finance/farms-sdk';
 import { getConnectionPool } from '../utils/connection';
 import { Address, address } from '@solana/kit';
 
@@ -63,11 +69,13 @@ export const getKaminoAllPricesAPI = 'https://api.hubbleprotocol.io/prices?env=m
     debtFarm,
     userObligation.obligationAddress
   );
-  const farmUserState = await UserState.fetch(c.rpc, farmUserStateAddress, farmsClient.getProgramID());
+  const maybeFarmUserState = await fetchMaybeUserState(c.rpc, farmUserStateAddress);
+  const farmUserState = maybeFarmUserState.exists ? maybeFarmUserState.data : null;
   if (!farmUserState) {
     throw Error(`Could not load farm user state ${farmUserStateAddress.toString()}`);
   }
-  const farmState = await FarmState.fetch(c.rpc, farmUserState.farmState);
+  const maybeFarmState = await fetchMaybeFarmState(c.rpc, farmUserState.farmState);
+  const farmState = maybeFarmState.exists ? maybeFarmState.data : null;
   if (!farmState) {
     throw Error(`Could not load farm state ${farmUserState.farmState.toString()}`);
   }

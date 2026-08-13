@@ -3,7 +3,7 @@ import { getExtraFarms, loadReserveData } from '../utils/helpers';
 import { getConnectionPool } from '../utils/connection';
 import { MAIN_MARKET, PYUSD_MINT } from '../utils/constants';
 import { Scope } from '@kamino-finance/scope-sdk';
-import { FarmState } from '@kamino-finance/farms-sdk';
+import { fetchMaybeFarmState } from '@kamino-finance/farms-sdk';
 import { lamportsToNumberDecimal } from '../../src';
 import Decimal from 'decimal.js/decimal';
 import { getRewardPerTimeUnitSecond } from '../../src/classes/farm_utils';
@@ -13,11 +13,16 @@ import { getRewardPerTimeUnitSecond } from '../../src/classes/farm_utils';
   console.log(`fetching data for market ${MAIN_MARKET.toString()} reserve for ${PYUSD_MINT.toString()}`);
   const extraFarms = await getExtraFarms();
   const xbtcMint = address('CtzPWv73Sn1dMGVU3ZtLv9yWSyUAanBni19YWDaznnkn');
-  const { market, reserve } = await loadReserveData({
-    rpc: c.rpc,
-    marketPubkey: MAIN_MARKET,
-    mintPubkey: xbtcMint,
-  });
+  const xbtcReserveAddress = address('4Hyrqb9Mq7y1wkq4YoqHkPdPx3VQyFY3mxMj67naC1Cb');
+  const slot = await c.rpc.getSlot().send();
+  const { market, reserve } = await loadReserveData(
+    {
+      rpc: c.rpc,
+      marketPubkey: MAIN_MARKET,
+      reserveAddress: xbtcReserveAddress,
+    },
+    slot
+  );
   const scope = new Scope('mainnet-beta', c.rpc);
   const oraclePrices = await scope.getSingleOraclePrices({ feed: 'hubble' });
 
@@ -30,7 +35,8 @@ import { getRewardPerTimeUnitSecond } from '../../src/classes/farm_utils';
     throw new Error('Farm not found');
   }
 
-  const farmState = await FarmState.fetch(c.rpc, address(farm.farm));
+  const maybeFarmState = await fetchMaybeFarmState(c.rpc, address(farm.farm));
+  const farmState = maybeFarmState.exists ? maybeFarmState.data : null;
 
   if (!farmState) {
     throw new Error('Farm state not found');
@@ -42,7 +48,7 @@ import { getRewardPerTimeUnitSecond } from '../../src/classes/farm_utils';
     farmState.rewardInfos[0],
     new Decimal(farmState?.totalStakedAmount.toString())
   );
-  const hasAvailableRewards = farmState.rewardInfos[0].rewardsAvailable.gtn(0);
+  const hasAvailableRewards = farmState.rewardInfos[0].rewardsAvailable > 0n;
   if (!hasAvailableRewards) {
     console.log('No available rewards');
     return;

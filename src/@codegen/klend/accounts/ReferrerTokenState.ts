@@ -16,44 +16,28 @@ import * as types from "../types" // eslint-disable-line @typescript-eslint/no-u
 import { PROGRAM_ID } from "../programId"
 
 export interface ReferrerTokenStateFields {
-  /** Pubkey of the referrer/owner */
   referrer: Address
-  /** Token mint for the account */
   mint: Address
-  /** Amount that has been accumulated and not claimed yet -> available to claim (scaled fraction) */
   amountUnclaimedSf: BN
-  /** Amount that has been accumulated in total -> both already claimed and unclaimed (scaled fraction) */
   amountCumulativeSf: BN
-  /** Referrer token state bump, used for address validation */
   bump: BN
   padding: Array<BN>
 }
 
 export interface ReferrerTokenStateJSON {
-  /** Pubkey of the referrer/owner */
   referrer: string
-  /** Token mint for the account */
   mint: string
-  /** Amount that has been accumulated and not claimed yet -> available to claim (scaled fraction) */
   amountUnclaimedSf: string
-  /** Amount that has been accumulated in total -> both already claimed and unclaimed (scaled fraction) */
   amountCumulativeSf: string
-  /** Referrer token state bump, used for address validation */
   bump: string
   padding: Array<string>
 }
 
-/** Referrer account -> each owner can have multiple accounts for specific reserves */
 export class ReferrerTokenState {
-  /** Pubkey of the referrer/owner */
   readonly referrer: Address
-  /** Token mint for the account */
   readonly mint: Address
-  /** Amount that has been accumulated and not claimed yet -> available to claim (scaled fraction) */
   readonly amountUnclaimedSf: BN
-  /** Amount that has been accumulated in total -> both already claimed and unclaimed (scaled fraction) */
   readonly amountCumulativeSf: BN
-  /** Referrer token state bump, used for address validation */
   readonly bump: BN
   readonly padding: Array<BN>
 

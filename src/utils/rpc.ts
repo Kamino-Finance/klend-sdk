@@ -1,5 +1,8 @@
 import {
   Address,
+  Commitment,
+  GetBlockTimeApi,
+  GetSlotApi,
   Rpc,
   GetProgramAccountsApi,
   fetchEncodedAccount,
@@ -10,6 +13,7 @@ import {
 } from '@solana/kit';
 import { Buffer } from 'buffer';
 import { ZSTDDecoder } from 'zstddec';
+import type { LedgerInstant } from './ledger';
 import type {
   AccountInfoBase,
   AccountInfoWithBase64EncodedZStdCompressedData,
@@ -56,6 +60,26 @@ export async function getAccountOwner(rpc: Rpc<GetAccountInfoApi>, address: Addr
     throw Error(`Could not fetch mint ${address.toString()}`);
   }
   return acc.programAddress;
+}
+
+export async function getCurrentLedgerInstant(
+  rpc: Rpc<GetSlotApi> & Partial<Pick<Rpc<GetBlockTimeApi>, 'getBlockTime'>>,
+  commitment: Commitment = 'confirmed'
+): Promise<LedgerInstant> {
+  if (typeof rpc.getBlockTime !== 'function') {
+    throw new Error('getCurrentLedgerInstant: the RPC client must support getBlockTime');
+  }
+  const slotPromise = rpc.getSlot({ commitment }).send();
+  const [slot, blockTime] = await Promise.all([
+    slotPromise,
+    slotPromise.then((resolvedSlot) => rpc.getBlockTime!(resolvedSlot).send()),
+  ]);
+
+  if (blockTime === null) {
+    throw new Error(`Block time not found for slot ${slot}`);
+  }
+
+  return { slot, blockTime };
 }
 
 async function deserializeAccountInfo(

@@ -5,7 +5,7 @@
 ```bash
 cd klend-sdk/examples
 yarn install
-export RPC_ENDPOINT=YOUR_RPC_URL_HERE
+export RPC=YOUR_RPC_URL_HERE
 export KEYPAIR_FILE=YOUR_KEYPAIR_FILE_HERE
 ```
 
@@ -13,10 +13,10 @@ export KEYPAIR_FILE=YOUR_KEYPAIR_FILE_HERE
 
 ```bash
 cd klend-sdk/examples
-yarn ts-node kvault/<example_file>.ts
+yarn tsx kvault-examples/<example_file>.ts
 ```
 
-e.g. `yarn ts-node kvault/example_create_vault.ts`
+e.g. `yarn tsx kvault-examples/example_create_vault.ts`
 
 ## Transactions troubleshooting
 

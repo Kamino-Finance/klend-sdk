@@ -15,7 +15,8 @@ import { sendAndConfirmTx } from '../utils/tx';
   const vault = new KaminoVault(c.rpc, vaultAddress);
   const vaultState = await vault.getState();
 
-  const claimRewardsIxs = await kaminoManager.getClaimAllRewardsForVaultIxs(wallet, vault);
+  const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
+  const claimRewardsIxs = await kaminoManager.getClaimAllRewardsForVaultIxs(wallet, vault, vaultReservesMap);
   if (claimRewardsIxs.length > 0) {
     await sendAndConfirmTx(c, wallet, claimRewardsIxs, [], [vaultState.vaultLookupTable], 'Claim Rewards');
   } else {

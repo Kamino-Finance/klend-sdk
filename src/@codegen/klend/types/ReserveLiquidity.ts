@@ -5,131 +5,67 @@ import * as borsh from "@coral-xyz/borsh"
 import { borshAddress } from "../utils"
 
 export interface ReserveLiquidityFields {
-  /** Reserve liquidity mint address */
   mintPubkey: Address
-  /** Reserve liquidity supply address */
   supplyVault: Address
-  /** Reserve liquidity fee collection address */
   feeVault: Address
-  /** Reserve liquidity available */
-  availableAmount: BN
-  /** Reserve liquidity borrowed (scaled fraction) */
+  totalAvailableAmount: BN
   borrowedAmountSf: BN
-  /** Reserve liquidity market price in quote currency (scaled fraction) */
   marketPriceSf: BN
-  /** Unix timestamp of the market price (from the oracle) */
   marketPriceLastUpdatedTs: BN
-  /** Reserve liquidity mint decimals */
   mintDecimals: BN
-  /**
-   * Timestamp when the last refresh reserve detected that the liquidity amount is above the deposit cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
-   * If the threshold is not crossed, then the timestamp is set to 0
-   */
   depositLimitCrossedTimestamp: BN
-  /**
-   * Timestamp when the last refresh reserve detected that the borrowed amount is above the borrow cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
-   * If the threshold is not crossed, then the timestamp is set to 0
-   */
   borrowLimitCrossedTimestamp: BN
-  /** Reserve liquidity cumulative borrow rate (scaled fraction) */
   cumulativeBorrowRateBsf: types.BigFractionBytesFields
-  /** Reserve cumulative protocol fees (scaled fraction) */
   accumulatedProtocolFeesSf: BN
-  /** Reserve cumulative referrer fees (scaled fraction) */
   accumulatedReferrerFeesSf: BN
-  /** Reserve pending referrer fees, to be claimed in refresh_obligation by referrer or protocol (scaled fraction) */
   pendingReferrerFeesSf: BN
-  /** Reserve referrer fee absolute rate calculated at each refresh_reserve operation (scaled fraction) */
   absoluteReferralRateSf: BN
-  /** Token program of the liquidity mint */
   tokenProgram: Address
+  rewardsAmountAvailable: BN
   padding2: Array<BN>
   padding3: Array<BN>
 }
 
 export interface ReserveLiquidityJSON {
-  /** Reserve liquidity mint address */
   mintPubkey: string
-  /** Reserve liquidity supply address */
   supplyVault: string
-  /** Reserve liquidity fee collection address */
   feeVault: string
-  /** Reserve liquidity available */
-  availableAmount: string
-  /** Reserve liquidity borrowed (scaled fraction) */
+  totalAvailableAmount: string
   borrowedAmountSf: string
-  /** Reserve liquidity market price in quote currency (scaled fraction) */
   marketPriceSf: string
-  /** Unix timestamp of the market price (from the oracle) */
   marketPriceLastUpdatedTs: string
-  /** Reserve liquidity mint decimals */
   mintDecimals: string
-  /**
-   * Timestamp when the last refresh reserve detected that the liquidity amount is above the deposit cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
-   * If the threshold is not crossed, then the timestamp is set to 0
-   */
   depositLimitCrossedTimestamp: string
-  /**
-   * Timestamp when the last refresh reserve detected that the borrowed amount is above the borrow cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
-   * If the threshold is not crossed, then the timestamp is set to 0
-   */
   borrowLimitCrossedTimestamp: string
-  /** Reserve liquidity cumulative borrow rate (scaled fraction) */
   cumulativeBorrowRateBsf: types.BigFractionBytesJSON
-  /** Reserve cumulative protocol fees (scaled fraction) */
   accumulatedProtocolFeesSf: string
-  /** Reserve cumulative referrer fees (scaled fraction) */
   accumulatedReferrerFeesSf: string
-  /** Reserve pending referrer fees, to be claimed in refresh_obligation by referrer or protocol (scaled fraction) */
   pendingReferrerFeesSf: string
-  /** Reserve referrer fee absolute rate calculated at each refresh_reserve operation (scaled fraction) */
   absoluteReferralRateSf: string
-  /** Token program of the liquidity mint */
   tokenProgram: string
+  rewardsAmountAvailable: string
   padding2: Array<string>
   padding3: Array<string>
 }
 
-/** Reserve liquidity */
 export class ReserveLiquidity {
-  /** Reserve liquidity mint address */
   readonly mintPubkey: Address
-  /** Reserve liquidity supply address */
   readonly supplyVault: Address
-  /** Reserve liquidity fee collection address */
   readonly feeVault: Address
-  /** Reserve liquidity available */
-  readonly availableAmount: BN
-  /** Reserve liquidity borrowed (scaled fraction) */
+  readonly totalAvailableAmount: BN
   readonly borrowedAmountSf: BN
-  /** Reserve liquidity market price in quote currency (scaled fraction) */
   readonly marketPriceSf: BN
-  /** Unix timestamp of the market price (from the oracle) */
   readonly marketPriceLastUpdatedTs: BN
-  /** Reserve liquidity mint decimals */
   readonly mintDecimals: BN
-  /**
-   * Timestamp when the last refresh reserve detected that the liquidity amount is above the deposit cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
-   * If the threshold is not crossed, then the timestamp is set to 0
-   */
   readonly depositLimitCrossedTimestamp: BN
-  /**
-   * Timestamp when the last refresh reserve detected that the borrowed amount is above the borrow cap. When this threshold is crossed, then redemptions (auto-deleverage) are enabled.
-   * If the threshold is not crossed, then the timestamp is set to 0
-   */
   readonly borrowLimitCrossedTimestamp: BN
-  /** Reserve liquidity cumulative borrow rate (scaled fraction) */
   readonly cumulativeBorrowRateBsf: types.BigFractionBytes
-  /** Reserve cumulative protocol fees (scaled fraction) */
   readonly accumulatedProtocolFeesSf: BN
-  /** Reserve cumulative referrer fees (scaled fraction) */
   readonly accumulatedReferrerFeesSf: BN
-  /** Reserve pending referrer fees, to be claimed in refresh_obligation by referrer or protocol (scaled fraction) */
   readonly pendingReferrerFeesSf: BN
-  /** Reserve referrer fee absolute rate calculated at each refresh_reserve operation (scaled fraction) */
   readonly absoluteReferralRateSf: BN
-  /** Token program of the liquidity mint */
   readonly tokenProgram: Address
+  readonly rewardsAmountAvailable: BN
   readonly padding2: Array<BN>
   readonly padding3: Array<BN>
 
@@ -137,7 +73,7 @@ export class ReserveLiquidity {
     this.mintPubkey = fields.mintPubkey
     this.supplyVault = fields.supplyVault
     this.feeVault = fields.feeVault
-    this.availableAmount = fields.availableAmount
+    this.totalAvailableAmount = fields.totalAvailableAmount
     this.borrowedAmountSf = fields.borrowedAmountSf
     this.marketPriceSf = fields.marketPriceSf
     this.marketPriceLastUpdatedTs = fields.marketPriceLastUpdatedTs
@@ -152,6 +88,7 @@ export class ReserveLiquidity {
     this.pendingReferrerFeesSf = fields.pendingReferrerFeesSf
     this.absoluteReferralRateSf = fields.absoluteReferralRateSf
     this.tokenProgram = fields.tokenProgram
+    this.rewardsAmountAvailable = fields.rewardsAmountAvailable
     this.padding2 = fields.padding2
     this.padding3 = fields.padding3
   }
@@ -162,7 +99,7 @@ export class ReserveLiquidity {
         borshAddress("mintPubkey"),
         borshAddress("supplyVault"),
         borshAddress("feeVault"),
-        borsh.u64("availableAmount"),
+        borsh.u64("totalAvailableAmount"),
         borsh.u128("borrowedAmountSf"),
         borsh.u128("marketPriceSf"),
         borsh.u64("marketPriceLastUpdatedTs"),
@@ -175,7 +112,8 @@ export class ReserveLiquidity {
         borsh.u128("pendingReferrerFeesSf"),
         borsh.u128("absoluteReferralRateSf"),
         borshAddress("tokenProgram"),
-        borsh.array(borsh.u64(), 51, "padding2"),
+        borsh.u64("rewardsAmountAvailable"),
+        borsh.array(borsh.u64(), 50, "padding2"),
         borsh.array(borsh.u128(), 32, "padding3"),
       ],
       property
@@ -188,7 +126,7 @@ export class ReserveLiquidity {
       mintPubkey: obj.mintPubkey,
       supplyVault: obj.supplyVault,
       feeVault: obj.feeVault,
-      availableAmount: obj.availableAmount,
+      totalAvailableAmount: obj.totalAvailableAmount,
       borrowedAmountSf: obj.borrowedAmountSf,
       marketPriceSf: obj.marketPriceSf,
       marketPriceLastUpdatedTs: obj.marketPriceLastUpdatedTs,
@@ -203,6 +141,7 @@ export class ReserveLiquidity {
       pendingReferrerFeesSf: obj.pendingReferrerFeesSf,
       absoluteReferralRateSf: obj.absoluteReferralRateSf,
       tokenProgram: obj.tokenProgram,
+      rewardsAmountAvailable: obj.rewardsAmountAvailable,
       padding2: obj.padding2,
       padding3: obj.padding3,
     })
@@ -213,7 +152,7 @@ export class ReserveLiquidity {
       mintPubkey: fields.mintPubkey,
       supplyVault: fields.supplyVault,
       feeVault: fields.feeVault,
-      availableAmount: fields.availableAmount,
+      totalAvailableAmount: fields.totalAvailableAmount,
       borrowedAmountSf: fields.borrowedAmountSf,
       marketPriceSf: fields.marketPriceSf,
       marketPriceLastUpdatedTs: fields.marketPriceLastUpdatedTs,
@@ -228,6 +167,7 @@ export class ReserveLiquidity {
       pendingReferrerFeesSf: fields.pendingReferrerFeesSf,
       absoluteReferralRateSf: fields.absoluteReferralRateSf,
       tokenProgram: fields.tokenProgram,
+      rewardsAmountAvailable: fields.rewardsAmountAvailable,
       padding2: fields.padding2,
       padding3: fields.padding3,
     }
@@ -238,7 +178,7 @@ export class ReserveLiquidity {
       mintPubkey: this.mintPubkey,
       supplyVault: this.supplyVault,
       feeVault: this.feeVault,
-      availableAmount: this.availableAmount.toString(),
+      totalAvailableAmount: this.totalAvailableAmount.toString(),
       borrowedAmountSf: this.borrowedAmountSf.toString(),
       marketPriceSf: this.marketPriceSf.toString(),
       marketPriceLastUpdatedTs: this.marketPriceLastUpdatedTs.toString(),
@@ -252,6 +192,7 @@ export class ReserveLiquidity {
       pendingReferrerFeesSf: this.pendingReferrerFeesSf.toString(),
       absoluteReferralRateSf: this.absoluteReferralRateSf.toString(),
       tokenProgram: this.tokenProgram,
+      rewardsAmountAvailable: this.rewardsAmountAvailable.toString(),
       padding2: this.padding2.map((item) => item.toString()),
       padding3: this.padding3.map((item) => item.toString()),
     }
@@ -262,7 +203,7 @@ export class ReserveLiquidity {
       mintPubkey: address(obj.mintPubkey),
       supplyVault: address(obj.supplyVault),
       feeVault: address(obj.feeVault),
-      availableAmount: new BN(obj.availableAmount),
+      totalAvailableAmount: new BN(obj.totalAvailableAmount),
       borrowedAmountSf: new BN(obj.borrowedAmountSf),
       marketPriceSf: new BN(obj.marketPriceSf),
       marketPriceLastUpdatedTs: new BN(obj.marketPriceLastUpdatedTs),
@@ -277,6 +218,7 @@ export class ReserveLiquidity {
       pendingReferrerFeesSf: new BN(obj.pendingReferrerFeesSf),
       absoluteReferralRateSf: new BN(obj.absoluteReferralRateSf),
       tokenProgram: address(obj.tokenProgram),
+      rewardsAmountAvailable: new BN(obj.rewardsAmountAvailable),
       padding2: obj.padding2.map((item) => new BN(item)),
       padding3: obj.padding3.map((item) => new BN(item)),
     })

@@ -32,6 +32,7 @@ export interface InitFarmsForReserveAccounts {
   farmsVaultAuthority: Address
   rent: Address
   systemProgram: Address
+  instructionSysvarAccount: Address
 }
 
 export const layout = borsh.struct<InitFarmsForReserveArgs>([borsh.u8("mode")])
@@ -57,6 +58,7 @@ export function initFarmsForReserve(
     { address: accounts.farmsVaultAuthority, role: 0 },
     { address: accounts.rent, role: 0 },
     { address: accounts.systemProgram, role: 0 },
+    { address: accounts.instructionSysvarAccount, role: 0 },
     ...remainingAccounts,
   ]
   const buffer = Buffer.alloc(1000)

@@ -42,16 +42,24 @@ console.log(obligation.stats.borrowLimit);
 ### Perform lending action
 
 ```typescript
-const kaminoAction = await KaminoAction.buildDepositTxns(
+const currentSlot = await rpc.getSlot().send();
+
+const kaminoAction = await KaminoAction.buildDepositTxns({
   kaminoMarket,
-  amountBase,
-  symbol,
-  new VanillaObligation(PROGRAM_ID),
-);
+  amount: amountBase,
+  reserveAddress,
+  owner,
+  obligation: new VanillaObligation(kaminoMarket.getAddress()),
+  useV2Ixs: true,
+  scopeRefreshConfig: undefined,
+  currentSlot,
+});
 
 const env = await initEnv('mainnet-beta');
 await sendTransactionFromAction(env, sendTransaction); // sendTransaction from wallet adapter or custom
 ```
+
+Fetch `currentSlot` once per workflow and pass it into lending action builders. Reusing the caller-fetched slot avoids extra RPC calls and keeps calculations consistent across multi-action flows.
 
 ### Getting a vanilla obligation for a user
 ```ts
@@ -67,15 +75,17 @@ await sendTransactionFromAction(env, sendTransaction); // sendTransaction from w
 ```ts
   const kaminoMarket = await KaminoMarket.load(env.provider.connection, marketAddress, DEFAULT_RECENT_SLOT_DURATION_MS, programId);
 
-  const obligations = await kaminoMarket!.getAllUserObligationsForReserve(user, reserve);
+  const slot = await env.provider.connection.getSlot();
+  const obligations = await kaminoMarket!.getAllUserObligationsForReserve(user, reserve, BigInt(slot));
 ```
 
 ### Getting a list of user obligations for a specific reserve with caching
 1. Fetch all user obligations, this should be cached as it takes longer to fetch
 ```ts
   const kaminoMarket = await KaminoMarket.load(env.provider.connection, marketAddress, DEFAULT_RECENT_SLOT_DURATION_MS, programId); 
-
-  const allUserObligations = await kaminoMarket!.getAllUserObligations(user);
+	
+  const slot = await env.provider.connection.getSlot();
+  const allUserObligations = await kaminoMarket!.getAllUserObligations(user, BigInt(slot));
 ```
 
 ```ts 

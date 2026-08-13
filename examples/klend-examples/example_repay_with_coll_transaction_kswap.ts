@@ -1,41 +1,77 @@
 import {
+  FlashBorrowType,
+  MultiplyObligation,
+  PROGRAM_ID,
+  RepayWithCollIxsResponse,
+  determineRepayWithCollFlashBorrowType,
   getComputeBudgetAndPriorityFeeIxs,
   getRepayWithCollIxs,
-  getUserLutAddressAndSetupIxs,
   getScopeRefreshIxForObligationAndReserves,
-  RepayWithCollIxsResponse,
+  getUserLutAddressAndSetupIxs,
+  getCurrentLedgerInstant,
 } from '@kamino-finance/klend-sdk';
 import { KswapSdk, RouteOutput } from '@kamino-finance/kswap-sdk';
-import { getConnectionPool } from '../utils/connection';
-import { getKeypair } from '../utils/keypair';
-import { SYRUP_USDC_MARKET, SYRUP_USDC_MINT, USDC_MINT } from '../utils/constants';
-import { executeUserSetupLutsTransactions, getMarket } from '../utils/helpers';
-import { Account, address, Address, IInstruction, none, Rpc, SolanaRpcApi } from '@solana/kit';
-import Decimal from 'decimal.js';
-import { getKswapQuoter, getKswapSwapper, getTokenPriceFromBirdeye, KSWAP_API } from '../utils/kswap_utils';
-import { Scope } from '@kamino-finance/scope-sdk/';
-import { sendAndConfirmTx, simulateTx } from '../utils/tx';
-import { getKaminoResources } from '../utils/kamino_resources';
+import { Account, address, Address, none, Rpc, SolanaRpcApi } from '@solana/kit';
 import { AddressLookupTable, fetchAllAddressLookupTable } from '@solana-program/address-lookup-table';
+import Decimal from 'decimal.js';
+import { Scope } from '@kamino-finance/scope-sdk/';
 
-// Helper to get repay-with-coll LUTs for a given pair (both directions)
+import { getConnectionPool } from '../utils/connection';
+import {
+  JLP_MARKET,
+  JLP_MARKET_LUT,
+  JLP_MINT,
+  JLP_RESERVE_JLP_MARKET,
+  USDC_MINT,
+  USDC_RESERVE_JLP_MARKET,
+} from '../utils/constants';
+import { getFlashBorrowTypeFromEnv } from '../utils/env';
+import { executeUserSetupLutsTransactions, getMarket } from '../utils/helpers';
+import { getKaminoResources } from '../utils/kamino_resources';
+import { getKeypair } from '../utils/keypair';
+import { getKswapQuoter, getKswapSwapper, getTokenPriceFromBirdeye, KSWAP_API } from '../utils/kswap_utils';
+import { sendAndConfirmTx, simulateTx } from '../utils/tx';
+
+/**
+ * Repay-with-collateral on the JLP/USDC market via KSwap, supporting both flash-borrow paths:
+ *
+ *  - `'debt'`: flash borrow USDC → repay USDC debt → withdraw JLP → swap JLP→USDC → flash repay USDC.
+ *  - `'coll'`: flash borrow JLP  → swap JLP→USDC → repay USDC debt → withdraw JLP → flash repay JLP.
+ *
+ * The SDK picks a viable side automatically via `determineRepayWithCollFlashBorrowType` — it
+ * verifies `isFlashLoanEnabled` and per-side required liquidity for the repay amount, then
+ * prefers coll when both are viable. Set `FLASH_BORROW_TYPE=coll|debt` to override for testing.
+ *
+ * Account-list optimisation:
+ *  - User lookup table (`getUserLutAddressAndSetupIxs`), extended with the JLP/USDC reserve pair.
+ *  - Market-wide `JLP_MARKET_LUT`.
+ *  - Repay-with-coll pair LUTs from the Kamino CDN (`kaminoResources.repayWithCollLUTs`).
+ *
+ * Best-route selection: KSwap returns multiple routes; we simulate each (klend LUTs attached) and
+ * pick the one with the highest realised price.
+ */
+
 function getRepayWithCollLuts(
   repayWithCollLUTs: Record<string, string>,
   collMint: Address,
   debtMint: Address
 ): Address[] {
-  const lutAddressCollDebt = repayWithCollLUTs[`${collMint}-${debtMint}`];
-  const lutAddressDebtColl = repayWithCollLUTs[`${debtMint}-${collMint}`];
-  return [
-    lutAddressCollDebt ? address(lutAddressCollDebt) : [],
-    lutAddressDebtColl ? address(lutAddressDebtColl) : [],
-  ].flat();
+  const collDebtKey = `${collMint}-${debtMint}`;
+  const debtCollKey = `${debtMint}-${collMint}`;
+  const luts: Address[] = [];
+  if (repayWithCollLUTs[collDebtKey]) {
+    luts.push(address(repayWithCollLUTs[collDebtKey]));
+  }
+  if (repayWithCollLUTs[debtCollKey]) {
+    luts.push(address(repayWithCollLUTs[debtCollKey]));
+  }
+  return luts;
 }
 
 type SimulatedRoute = {
   route: RepayWithCollIxsResponse<RouteOutput>;
   routerType: string;
-  luts: Address[];
+  lutAddresses: Address[];
 };
 
 async function simulateAndSelectBestRoute(
@@ -45,216 +81,228 @@ async function simulateAndSelectBestRoute(
   klendLutKeys: Address[],
   klendLutAccounts: Account<AddressLookupTable>[]
 ): Promise<SimulatedRoute> {
-  console.log(`\nGot ${routes.length} routes, simulating all...`);
+  console.log(`\nSimulating ${routes.length} route(s)...`);
 
-  const simulationResults = await Promise.all(
+  const results = await Promise.all(
     routes.map(async (route, i) => {
-      const { ixs, lookupTables, quote } = route;
-      const routerType = quote?.routerType || 'unknown';
-
-      // Combine swap LUTs with klend LUTs
-      const allLuts = [...lookupTables, ...klendLutAccounts];
-
+      const routerType = route.quote?.routerType ?? 'unknown';
+      const allLuts = [...route.lookupTables, ...klendLutAccounts];
       try {
-        const simulation = await simulateTx(rpc, wallet, ixs, allLuts);
-
-        if (!simulation || simulation.value.err) {
-          console.log(`Route ${i} (${routerType}): simulation FAILED -`, simulation?.value?.err);
+        const sim = await simulateTx(rpc, wallet, route.ixs, allLuts);
+        if (!sim || sim.value.err) {
+          console.log(`  [${i}] ${routerType}: FAILED — ${JSON.stringify(sim?.value?.err)}`);
           return undefined;
         }
-
-        console.log(`Route ${i} (${routerType}): simulation PASSED`);
-
+        console.log(`  [${i}] ${routerType}: passed`);
         return {
           route,
           routerType,
-          luts: [...lookupTables.map((l) => l.address), ...klendLutKeys],
+          lutAddresses: [...route.lookupTables.map((l) => l.address), ...klendLutKeys],
         } as SimulatedRoute;
       } catch (e) {
-        console.log(`Route ${i} (${routerType}): simulation ERROR -`, e);
+        // Stringify carefully — errors may carry BigInt fields that break default toString.
+        const msg = e instanceof Error ? e.message : String(e);
+        console.log(`  [${i}] ${routerType}: ERROR — ${msg}`);
         return undefined;
       }
     })
   );
 
-  // Filter out failed simulations
-  const passingRoutes = simulationResults.filter((r): r is SimulatedRoute => r !== undefined);
-
-  if (passingRoutes.length === 0) {
-    throw new Error('No routes passed simulation');
+  const passing = results.filter((r): r is SimulatedRoute => r !== undefined);
+  if (passing.length === 0) {
+    throw new Error(
+      'No KSwap route passed simulation. Common causes:\n' +
+        '  - Tx > 1232 bytes after LUT compression: try `FLASH_BORROW_TYPE=coll` (different ix layout),\n' +
+        '    or set a smaller `preferredMaxAccounts` on the swapper.\n' +
+        '  - "TooManyAccountLocks": the chosen router adds too many writable accounts; the next-best\n' +
+        '    router should still pass if it returned a route.\n' +
+        '  - Slippage too tight relative to current pool depth: bump `slippageBps`.'
+    );
   }
 
-  console.log(`\n${passingRoutes.length} routes passed simulation`);
-
-  // Pick the best route based on swap price (highest output for given input)
-  const bestRoute = passingRoutes.reduce((best, current) => {
-    const bestQuote = best.route.quote;
-    const currentQuote = current.route.quote;
-
-    if (!bestQuote || !currentQuote) return best;
-
-    const bestInAmount = new Decimal(bestQuote.amountsExactIn.amountIn.toString());
-    const bestOutAmount = new Decimal(bestQuote.amountsExactIn.amountOut.toString());
-    const bestPrice = bestOutAmount.div(bestInAmount);
-
-    const currentInAmount = new Decimal(currentQuote.amountsExactIn.amountIn.toString());
-    const currentOutAmount = new Decimal(currentQuote.amountsExactIn.amountOut.toString());
-    const currentPrice = currentOutAmount.div(currentInAmount);
-
-    return currentPrice.gt(bestPrice) ? current : best;
+  // Pick the best route by realised price (output/input).
+  const best = passing.reduce((bestSoFar, candidate) => {
+    const bq = bestSoFar.route.quote;
+    const cq = candidate.route.quote;
+    if (!bq || !cq) return bestSoFar;
+    const bestPx = new Decimal(bq.amountsExactIn.amountOut.toString()).div(bq.amountsExactIn.amountIn.toString());
+    const candidatePx = new Decimal(cq.amountsExactIn.amountOut.toString()).div(cq.amountsExactIn.amountIn.toString());
+    return candidatePx.gt(bestPx) ? candidate : bestSoFar;
   });
 
-  return bestRoute;
+  console.log(`Selected: ${best.routerType}`);
+  return best;
 }
 
-// a bunch of code is just for the sake of the examples, such as the hardcoded obligation address and the token mints, or the repayAmount, configure your own
 (async () => {
   const c = getConnectionPool();
   const wallet = await getKeypair();
 
-  const market = await getMarket({ rpc: c.rpc, marketPubkey: SYRUP_USDC_MARKET });
+  const market = await getMarket({ rpc: c.rpc, marketPubkey: JLP_MARKET });
   const scope = new Scope('mainnet-beta', c.rpc);
-
   const kswapSdk = new KswapSdk(KSWAP_API, c.rpc, c.wsRpc);
 
-  // Fetch Kamino resources for repay-with-coll LUTs
-  const kaminoResources = await getKaminoResources();
-
-  // just for the sake of the example
-  const collTokenMint = SYRUP_USDC_MINT;
+  // ---- Pair config ----
+  const collTokenMint = JLP_MINT;
   const debtTokenMint = USDC_MINT;
-  const slippageBps = 100;
+  const collReserveAddress = JLP_RESERVE_JLP_MARKET;
+  const debtReserveAddress = USDC_RESERVE_JLP_MARKET;
+  const slippageBps = 30;
 
-  // Set to true to repay all debt and withdraw all collateral (close position)
+  // Set to true to close the position entirely (repays all debt, withdraws all collateral).
   const isClosingPosition = false;
 
-  // Replace with your actual obligation address
-  const obligationAddress = address('GGT1QUJRRTqVA1Zes81x96dZ44ePoegXrxhBkFgeQQtE');
+  const collTokenReserve = market.getExistingReserveByAddress(collReserveAddress);
+  const debtTokenReserve = market.getExistingReserveByAddress(debtReserveAddress);
+
+  // ---- Obligation resolution ----
+  // Repay-with-coll requires an existing obligation. Use the multiply PDA so a leveraged
+  // JLP/USDC position created by the multiply example is repayable through this one.
+  const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, PROGRAM_ID);
+  const obligationAddress = await obligationType.toPda(market.getAddress(), wallet.address);
   const obligation = await market.getObligationByAddress(obligationAddress);
-
   if (!obligation) {
-    throw new Error(`Obligation not found: ${obligationAddress}`);
+    throw new Error(`No obligation found for ${wallet.address} on the JLP market — create a multiply position first.`);
   }
 
-  const collTokenReserve = market.getReserveByMint(collTokenMint);
-  const debtTokenReserve = market.getReserveByMint(debtTokenMint);
-
-  if (!collTokenReserve) {
-    throw new Error(`Collateral reserve not found for mint: ${collTokenMint}`);
-  }
-  if (!debtTokenReserve) {
-    throw new Error(`Debt reserve not found for mint: ${debtTokenMint}`);
-  }
-
-  const debtPosition = obligation.getBorrowByReserve(debtTokenReserve.address);
-  const collPosition = obligation.getDepositByReserve(collTokenReserve.address);
-
+  const debtPosition = obligation.getBorrowByReserve(debtReserveAddress);
+  const collPosition = obligation.getDepositByReserve(collReserveAddress);
   if (!debtPosition) {
-    throw new Error(`No debt position found for ${debtTokenReserve.symbol} in obligation`);
+    throw new Error(`No USDC debt in obligation ${obligationAddress}`);
   }
   if (!collPosition) {
-    throw new Error(`No collateral position found for ${collTokenReserve.symbol} in obligation`);
+    throw new Error(`No JLP collateral in obligation ${obligationAddress}`);
   }
+  console.log(`Current debt: ${debtPosition.amount.div(debtTokenReserve.getMintFactor())} ${debtTokenReserve.symbol}`);
+  console.log(
+    `Current collateral: ${collPosition.amount.div(collTokenReserve.getMintFactor())} ${collTokenReserve.symbol}`
+  );
 
-  console.log(`Current debt: ${debtPosition.amount} ${debtTokenReserve.symbol}`);
-  console.log(`Current collateral: ${collPosition.amount} ${collTokenReserve.symbol}`);
+  // Amount to repay (in debt token units, not lamports). Closing-position overrides this.
+  // `debtPosition.amount` is lamports; convert to token units before handing to the SDK.
+  const repayAmount = isClosingPosition ? debtPosition.amount.div(debtTokenReserve.getMintFactor()) : new Decimal(1); // 1 USDC
 
-  // Amount to repay (in debt token units, not lamports)
-  // For partial repay, specify an amount less than total debt
-  // For full repay, use the full debt amount or set isClosingPosition = true
-  const repayAmount = isClosingPosition ? debtPosition.amount : new Decimal(1); // Repay 1 USDC
+  // ---- User LUT setup ----
+  // Ensure the user metadata + LUT are initialised, extended to cover the JLP/USDC reserve pair.
+  const [userLookupTable, setupTxIxs] = await getUserLutAddressAndSetupIxs(
+    market,
+    wallet,
+    none(),
+    true, // extend LUT
+    [{ coll: collReserveAddress, debt: debtReserveAddress }], // multiply reserve pair
+    []
+  );
+  await executeUserSetupLutsTransactions(c, wallet, setupTxIxs);
 
-  // Setup user LUT if needed (first time setup)
-  const [userLookupTable, txsIxs] = await getUserLutAddressAndSetupIxs(market, wallet, none(), false);
-
-  await executeUserSetupLutsTransactions(c, wallet, txsIxs);
-
-  const currentSlot = await c.rpc.getSlot().send();
-
+  // ---- Scope refresh + price ----
+  const scopeConfiguration = { scope, scopeConfigurations: await scope.getAllConfigurations() };
+  const scopeRefreshIx = await getScopeRefreshIxForObligationAndReserves(
+    market,
+    collTokenReserve,
+    debtTokenReserve,
+    obligation,
+    scopeConfiguration
+  );
   const priceCollToDebt = await getTokenPriceFromBirdeye(kswapSdk, collTokenMint, debtTokenMint);
-  console.log(`Price ${collTokenReserve.symbol} to ${debtTokenReserve.symbol}: ${priceCollToDebt}`);
+  console.log(`Price ${collTokenReserve.symbol}->${debtTokenReserve.symbol}: ${priceCollToDebt}`);
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc, 'processed');
+  const currentSlot = currentLedgerInstant.slot;
+
+  // ---- Pick the flash-borrow side ----
+  // The client expresses intent only: which obligation, which reserves, repay amount, price.
+  // The SDK helper computes the required-lamport size for each side and verifies:
+  //   - `isFlashLoanEnabled(reserve)` (raw flashLoanFeeSf != U64_MAX), AND
+  //   - reserve has enough available liquidity for the required size,
+  // preferring coll when both are viable.
+  // An explicit `FLASH_BORROW_TYPE=coll|debt` env var still overrides for testing.
+  const envOverride = getFlashBorrowTypeFromEnv();
+  const flashBorrowType: FlashBorrowType =
+    envOverride ??
+    determineRepayWithCollFlashBorrowType({
+      kaminoMarket: market,
+      obligation,
+      debtReserveAddress,
+      collReserveAddress,
+      repayAmount,
+      priceCollToDebt: new Decimal(priceCollToDebt),
+      slippagePct: new Decimal(slippageBps / 100),
+      currentSlot,
+      currentLedgerInstant,
+      referrer: none(),
+    });
+  console.log(`flashBorrowType: ${flashBorrowType}${envOverride ? ' (env override)' : ' (SDK pick)'}`);
+
+  // ---- KSwap quoter + swapper ----
+  // For repay-with-coll the swap is always coll → debt regardless of flashBorrowType.
+  const preferredMaxAccounts = 20;
+  const quoter = getKswapQuoter(kswapSdk, wallet.address, slippageBps, collTokenReserve, debtTokenReserve);
+  const swapper = getKswapSwapper(kswapSdk, wallet.address, slippageBps, preferredMaxAccounts);
 
   const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
 
-  const preferredMaxAccounts = 20;
-
-  // Build repay with collateral transaction using KSwap
-  const repayWithCollResults = await getRepayWithCollIxs({
+  // ---- Build routes ----
+  const repayRoutes = await getRepayWithCollIxs<RouteOutput>({
     kaminoMarket: market,
-    debtTokenMint,
-    collTokenMint,
+    debtReserveAddress,
+    collReserveAddress,
     owner: wallet,
     obligation,
     referrer: none(),
     currentSlot,
+    currentLedgerInstant,
     repayAmount,
     isClosingPosition,
     budgetAndPriorityFeeIxs: computeIxs,
-    scopeRefreshIx: [],
+    scopeRefreshIx,
     useV2Ixs: true,
-    // KSwap Quoter: estimates the swap price for calculating amounts
-    // For repay with coll, we swap collateral (input) -> debt (output)
-    quoter: getKswapQuoter(kswapSdk, wallet.address, slippageBps, collTokenReserve, debtTokenReserve),
-    // KSwap Swapper: returns actual swap instructions
-    swapper: getKswapSwapper(kswapSdk, wallet.address, slippageBps, preferredMaxAccounts),
+    quoter,
+    swapper,
+    slippagePct: new Decimal(slippageBps / 100),
+    flashBorrowType,
   });
 
-  // Collect klend LUTs
+  // ---- Gather klend LUTs ----
+  const kaminoResources = await getKaminoResources();
   const klendLutKeys: Address[] = [];
   if (userLookupTable) {
     klendLutKeys.push(userLookupTable);
   }
-
-  // Add repay-with-coll LUTs from CDN
-  const repayWithCollLutKeys = getRepayWithCollLuts(kaminoResources.repayWithCollLUTs, collTokenMint, debtTokenMint);
-  klendLutKeys.push(...repayWithCollLutKeys);
-
-  // Fetch all klend LUT accounts
+  klendLutKeys.push(JLP_MARKET_LUT);
+  klendLutKeys.push(...getRepayWithCollLuts(kaminoResources.repayWithCollLUTs, collTokenMint, debtTokenMint));
   const klendLutAccounts = klendLutKeys.length > 0 ? await fetchAllAddressLookupTable(c.rpc, klendLutKeys) : [];
 
-  // Simulate all routes and select the best one
-  const bestRoute = await simulateAndSelectBestRoute(
-    c.rpc,
-    wallet.address,
-    repayWithCollResults,
-    klendLutKeys,
-    klendLutAccounts
-  );
+  // ---- Simulate + pick best route ----
+  const best = await simulateAndSelectBestRoute(c.rpc, wallet.address, repayRoutes, klendLutKeys, klendLutAccounts);
+  const { ixs, swapInputs, initialInputs, flashLoanInfo } = best.route;
 
-  const { ixs, swapInputs, initialInputs } = bestRoute.route;
-
-  console.log(`\n--- Best Route: ${bestRoute.routerType} ---`);
-  console.log(`Repaying: ${repayAmount} ${debtTokenReserve.symbol}`);
+  console.log(`\n--- Tx Summary ---`);
+  console.log(`Router:           ${best.routerType}`);
+  console.log(`Flash borrow:     ${flashLoanInfo.flashBorrowReserve} (fee: ${flashLoanInfo.flashLoanFee})`);
+  console.log(`Repay amount:     ${repayAmount} ${debtTokenReserve.symbol}`);
   console.log(
-    `Swap input: ${swapInputs.inputAmountLamports.div(collTokenReserve.getMintFactor())} ${collTokenReserve.symbol}`
+    `Swap in:          ${swapInputs.inputAmountLamports.div(collTokenReserve.getMintFactor())} ${
+      collTokenReserve.symbol
+    }`
   );
   console.log(
-    `Flash borrow: ${initialInputs.debtRepayAmountLamports.div(debtTokenReserve.getMintFactor())} ${
+    `Swap min-out:     ${swapInputs.minOutAmountLamports!.div(debtTokenReserve.getMintFactor())} ${
       debtTokenReserve.symbol
     }`
   );
   console.log(
-    `Max withdrawable collateral: ${initialInputs.maxCollateralWithdrawLamports.div(collTokenReserve.getMintFactor())} ${
+    `Max withdrawable: ${initialInputs.maxCollateralWithdrawLamports.div(collTokenReserve.getMintFactor())} ${
       collTokenReserve.symbol
     }`
   );
+  console.log(`Instructions:     ${ixs.length}`);
+  console.log(`Lookup tables:    ${best.lutAddresses.length} (${best.lutAddresses.join(', ')})`);
 
-  console.log(`\nUsing lookup tables: ${bestRoute.luts.join(', ')}`);
-  console.log(`Instructions: ${ixs.length} (programs: ${[...new Set(ixs.map((ix) => ix.programAddress))].join(', ')})`);
-
+  // ---- Send ----
   console.log('\nSending transaction...');
-  const txHash = await sendAndConfirmTx(
-    c,
-    wallet,
-    ixs,
-    [],
-    [...bestRoute.luts, ...klendLutKeys],
-    'repayWithCollateral'
-  );
-
+  const txHash = await sendAndConfirmTx(c, wallet, ixs, [], best.lutAddresses, 'repayWithCollateralJlpUsdc');
   console.log('\n--- Success ---');
-  console.log('Transaction hash:', txHash);
-  console.log(`View on Solscan: https://solscan.io/tx/${txHash}`);
+  console.log(`tx: ${txHash}`);
+  console.log(`https://solscan.io/tx/${txHash}`);
 })().catch(async (e) => {
   console.error('Error:', e);
   process.exit(1);

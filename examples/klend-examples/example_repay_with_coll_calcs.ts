@@ -1,11 +1,21 @@
-import { getComputeBudgetAndPriorityFeeIxs, getRepayWithCollSwapInputs } from '@kamino-finance/klend-sdk';
+import {
+  getComputeBudgetAndPriorityFeeIxs,
+  getCurrentLedgerInstant,
+  getRepayWithCollSwapInputs,
+  noopSigner,
+} from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from '../utils/connection';
-import { MAIN_MARKET, PYUSD_MINT, USDC_MINT } from '../utils/constants';
+import {
+  MAIN_MARKET,
+  PYUSD_MINT,
+  PYUSD_RESERVE_MAIN_MARKET,
+  USDC_MINT,
+  USDC_RESERVE_MAIN_MARKET,
+} from '../utils/constants';
 import { getMarket } from '../utils/helpers';
 import { address, none } from '@solana/kit';
 import Decimal from 'decimal.js';
 import { getJupiterQuoter } from '../utils/jup_utils';
-import { noopSigner } from '@kamino-finance/klend-sdk/dist/utils/signer';
 
 // For this example we are only using JLP/USDC multiply
 // This can be also used for leverage by using the correct type when creating the obligation
@@ -14,15 +24,16 @@ import { noopSigner } from '@kamino-finance/klend-sdk/dist/utils/signer';
 
   const market = await getMarket({ rpc: c.rpc, marketPubkey: MAIN_MARKET });
 
-  const collTokenMint = USDC_MINT;
-  const debtTokenMint = PYUSD_MINT;
-  const debtTokenReserve = market.getReserveByMint(debtTokenMint);
-  const collTokenReserve = market.getReserveByMint(collTokenMint);
+  const collTokenReserveAddress = USDC_RESERVE_MAIN_MARKET;
+  const debtTokenReserveAddress = PYUSD_RESERVE_MAIN_MARKET;
+  const debtTokenReserve = market.getExistingReserveByAddress(debtTokenReserveAddress);
+  const collTokenReserve = market.getExistingReserveByAddress(collTokenReserveAddress);
   const slippagePct = 0.01;
 
   const obligation = await market.getObligationByAddress(address('5LvkLen8kPwJvaUBaHbfmNNxFCdxYxVsPPjY6VQQQoMK'));
 
-  const currentSlot = await c.rpc.getSlot().send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc, 'processed');
+  const currentSlot = currentLedgerInstant.slot;
 
   const repayAmount = obligation?.borrows.get(debtTokenReserve!.address!)?.amount || new Decimal(0);
 
@@ -35,13 +46,15 @@ import { noopSigner } from '@kamino-finance/klend-sdk/dist/utils/signer';
     referrer: none(),
     isClosingPosition: false,
     kaminoMarket: market,
-    debtTokenMint: debtTokenMint,
+    debtReserveAddress: debtTokenReserveAddress,
     obligation: obligation!,
     currentSlot,
-    collTokenMint: collTokenMint,
+    currentLedgerInstant,
+    collReserveAddress: collTokenReserveAddress,
     quoter: getJupiterQuoter(slippagePct * 100, collTokenReserve!, debtTokenReserve!),
     useV2Ixs: true,
     scopeRefreshIx: [],
+    slippagePct: new Decimal(slippagePct),
   });
   console.log('estimatedStats', estimatedStats);
 })().catch(async (e) => {

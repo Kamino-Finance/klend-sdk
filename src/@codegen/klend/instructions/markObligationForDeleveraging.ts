@@ -22,9 +22,10 @@ export interface MarkObligationForDeleveragingArgs {
 }
 
 export interface MarkObligationForDeleveragingAccounts {
-  riskCouncil: TransactionSigner
+  lendingMarketOwner: TransactionSigner
   obligation: Address
   lendingMarket: Address
+  instructionSysvarAccount: Address
 }
 
 export const layout = borsh.struct<MarkObligationForDeleveragingArgs>([
@@ -39,12 +40,13 @@ export function markObligationForDeleveraging(
 ) {
   const keys: Array<AccountMeta | AccountSignerMeta> = [
     {
-      address: accounts.riskCouncil.address,
+      address: accounts.lendingMarketOwner.address,
       role: 2,
-      signer: accounts.riskCouncil,
+      signer: accounts.lendingMarketOwner,
     },
     { address: accounts.obligation, role: 1 },
     { address: accounts.lendingMarket, role: 0 },
+    { address: accounts.instructionSysvarAccount, role: 0 },
     ...remainingAccounts,
   ]
   const buffer = Buffer.alloc(1000)

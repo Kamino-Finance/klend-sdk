@@ -57,6 +57,7 @@ export interface VaultStateFields {
   allowAllocationsInWhitelistedReservesOnly: number
   allowInvestInWhitelistedReservesOnly: number
   padding2: Array<number>
+  depositCap: BN
   rewardInfo: types.VaultRewardInfoFields
   padding3: Array<BN>
 }
@@ -103,6 +104,7 @@ export interface VaultStateJSON {
   allowAllocationsInWhitelistedReservesOnly: number
   allowInvestInWhitelistedReservesOnly: number
   padding2: Array<number>
+  depositCap: string
   rewardInfo: types.VaultRewardInfoJSON
   padding3: Array<string>
 }
@@ -149,6 +151,7 @@ export class VaultState {
   readonly allowAllocationsInWhitelistedReservesOnly: number
   readonly allowInvestInWhitelistedReservesOnly: number
   readonly padding2: Array<number>
+  readonly depositCap: BN
   readonly rewardInfo: types.VaultRewardInfo
   readonly padding3: Array<BN>
 
@@ -197,7 +200,8 @@ export class VaultState {
     borshAddress("firstLossCapitalFarm"),
     borsh.u8("allowAllocationsInWhitelistedReservesOnly"),
     borsh.u8("allowInvestInWhitelistedReservesOnly"),
-    borsh.array(borsh.u8(), 14, "padding2"),
+    borsh.array(borsh.u8(), 6, "padding2"),
+    borsh.u64("depositCap"),
     types.VaultRewardInfo.layout("rewardInfo"),
     borsh.array(borsh.u128(), 232, "padding3"),
   ])
@@ -248,6 +252,7 @@ export class VaultState {
     this.allowInvestInWhitelistedReservesOnly =
       fields.allowInvestInWhitelistedReservesOnly
     this.padding2 = fields.padding2
+    this.depositCap = fields.depositCap
     this.rewardInfo = new types.VaultRewardInfo({ ...fields.rewardInfo })
     this.padding3 = fields.padding3
   }
@@ -347,6 +352,7 @@ export class VaultState {
       allowInvestInWhitelistedReservesOnly:
         dec.allowInvestInWhitelistedReservesOnly,
       padding2: dec.padding2,
+      depositCap: dec.depositCap,
       rewardInfo: types.VaultRewardInfo.fromDecoded(dec.rewardInfo),
       padding3: dec.padding3,
     })
@@ -399,6 +405,7 @@ export class VaultState {
       allowInvestInWhitelistedReservesOnly:
         this.allowInvestInWhitelistedReservesOnly,
       padding2: this.padding2,
+      depositCap: this.depositCap.toString(),
       rewardInfo: this.rewardInfo.toJSON(),
       padding3: this.padding3.map((item) => item.toString()),
     }
@@ -451,6 +458,7 @@ export class VaultState {
       allowInvestInWhitelistedReservesOnly:
         obj.allowInvestInWhitelistedReservesOnly,
       padding2: obj.padding2,
+      depositCap: new BN(obj.depositCap),
       rewardInfo: types.VaultRewardInfo.fromJSON(obj.rewardInfo),
       padding3: obj.padding3.map((item) => new BN(item)),
     })

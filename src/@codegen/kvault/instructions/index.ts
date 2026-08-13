@@ -5,16 +5,36 @@ export type {
   UpdateReserveAllocationArgs,
   UpdateReserveAllocationAccounts,
 } from "./updateReserveAllocation"
+export { updateReserveAllocationV2 } from "./updateReserveAllocationV2"
+export type {
+  UpdateReserveAllocationV2Args,
+  UpdateReserveAllocationV2Accounts,
+} from "./updateReserveAllocationV2"
 export { deposit } from "./deposit"
 export type { DepositArgs, DepositAccounts } from "./deposit"
+export { depositWithMinSharesOut } from "./depositWithMinSharesOut"
+export type {
+  DepositWithMinSharesOutArgs,
+  DepositWithMinSharesOutAccounts,
+} from "./depositWithMinSharesOut"
 export { buy } from "./buy"
 export type { BuyArgs, BuyAccounts } from "./buy"
+export { buyWithMinSharesOut } from "./buyWithMinSharesOut"
+export type {
+  BuyWithMinSharesOutArgs,
+  BuyWithMinSharesOutAccounts,
+} from "./buyWithMinSharesOut"
 export { withdraw } from "./withdraw"
 export type { WithdrawArgs, WithdrawAccounts } from "./withdraw"
 export { sell } from "./sell"
 export type { SellArgs, SellAccounts } from "./sell"
 export { invest } from "./invest"
 export type { InvestAccounts } from "./invest"
+export { investWithMaxAmount } from "./investWithMaxAmount"
+export type {
+  InvestWithMaxAmountArgs,
+  InvestWithMaxAmountAccounts,
+} from "./investWithMaxAmount"
 export { updateVaultConfig } from "./updateVaultConfig"
 export type {
   UpdateVaultConfigArgs,

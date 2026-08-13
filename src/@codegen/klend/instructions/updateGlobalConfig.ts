@@ -25,6 +25,7 @@ export interface UpdateGlobalConfigArgs {
 export interface UpdateGlobalConfigAccounts {
   globalAdmin: TransactionSigner
   globalConfig: Address
+  instructionSysvarAccount: Address
 }
 
 export const layout = borsh.struct([
@@ -45,6 +46,7 @@ export function updateGlobalConfig(
       signer: accounts.globalAdmin,
     },
     { address: accounts.globalConfig, role: 1 },
+    { address: accounts.instructionSysvarAccount, role: 0 },
     ...remainingAccounts,
   ]
   const buffer = Buffer.alloc(1000)

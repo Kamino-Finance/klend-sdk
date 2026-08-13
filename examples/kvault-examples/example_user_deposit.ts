@@ -15,11 +15,22 @@ import { sendAndConfirmTx } from '../utils/tx';
   // read the vault state so we can use the LUT in the tx
   const vaultState = await vault.getState();
 
+  // pre-load vault reserves once and pass to all methods (avoids redundant RPC calls)
+  const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
+  const farmState = await kaminoManager.loadVaultFarmState(vaultState);
+
   // deposit 100 USDC into the vault
   const usdcToDeposit = new Decimal(100.0);
-  const depositIx = await kaminoManager.depositToVaultIxs(user, vault, usdcToDeposit);
+  const depositIx = await kaminoManager.depositToVaultIxs(
+    user,
+    vault,
+    usdcToDeposit,
+    vaultReservesMap,
+    farmState,
+    null
+  );
 
-  // send in the tx the instruction to deposit + the instruction to stake the shares into the vault farm if the vault has any farm
+  // send the deposit ixs, then the vault-farm stake ixs if the vault farm was provided
   await sendAndConfirmTx(
     c,
     user,

@@ -64,7 +64,7 @@ export function sell(
   const keys: Array<AccountMeta | AccountSignerMeta> = [
     {
       address: accounts.withdrawFromAvailable.user.address,
-      role: 3,
+      role: 2,
       signer: accounts.withdrawFromAvailable.user,
     },
     { address: accounts.withdrawFromAvailable.vaultState, role: 1 },

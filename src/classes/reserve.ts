@@ -1,4 +1,5 @@
 /* eslint-disable max-classes-per-file */
+import BN from 'bn.js';
 import {
   Address,
   Instruction,
@@ -14,26 +15,33 @@ import {
   GetAccountInfoApi,
   GetMultipleAccountsApi,
   SolanaRpcApiMainnet,
+  Base58EncodedBytes,
 } from '@solana/kit';
 import Decimal from 'decimal.js';
 import {
   AllOracleAccounts,
   DEFAULT_PUBLIC_KEY,
+  fetchReserveRewardsMaxAprBps,
+  FixedRateReserveKind,
+  FloatRateReserveKind,
   getTokenOracleData,
   globalConfigPda,
   INITIAL_COLLATERAL_RATE,
   lendingMarketAuthPda,
   MarketWithAddress,
+  MaturityTimestampReserveKind,
   MIN_INITIAL_DEPOSIT,
   ONE_HUNDRED_PCT_IN_BPS,
   reservePdas,
+  ReserveKind,
   SLOTS_PER_SECOND,
   SLOTS_PER_YEAR,
   TokenOracleData,
   U64_MAX,
 } from '../utils';
 import { FeeCalculation, Fees, ReserveDataType, ReserveFarmInfo, ReserveRewardYield, ReserveStatus } from './shared';
-import { Reserve, ReserveFields } from '../@codegen/klend/accounts';
+import { Reserve, ReserveFields, WithdrawTicket } from '../@codegen/klend/accounts';
+import { PROGRAM_ID } from '../@codegen/klend/programId';
 import {
   CurvePointFields,
   ReserveConfig,
@@ -42,7 +50,14 @@ import {
   UpdateConfigModeKind,
   WithdrawalCaps,
 } from '../@codegen/klend/types';
-import { calculateAPYFromAPR, getBorrowRate, lamportsToNumberDecimal, parseTokenSymbol, positiveOrZero } from './utils';
+import {
+  calculateAPYFromAPR,
+  getBorrowRate,
+  lamportsToNumberDecimal,
+  parseTokenSymbol,
+  positiveOrZero,
+  toBuffer,
+} from './utils';
 import { CompositeConfigItem, ConfigUpdater, PriorityOrderedConfigUpdater } from './configItems';
 import { bfToDecimal, Fraction } from './fraction';
 import { ActionType } from './action';
@@ -55,19 +70,42 @@ import {
   UpdateReserveConfigArgs,
 } from '../lib';
 import { aprToApy, KaminoPrices } from '@kamino-finance/kliquidity-sdk';
-import { FarmAndKey, FarmState, RewardInfo } from '@kamino-finance/farms-sdk';
+import { FarmAndKey, RewardInfo } from '@kamino-finance/farms-sdk';
 import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
-import { maxBigInt } from '../utils/bigint';
+import { maxBigInt, minBigInt } from '../utils/bigint';
 import { getCreateAccountInstruction, SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
-import { SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
+import { SYSVAR_INSTRUCTIONS_ADDRESS, SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 import { noopSigner } from '../utils/signer';
-import { getRewardPerTimeUnitSecond } from './farm_utils';
+import { fetchFarmStateOrNull, getRewardPerTimeUnitSecond } from './farm_utils';
 import { Scope, ScopeEntryMetadata } from '@kamino-finance/scope-sdk';
-import { fetchKaminoCdnData, KaminoCdnData } from '../utils/readCdnData';
+import { kaminoCdn, KaminoCdnData } from './cdnClient';
 
 export type KaminoReserveRpcApi = GetProgramAccountsApi & GetAccountInfoApi & GetMultipleAccountsApi;
 
 export const DEFAULT_RECENT_SLOT_DURATION_MS = 400;
+
+/**
+ * The terms a fresh fixed-term borrow into a fixed-rate reserve is (re-)originated with. Surfaced by SDK flows that
+ * originate or reset fixed-term debt (swap-debt into a fixed-rate target, swap-collateral via-debt re-borrow, leverage
+ * deposit/increase) so clients can show the user the new term/rate/maturity. All fields are `undefined` for
+ * variable/open-term reserves.
+ */
+export type FixedTermReorigination = {
+  /**
+   * The reserve's configured fixed debt term, in seconds. This is orthogonal to the reserve-wide
+   * `debt_maturity_timestamp`, matching the term that on-chain early-repay penalty calculations use.
+   */
+  newDebtTermSeconds: number;
+  /**
+   * The independent reserve-wide `debt_maturity_timestamp`, or `0` when none is configured. This is not the
+   * per-borrow term end; that derives from `last_borrowed_at + newDebtTermSeconds`.
+   */
+  newDebtTermMaturityTimestamp: number;
+  /** The fixed borrow rate (bps) the new debt accrues at. */
+  newBorrowRateBps: number;
+  /** Whether any prior auto-rollover config is dropped on (re)origination — always true for the SDK's flash flows. */
+  rolloverReset: boolean;
+};
 
 export class KaminoReserve {
   state: Reserve;
@@ -82,13 +120,29 @@ export class KaminoReserve {
   private readonly recentSlotDurationMs: number;
 
   private metadata?: ScopeEntryMetadata[];
+  private reserveKind: ReserveKind;
+  private scaledUiAmountMultiplier: Decimal;
+  /** The klend program that owns this reserve (and its parent lending market); used by all account fetches this instance makes. */
+  private readonly programId: Address;
+
+  /**
+   * Snapshot of the parent market's `LendingMarket::reserveRewardsMaxAprBps`, captured when this
+   * instance was constructed and, like `state` itself, refreshed on {@link reloadState}/{@link load}.
+   *
+   * All estimation methods use it to mirror the rewards-distribution step of the on-chain
+   * `refresh_reserve`; `0` means the market has reserve rewards disabled.
+   */
+  reserveRewardsMaxAprBps: number;
 
   constructor(
     state: Reserve,
     address: Address,
     tokenOraclePrice: TokenOracleData,
     connection: Rpc<KaminoReserveRpcApi>,
-    recentSlotDurationMs: number
+    recentSlotDurationMs: number,
+    reserveRewardsMaxAprBps: number,
+    scaledUiAmountMultiplier: Decimal = new Decimal(1),
+    programId: Address = PROGRAM_ID
   ) {
     this.state = state;
     this.address = address;
@@ -97,6 +151,10 @@ export class KaminoReserve {
     this.rpc = connection;
     this.symbol = parseTokenSymbol(state.config.tokenInfo.name);
     this.recentSlotDurationMs = recentSlotDurationMs;
+    this.reserveKind = KaminoReserve.createReserveKind(state);
+    this.reserveRewardsMaxAprBps = reserveRewardsMaxAprBps;
+    this.scaledUiAmountMultiplier = scaledUiAmountMultiplier;
+    this.programId = programId;
   }
 
   static initialize(
@@ -105,38 +163,125 @@ export class KaminoReserve {
     tokenOraclePrice: TokenOracleData,
     rpc: Rpc<KaminoReserveRpcApi>,
     recentSlotDurationMs: number,
-    cdnResourcesData?: KaminoCdnData
+    reserveRewardsMaxAprBps: number,
+    cdnResourcesData?: KaminoCdnData,
+    scaledUiAmountMultiplier?: Decimal,
+    programId?: Address
   ): KaminoReserve {
-    const reserve = new KaminoReserve(state, address, tokenOraclePrice, rpc, recentSlotDurationMs);
+    const reserve = new KaminoReserve(
+      state,
+      address,
+      tokenOraclePrice,
+      rpc,
+      recentSlotDurationMs,
+      reserveRewardsMaxAprBps,
+      scaledUiAmountMultiplier,
+      programId
+    );
     reserve.stats = reserve.formatReserveData(state, cdnResourcesData?.deprecatedAssets ?? []);
     return reserve;
   }
 
+  /**
+   * Construct a KaminoReserve from raw on-chain account data.
+   * Use this when you have raw bytes from a WebSocket notification and
+   * an existing oracle price (e.g. from a cached price query).
+   *
+   * Note that the reserve account bytes alone are not enough for fully accurate reserve math:
+   * `reserveRewardsMaxAprBps` lives on the parent `LendingMarket` account, so callers must supply
+   * a snapshot of it read from that account (`kaminoMarket.state.reserveRewardsMaxAprBps`) —
+   * do not hardcode a value. Long-lived subscribers should refresh the snapshot when the market
+   * account changes.
+   *
+   * Throws if the data does not match the Reserve discriminator.
+   */
+  static fromAccountData(
+    reserveAddress: Address,
+    data: Buffer | Uint8Array,
+    tokenOraclePrice: TokenOracleData,
+    rpc: Rpc<KaminoReserveRpcApi>,
+    recentSlotDurationMs: number,
+    reserveRewardsMaxAprBps: number,
+    cdnResourcesData?: KaminoCdnData,
+    programId?: Address
+  ): KaminoReserve {
+    const state = Reserve.decode(toBuffer(data));
+    return KaminoReserve.initialize(
+      reserveAddress,
+      state,
+      tokenOraclePrice,
+      rpc,
+      recentSlotDurationMs,
+      reserveRewardsMaxAprBps,
+      cdnResourcesData,
+      undefined,
+      programId
+    );
+  }
+
+  /**
+   * `reserveRewardsMaxAprBps` is the parent market's `LendingMarket::reserveRewardsMaxAprBps`;
+   * pass it when you already hold the market state to save a network call, otherwise the
+   * reserve's lending market is fetched to read it.
+   */
   static async initializeFromAddress(
     address: Address,
     rpc: Rpc<KaminoReserveRpcApi>,
     recentSlotDurationMs: number,
     reserveState?: Reserve,
-    oracleAccounts?: AllOracleAccounts
+    oracleAccounts?: AllOracleAccounts,
+    scaledUiAmountMultiplier?: Decimal,
+    reserveRewardsMaxAprBps?: number,
+    programId: Address = PROGRAM_ID
   ) {
-    const reserve = reserveState ?? (await Reserve.fetch(rpc, address));
+    const reserve = reserveState ?? (await Reserve.fetch(rpc, address, programId));
     if (reserve === null) {
       throw new Error(`Reserve account ${address} does not exist`);
     }
 
-    const tokenOracleDataWithReserve = await getTokenOracleData(
-      rpc,
-      [{ address: address, state: reserve }],
-      oracleAccounts
-    );
+    const [tokenOracleDataWithReserve, rewardsMaxAprBps] = await Promise.all([
+      getTokenOracleData(rpc, [{ address: address, state: reserve }], oracleAccounts),
+      reserveRewardsMaxAprBps !== undefined
+        ? Promise.resolve(reserveRewardsMaxAprBps)
+        : fetchReserveRewardsMaxAprBps(rpc, reserve.lendingMarket, programId),
+    ]);
     if (!tokenOracleDataWithReserve[0]) {
       throw new Error('Token oracle data not found');
     }
     const tokenOracleData = tokenOracleDataWithReserve[0]![1]!;
-    return new KaminoReserve(reserve, address, tokenOracleData, rpc, recentSlotDurationMs);
+    return new KaminoReserve(
+      reserve,
+      address,
+      tokenOracleData,
+      rpc,
+      recentSlotDurationMs,
+      rewardsMaxAprBps,
+      scaledUiAmountMultiplier,
+      programId
+    );
+  }
+
+  static createReserveKind(state: Reserve): ReserveKind {
+    const { debtTermSeconds, debtMaturityTimestamp } = state.config;
+    if (debtTermSeconds.eqn(0) && debtMaturityTimestamp.eqn(0)) {
+      return new FloatRateReserveKind();
+    } else if (!debtTermSeconds.eqn(0)) {
+      const borrowRateBps = state.config.borrowRateCurve.points[0]?.borrowRateBps || 0;
+      return new FixedRateReserveKind(debtTermSeconds, borrowRateBps);
+    } else {
+      return new MaturityTimestampReserveKind(debtMaturityTimestamp);
+    }
   }
 
   /// GETTERS
+
+  /**
+   * @returns the scaledUiAmount multiplier for this reserve's liquidity mint.
+   * Returns 1 for mints without the ScaledUiAmountConfig extension.
+   */
+  getScaledUiAmountMultiplier(): Decimal {
+    return this.scaledUiAmountMultiplier;
+  }
 
   /**
    * @returns the parsed token symbol of the reserve
@@ -166,10 +311,58 @@ export class KaminoReserve {
   }
 
   /**
-   * @returns the available liquidity amount of the reserve in lamports
+   * @returns the available liquidity amount of the reserve in lamports, as credited at the last refresh
+   *
+   * This is what the reserve holds right now, so it is the amount to use when mirroring the program at
+   * the reserve's current state (see {@link getQueuedLiquidityAmountAtCurrentRate}). Use
+   * {@link getEstimatedLiquidityAvailableAmount} when projecting to a later slot instead.
    */
   getLiquidityAvailableAmount(): Decimal {
-    return new Decimal(this.state.liquidity.availableAmount.toString());
+    return new Decimal(this.state.liquidity.totalAvailableAmount.toString());
+  }
+
+  /**
+   * @returns the available liquidity amount of the reserve in lamports, estimated at `slot`: the amount
+   * credited at the last refresh plus whatever a refresh at `slot` would distribute into it
+   *
+   * The on-chain `distribute_rewards` credits `total_available_amount`, so — unlike interest accrual —
+   * the reserve rewards make this amount a function of the slot being asked about. This is the value to
+   * pair with anything derived from {@link getEstimatedCollateralExchangeRate}, so that both sides come
+   * from one simulated refresh.
+   */
+  getEstimatedLiquidityAvailableAmount(slot: Slot, referralFeeBps: number): Decimal {
+    return this.getLiquidityAvailableAmount().add(this.getEstimatedDistributedRewards(slot, referralFeeBps));
+  }
+
+  /** @returns the total amount of ctokens queued for withdrawal */
+  getQueuedCTokens(): Decimal {
+    return new Decimal(this.state.withdrawQueue.queuedCollateralAmount.toString());
+  }
+
+  /**
+   * @returns the total amount of liquidity queued for withdrawal, valued at the exchange rate estimated
+   * for `slot`. Floored, like the on-chain `Reserve::queued_liquidity_amount`.
+   */
+  getQueuedLiquidityAmount(slot: Slot, referralFeeBps: number): Decimal {
+    const queuedCTokens = this.getQueuedCTokens();
+    const exchangeRate = this.getEstimatedCollateralExchangeRate(slot, referralFeeBps);
+    return KaminoReserve.cTokensToLiquidity(queuedCTokens, exchangeRate).floor();
+  }
+
+  /**
+   * @returns the the part of reserve liquidity available for *non-priority* purposes (e.g. borrowing,
+   * regular withdrawals), estimated at `slot`
+   *
+   * Mirrors the on-chain `Reserve::freely_available_liquidity_amount`, which takes the available
+   * liquidity and the value of the withdraw queue from the same refreshed state — so both sides here
+   * come from one simulated refresh.
+   */
+  getFreelyAvailableLiquidityAmount(slot: Slot, referralFeeBps: number): Decimal {
+    const liquidityForQueuedCollateral = this.getQueuedLiquidityAmount(slot, referralFeeBps);
+    return Decimal.max(
+      this.getEstimatedLiquidityAvailableAmount(slot, referralFeeBps).sub(liquidityForQueuedCollateral),
+      new Decimal(0)
+    );
   }
 
   /**
@@ -208,6 +401,34 @@ export class KaminoReserve {
     return new Fraction(this.state.liquidity.pendingReferrerFeesSf).toDecimal();
   }
 
+  // --- Scaled UI amount getters ---
+  // These apply the Token-2022 ScaledUiAmountConfig multiplier for display purposes.
+  // Use these for user-facing amounts; use the raw getters above for calculations.
+
+  getScaledBorrowedAmount(): Decimal {
+    return this.getBorrowedAmount().mul(this.scaledUiAmountMultiplier);
+  }
+
+  getScaledLiquidityAvailableAmount(): Decimal {
+    return this.getLiquidityAvailableAmount().mul(this.scaledUiAmountMultiplier);
+  }
+
+  getScaledTotalSupply(): Decimal {
+    return this.getTotalSupply().mul(this.scaledUiAmountMultiplier);
+  }
+
+  getScaledAccumulatedProtocolFees(): Decimal {
+    return this.getAccumulatedProtocolFees().mul(this.scaledUiAmountMultiplier);
+  }
+
+  getScaledAccumulatedReferrerFees(): Decimal {
+    return this.getAccumulatedReferrerFees().mul(this.scaledUiAmountMultiplier);
+  }
+
+  getScaledPendingReferrerFees(): Decimal {
+    return this.getPendingReferrerFees().mul(this.scaledUiAmountMultiplier);
+  }
+
   /**
    *
    * @returns the flash loan fee percentage of the reserve
@@ -232,7 +453,7 @@ export class KaminoReserve {
    * @returns the fixed interest rate allocated to the host
    */
   getFixedHostInterestRate = (): Decimal => {
-    return new Decimal(this.state.config.hostFixedInterestRateBps).div(10_000);
+    return new Decimal(this.state.config.hostFixedInterestRateBps).div(ONE_HUNDRED_PCT_IN_BPS);
   };
 
   /**
@@ -245,6 +466,16 @@ export class KaminoReserve {
       .sub(this.getAccumulatedProtocolFees())
       .sub(this.getAccumulatedReferrerFees())
       .sub(this.getPendingReferrerFees());
+  }
+
+  /** @returns {@link getTotalSupply} in scaled-fraction units, for exact on-chain-matching fixed-point math */
+  getTotalSupplySf(): BN {
+    return this.state.liquidity.totalAvailableAmount
+      .mul(Fraction.ONE_SF)
+      .add(this.state.liquidity.borrowedAmountSf)
+      .sub(this.state.liquidity.accumulatedProtocolFeesSf)
+      .sub(this.state.liquidity.accumulatedReferrerFeesSf)
+      .sub(this.state.liquidity.pendingReferrerFeesSf);
   }
 
   /**
@@ -264,17 +495,39 @@ export class KaminoReserve {
   }
 
   /**
-   * @Returns estimated cumulative borrow rate of the reserve
+   * @Returns estimated cumulative borrow rate of the reserve.
+   *
+   * This is a running scale factor, not a rate: an obligation's debt is recovered by scaling it by the
+   * ratio between two readings (see the on-chain `ObligationLiquidity::accrue_interest`). It must
+   * therefore grow by the same factor {@link getEstimatedDebtAndSupply} grows the reserve's borrowed
+   * amount by, which is why both take it from {@link compoundInterest}.
    */
   getEstimatedCumulativeBorrowRate(currentSlot: Slot, referralFeeBps: number): Decimal {
-    const currentBorrowRate = new Decimal(this.calculateBorrowAPR(currentSlot, referralFeeBps));
     const slotsElapsed = maxBigInt(currentSlot - BigInt(this.state.lastUpdate.slot.toString()), 0n);
 
-    const compoundInterest = this.approximateCompoundedInterest(currentBorrowRate, slotsElapsed);
+    const { compoundedInterestRate } = this.compoundInterest(slotsElapsed, referralFeeBps);
 
     const previousCumulativeBorrowRate = this.getCumulativeBorrowRate();
 
-    return previousCumulativeBorrowRate.mul(compoundInterest);
+    return previousCumulativeBorrowRate.mul(compoundedInterestRate);
+  }
+
+  /**
+   * Mirrors on-chain `Reserve::calculate_future_cumulative_borrow_rate`.
+   * Projects the cumulative borrow rate to a future slot.
+   */
+  calculateFutureCumulativeBorrowRate(futureSlot: Slot): Decimal {
+    const currentSlot = BigInt(this.state.lastUpdate.slot.toString()) as Slot;
+    const slotsElapsed = maxBigInt(futureSlot - currentSlot, 0n);
+    const hostFixedInterestRate = this.getFixedHostInterestRate();
+    const currentUtilization = this.calculateUtilizationRatio();
+    const curve = truncateBorrowCurve(this.state.config.borrowRateCurve.points);
+    const baseBorrowRate = new Decimal(getBorrowRate(currentUtilization, curve));
+    const currentBorrowRate = baseBorrowRate.add(hostFixedInterestRate);
+    const compoundedInterestRate = this.approximateCompoundedInterest(currentBorrowRate, slotsElapsed);
+    const previousCumulativeBorrowRate = this.getCumulativeBorrowRate();
+
+    return previousCumulativeBorrowRate.mul(compoundedInterestRate);
   }
 
   /**
@@ -306,6 +559,56 @@ export class KaminoReserve {
   }
 
   /**
+   * Computes the amount of liquidity tokens that corresponds to a given amount of cTokens
+   * @param cTokens - the amount of cTokens to convert to liquidity tokens
+   * @param exchangeRate - the exchange rate to use. If not provided, the estimated exchange rate will be used
+   * @param slot - the slot to use to estimate exchange rate. If exchangeRate is provided, this parameter is ignored, if exchangeRate is not provided this parameter is required
+   * @param referralFeeBps - the referral fee percentage to use for the estimated exchange rate. Defaults to 0. If exchangeRate is provided, this parameter is ignored.
+   * @returns the amount of liquidity tokens that corresponds to the given amount of cTokens
+   */
+  cTokensToLiquidity(cTokens: Decimal, slot: Slot, exchangeRate?: Decimal, referralFeeBps: number = 0): Decimal {
+    if (exchangeRate === undefined) {
+      exchangeRate = this.getEstimatedCollateralExchangeRate(slot, referralFeeBps);
+    }
+    return KaminoReserve.cTokensToLiquidity(cTokens, exchangeRate);
+  }
+
+  /**
+   * Computes the amount of liquidity tokens that corresponds to a given amount of cTokens
+   * @param cTokens - the amount of cTokens to convert to liquidity tokens
+   * @param exchangeRate - the exchange rate to use
+   * @returns the amount of liquidity tokens that corresponds to the given amount of cTokens
+   */
+  static cTokensToLiquidity(cTokens: Decimal, exchangeRate: Decimal): Decimal {
+    return cTokens.div(exchangeRate);
+  }
+
+  /**
+   * Computes the amount of cTokens that corresponds to a given amount of liquidity
+   * @param liquidity - the amount of liquidity to convert to cTokens
+   * @param exchangeRate - the exchange rate to use. If not provided, the estimated exchange rate will be used
+   * @param slot - the slot to use to estimate exchange rate. If exchangeRate is provided, this parameter is ignored, if exchangeRate is not provided this parameter is required
+   * @param referralFeeBps - the referral fee percentage to use for the estimated exchange rate. Defaults to 0. If exchangeRate is provided, this parameter is ignored.
+   * @returns the amount of cTokens that corresponds to the given amount of liquidity
+   */
+  liquidityToCTokens(liquidity: Decimal, slot: Slot, exchangeRate?: Decimal, referralFeeBps: number = 0): Decimal {
+    if (exchangeRate === undefined) {
+      exchangeRate = this.getEstimatedCollateralExchangeRate(slot, referralFeeBps);
+    }
+    return KaminoReserve.liquidityToCTokens(liquidity, exchangeRate);
+  }
+
+  /**
+   * Computes the amount of cTokens that corresponds to a given amount of liquidity
+   * @param liquidity - the amount of liquidity to convert to cTokens
+   * @param exchangeRate - the exchange rate to use
+   * @returns the amount of cTokens that corresponds to the given amount of liquidity
+   */
+  static liquidityToCTokens(liquidity: Decimal, exchangeRate: Decimal): Decimal {
+    return liquidity.mul(exchangeRate);
+  }
+
+  /**
    *
    * @returns the total USD value of the existing collateral in the reserve
    */
@@ -326,6 +629,15 @@ export class KaminoReserve {
    */
   getMintFactor(): Decimal {
     return new Decimal(10).pow(this.getMintDecimals());
+  }
+
+  /**
+   * @returns the raw (no borrow factor) market value of the given liquidity amount, in scaled-fraction USD,
+   * mirroring the on-chain `liquidity_amount_to_market_value` (truncating toward zero).
+   */
+  getMarketValueFromLiquidityAmount(liquidityAmount: Fraction): Fraction {
+    const mintFactorSf = new BN(10).pow(new BN(this.getMintDecimals())).mul(Fraction.ONE_SF);
+    return liquidityAmount.mulIntRatio(this.state.liquidity.marketPriceSf, mintFactorSf);
   }
 
   /**
@@ -447,19 +759,252 @@ export class KaminoReserve {
     return this.getWithdrawalCapCurrent(this.state.config.debtWithdrawalCap, currentUnixTimestamp);
   }
 
+  /**
+   * @returns the liquidity (floored, valued at the current collateral exchange rate) the reserve has set aside
+   * to honor queued collateral withdrawals. Mirrors the on-chain `Reserve::queued_liquidity_amount` (current,
+   * non-estimated rate), unlike {@link getQueuedLiquidityAmount} which estimates the rate to a given slot.
+   */
+  getQueuedLiquidityAmountAtCurrentRate(): Decimal {
+    return KaminoReserve.cTokensToLiquidity(this.getQueuedCTokens(), this.getCollateralExchangeRate()).floor();
+  }
+
+  /**
+   * @returns the most restrictive amount of liquidity (a u64 lamport count) that can be borrowed from this
+   * reserve outside any elevation group, mirroring the on-chain
+   * `Reserve::borrowable_liquidity_amount_outside_elevation_group`: the minimum of freely-available liquidity,
+   * the reserve borrow cap, the outside-elevation-group borrow limit, the utilization-rate limit, and the debt
+   * withdrawal cap. Never negative.
+   */
+  getBorrowableLiquidityAmountOutsideElevationGroup(currentUnixTimestamp: number): BN {
+    const toBn = (amount: Decimal): BN => new BN(amount.floor().toFixed());
+    const withdrawalCapActive = !this.state.config.debtWithdrawalCap.configIntervalLengthSeconds.isZero();
+    let withdrawalCapRemaining: BN | null = null;
+    if (withdrawalCapActive) {
+      const capacity = this.getDebtWithdrawalCapCapacity();
+      withdrawalCapRemaining = capacity.lte(0)
+        ? new BN(0)
+        : toBn(capacity.sub(this.getDebtWithdrawalCapCurrent(currentUnixTimestamp)));
+    }
+    return KaminoReserve.computeBorrowableLiquidityOutsideElevationGroup({
+      freelyAvailable: toBn(this.getLiquidityAvailableAmount().sub(this.getQueuedLiquidityAmountAtCurrentRate())),
+      remainingBorrowCap: toBn(this.stats.reserveBorrowLimit.sub(this.getBorrowedAmount())),
+      remainingOutsideElevationLimit: toBn(
+        this.getBorrowLimitOutsideElevationGroup().sub(this.getBorrowedAmountOutsideElevationGroup())
+      ),
+      totalSupply: new Fraction(this.getTotalSupplySf()),
+      totalBorrow: new Fraction(this.state.liquidity.borrowedAmountSf),
+      utilizationLimitPct: this.state.config.utilizationLimitBlockBorrowingAbovePct,
+      withdrawalCapRemaining,
+    });
+  }
+
+  /**
+   * @returns whether the reserve is already over any of its borrow caps - the reserve borrow limit (`>`), the
+   * outside-elevation-group borrow limit (`>`), or the utilization limit (`>=`, which deliberately blocks at
+   * the boundary on-chain). Used by a same-reserve rollover, which re-borrows the same amount and so only
+   * requires the reserve to be within its existing limits rather than to have spare capacity.
+   */
+  isOverBorrowLimits(): boolean {
+    return KaminoReserve.computeIsOverBorrowLimits({
+      borrowedAmount: this.getBorrowedAmount(),
+      reserveBorrowLimit: this.stats.reserveBorrowLimit,
+      borrowedAmountOutsideElevation: this.getBorrowedAmountOutsideElevationGroup(),
+      borrowLimitOutsideElevation: this.getBorrowLimitOutsideElevationGroup(),
+      utilizationLimitPct: this.state.config.utilizationLimitBlockBorrowingAbovePct,
+      totalSupply: this.getTotalSupply(),
+    });
+  }
+
+  /**
+   * Pure form of {@link getBorrowableLiquidityAmountOutsideElevationGroup} (mirrors the on-chain
+   * `Reserve::borrowable_liquidity_amount_outside_elevation_group`): the most restrictive of the integer caps
+   * (freely-available liquidity, the reserve borrow cap, the outside-elevation-group borrow limit, and - when
+   * active - the debt withdrawal cap) together with the utilization-rate limit. The utilization limit is
+   * computed in `Fraction` arithmetic as `(totalSupply * pct% - totalBorrow - DELTA)` floored (or the full
+   * `totalSupply` floored when no limit is configured), matching the program's fixed-point math. The integer
+   * caps are u64 lamport counts; `withdrawalCapRemaining` is null when no withdrawal cap is active. Never
+   * negative.
+   */
+  static computeBorrowableLiquidityOutsideElevationGroup(inputs: {
+    freelyAvailable: BN;
+    remainingBorrowCap: BN;
+    remainingOutsideElevationLimit: BN;
+    totalSupply: Fraction;
+    totalBorrow: Fraction;
+    utilizationLimitPct: number;
+    withdrawalCapRemaining: BN | null;
+  }): BN {
+    const utilizationRateLimit =
+      inputs.utilizationLimitPct > 0
+        ? inputs.totalSupply
+            .mul(Fraction.fromInt(inputs.utilizationLimitPct).mulIntRatio(1, 100)) // * from_percent(pct), truncating
+            .saturatingSub(inputs.totalBorrow)
+            .saturatingSub(new Fraction(new BN(1))) // - Fraction::DELTA (one ulp)
+            .floorToBn()
+        : inputs.totalSupply.floorToBn();
+    const limits = [
+      inputs.freelyAvailable,
+      inputs.remainingBorrowCap,
+      inputs.remainingOutsideElevationLimit,
+      utilizationRateLimit,
+    ];
+    if (inputs.withdrawalCapRemaining !== null) {
+      limits.push(inputs.withdrawalCapRemaining);
+    }
+    return BN.max(
+      limits.reduce((acc, limit) => BN.min(acc, limit)),
+      new BN(0)
+    );
+  }
+
+  /**
+   * Pure form of {@link isOverBorrowLimits}: whether the reserve is over the borrow limit (`>`), the
+   * outside-elevation-group borrow limit (`>`), or the utilization limit (`>=`, which blocks at the boundary).
+   */
+  static computeIsOverBorrowLimits(inputs: {
+    borrowedAmount: Decimal;
+    reserveBorrowLimit: Decimal;
+    borrowedAmountOutsideElevation: Decimal;
+    borrowLimitOutsideElevation: Decimal;
+    utilizationLimitPct: number;
+    totalSupply: Decimal;
+  }): boolean {
+    if (inputs.borrowedAmount.gt(inputs.reserveBorrowLimit)) {
+      return true;
+    }
+    if (inputs.borrowedAmountOutsideElevation.gt(inputs.borrowLimitOutsideElevation)) {
+      return true;
+    }
+    return (
+      inputs.utilizationLimitPct > 0 &&
+      inputs.borrowedAmount.gte(inputs.totalSupply.mul(inputs.utilizationLimitPct).div(100))
+    );
+  }
+
   getBorrowFactor(): Decimal {
     return new Decimal(this.state.config.borrowFactorPct.toString()).div(100);
   }
 
-  calculateSupplyAPR(slot: Slot, referralFeeBps: number) {
-    const currentUtilization = this.calculateUtilizationRatio();
+  /**
+   * @returns the reserve's borrow factor as a {@link Fraction}, mirroring the on-chain `get_borrow_factor`:
+   * `max(1, borrow_factor_pct%)`.
+   */
+  getBorrowFactorFraction(): Fraction {
+    const one = Fraction.fromInt(1);
+    // Truncating percent (`floor(pct * 2^60 / 100)`) to match `Fraction::from_percent`; `Fraction.fromPercent`
+    // rounds to nearest and so diverges by one ulp at borrow factors such as 110%.
+    const borrowFactor = Fraction.fromInt(this.state.config.borrowFactorPct).mulIntRatio(1, 100);
+    return borrowFactor.lt(one) ? one : borrowFactor;
+  }
 
+  /**
+   * Borrow-interest component of the supply APR (i.e. utilization × borrow-rate × (1 − take)).
+   *
+   * Utilization and borrow rate are both evaluated from the same estimated reserve state,
+   * including the rewards distribution implied by {@link reserveRewardsMaxAprBps}.
+   *
+   * Does NOT include the reserve-rewards distribution contribution itself (the inflation-of-cToken-
+   * exchange-rate yield); see {@link calculateTheoreticalReserveRewardsSupplyAPR} for that component. Callers
+   * that want the combined depositor yield should add the two.
+   */
+  calculateSupplyAPR(slot: Slot, referralFeeBps: number) {
+    const currentUtilization = this.getEstimatedUtilizationRatio(slot, referralFeeBps);
     const borrowRate = this.calculateEstimatedBorrowRate(slot, referralFeeBps);
     const protocolTakeRatePct = 1 - this.state.config.protocolTakeRatePct / 100;
     return currentUtilization * borrowRate * protocolTakeRatePct;
   }
 
+  /**
+   * Returns the rewards-distribution component of the supply APR — the annualized rate at
+   * which the on-chain `distribute_rewards` step inflates the cToken exchange rate.
+   *
+   * Exposed separately from {@link calculateSupplyAPR} (which returns the borrow-interest yield
+   * only) so that callers can render or use the two components independently.
+   *
+   * Returns the lesser of:
+   *   - `rewardsAmountPerSlot * SLOTS_PER_YEAR / total_supply` — the configured per-slot drip rate,
+   *   - `reserveRewardsMaxAprBps / FULL_BPS` — the market-level cap.
+   *
+   * Returns `0` only when rewards are configured off (market cap is `0` or RPS is `0`), or
+   * when `total_supply` is zero (no depositors to earn the rate).
+   *
+   * Note on `rewardsAmountAvailable`: the realized rewards yield drops to zero whenever the
+   * on-chain budget is depleted (until an admin tops it up). The SDK cannot predict topup
+   * cadence, so this function returns the **steady-state rate** — what depositors earn while
+   * the budget is non-zero.
+   */
+  calculateTheoreticalReserveRewardsSupplyAPR(slot: Slot, referralFeeBps: number): number {
+    if (this.reserveRewardsMaxAprBps === 0) {
+      return 0;
+    }
+    const rps = new Decimal(this.state.config.rewardsAmountPerSlot.toString());
+    if (rps.isZero()) {
+      return 0;
+    }
+    // On-chain `distribute_rewards` evaluates its APR cap against the post-accrue, pre-distribute
+    // supply (see `programs/klend/src/state/reserve.rs` — `total_supply()` is read before
+    // `total_available_amount` is incremented by the distribution). Use the pre-rewards supply
+    // here too, otherwise we'd be feeding the distribution back into its own denominator and
+    // under-stating the rate.
+    const { totalSupply } = this.getEstimatedDebtAndSupplyPreRewards(slot, referralFeeBps);
+    if (totalSupply.isZero()) {
+      return 0;
+    }
+    const rpsRate = rps.mul(SLOTS_PER_YEAR).div(totalSupply).toNumber();
+    const aprCap = this.reserveRewardsMaxAprBps / ONE_HUNDRED_PCT_IN_BPS;
+    return Math.min(rpsRate, aprCap);
+  }
+
+  /**
+   * Rewards-distribution supply APR the reserve is earning right now: equals
+   * {@link calculateTheoreticalReserveRewardsSupplyAPR} while the on-chain rewards budget is funded, and `0`
+   * once `rewardsAmountAvailable` is depleted (the on-chain `distribute_rewards` step distributes
+   * nothing until an admin tops the budget up).
+   *
+   * Use this for reporting current/actual yield; use {@link calculateTheoreticalReserveRewardsSupplyAPR} for
+   * the steady-state rate (eg. theoretical APY projections).
+   */
+  calculateEffectiveReserveRewardsSupplyAPR(slot: Slot, referralFeeBps: number): number {
+    if (this.state.liquidity.rewardsAmountAvailable.isZero()) {
+      return 0;
+    }
+    return this.calculateTheoreticalReserveRewardsSupplyAPR(slot, referralFeeBps);
+  }
+
+  /**
+   * Mirrors the on-chain `refresh_reserve` (`accrue_interest` → `distribute_rewards`) and returns
+   * the post-refresh debt and supply. The rewards-distribution step is driven by
+   * {@link reserveRewardsMaxAprBps} (`0`, i.e. rewards disabled on the market, makes it a no-op).
+   */
   getEstimatedDebtAndSupply(slot: Slot, referralFeeBps: number): { totalBorrow: Decimal; totalSupply: Decimal } {
+    const slotsElapsed = maxBigInt(slot - BigInt(this.state.lastUpdate.slot.toNumber()), 0n);
+    const { totalBorrow, totalSupply } = this.getEstimatedDebtAndSupplyPreRewards(slot, referralFeeBps);
+    const distributedRewards = this.simulateDistributeRewards(slotsElapsed, totalSupply);
+    return { totalBorrow, totalSupply: totalSupply.add(distributedRewards) };
+  }
+
+  /**
+   * The amount the `distribute_rewards` step of a refresh at `slot` would move out of
+   * `rewardsAmountAvailable` and into the reserve's available liquidity.
+   */
+  private getEstimatedDistributedRewards(slot: Slot, referralFeeBps: number): Decimal {
+    const slotsElapsed = maxBigInt(slot - BigInt(this.state.lastUpdate.slot.toNumber()), 0n);
+    const { totalSupply } = this.getEstimatedDebtAndSupplyPreRewards(slot, referralFeeBps);
+    return this.simulateDistributeRewards(slotsElapsed, totalSupply);
+  }
+
+  /**
+   * Debt and supply after the `accrue_interest` step only — the pre-distribution state.
+   *
+   * This is what the on-chain code sees while accruing interest: the borrow index
+   * ({@link getEstimatedCumulativeBorrowRate}) and the rewards-distribution APR cap
+   * ({@link calculateTheoreticalReserveRewardsSupplyAPR}, {@link simulateDistributeRewards}) are all
+   * evaluated against this state, never against the post-distribution one.
+   */
+  private getEstimatedDebtAndSupplyPreRewards(
+    slot: Slot,
+    referralFeeBps: number
+  ): { totalBorrow: Decimal; totalSupply: Decimal } {
     const slotsElapsed = maxBigInt(slot - BigInt(this.state.lastUpdate.slot.toNumber()), 0n);
     let totalBorrow: Decimal;
     let totalSupply: Decimal;
@@ -468,15 +1013,52 @@ export class KaminoReserve {
       totalSupply = this.getTotalSupply();
     } else {
       const { newDebt, newAccProtocolFees, pendingReferralFees } = this.compoundInterest(slotsElapsed, referralFeeBps);
-      const newTotalSupply = this.getLiquidityAvailableAmount()
+      const postAccrueTotalSupply = this.getLiquidityAvailableAmount()
         .add(newDebt)
         .sub(newAccProtocolFees)
         .sub(this.getAccumulatedReferrerFees())
         .sub(pendingReferralFees);
       totalBorrow = newDebt;
-      totalSupply = newTotalSupply;
+      totalSupply = postAccrueTotalSupply;
     }
     return { totalBorrow, totalSupply };
+  }
+
+  /**
+   * Mirrors on-chain `Reserve::distribute_rewards` (programs/klend/src/state/reserve.rs).
+   *
+   * Computes how much of `rewards_amount_available` would be moved into `total_available_amount`
+   * during a refresh at the given slot, capped by the per-slot RPS budget and the market-level
+   * APR ({@link reserveRewardsMaxAprBps}).
+   *
+   * `postAccrueTotalSupply` must be the supply *after* `accrue_interest` has run for the same
+   * `slotsElapsed` (this is what the on-chain code uses for the APR cap).
+   *
+   * Every quantity the on-chain formula operates on is an integer, so this is computed in `bigint`
+   * to match it exactly: the `total_supply * apr_bps * slots_elapsed` product exceeds the 20
+   * significant digits {@link Decimal} keeps by default long before it exceeds the program's `u128`,
+   * and rounding it would shift the final floor by a lamport.
+   */
+  private simulateDistributeRewards(slotsElapsed: bigint, postAccrueTotalSupply: Decimal): Decimal {
+    const maxAprBps = BigInt(this.reserveRewardsMaxAprBps);
+    const rps = BigInt(this.state.config.rewardsAmountPerSlot.toString());
+    const rewardsAvailable = BigInt(this.state.liquidity.rewardsAmountAvailable.toString());
+    const mintTotalSupply = BigInt(this.state.collateral.mintTotalSupply.toString());
+
+    if (slotsElapsed === 0n || maxAprBps === 0n || rps === 0n || rewardsAvailable === 0n || mintTotalSupply === 0n) {
+      return new Decimal(0);
+    }
+
+    const rawDistribution = rps * slotsElapsed;
+    // APR cap: floor(floor(total_supply) * apr_bps * slots_elapsed / (FULL_BPS * SLOTS_PER_YEAR))
+    // On-chain calls `total_supply().to_floor()` *before* the multiplication
+    // (programs/klend/src/state/reserve.rs::distribute_rewards), so we floor first too; the
+    // program's integer division then truncates the quotient, like `bigint` division does here.
+    const flooredTotalSupply = BigInt(postAccrueTotalSupply.floor().toFixed(0));
+    const aprCap =
+      (flooredTotalSupply * maxAprBps * slotsElapsed) / (BigInt(ONE_HUNDRED_PCT_IN_BPS) * BigInt(SLOTS_PER_YEAR));
+
+    return new Decimal(minBigInt(rawDistribution, aprCap, rewardsAvailable).toString());
   }
 
   getEstimatedAccumulatedProtocolFees(
@@ -658,6 +1240,10 @@ export class KaminoReserve {
     return Decimal.max(new Decimal(0), maxBorrowAmount);
   }
 
+  /**
+   * Simulated borrow rate for a hypothetical deposit/withdraw, evaluated at the rewards-aware
+   * post-action utilization (see {@link reserveRewardsMaxAprBps}).
+   */
   calcSimulatedBorrowRate(
     amount: Decimal,
     action: ActionType,
@@ -671,6 +1257,10 @@ export class KaminoReserve {
     return getBorrowRate(newUtilization, curve) * slotAdjustmentFactor;
   }
 
+  /**
+   * Simulated borrow APR. Same semantics as {@link calcSimulatedBorrowRate} plus the fixed
+   * host interest component.
+   */
   calcSimulatedBorrowAPR(
     amount: Decimal,
     action: ActionType,
@@ -684,6 +1274,12 @@ export class KaminoReserve {
     );
   }
 
+  /**
+   * Borrow-interest component of the supply APR for a simulated deposit/withdraw — symmetric
+   * with {@link calculateSupplyAPR}. Does NOT include the reserve-rewards distribution
+   * component; see {@link calculateTheoreticalReserveRewardsSupplyAPR} for the snapshot rewards rate
+   * (callers can add the two for the combined depositor yield).
+   */
   calcSimulatedSupplyAPR(
     amount: Decimal,
     action: ActionType,
@@ -710,6 +1306,43 @@ export class KaminoReserve {
     return getBorrowRate(currentUtilization, curve) * slotAdjustmentFactor;
   }
 
+  /**
+   * The reserve's peak (worst-case) borrow rate in bps: the maximum point of its borrow-rate curve.
+   * Mirrors on-chain `ReserveConfig::max_borrow_rate_bps`, used to gate borrow-order fills against the
+   * order's max acceptable rate. The borrow-rate curve is a fixed-length on-chain array, so an empty one means
+   * the reserve is misconfigured and this throws.
+   */
+  getMaxBorrowRateBps(): number {
+    const points = this.state.config.borrowRateCurve.points;
+    if (points.length === 0) {
+      throw new Error(`Reserve ${this.address} has an empty borrow rate curve`);
+    }
+    return Math.max(...points.map((point) => point.borrowRateBps));
+  }
+
+  /**
+   * The reserve's remaining debt term in seconds, or `undefined` if it is open-term (a float reserve with neither
+   * a fixed term nor a maturity timestamp). If both `debtTermSeconds` and `debtMaturityTimestamp` are set, the
+   * shorter remaining cap is returned, because the on-chain `fill_borrow_order` instruction checks both.
+   *
+   * @param currentTimestamp current unix time in seconds, used for the seconds-until-maturity case.
+   */
+  getRemainingDebtTermSeconds(currentTimestamp: number): BN | undefined {
+    const { debtTermSeconds, debtMaturityTimestamp } = this.state.config;
+    const termCaps: BN[] = [];
+    if (!debtTermSeconds.eqn(0)) {
+      termCaps.push(debtTermSeconds);
+    }
+    if (!debtMaturityTimestamp.eqn(0)) {
+      termCaps.push(BN.max(debtMaturityTimestamp.sub(new BN(currentTimestamp)), new BN(0)));
+    }
+    return termCaps.length === 0 ? undefined : termCaps.reduce((shortest, cap) => BN.min(shortest, cap));
+  }
+
+  /**
+   * Estimated borrow rate, evaluated at the rewards-aware utilization implied by
+   * {@link reserveRewardsMaxAprBps}.
+   */
   calculateEstimatedBorrowRate(slot: Slot, referralFeeBps: number) {
     const slotAdjustmentFactor = this.slotAdjustmentFactor();
     const estimatedCurrentUtilization = this.getEstimatedUtilizationRatio(slot, referralFeeBps);
@@ -717,10 +1350,76 @@ export class KaminoReserve {
     return getBorrowRate(estimatedCurrentUtilization, curve) * slotAdjustmentFactor;
   }
 
+  /**
+   * Borrow APR (curve-driven borrow rate + fixed host interest). The utilization that feeds
+   * the curve is computed with the rewards-distribution simulation of
+   * {@link reserveRewardsMaxAprBps} applied.
+   */
   calculateBorrowAPR(slot: Slot, referralFeeBps: number) {
     const slotAdjustmentFactor = this.slotAdjustmentFactor();
     const borrowRate = this.calculateEstimatedBorrowRate(slot, referralFeeBps);
     return borrowRate + this.getFixedHostInterestRate().toNumber() * slotAdjustmentFactor;
+  }
+
+  calculateBorrowAPRFixedRate() {
+    if (!this.reserveKind.isFixedRate()) {
+      throw new Error(
+        'calculateBorrowAPRFixedRate should only be called for fixed rate reserves; for float rate reserves, see calculateBorrowAPR'
+      );
+    }
+    const slotAdjustmentFactor = this.slotAdjustmentFactor();
+    const borrowRate =
+      (this.reserveKind as FixedRateReserveKind).borrowRateBps / ONE_HUNDRED_PCT_IN_BPS +
+      this.getFixedHostInterestRate().toNumber();
+    return borrowRate * slotAdjustmentFactor;
+  }
+
+  /**
+   * For a fixed-rate (fixed-term) reserve, returns the terms a fresh borrow into this reserve would be (re-)originated
+   * with, so callers can surface that an obligation's debt term/rate/maturity is being (re)stamped. A direct borrow
+   * stamps `last_borrowed_at = now` and does NOT carry over any prior auto-rollover config (so `rolloverReset` is
+   * always true for the SDK's flash-based flows). Returns `undefined` for open-term (variable) reserves.
+   *
+   * `debt_term_seconds` and `debt_maturity_timestamp` are independent on-chain axes: a direct borrow stamps the full
+   * configured term for early-repay calculations, while the reserve-wide maturity remains an absolute timestamp.
+   */
+  getFixedTermReorigination(): FixedTermReorigination | undefined {
+    if (!this.reserveKind.isFixedRate()) {
+      return undefined;
+    }
+    const kind = this.reserveKind as FixedRateReserveKind;
+    const configTermSeconds = kind.debtTermSeconds.toNumber();
+    return {
+      newDebtTermSeconds: configTermSeconds,
+      newDebtTermMaturityTimestamp: this.state.config.debtMaturityTimestamp.toNumber(),
+      newBorrowRateBps: kind.borrowRateBps,
+      rolloverReset: true,
+    };
+  }
+
+  /**
+   * Throws if a fresh borrow into this reserve would be rejected on-chain because the reserve-wide debt maturity has
+   * been reached (`ReserveDebtMaturityReached`). No-op for reserves without a configured `debt_maturity_timestamp`.
+   * Use this to preflight the (re-)origination of debt before building a swap-debt / swap-collateral / leverage tx so
+   * callers get a clear error instead of an opaque on-chain revert.
+   *
+   * This low-level helper retains a wall-clock default, but transaction builders pass the block time from a
+   * `LedgerInstant` fetched at the same commitment as their loaded state. Other callers that need a deterministic
+   * clock should likewise pass a cluster-derived `currentTimestamp` (e.g. from `getBlockTime`). The on-chain check
+   * runs against cluster time at execution, so a borrow that crosses maturity after this preflight still fails
+   * cleanly at simulation with the on-chain error.
+   *
+   * @param currentTimestamp unix seconds (defaults to the current wall clock)
+   */
+  assertCanOriginateDebt(currentTimestamp: number = Math.floor(Date.now() / 1000)): void {
+    const debtMaturityTimestamp = this.state.config.debtMaturityTimestamp;
+    if (!debtMaturityTimestamp.eqn(0) && debtMaturityTimestamp.lten(currentTimestamp)) {
+      throw new Error(
+        `Reserve ${this.address} (${this.symbol}) has reached its debt maturity timestamp ` +
+          `(${debtMaturityTimestamp.toString()} <= ${currentTimestamp}); new borrows are rejected on-chain ` +
+          `(ReserveDebtMaturityReached). Cannot originate debt into this reserve.`
+      );
+    }
   }
 
   /**
@@ -742,6 +1441,15 @@ export class KaminoReserve {
    */
   getCTokenMint(): Address {
     return this.state.collateral.mintPubkey;
+  }
+
+  /**
+   * Returns the reserve kind (FloatRateReserveKind or FixedRateReserveKind) for this reserve.
+   *
+   * @returns The reserve kind instance
+   */
+  getKind(): ReserveKind {
+    return this.reserveKind;
   }
 
   calculateFees(
@@ -792,18 +1500,31 @@ export class KaminoReserve {
   }
 
   async load(tokenOraclePrice: TokenOracleData) {
-    const [parsedData, cdnResourcesData] = await Promise.all([
-      Reserve.fetch(this.rpc, this.address),
-      fetchKaminoCdnData(),
+    await this.reloadState();
+    this.tokenOraclePrice = tokenOraclePrice;
+  }
+
+  async reloadState() {
+    // the parent lending market of a reserve never changes, so its rewards cap can be
+    // re-fetched in parallel with the reserve account itself
+    const [parsedData, cdnResourcesData, reserveRewardsMaxAprBps] = await Promise.all([
+      Reserve.fetch(this.rpc, this.address, this.programId),
+      kaminoCdn.getData(),
+      fetchReserveRewardsMaxAprBps(this.rpc, this.state.lendingMarket, this.programId),
     ]);
     if (!parsedData) {
       throw Error(`Unable to parse data of reserve ${this.symbol}`);
     }
     this.state = parsedData;
-    this.tokenOraclePrice = tokenOraclePrice;
     this.stats = this.formatReserveData(parsedData, cdnResourcesData?.deprecatedAssets ?? []);
+    this.reserveRewardsMaxAprBps = reserveRewardsMaxAprBps;
   }
 
+  /**
+   * Borrow-interest supply APY (does not include reserve-rewards distribution; see
+   * {@link calculateTheoreticalReserveRewardsSupplyAPR} for that). The borrow rate that feeds this is
+   * evaluated at the rewards-aware utilization (see {@link reserveRewardsMaxAprBps}).
+   */
   totalSupplyAPY(currentSlot: Slot) {
     const { stats } = this;
     if (!stats) {
@@ -813,6 +1534,10 @@ export class KaminoReserve {
     return calculateAPYFromAPR(this.calculateSupplyAPR(currentSlot, 0));
   }
 
+  /**
+   * Borrow APY. The curve-driven borrow rate is evaluated at the rewards-aware utilization
+   * (see {@link reserveRewardsMaxAprBps}).
+   */
   totalBorrowAPY(currentSlot: Slot) {
     const { stats } = this;
     if (!stats) {
@@ -822,19 +1547,28 @@ export class KaminoReserve {
     return calculateAPYFromAPR(this.calculateBorrowAPR(currentSlot, 0));
   }
 
-  async loadFarmStates(farmsProgramId?: Address) {
+  totalBorrowAPYFixedRate() {
+    const { stats } = this;
+    if (!stats) {
+      throw Error('KaminoMarket must call loadRewards.');
+    }
+
+    return calculateAPYFromAPR(this.calculateBorrowAPRFixedRate());
+  }
+
+  async loadFarmStates(_farmsProgramId?: Address) {
     if (!this.farmData.fetched) {
       const farmStates: FarmAndKey[] = [];
       const debtFarmAddress = this.getDebtFarmAddress();
       if (isSome(debtFarmAddress)) {
-        const farmState = await FarmState.fetch(this.rpc, debtFarmAddress.value, farmsProgramId);
+        const farmState = await fetchFarmStateOrNull(this.rpc, debtFarmAddress.value);
         if (farmState !== null) {
           farmStates.push({ farmState, key: debtFarmAddress.value });
         }
       }
       const collateralFarmAddress = this.getCollateralFarmAddress();
       if (isSome(collateralFarmAddress)) {
-        const farmState = await FarmState.fetch(this.rpc, collateralFarmAddress.value, farmsProgramId);
+        const farmState = await fetchFarmStateOrNull(this.rpc, collateralFarmAddress.value);
         if (farmState !== null) {
           farmStates.push({ farmState, key: collateralFarmAddress.value });
         }
@@ -855,7 +1589,7 @@ export class KaminoReserve {
     for (const farmAndKey of this.farmData.farms) {
       const isDebtReward = this.state.farmDebt === farmAndKey.key;
       for (const rewardInfo of farmAndKey.farmState.rewardInfos.filter(
-        (x) => x.token.mint !== DEFAULT_PUBLIC_KEY && !x.rewardsAvailable.isZero()
+        (x) => x.token.mint !== DEFAULT_PUBLIC_KEY && x.rewardsAvailable !== 0n
       )) {
         const { apy, apr } = this.calculateRewardYield(
           prices,
@@ -958,6 +1692,7 @@ export class KaminoReserve {
     slotsElapsed: bigint,
     referralFeeBps: number
   ): {
+    compoundedInterestRate: Decimal;
     newDebt: Decimal;
     netNewDebt: Decimal;
     variableProtocolFee: Decimal;
@@ -996,6 +1731,7 @@ export class KaminoReserve {
     const pendingReferralFees = this.getPendingReferrerFees().add(maxReferralFees);
 
     return {
+      compoundedInterestRate,
       newDebt,
       netNewDebt,
       variableProtocolFee,
@@ -1012,7 +1748,6 @@ export class KaminoReserve {
    * https://github.com/Kamino-Finance/klend/blob/release/1.3.0/programs/klend/src/state/reserve.rs#L1026
    * @param rate
    * @param elapsedSlots
-   * @private
    */
   private approximateCompoundedInterest(rate: Decimal, elapsedSlots: bigint): Decimal {
     const base = rate.div(SLOTS_PER_YEAR);
@@ -1025,21 +1760,18 @@ export class KaminoReserve {
         return base.add(1).mul(base.add(1));
       case 3n:
         return base.add(1).mul(base.add(1)).mul(base.add(1));
-      case 4n:
-        // eslint-disable-next-line no-case-declarations
+      case 4n: {
         const pow2 = base.add(1).mul(base.add(1));
         return pow2.mul(pow2);
+      }
     }
     const exp = elapsedSlots;
     const expMinus1 = exp - 1n;
     const expMinus2 = exp - 2n;
 
-    const basePow2 = base.mul(base);
-    const basePow3 = basePow2.mul(base);
-
     const firstTerm = base.mul(exp.toString());
-    const secondTerm = basePow2.mul(exp.toString()).mul(expMinus1.toString()).div(2);
-    const thirdTerm = basePow3.mul(exp.toString()).mul(expMinus1.toString()).mul(expMinus2.toString()).div(6);
+    const secondTerm = firstTerm.mul(base).mul(expMinus1.toString()).div(2);
+    const thirdTerm = secondTerm.mul(base).mul(expMinus2.toString()).div(3);
 
     return new Decimal(1).add(firstTerm).add(secondTerm).add(thirdTerm);
   }
@@ -1174,6 +1906,82 @@ export class KaminoReserve {
 
     return available;
   }
+
+  /**
+   * Fetches all withdraw tickets for this reserve (across all users).
+   *
+   * Useful for computing "queued before you" by comparing ticket sequence numbers.
+   *
+   * @param programId - The lending program ID (defaults to the program that owns this reserve)
+   * @returns Array of all withdraw tickets for this reserve
+   */
+  async getAllWithdrawTickets(programId: Address = this.programId): Promise<WithdrawTicket[]> {
+    const tickets = await this.rpc
+      .getProgramAccounts(programId, {
+        filters: [
+          {
+            dataSize: BigInt(WithdrawTicket.layout.span + 8),
+          },
+          {
+            memcmp: {
+              offset: 48n, // reserve field offset (8 disc + 8 sequence + 32 owner)
+              bytes: this.address.toString() as Base58EncodedBytes,
+              encoding: 'base58',
+            },
+          },
+        ],
+        encoding: 'base64',
+      })
+      .send();
+
+    return tickets.map((ticket) => {
+      if (ticket.account === null) {
+        throw new Error(`WithdrawTicket account ${ticket.pubkey} does not exist`);
+      }
+      return WithdrawTicket.decode(Buffer.from(ticket.account.data[0], 'base64'));
+    });
+  }
+
+  /**
+   * Fetches all withdraw tickets for this reserve owned by the given user.
+   *
+   * @param userWallet - The user's wallet address
+   * @param programId - The lending program ID (defaults to the program that owns this reserve)
+   * @returns Array of withdraw tickets for the user on this reserve
+   */
+  async getWithdrawTicketsForUser(userWallet: Address, programId: Address = this.programId): Promise<WithdrawTicket[]> {
+    const tickets = await this.rpc
+      .getProgramAccounts(programId, {
+        filters: [
+          {
+            dataSize: BigInt(WithdrawTicket.layout.span + 8),
+          },
+          {
+            memcmp: {
+              offset: 16n, // owner field offset (8 bytes discriminator + 8 bytes sequenceNumber)
+              bytes: userWallet.toString() as Base58EncodedBytes,
+              encoding: 'base58',
+            },
+          },
+          {
+            memcmp: {
+              offset: 48n, // reserve field offset (8 + 8 + 32)
+              bytes: this.address.toString() as Base58EncodedBytes,
+              encoding: 'base58',
+            },
+          },
+        ],
+        encoding: 'base64',
+      })
+      .send();
+
+    return tickets.map((ticket) => {
+      if (ticket.account === null) {
+        throw new Error(`WithdrawTicket account ${ticket.pubkey} does not exist`);
+      }
+      return WithdrawTicket.decode(Buffer.from(ticket.account.data[0], 'base64'));
+    });
+  }
 }
 
 const truncateBorrowCurve = (points: CurvePointFields[]): [number, number][] => {
@@ -1228,6 +2036,7 @@ export async function createReserveIxs(
     collateralTokenProgram: TOKEN_PROGRAM_ADDRESS,
     systemProgram: SYSTEM_PROGRAM_ADDRESS,
     rent: SYSVAR_RENT_ADDRESS,
+    instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
   };
 
   const initReserveIx = initReserve(accounts, undefined, programId);
@@ -1256,6 +2065,7 @@ export async function updateReserveConfigIx(
     lendingMarket: marketAddress,
     reserve: reserveAddress,
     globalConfig,
+    instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
   };
 
   return updateReserveConfig(args, accounts, undefined, programId);
@@ -1286,7 +2096,7 @@ export const RESERVE_CONFIG_UPDATER = new ConfigUpdater(UpdateConfigMode.fromDec
   [UpdateConfigMode.UpdateSwitchboardFeed.kind]: config.tokenInfo.switchboardConfiguration.priceAggregator,
   [UpdateConfigMode.UpdateSwitchboardTwapFeed.kind]: config.tokenInfo.switchboardConfiguration.twapAggregator,
   [UpdateConfigMode.UpdateBorrowRateCurve.kind]: config.borrowRateCurve,
-  [UpdateConfigMode.UpdateEntireReserveConfig.kind]: [], // technically `config` would be a valid thing here, but we actually do NOT want entire config update among ixs produced for field-by-field updates
+  [UpdateConfigMode.DeprecatedUpdateEntireReserveConfig.kind]: [], // technically `config` would be a valid thing here, but we actually do NOT want entire config update among ixs produced for field-by-field updates
   [UpdateConfigMode.UpdateDebtWithdrawalCap.kind]: new CompositeConfigItem(
     config.debtWithdrawalCap.configCapacity,
     config.debtWithdrawalCap.configIntervalLengthSeconds
@@ -1324,6 +2134,10 @@ export const RESERVE_CONFIG_UPDATER = new ConfigUpdater(UpdateConfigMode.fromDec
   [UpdateConfigMode.UpdateBlockCTokenUsage.kind]: config.blockCtokenUsage,
   [UpdateConfigMode.UpdateDebtMaturityTimestamp.kind]: config.debtMaturityTimestamp,
   [UpdateConfigMode.UpdateDebtTermSeconds.kind]: config.debtTermSeconds,
+  [UpdateConfigMode.UpdateEarlyRepayRemainingInterestPct.kind]: config.earlyRepayRemainingInterestPct,
+  [UpdateConfigMode.UpdateReserveEmergencyMode.kind]: config.emergencyMode,
+  [UpdateConfigMode.UpdateRewardsAmountPerSlot.kind]: config.rewardsAmountPerSlot,
+  [UpdateConfigMode.UpdateReservePermissionedOps.kind]: config.permissionedOps,
 }));
 
 export const ENTIRE_RESERVE_CONFIG_UPDATER = new PriorityOrderedConfigUpdater(RESERVE_CONFIG_UPDATER);
@@ -1363,20 +2177,14 @@ export function parseForChangesReserveConfigAndGetIxs(
     buildReserveConfigPriority(currentConfig, reserveConfig)
   );
 
-  const filteredUpdates = encodedConfigUpdates.filter((encodedConfigUpdate) => {
-    if (isGlobalAdminOnly(encodedConfigUpdate.mode) && !globalAdminSigner) {
-      console.warn(
-        `WARN: Skipping ${encodedConfigUpdate.mode.kind}. Global admin must update this parameter separately.`
-      );
-      return false;
-    }
-    return true;
-  });
-
   return Promise.all(
-    filteredUpdates.map(async (encodedConfigUpdate) => {
+    encodedConfigUpdates.map(async (encodedConfigUpdate) => {
       const requiresGlobalAdmin = isGlobalAdminOnly(encodedConfigUpdate.mode);
-
+      if (requiresGlobalAdmin && !globalAdminSigner) {
+        throw new Error(
+          `Global admin signer is required for update mode ${encodedConfigUpdate.mode.kind} (${encodedConfigUpdate.mode.discriminator})`
+        );
+      }
       const signer = requiresGlobalAdmin ? globalAdminSigner! : lendingMarketOwner;
       const ix = await updateReserveConfigIx(
         signer,
@@ -1413,7 +2221,7 @@ export function shouldSkipValidation(mode: UpdateConfigModeKind, reserve: Reserv
   }
 
   const isUsed =
-    reserve.liquidity.availableAmount.gtn(MIN_INITIAL_DEPOSIT) ||
+    reserve.liquidity.totalAvailableAmount.gtn(MIN_INITIAL_DEPOSIT) ||
     reserve.liquidity.borrowedAmountSf.gtn(0) ||
     reserve.collateral.mintTotalSupply.gtn(MIN_INITIAL_DEPOSIT);
   const isUsageBlocked = reserve.config.depositLimit.isZero() && reserve.config.borrowLimit.isZero();
@@ -1436,20 +2244,25 @@ export function buildReserveConfigPriority(previous: ReserveConfig | undefined, 
   const currentLiquidationThreshold = previous?.liquidationThresholdPct ?? 0;
   const liquidationThresholdIncreasing = changed.liquidationThresholdPct > currentLiquidationThreshold;
   const autodeleverageDisabling = (previous?.autodeleverageEnabled ?? 0) !== 0 && changed.autodeleverageEnabled === 0;
-  return (mode: UpdateConfigModeKind) => priorityOf(mode, liquidationThresholdIncreasing, autodeleverageDisabling);
+  const maxLiquidationBonusShouldUpdateFirst = changed.minLiquidationBonusBps > (previous?.maxLiquidationBonusBps ?? 0);
+  return (mode: UpdateConfigModeKind) =>
+    priorityOf(mode, liquidationThresholdIncreasing, autodeleverageDisabling, maxLiquidationBonusShouldUpdateFirst);
 }
 
 // Lowest priority gets updated first
 export function priorityOf(
   mode: UpdateConfigModeKind,
   liquidationThresholdIncreasing: boolean = false,
-  autodeleverageDisabling: boolean = false
+  autodeleverageDisabling: boolean = false,
+  maxLiquidationBonusShouldUpdateFirst: boolean = false
 ): number {
   switch (mode.discriminator) {
     case UpdateConfigMode.UpdateScopePriceFeed.discriminator:
-      return 0;
-    case UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator:
+    case UpdateConfigMode.UpdatePythPrice.discriminator:
+    case UpdateConfigMode.UpdateSwitchboardFeed.discriminator:
     case UpdateConfigMode.UpdateTokenInfoScopeChain.discriminator:
+    case UpdateConfigMode.UpdateTokenInfoScopeTwap.discriminator:
+    case UpdateConfigMode.UpdateSwitchboardTwapFeed.discriminator:
     case UpdateConfigMode.UpdateTokenInfoLowerHeuristic.discriminator:
     case UpdateConfigMode.UpdateTokenInfoUpperHeuristic.discriminator:
     case UpdateConfigMode.UpdateTokenInfoExpHeuristic.discriminator:
@@ -1457,9 +2270,6 @@ export function priorityOf(
     case UpdateConfigMode.UpdateTokenInfoName.discriminator:
     case UpdateConfigMode.UpdateTokenInfoPriceMaxAge.discriminator:
     case UpdateConfigMode.UpdateTokenInfoTwapMaxAge.discriminator:
-    case UpdateConfigMode.UpdatePythPrice.discriminator:
-    case UpdateConfigMode.UpdateSwitchboardFeed.discriminator:
-    case UpdateConfigMode.UpdateSwitchboardTwapFeed.discriminator:
       return 0;
     // When disabling autodeleverage, it must be disabled before params can be zeroed out;
     // when enabling, params must be set first (non-zero) before autodeleverage can be enabled
@@ -1469,8 +2279,6 @@ export function priorityOf(
       return priorityOf(new UpdateConfigMode.UpdateAutodeleverageEnabled()) + (autodeleverageDisabling ? 1 : -1);
     case UpdateConfigMode.UpdateAutodeleverageEnabled.discriminator:
       return 4;
-    case UpdateConfigMode.UpdateBorrowFactor.discriminator:
-      return 6;
     case UpdateConfigMode.UpdateLoanToValuePct.discriminator:
       return 8;
     // LiquidationThreshold >= LTV must always hold
@@ -1484,10 +2292,10 @@ export function priorityOf(
     case UpdateConfigMode.UpdateMinLiquidationBonusBps.discriminator:
       return 62;
     case UpdateConfigMode.UpdateDepositLimit.discriminator:
-    case UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator:
-      return 63;
     case UpdateConfigMode.UpdateBorrowLimit.discriminator:
       return 63;
+    case UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator:
+      return maxLiquidationBonusShouldUpdateFirst ? 61 : 63;
     default:
       return 10;
   }

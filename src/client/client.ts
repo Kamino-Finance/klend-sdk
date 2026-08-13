@@ -12,6 +12,7 @@ import {
 } from '../lib';
 import { address, Base58EncodedBytes } from '@solana/kit';
 import BN from 'bn.js';
+import { LendingMarket } from '../@codegen/klend/accounts';
 import { getMedianSlotDurationInMsFromLastEpochs, parseTokenSymbol } from '../classes/utils';
 import { initEnv, parseEnv, SendTxMode } from './tx/CliEnv';
 import { getMarket } from './services/market';
@@ -23,6 +24,7 @@ import { downloadUserMetadatasWithFilter } from './services/userMetadata';
 import { initFarmsForReserve } from './commands/initFarmsForReserve';
 import { printReserve } from './commands/printReserve';
 import { printAllReserveAccounts } from './commands/printAllReserveAccounts';
+import { processTx } from './tx/processor';
 
 dotenv.config({
   path: `.env${process.env.ENV ? '.' + process.env.ENV : ''}`,
@@ -36,14 +38,14 @@ async function main() {
   commands
     .command('print-borrow-rate')
     .option(`--rpc <string>`, 'Custom RPC URL')
-    .requiredOption(`--token <string>`, 'The token symbol')
+    .requiredOption(`--reserveAddress <string>`, 'The reserve address')
     .requiredOption(`--market <string>`, 'The lending market address')
     .option(`--env <string>`, 'Environment: mainnet-beta (default), staging, devnet')
-    .action(async ({ rpc, token, market, env: envFlag }) => {
+    .action(async ({ rpc, reserveAddress, market, env: envFlag }) => {
       const env = await initEnv(parseEnv(envFlag), undefined, false, undefined, rpc);
       const kaminoMarket = await getMarket(env.c.rpc, address(market), env.klendProgramId);
 
-      const reserve = kaminoMarket.getReserveBySymbol(token);
+      const reserve = kaminoMarket.getReserveByAddress(address(reserveAddress));
 
       const slot = await env.c.rpc.getSlot().send();
 
@@ -68,7 +70,7 @@ async function main() {
         count++;
         console.log(
           address.toString(),
-          lendingMarketAccount.riskCouncil.toString(),
+          lendingMarketAccount.emergencyCouncil.toString(),
           lendingMarketAccount.autodeleverageEnabled,
           lendingMarketAccount.individualAutodeleverageMarginCallPeriodSecs.toString()
         );
@@ -145,11 +147,11 @@ async function main() {
     .option(`--rpc <string>`, 'Custom RPC URL')
     .requiredOption(`--market <string>`, 'The lending market address')
     .option(`--reserve <string>`, 'Reserve address')
-    .option(`--symbol <string>`, 'Symbol (optional)')
+    .requiredOption(`--reserve <string>`, 'Reserve address')
     .option(`--env <string>`, 'Environment: mainnet-beta (default), staging, devnet')
-    .action(async ({ rpc, market, reserve, symbol, env: envFlag }) => {
+    .action(async ({ rpc, market, reserve, env: envFlag }) => {
       const env = await initEnv(parseEnv(envFlag), undefined, false, undefined, rpc);
-      await printReserve(env.c.rpc, address(market), env.klendProgramId, reserve, symbol);
+      await printReserve(env.c.rpc, address(market), env.klendProgramId, reserve);
     });
 
   commands
@@ -165,56 +167,56 @@ async function main() {
     .command('deposit')
     .option(`--rpc <string>`, 'Custom RPC URL')
     .requiredOption(`--owner <string>`, 'Owner keypair file')
-    .requiredOption(`--token <string>`, 'Token symbol')
+    .requiredOption(`--reserveAddress <string>`, 'Reserve address')
     .requiredOption(`--amount <string>`, 'Amount to deposit')
     .requiredOption(`--market <string>`, 'The lending market address')
     .option(`--env <string>`, 'Environment: mainnet-beta (default), staging, devnet')
-    .action(async ({ rpc, owner, token, amount, market, env: envFlag }) => {
+    .action(async ({ rpc, owner, reserveAddress, amount, market, env: envFlag }) => {
       const depositAmount = new BN(amount);
       const env = await initEnv(parseEnv(envFlag), owner, false, undefined, rpc);
-      await deposit(env, 'execute', token, depositAmount, address(market));
+      await deposit(env, 'execute', reserveAddress, depositAmount, address(market));
     });
 
   commands
     .command('withdraw')
     .option(`--rpc <string>`, 'Custom RPC URL')
     .requiredOption(`--owner <string>`, 'Owner keypair file')
-    .requiredOption(`--token <string>`, 'Token symbol')
+    .requiredOption(`--reserveAddress <string>`, 'Reserve address')
     .requiredOption(`--amount <string>`, 'Amount to withdraw')
     .requiredOption(`--market <string>`, 'The lending market address')
     .option(`--env <string>`, 'Environment: mainnet-beta (default), staging, devnet')
-    .action(async ({ rpc, owner, token, amount, market, env: envFlag }) => {
+    .action(async ({ rpc, owner, reserveAddress, amount, market, env: envFlag }) => {
       const withdrawAmount = new BN(amount);
       const env = await initEnv(parseEnv(envFlag), owner, false, undefined, rpc);
-      await withdraw(env, 'execute', token, withdrawAmount, address(market));
+      await withdraw(env, 'execute', reserveAddress, withdrawAmount, address(market));
     });
 
   commands
     .command('borrow')
     .option(`--rpc <string>`, 'Custom RPC URL')
     .requiredOption(`--owner <string>`, 'Owner keypair file')
-    .requiredOption(`--token <string>`, 'Token symbol')
+    .requiredOption(`--reserveAddress <string>`, 'Reserve address')
     .requiredOption(`--amount <string>`, 'Amount to borrow')
     .requiredOption(`--market <string>`, 'The lending market address')
     .option(`--env <string>`, 'Environment: mainnet-beta (default), staging, devnet')
-    .action(async ({ rpc, owner, token, amount, market, env: envFlag }) => {
+    .action(async ({ rpc, owner, reserveAddress, amount, market, env: envFlag }) => {
       const borrowAmount = new BN(amount);
       const env = await initEnv(parseEnv(envFlag), owner, false, undefined, rpc);
-      await borrow(env, 'execute', token, borrowAmount, address(market));
+      await borrow(env, 'execute', reserveAddress, borrowAmount, address(market));
     });
 
   commands
     .command('repay')
     .option(`--rpc <string>`, 'Custom RPC URL')
     .requiredOption(`--owner <string>`, 'Owner keypair file')
-    .requiredOption(`--token <string>`, 'Token symbol')
+    .requiredOption(`--reserveAddress <string>`, 'Reserve address')
     .requiredOption(`--amount <string>`, 'Amount to repay')
     .requiredOption(`--market <string>`, 'The lending market address')
     .option(`--env <string>`, 'Environment: mainnet-beta (default), staging, devnet')
-    .action(async ({ rpc, owner, token, amount, market, env: envFlag }) => {
+    .action(async ({ rpc, owner, reserveAddress, amount, market, env: envFlag }) => {
       const repayAmount = new BN(amount);
       const env = await initEnv(parseEnv(envFlag), owner, false, undefined, rpc);
-      await repay(env, 'execute', token, repayAmount, address(market));
+      await repay(env, 'execute', reserveAddress, repayAmount, address(market));
     });
 
   commands
@@ -339,7 +341,8 @@ async function main() {
         programId
       );
 
-      const obligations = await kaminoMarket!.getAllUserObligationsForReserve(address(user), address(reserve));
+      const slot = await env.c.rpc.getSlot().send();
+      const obligations = await kaminoMarket!.getAllUserObligationsForReserve(address(user), address(reserve), slot);
 
       for (const obligation of obligations) {
         console.log('obligation address: ', obligation.obligationAddress.toString());
@@ -367,6 +370,39 @@ async function main() {
       const obligation = await kaminoMarket!.getUserVanillaObligation(address(user));
 
       console.log('obligation address: ', obligation ? obligation?.obligationAddress.toString() : 'null');
+    });
+
+  commands
+    .command('update-borrow-order-flags')
+    .option(`--rpc <string>`, 'Custom RPC URL')
+    .requiredOption(`--owner <string>`, 'Owner keypair file')
+    .requiredOption(`--market <string>`, 'The lending market address')
+    .requiredOption(`--enabled <boolean>`, 'Enable or disable borrow orders (true/false)', (v) => v === 'true')
+    .option(`--min-bo-fill-value <string>`, 'Minimum borrow order fill value (u64)')
+    .option(`--multisig`, 'Whether to use multisig or not -> prints bs58 txn')
+    .option(`--simulate`, 'Whether to simulate the transaction or not')
+    .option(`--env <string>`, 'Environment: mainnet-beta (default), staging, devnet')
+    .action(async ({ rpc, owner, market, enabled, minBoFillValue, multisig, simulate, env: envFlag }) => {
+      const env = await initEnv(parseEnv(envFlag), owner, multisig, undefined, rpc);
+      const kaminoMarket = await getMarket(env.c.rpc, address(market), env.klendProgramId);
+      const signer = await env.getSigner(kaminoMarket);
+      const mode: SendTxMode = simulate ? 'simulate' : multisig ? 'multisig' : 'execute';
+      const enabledValue = enabled ? 1 : 0;
+      const newMarket = new LendingMarket({
+        ...kaminoMarket.state,
+        borrowOrderCreationEnabled: enabledValue,
+        borrowOrderExecutionEnabled: enabledValue,
+        ...(minBoFillValue !== undefined && { minBorrowOrderFillValue: new BN(minBoFillValue) }),
+      });
+      const kaminoManager = new KaminoManager(env.c.rpc, DEFAULT_RECENT_SLOT_DURATION_MS, env.klendProgramId);
+      const ixs = kaminoManager.updateLendingMarketIxs(
+        signer,
+        { address: kaminoMarket.address, state: kaminoMarket.state },
+        newMarket
+      );
+
+      await processTx(env.c, signer, ixs, mode);
+      console.log(`Borrow order creation and execution ${enabled ? 'enabled' : 'disabled'} on market ${market}`);
     });
 
   await commands.parseAsync();

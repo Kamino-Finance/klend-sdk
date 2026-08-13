@@ -32,6 +32,7 @@ export interface InitReserveAccounts {
   liquidityTokenProgram: Address
   collateralTokenProgram: Address
   systemProgram: Address
+  instructionSysvarAccount: Address
 }
 
 export function initReserve(
@@ -54,6 +55,7 @@ export function initReserve(
     { address: accounts.liquidityTokenProgram, role: 0 },
     { address: accounts.collateralTokenProgram, role: 0 },
     { address: accounts.systemProgram, role: 0 },
+    { address: accounts.instructionSysvarAccount, role: 0 },
     ...remainingAccounts,
   ]
   const data = DISCRIMINATOR

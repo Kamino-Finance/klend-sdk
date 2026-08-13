@@ -2,11 +2,12 @@ import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
 import Decimal from 'decimal.js/decimal';
-import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } from '@kamino-finance/klend-sdk';
 import {
-  PerformanceFeeBps,
-  ManagementFeeBps,
-} from '@kamino-finance/klend-sdk/dist/@codegen/kvault/types/VaultConfigField';
+  getMedianSlotDurationInMsFromLastEpochs,
+  KaminoManager,
+  KaminoVault,
+  VaultConfigField,
+} from '@kamino-finance/klend-sdk';
 import { sendAndConfirmTx } from '../utils/tx';
 
 (async () => {
@@ -18,19 +19,21 @@ import { sendAndConfirmTx } from '../utils/tx';
 
   // read the vault state so we can use the LUT in the tx
   const vaultState = await kaminoVault.getState();
+  const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
 
   // update the performance fee of the vault
   const perfFeeBps = new Decimal(1000);
   const updatePerfFeeIxs = await kaminoManager.updateVaultConfigIxs(
     kaminoVault,
-    new PerformanceFeeBps(),
-    perfFeeBps.toString()
+    new VaultConfigField.PerformanceFeeBps(),
+    perfFeeBps.toString(),
+    vaultReservesMap
   );
 
   await sendAndConfirmTx(
     c,
     user,
-    [updatePerfFeeIxs.updateVaultConfigIx, ...updatePerfFeeIxs.updateLUTIxs],
+    [updatePerfFeeIxs.updateVaultConfigIx, ...updatePerfFeeIxs.updateLUTIxs, ...updatePerfFeeIxs.extraIxs],
     [],
     [vaultState.vaultLookupTable],
     'Update Vault Performance Fee'
@@ -40,14 +43,15 @@ import { sendAndConfirmTx } from '../utils/tx';
   const mgmtFeeBps = new Decimal(200);
   const updateMgmtFeeIxs = await kaminoManager.updateVaultConfigIxs(
     kaminoVault,
-    new ManagementFeeBps(),
-    mgmtFeeBps.toString()
+    new VaultConfigField.ManagementFeeBps(),
+    mgmtFeeBps.toString(),
+    vaultReservesMap
   );
 
   await sendAndConfirmTx(
     c,
     user,
-    [updateMgmtFeeIxs.updateVaultConfigIx, ...updateMgmtFeeIxs.updateLUTIxs],
+    [updateMgmtFeeIxs.updateVaultConfigIx, ...updateMgmtFeeIxs.updateLUTIxs, ...updateMgmtFeeIxs.extraIxs],
     [],
     [vaultState.vaultLookupTable],
     'Update Vault Management Fee'

@@ -17,10 +17,23 @@ const USDC_VAULT = address('HDsayqAsDWy3QvANGqh2yNraqcD8Fnjgh73Mhb3WRS5E');
   // read the vault state so we can use the LUT in the tx
   const vaultState = await vault.getState();
 
+  // pre-load vault reserves and farm state
+  const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
+  const farmState = await kaminoManager.loadVaultFarmState(vaultState);
+
   // deposit 1 USDC into the vault, with a memo
   const usdcToDeposit = new Decimal(1.0);
   const memo = 'test-memo';
-  const depositIx = await kaminoManager.depositToVaultIxs(user, vault, usdcToDeposit, undefined, undefined, undefined, memo);
+  const depositIx = await kaminoManager.depositToVaultIxs(
+    user,
+    vault,
+    usdcToDeposit,
+    vaultReservesMap,
+    farmState,
+    null,
+    undefined,
+    memo
+  );
 
   // send in the tx the instruction to deposit + the instruction to stake the shares into the vault farm if the vault has any farm
   await sendAndConfirmTx(

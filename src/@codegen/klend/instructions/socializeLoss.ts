@@ -22,7 +22,7 @@ export interface SocializeLossArgs {
 }
 
 export interface SocializeLossAccounts {
-  riskCouncil: TransactionSigner
+  lendingMarketOwner: TransactionSigner
   obligation: Address
   lendingMarket: Address
   reserve: Address
@@ -41,9 +41,9 @@ export function socializeLoss(
 ) {
   const keys: Array<AccountMeta | AccountSignerMeta> = [
     {
-      address: accounts.riskCouncil.address,
+      address: accounts.lendingMarketOwner.address,
       role: 2,
-      signer: accounts.riskCouncil,
+      signer: accounts.lendingMarketOwner,
     },
     { address: accounts.obligation, role: 1 },
     { address: accounts.lendingMarket, role: 0 },

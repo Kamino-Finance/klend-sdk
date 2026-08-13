@@ -142,25 +142,25 @@ export class UpdateGlobalAllowedBorrow {
   }
 }
 
-export interface UpdateRiskCouncilJSON {
-  kind: "UpdateRiskCouncil"
+export interface UpdateEmergencyCouncilJSON {
+  kind: "UpdateEmergencyCouncil"
 }
 
-export class UpdateRiskCouncil {
+export class UpdateEmergencyCouncil {
   static readonly discriminator = 6
-  static readonly kind = "UpdateRiskCouncil"
+  static readonly kind = "UpdateEmergencyCouncil"
   readonly discriminator = 6
-  readonly kind = "UpdateRiskCouncil"
+  readonly kind = "UpdateEmergencyCouncil"
 
-  toJSON(): UpdateRiskCouncilJSON {
+  toJSON(): UpdateEmergencyCouncilJSON {
     return {
-      kind: "UpdateRiskCouncil",
+      kind: "UpdateEmergencyCouncil",
     }
   }
 
   toEncodable() {
     return {
-      UpdateRiskCouncil: {},
+      UpdateEmergencyCouncil: {},
     }
   }
 }
@@ -717,6 +717,375 @@ export class UpdateBorrowOrderExecutionEnabled {
   }
 }
 
+export interface UpdateMinBorrowOrderFillValueJSON {
+  kind: "UpdateMinBorrowOrderFillValue"
+}
+
+export class UpdateMinBorrowOrderFillValue {
+  static readonly discriminator = 31
+  static readonly kind = "UpdateMinBorrowOrderFillValue"
+  readonly discriminator = 31
+  readonly kind = "UpdateMinBorrowOrderFillValue"
+
+  toJSON(): UpdateMinBorrowOrderFillValueJSON {
+    return {
+      kind: "UpdateMinBorrowOrderFillValue",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateMinBorrowOrderFillValue: {},
+    }
+  }
+}
+
+export interface UpdateWithdrawTicketIssuanceEnabledJSON {
+  kind: "UpdateWithdrawTicketIssuanceEnabled"
+}
+
+export class UpdateWithdrawTicketIssuanceEnabled {
+  static readonly discriminator = 32
+  static readonly kind = "UpdateWithdrawTicketIssuanceEnabled"
+  readonly discriminator = 32
+  readonly kind = "UpdateWithdrawTicketIssuanceEnabled"
+
+  toJSON(): UpdateWithdrawTicketIssuanceEnabledJSON {
+    return {
+      kind: "UpdateWithdrawTicketIssuanceEnabled",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateWithdrawTicketIssuanceEnabled: {},
+    }
+  }
+}
+
+export interface UpdateWithdrawTicketRedemptionEnabledJSON {
+  kind: "UpdateWithdrawTicketRedemptionEnabled"
+}
+
+export class UpdateWithdrawTicketRedemptionEnabled {
+  static readonly discriminator = 33
+  static readonly kind = "UpdateWithdrawTicketRedemptionEnabled"
+  readonly discriminator = 33
+  readonly kind = "UpdateWithdrawTicketRedemptionEnabled"
+
+  toJSON(): UpdateWithdrawTicketRedemptionEnabledJSON {
+    return {
+      kind: "UpdateWithdrawTicketRedemptionEnabled",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateWithdrawTicketRedemptionEnabled: {},
+    }
+  }
+}
+
+export interface UpdateMinWithdrawQueuedLiquidityValueJSON {
+  kind: "UpdateMinWithdrawQueuedLiquidityValue"
+}
+
+export class UpdateMinWithdrawQueuedLiquidityValue {
+  static readonly discriminator = 34
+  static readonly kind = "UpdateMinWithdrawQueuedLiquidityValue"
+  readonly discriminator = 34
+  readonly kind = "UpdateMinWithdrawQueuedLiquidityValue"
+
+  toJSON(): UpdateMinWithdrawQueuedLiquidityValueJSON {
+    return {
+      kind: "UpdateMinWithdrawQueuedLiquidityValue",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateMinWithdrawQueuedLiquidityValue: {},
+    }
+  }
+}
+
+export interface UpdateFixedTermRolloverWindowDurationSecondsJSON {
+  kind: "UpdateFixedTermRolloverWindowDurationSeconds"
+}
+
+export class UpdateFixedTermRolloverWindowDurationSeconds {
+  static readonly discriminator = 35
+  static readonly kind = "UpdateFixedTermRolloverWindowDurationSeconds"
+  readonly discriminator = 35
+  readonly kind = "UpdateFixedTermRolloverWindowDurationSeconds"
+
+  toJSON(): UpdateFixedTermRolloverWindowDurationSecondsJSON {
+    return {
+      kind: "UpdateFixedTermRolloverWindowDurationSeconds",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateFixedTermRolloverWindowDurationSeconds: {},
+    }
+  }
+}
+
+export interface UpdateOpenTermRolloverWindowDurationSecondsJSON {
+  kind: "UpdateOpenTermRolloverWindowDurationSeconds"
+}
+
+export class UpdateOpenTermRolloverWindowDurationSeconds {
+  static readonly discriminator = 36
+  static readonly kind = "UpdateOpenTermRolloverWindowDurationSeconds"
+  readonly discriminator = 36
+  readonly kind = "UpdateOpenTermRolloverWindowDurationSeconds"
+
+  toJSON(): UpdateOpenTermRolloverWindowDurationSecondsJSON {
+    return {
+      kind: "UpdateOpenTermRolloverWindowDurationSeconds",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateOpenTermRolloverWindowDurationSeconds: {},
+    }
+  }
+}
+
+export interface UpdateObligationBorrowRolloverConfigurationEnabledJSON {
+  kind: "UpdateObligationBorrowRolloverConfigurationEnabled"
+}
+
+export class UpdateObligationBorrowRolloverConfigurationEnabled {
+  static readonly discriminator = 37
+  static readonly kind = "UpdateObligationBorrowRolloverConfigurationEnabled"
+  readonly discriminator = 37
+  readonly kind = "UpdateObligationBorrowRolloverConfigurationEnabled"
+
+  toJSON(): UpdateObligationBorrowRolloverConfigurationEnabledJSON {
+    return {
+      kind: "UpdateObligationBorrowRolloverConfigurationEnabled",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateObligationBorrowRolloverConfigurationEnabled: {},
+    }
+  }
+}
+
+export interface UpdateTermBasedFullLiquidationDurationSecsJSON {
+  kind: "UpdateTermBasedFullLiquidationDurationSecs"
+}
+
+export class UpdateTermBasedFullLiquidationDurationSecs {
+  static readonly discriminator = 38
+  static readonly kind = "UpdateTermBasedFullLiquidationDurationSecs"
+  readonly discriminator = 38
+  readonly kind = "UpdateTermBasedFullLiquidationDurationSecs"
+
+  toJSON(): UpdateTermBasedFullLiquidationDurationSecsJSON {
+    return {
+      kind: "UpdateTermBasedFullLiquidationDurationSecs",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateTermBasedFullLiquidationDurationSecs: {},
+    }
+  }
+}
+
+export interface UpdateObligationBorrowMigrationToFixedExecutionEnabledJSON {
+  kind: "UpdateObligationBorrowMigrationToFixedExecutionEnabled"
+}
+
+export class UpdateObligationBorrowMigrationToFixedExecutionEnabled {
+  static readonly discriminator = 39
+  static readonly kind =
+    "UpdateObligationBorrowMigrationToFixedExecutionEnabled"
+  readonly discriminator = 39
+  readonly kind = "UpdateObligationBorrowMigrationToFixedExecutionEnabled"
+
+  toJSON(): UpdateObligationBorrowMigrationToFixedExecutionEnabledJSON {
+    return {
+      kind: "UpdateObligationBorrowMigrationToFixedExecutionEnabled",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateObligationBorrowMigrationToFixedExecutionEnabled: {},
+    }
+  }
+}
+
+export interface UpdateMinPartialRolloverValueJSON {
+  kind: "UpdateMinPartialRolloverValue"
+}
+
+export class UpdateMinPartialRolloverValue {
+  static readonly discriminator = 40
+  static readonly kind = "UpdateMinPartialRolloverValue"
+  readonly discriminator = 40
+  readonly kind = "UpdateMinPartialRolloverValue"
+
+  toJSON(): UpdateMinPartialRolloverValueJSON {
+    return {
+      kind: "UpdateMinPartialRolloverValue",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateMinPartialRolloverValue: {},
+    }
+  }
+}
+
+export interface UpdateWithdrawTicketCancellationEnabledJSON {
+  kind: "UpdateWithdrawTicketCancellationEnabled"
+}
+
+export class UpdateWithdrawTicketCancellationEnabled {
+  static readonly discriminator = 41
+  static readonly kind = "UpdateWithdrawTicketCancellationEnabled"
+  readonly discriminator = 41
+  readonly kind = "UpdateWithdrawTicketCancellationEnabled"
+
+  toJSON(): UpdateWithdrawTicketCancellationEnabledJSON {
+    return {
+      kind: "UpdateWithdrawTicketCancellationEnabled",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateWithdrawTicketCancellationEnabled: {},
+    }
+  }
+}
+
+export interface UpdatePermissioningAuthorityJSON {
+  kind: "UpdatePermissioningAuthority"
+}
+
+export class UpdatePermissioningAuthority {
+  static readonly discriminator = 42
+  static readonly kind = "UpdatePermissioningAuthority"
+  readonly discriminator = 42
+  readonly kind = "UpdatePermissioningAuthority"
+
+  toJSON(): UpdatePermissioningAuthorityJSON {
+    return {
+      kind: "UpdatePermissioningAuthority",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdatePermissioningAuthority: {},
+    }
+  }
+}
+
+export interface UpdatePermissionedOpsJSON {
+  kind: "UpdatePermissionedOps"
+}
+
+export class UpdatePermissionedOps {
+  static readonly discriminator = 43
+  static readonly kind = "UpdatePermissionedOps"
+  readonly discriminator = 43
+  readonly kind = "UpdatePermissionedOps"
+
+  toJSON(): UpdatePermissionedOpsJSON {
+    return {
+      kind: "UpdatePermissionedOps",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdatePermissionedOps: {},
+    }
+  }
+}
+
+export interface DeprecatedUpdateReserveRewardsMaxAprPctJSON {
+  kind: "DeprecatedUpdateReserveRewardsMaxAprPct"
+}
+
+export class DeprecatedUpdateReserveRewardsMaxAprPct {
+  static readonly discriminator = 44
+  static readonly kind = "DeprecatedUpdateReserveRewardsMaxAprPct"
+  readonly discriminator = 44
+  readonly kind = "DeprecatedUpdateReserveRewardsMaxAprPct"
+
+  toJSON(): DeprecatedUpdateReserveRewardsMaxAprPctJSON {
+    return {
+      kind: "DeprecatedUpdateReserveRewardsMaxAprPct",
+    }
+  }
+
+  toEncodable() {
+    return {
+      DeprecatedUpdateReserveRewardsMaxAprPct: {},
+    }
+  }
+}
+
+export interface UpdateReserveRewardsMaxAprBpsJSON {
+  kind: "UpdateReserveRewardsMaxAprBps"
+}
+
+export class UpdateReserveRewardsMaxAprBps {
+  static readonly discriminator = 45
+  static readonly kind = "UpdateReserveRewardsMaxAprBps"
+  readonly discriminator = 45
+  readonly kind = "UpdateReserveRewardsMaxAprBps"
+
+  toJSON(): UpdateReserveRewardsMaxAprBpsJSON {
+    return {
+      kind: "UpdateReserveRewardsMaxAprBps",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateReserveRewardsMaxAprBps: {},
+    }
+  }
+}
+
+export interface UpdateDisableNonceBlockJSON {
+  kind: "UpdateDisableNonceBlock"
+}
+
+export class UpdateDisableNonceBlock {
+  static readonly discriminator = 46
+  static readonly kind = "UpdateDisableNonceBlock"
+  readonly discriminator = 46
+  readonly kind = "UpdateDisableNonceBlock"
+
+  toJSON(): UpdateDisableNonceBlockJSON {
+    return {
+      kind: "UpdateDisableNonceBlock",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateDisableNonceBlock: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.UpdateLendingMarketModeKind {
   if (typeof obj !== "object") {
@@ -741,8 +1110,8 @@ export function fromDecoded(obj: any): types.UpdateLendingMarketModeKind {
   if ("UpdateGlobalAllowedBorrow" in obj) {
     return new UpdateGlobalAllowedBorrow()
   }
-  if ("UpdateRiskCouncil" in obj) {
-    return new UpdateRiskCouncil()
+  if ("UpdateEmergencyCouncil" in obj) {
+    return new UpdateEmergencyCouncil()
   }
   if ("UpdateMinFullLiquidationThreshold" in obj) {
     return new UpdateMinFullLiquidationThreshold()
@@ -816,6 +1185,54 @@ export function fromDecoded(obj: any): types.UpdateLendingMarketModeKind {
   if ("UpdateBorrowOrderExecutionEnabled" in obj) {
     return new UpdateBorrowOrderExecutionEnabled()
   }
+  if ("UpdateMinBorrowOrderFillValue" in obj) {
+    return new UpdateMinBorrowOrderFillValue()
+  }
+  if ("UpdateWithdrawTicketIssuanceEnabled" in obj) {
+    return new UpdateWithdrawTicketIssuanceEnabled()
+  }
+  if ("UpdateWithdrawTicketRedemptionEnabled" in obj) {
+    return new UpdateWithdrawTicketRedemptionEnabled()
+  }
+  if ("UpdateMinWithdrawQueuedLiquidityValue" in obj) {
+    return new UpdateMinWithdrawQueuedLiquidityValue()
+  }
+  if ("UpdateFixedTermRolloverWindowDurationSeconds" in obj) {
+    return new UpdateFixedTermRolloverWindowDurationSeconds()
+  }
+  if ("UpdateOpenTermRolloverWindowDurationSeconds" in obj) {
+    return new UpdateOpenTermRolloverWindowDurationSeconds()
+  }
+  if ("UpdateObligationBorrowRolloverConfigurationEnabled" in obj) {
+    return new UpdateObligationBorrowRolloverConfigurationEnabled()
+  }
+  if ("UpdateTermBasedFullLiquidationDurationSecs" in obj) {
+    return new UpdateTermBasedFullLiquidationDurationSecs()
+  }
+  if ("UpdateObligationBorrowMigrationToFixedExecutionEnabled" in obj) {
+    return new UpdateObligationBorrowMigrationToFixedExecutionEnabled()
+  }
+  if ("UpdateMinPartialRolloverValue" in obj) {
+    return new UpdateMinPartialRolloverValue()
+  }
+  if ("UpdateWithdrawTicketCancellationEnabled" in obj) {
+    return new UpdateWithdrawTicketCancellationEnabled()
+  }
+  if ("UpdatePermissioningAuthority" in obj) {
+    return new UpdatePermissioningAuthority()
+  }
+  if ("UpdatePermissionedOps" in obj) {
+    return new UpdatePermissionedOps()
+  }
+  if ("DeprecatedUpdateReserveRewardsMaxAprPct" in obj) {
+    return new DeprecatedUpdateReserveRewardsMaxAprPct()
+  }
+  if ("UpdateReserveRewardsMaxAprBps" in obj) {
+    return new UpdateReserveRewardsMaxAprBps()
+  }
+  if ("UpdateDisableNonceBlock" in obj) {
+    return new UpdateDisableNonceBlock()
+  }
 
   throw new Error("Invalid enum object")
 }
@@ -842,8 +1259,8 @@ export function fromJSON(
     case "UpdateGlobalAllowedBorrow": {
       return new UpdateGlobalAllowedBorrow()
     }
-    case "UpdateRiskCouncil": {
-      return new UpdateRiskCouncil()
+    case "UpdateEmergencyCouncil": {
+      return new UpdateEmergencyCouncil()
     }
     case "UpdateMinFullLiquidationThreshold": {
       return new UpdateMinFullLiquidationThreshold()
@@ -917,6 +1334,54 @@ export function fromJSON(
     case "UpdateBorrowOrderExecutionEnabled": {
       return new UpdateBorrowOrderExecutionEnabled()
     }
+    case "UpdateMinBorrowOrderFillValue": {
+      return new UpdateMinBorrowOrderFillValue()
+    }
+    case "UpdateWithdrawTicketIssuanceEnabled": {
+      return new UpdateWithdrawTicketIssuanceEnabled()
+    }
+    case "UpdateWithdrawTicketRedemptionEnabled": {
+      return new UpdateWithdrawTicketRedemptionEnabled()
+    }
+    case "UpdateMinWithdrawQueuedLiquidityValue": {
+      return new UpdateMinWithdrawQueuedLiquidityValue()
+    }
+    case "UpdateFixedTermRolloverWindowDurationSeconds": {
+      return new UpdateFixedTermRolloverWindowDurationSeconds()
+    }
+    case "UpdateOpenTermRolloverWindowDurationSeconds": {
+      return new UpdateOpenTermRolloverWindowDurationSeconds()
+    }
+    case "UpdateObligationBorrowRolloverConfigurationEnabled": {
+      return new UpdateObligationBorrowRolloverConfigurationEnabled()
+    }
+    case "UpdateTermBasedFullLiquidationDurationSecs": {
+      return new UpdateTermBasedFullLiquidationDurationSecs()
+    }
+    case "UpdateObligationBorrowMigrationToFixedExecutionEnabled": {
+      return new UpdateObligationBorrowMigrationToFixedExecutionEnabled()
+    }
+    case "UpdateMinPartialRolloverValue": {
+      return new UpdateMinPartialRolloverValue()
+    }
+    case "UpdateWithdrawTicketCancellationEnabled": {
+      return new UpdateWithdrawTicketCancellationEnabled()
+    }
+    case "UpdatePermissioningAuthority": {
+      return new UpdatePermissioningAuthority()
+    }
+    case "UpdatePermissionedOps": {
+      return new UpdatePermissionedOps()
+    }
+    case "DeprecatedUpdateReserveRewardsMaxAprPct": {
+      return new DeprecatedUpdateReserveRewardsMaxAprPct()
+    }
+    case "UpdateReserveRewardsMaxAprBps": {
+      return new UpdateReserveRewardsMaxAprBps()
+    }
+    case "UpdateDisableNonceBlock": {
+      return new UpdateDisableNonceBlock()
+    }
   }
 }
 
@@ -928,7 +1393,7 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateLiquidationMaxValue"),
     borsh.struct([], "DeprecatedUpdateGlobalUnhealthyBorrow"),
     borsh.struct([], "UpdateGlobalAllowedBorrow"),
-    borsh.struct([], "UpdateRiskCouncil"),
+    borsh.struct([], "UpdateEmergencyCouncil"),
     borsh.struct([], "UpdateMinFullLiquidationThreshold"),
     borsh.struct([], "UpdateInsolvencyRiskLtv"),
     borsh.struct([], "UpdateElevationGroup"),
@@ -953,6 +1418,22 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateObligationBorrowDebtTermLiquidationEnabled"),
     borsh.struct([], "UpdateBorrowOrderCreationEnabled"),
     borsh.struct([], "UpdateBorrowOrderExecutionEnabled"),
+    borsh.struct([], "UpdateMinBorrowOrderFillValue"),
+    borsh.struct([], "UpdateWithdrawTicketIssuanceEnabled"),
+    borsh.struct([], "UpdateWithdrawTicketRedemptionEnabled"),
+    borsh.struct([], "UpdateMinWithdrawQueuedLiquidityValue"),
+    borsh.struct([], "UpdateFixedTermRolloverWindowDurationSeconds"),
+    borsh.struct([], "UpdateOpenTermRolloverWindowDurationSeconds"),
+    borsh.struct([], "UpdateObligationBorrowRolloverConfigurationEnabled"),
+    borsh.struct([], "UpdateTermBasedFullLiquidationDurationSecs"),
+    borsh.struct([], "UpdateObligationBorrowMigrationToFixedExecutionEnabled"),
+    borsh.struct([], "UpdateMinPartialRolloverValue"),
+    borsh.struct([], "UpdateWithdrawTicketCancellationEnabled"),
+    borsh.struct([], "UpdatePermissioningAuthority"),
+    borsh.struct([], "UpdatePermissionedOps"),
+    borsh.struct([], "DeprecatedUpdateReserveRewardsMaxAprPct"),
+    borsh.struct([], "UpdateReserveRewardsMaxAprBps"),
+    borsh.struct([], "UpdateDisableNonceBlock"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

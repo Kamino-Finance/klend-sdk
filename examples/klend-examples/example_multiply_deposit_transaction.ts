@@ -1,4 +1,5 @@
 import {
+  FlashBorrowType,
   MultiplyObligation,
   ObligationTypeTag,
   PROGRAM_ID,
@@ -6,10 +7,19 @@ import {
   getDepositWithLeverageIxs,
   getUserLutAddressAndSetupIxs,
   getScopeRefreshIxForObligationAndReserves,
+  getCurrentLedgerInstant,
 } from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
-import { JLP_MARKET, JLP_MARKET_LUT, JLP_MINT, JUP_QUOTE_BUFFER_BPS, USDC_MINT } from '../utils/constants';
+import {
+  JLP_MARKET,
+  JLP_MARKET_LUT,
+  JLP_MINT,
+  JLP_RESERVE_JLP_MARKET,
+  JUP_QUOTE_BUFFER_BPS,
+  USDC_MINT,
+  USDC_RESERVE_JLP_MARKET,
+} from '../utils/constants';
 import { executeUserSetupLutsTransactions, getMarket } from '../utils/helpers';
 import { getKaminoResources } from '../utils/kamino_resources';
 import { address, Address, none } from '@solana/kit';
@@ -17,6 +27,7 @@ import Decimal from 'decimal.js';
 import { getJupiterPrice, getJupiterQuoter, getJupiterSwapper } from '../utils/jup_utils';
 import { Scope } from '@kamino-finance/scope-sdk/';
 import { sendAndConfirmTx } from '../utils/tx';
+import { getFlashBorrowTypeFromEnv } from '../utils/env';
 // For this example we are only using JLP/USDC multiply
 // This can be also used for leverage by using the correct type when creating the obligation
 (async () => {
@@ -28,10 +39,14 @@ import { sendAndConfirmTx } from '../utils/tx';
 
   const collTokenMint = JLP_MINT;
   const debtTokenMint = USDC_MINT;
+  const collReserveAddress = JLP_RESERVE_JLP_MARKET;
+  const debtReserveAddress = USDC_RESERVE_JLP_MARKET;
   // const vaultType = 'multiply';
   const leverage = 3; // 3x leverage/ 3x multiply
   const amountToDeposit = new Decimal(5); // 5 USDC
   const slippagePct = 0.1;
+  // Optional: set to 'coll' or 'debt' to override which token is flash borrowed (default: 'coll' for deposit)
+  const flashBorrowType: FlashBorrowType | undefined = getFlashBorrowTypeFromEnv();
 
   const kaminoResources = await getKaminoResources();
 
@@ -40,11 +55,13 @@ import { sendAndConfirmTx } from '../utils/tx';
 
   const multiplyLutKeys = multiplyLut.map((lut) => address(lut));
 
-  const multiplyMints: { coll: Address; debt: Address }[] = [{ coll: collTokenMint, debt: debtTokenMint }];
-  const leverageMints: { coll: Address; debt: Address }[] = [];
-  multiplyMints.push({
-    coll: collTokenMint,
-    debt: debtTokenMint,
+  const multiplyReserveAddresses: { coll: Address; debt: Address }[] = [
+    { coll: collReserveAddress, debt: debtReserveAddress },
+  ];
+  const leverageReserveAddresses: { coll: Address; debt: Address }[] = [];
+  multiplyReserveAddresses.push({
+    coll: collReserveAddress,
+    debt: debtReserveAddress,
   });
 
   // This is the setup step that should happen each time the user has to extend it's LookupTable with missing keys
@@ -55,8 +72,8 @@ import { sendAndConfirmTx } from '../utils/tx';
     wallet,
     none(),
     true, // always extending LUT
-    multiplyMints,
-    leverageMints
+    multiplyReserveAddresses,
+    leverageReserveAddresses
   );
 
   await executeUserSetupLutsTransactions(c, wallet, txsIxs);
@@ -64,10 +81,11 @@ import { sendAndConfirmTx } from '../utils/tx';
   const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, PROGRAM_ID); // new LeverageObligation(collTokenMint, debtTokenMint, PROGRAM_ID); for leverage
   const obligationAddress = await obligationType.toPda(market.getAddress(), wallet.address);
 
-  const currentSlot = await c.rpc.getSlot().send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc, 'processed');
+  const currentSlot = currentLedgerInstant.slot;
 
-  const collTokenReserve = market.getReserveByMint(collTokenMint)!;
-  const debtTokenReserve = market.getReserveByMint(debtTokenMint)!;
+  const collTokenReserve = market.getExistingReserveByAddress(collReserveAddress);
+  const debtTokenReserve = market.getExistingReserveByAddress(debtReserveAddress);
   const obligation = await market.getObligationByAddress(obligationAddress)!;
 
   const scopeConfiguration = { scope, scopeConfigurations: await scope.getAllConfigurations() };
@@ -91,31 +109,30 @@ import { sendAndConfirmTx } from '../utils/tx';
 
   const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
 
-  const { ixs, lookupTables, swapInputs } = (
+  const { ixs, lookupTables } = (
     await getDepositWithLeverageIxs({
       owner: wallet,
       kaminoMarket: market,
-      debtTokenMint: debtTokenMint,
-      collTokenMint: collTokenMint,
+      debtReserveAddress: debtReserveAddress,
+      collReserveAddress: collReserveAddress,
       depositAmount: amountToDeposit,
       priceDebtToColl: priceDebtToColl,
       slippagePct: new Decimal(slippagePct),
       obligation: null, // obligation does not exist as we are creating it with this deposit
       referrer: none(),
       currentSlot,
+      currentLedgerInstant,
       targetLeverage: new Decimal(leverage),
       selectedTokenMint: debtTokenMint, // the token we are using to deposit
       obligationTypeTagOverride: ObligationTypeTag.Multiply, // or leverage
       scopeRefreshIx,
       budgetAndPriorityFeeIxs: computeIxs,
       quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
-      quoter: getJupiterQuoter(
-        slippagePct * 100,
-        market.getReserveByMint(debtTokenMint)!,
-        market.getReserveByMint(collTokenMint)!
-      ), // IMPORTANT!: For deposit the input mint is the debt token mint and the output mint is the collateral token
+      quoter: getJupiterQuoter(slippagePct * 100, debtTokenReserve, collTokenReserve), // IMPORTANT!: For deposit the input mint is the debt token mint and the output mint is the collateral token
       swapper: getJupiterSwapper(c.rpc, wallet.address),
       useV2Ixs: true,
+      rollOver: false,
+      flashBorrowType,
     })
   )[0];
 

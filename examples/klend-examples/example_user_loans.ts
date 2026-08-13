@@ -11,7 +11,8 @@ import { getConnectionPool } from '../utils/connection';
  */
 export async function getUserLoansForMarket(args: UserLoansArgs) {
   const market = await getMarket(args);
-  return market.getAllUserObligations(args.wallet);
+  const slot = await args.rpc.getSlot().send();
+  return market.getAllUserObligations(args.wallet, slot);
 }
 
 (async () => {

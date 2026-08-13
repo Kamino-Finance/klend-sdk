@@ -27,6 +27,7 @@ export interface InitLendingMarketAccounts {
   lendingMarketAuthority: Address
   systemProgram: Address
   rent: Address
+  instructionSysvarAccount: Address
 }
 
 export const layout = borsh.struct<InitLendingMarketArgs>([
@@ -49,6 +50,7 @@ export function initLendingMarket(
     { address: accounts.lendingMarketAuthority, role: 0 },
     { address: accounts.systemProgram, role: 0 },
     { address: accounts.rent, role: 0 },
+    { address: accounts.instructionSysvarAccount, role: 0 },
     ...remainingAccounts,
   ]
   const buffer = Buffer.alloc(1000)

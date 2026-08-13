@@ -43,7 +43,17 @@ import { sendAndConfirmTx } from '../utils/tx';
   // DEPOSIT: get accounts and build the instruction manually
   // ============================================================
 
-  const depositResult: AllDepositAccounts = await vaultClient.getDepositAccounts(user, vault);
+  // pre-load vault reserves once and pass to all methods (avoids redundant RPC calls)
+  const vaultReservesMap = await vaultClient.loadVaultReserves(vaultState);
+  const farmState = await vaultClient.loadVaultFarmState(vaultState);
+
+  const depositResult: AllDepositAccounts = await vaultClient.getDepositAccounts(
+    user,
+    vault,
+    vaultReservesMap,
+    farmState,
+    null
+  );
 
   // Build the deposit instruction with your own amount
   const usdcToDeposit = new Decimal(100.0);
@@ -58,8 +68,7 @@ import { sendAndConfirmTx } from '../utils/tx';
     ...depositIxRaw,
     accounts: [...(depositIxRaw.accounts ?? []), ...depositResult.remainingAccounts],
   };
-
-  // Send the deposit transaction, including stake instructions if the vault has a farm
+  // Send the deposit transaction, including vault-farm stake instructions if the vault farm exists
   await sendAndConfirmTx(
     c,
     user,
@@ -73,8 +82,6 @@ import { sendAndConfirmTx } from '../utils/tx';
   // WITHDRAW FROM RESERVE: get accounts and build the instruction manually
   // ============================================================
 
-  // Load the vault's allocated reserves to pick one to withdraw from
-  const vaultReservesMap = await vaultClient.loadVaultReserves(vaultState);
   const reserves = Array.from(vaultReservesMap.values());
 
   if (reserves.length > 0) {
@@ -84,7 +91,9 @@ import { sendAndConfirmTx } from '../utils/tx';
       user,
       vault,
       { address: reserve.address, state: reserve.state },
-      vaultReservesMap
+      vaultReservesMap,
+      farmState,
+      null
     );
 
     // Build the withdraw instruction
@@ -124,7 +133,14 @@ import { sendAndConfirmTx } from '../utils/tx';
   // WITHDRAW FROM AVAILABLE ONLY: no reserve needed
   // ============================================================
 
-  const withdrawAvailableResult: AllWithdrawAccounts = await vaultClient.getWithdrawAccounts(user, vault);
+  const withdrawAvailableResult: AllWithdrawAccounts = await vaultClient.getWithdrawAccounts(
+    user,
+    vault,
+    undefined,
+    vaultReservesMap,
+    farmState,
+    null
+  );
 
   // Build the withdrawFromAvailable instruction
   const sharesToWithdrawFromAvailable = new Decimal(10.0);

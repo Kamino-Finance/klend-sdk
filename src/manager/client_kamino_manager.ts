@@ -1,9 +1,10 @@
 import dotenv from 'dotenv';
 import { Command } from 'commander';
-import { Address, address, generateKeyPairSigner, Instruction, TransactionSigner } from '@solana/kit';
+import { Account, Address, address, generateKeyPairSigner, Instruction, TransactionSigner } from '@solana/kit';
 import {
   AssetReserveConfigCli,
   calculateAPYFromAPR,
+  CDN_ENDPOINT,
   createLookupTableIx,
   DEFAULT_CU_PER_TX,
   DEFAULT_PUBLIC_KEY,
@@ -26,10 +27,12 @@ import {
   parseBooleanFlag,
   parseTokenSymbol,
   parseZeroPaddedUtf8,
+  printKvaultHoldingsLog,
   renderZeroPaddedUtf8,
   programDataPda,
   Reserve,
   ReserveAllocationConfig,
+  ReserveConfigUpdateIx,
   ReserveWithAddress,
   sleep,
 } from '../lib';
@@ -39,12 +42,14 @@ import {
   PriceHeuristic,
   ReserveConfig,
   ReserveConfigFields,
+  ReserveFarmKind,
   ScopeConfiguration,
   TokenInfo,
   WithdrawalCaps,
 } from '../@codegen/klend/types';
 import { Fraction } from '../classes/fraction';
 import { trimPoints } from '../classes/curve';
+import { PermissionedOp } from '../classes/permission';
 import Decimal from 'decimal.js';
 import BN from 'bn.js';
 import { PythConfiguration, SwitchboardConfiguration, UpdateReserveWhitelistMode } from '../@codegen/kvault/types';
@@ -54,17 +59,341 @@ import { getMarketsFromApi } from '../utils/api';
 import * as fs from 'fs';
 import { MarketWithAddress } from '../utils/managerTypes';
 import { ManagementFeeBps, PendingVaultAdmin, PerformanceFeeBps } from '../@codegen/kvault/types/VaultConfigField';
-import { getAccountOwner } from '../utils/rpc';
+import { getAccountOwner, getCurrentLedgerInstant } from '../utils/rpc';
 import { fetchMint, findAssociatedTokenPda } from '@solana-program/token-2022';
-import { initEnv, ManagerEnv } from './tx/ManagerEnv';
+import { initEnv, ManagerEnv, SendTxMode } from './tx/ManagerEnv';
 import { processTx } from './tx/processor';
 import { getPriorityFeeAndCuIxs } from '../client/tx/priorityFee';
-import { fetchAddressLookupTable, fetchAllAddressLookupTable } from '@solana-program/address-lookup-table';
+import {
+  AddressLookupTable,
+  fetchAddressLookupTable,
+  fetchAllAddressLookupTable,
+} from '@solana-program/address-lookup-table';
 import { noopSigner, parseKeypairFile } from '../utils/signer';
+import { checkReserveWhitelistCommand, printVaultReserveAllocations, printVaultReserveFarmIncentives } from './print';
+import { assertCreateMarketLutCliOptions, resolveCreateMarketLutTxSigner } from './utils/createMarketLutCli';
+import { getWalletType } from '../utils/wallets';
 
 dotenv.config({
   path: `.env${process.env.ENV ? '.' + process.env.ENV : ''}`,
 });
+
+async function loadVaultInstructionParams(kaminoManager: KaminoManager, vault: KaminoVault) {
+  const vaultState = await vault.getState();
+  const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
+  const farmsMap = await kaminoManager.loadVaultFarmStates([vaultState], vaultReservesMap);
+
+  return {
+    vaultState,
+    vaultReservesMap,
+    farmState: farmsMap.get(vaultState.vaultFarm) ?? null,
+    flcFarmState: farmsMap.get(vaultState.firstLossCapitalFarm) ?? null,
+  };
+}
+
+async function loadKVaultGlobalAdminNoopSigner(kaminoManager: KaminoManager): Promise<TransactionSigner> {
+  const globalConfig = await kaminoManager.loadKVaultGlobalConfig();
+  return noopSigner(address(globalConfig.globalAdmin));
+}
+
+function readReserveAddressesFromFile(reservesFile: string): Address[] {
+  return fs
+    .readFileSync(reservesFile, 'utf-8')
+    .split(/[\s,]+/)
+    .map((reserve) => reserve.trim())
+    .filter((reserve) => reserve.length > 0)
+    .map((reserve) => address(reserve));
+}
+
+type WhitelistReservesFileCommandArgs = {
+  reservesFile: string;
+  value: string;
+  mode: SendTxMode;
+  globalAdmin: string;
+  staging?: boolean;
+  devnet?: boolean;
+  multisig?: string;
+  CU?: number | string;
+};
+
+type CdnUiVaultMetadata = {
+  name?: string;
+  tokenSymbol?: string;
+};
+
+type CdnUiVaultResources = {
+  'mainnet-beta'?: {
+    vaults?: Record<string, CdnUiVaultMetadata>;
+  };
+};
+
+type UiVaultEntry = {
+  address: Address;
+  metadata?: CdnUiVaultMetadata;
+};
+
+type VaultFarmCheckLevel = 'OK' | 'WARN' | 'ERROR';
+
+type VaultFarmCheckResult = {
+  level: VaultFarmCheckLevel;
+  vault: Address;
+  name?: string;
+  tokenSymbol?: string;
+  hasFarm: boolean;
+  vaultFarm?: Address;
+  farmAdmin?: Address;
+  pendingFarmAdmin?: Address;
+  message?: string;
+};
+
+async function loadUiVaultsFromCdn(): Promise<UiVaultEntry[]> {
+  const response = await fetch(`${CDN_ENDPOINT}/resources.json`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch CDN resources: ${response.status} ${response.statusText}`);
+  }
+
+  const resources = (await response.json()) as CdnUiVaultResources;
+  const vaults = resources['mainnet-beta']?.vaults;
+  if (!vaults) {
+    throw new Error('CDN resources are missing mainnet-beta.vaults');
+  }
+
+  return Object.entries(vaults)
+    .map(([vault, metadata]) => ({
+      address: address(vault),
+      metadata,
+    }))
+    .sort((a, b) => a.address.localeCompare(b.address));
+}
+
+function formatUiVaultName(result: VaultFarmCheckResult): string {
+  const name = result.name ?? 'Unnamed vault';
+  return result.tokenSymbol ? `${name} (${result.tokenSymbol})` : name;
+}
+
+function buildVaultFarmCheckResult(
+  vault: KaminoVault,
+  farmStates: Awaited<ReturnType<KaminoManager['loadVaultFarmStates']>>,
+  metadata?: CdnUiVaultMetadata
+): VaultFarmCheckResult {
+  if (!vault.state) {
+    return {
+      level: 'ERROR',
+      vault: vault.address,
+      name: metadata?.name,
+      tokenSymbol: metadata?.tokenSymbol,
+      hasFarm: false,
+      message: 'vault state not loaded',
+    };
+  }
+
+  const vaultFarm = vault.state.vaultFarm;
+  if (vaultFarm === DEFAULT_PUBLIC_KEY) {
+    return {
+      level: 'ERROR',
+      vault: vault.address,
+      name: metadata?.name,
+      tokenSymbol: metadata?.tokenSymbol,
+      hasFarm: false,
+      message: 'vault has no farm configured',
+    };
+  }
+
+  const farmState = farmStates.get(vaultFarm);
+  if (!farmState) {
+    return {
+      level: 'ERROR',
+      vault: vault.address,
+      name: metadata?.name,
+      tokenSymbol: metadata?.tokenSymbol,
+      hasFarm: true,
+      vaultFarm,
+      message: 'farm account not found',
+    };
+  }
+
+  const pendingFarmAdminMismatch = farmState.pendingFarmAdmin !== farmState.farmAdmin;
+  return {
+    level: pendingFarmAdminMismatch ? 'WARN' : 'OK',
+    vault: vault.address,
+    name: metadata?.name,
+    tokenSymbol: metadata?.tokenSymbol,
+    hasFarm: true,
+    vaultFarm,
+    farmAdmin: farmState.farmAdmin,
+    pendingFarmAdmin: farmState.pendingFarmAdmin,
+    message: pendingFarmAdminMismatch ? 'pending farm admin differs from farm admin' : undefined,
+  };
+}
+
+async function checkVaultFarms(
+  kaminoManager: KaminoManager,
+  vaultEntries: UiVaultEntry[]
+): Promise<VaultFarmCheckResult[]> {
+  const vaultAddresses = vaultEntries.map((vault) => vault.address);
+  const loadedVaults = await kaminoManager.getVaults(vaultAddresses);
+  const vaultMetadata = new Map(vaultEntries.map((vault) => [vault.address, vault.metadata]));
+  const existentVaults = loadedVaults.filter((vault): vault is KaminoVault => vault !== null);
+  const existentVaultStates = existentVaults
+    .map((vault) => vault.state)
+    .filter((vaultState): vaultState is NonNullable<KaminoVault['state']> => vaultState != null);
+  const farmStates = await kaminoManager.loadVaultFarmStates(existentVaultStates);
+
+  const results: VaultFarmCheckResult[] = [];
+  for (let i = 0; i < loadedVaults.length; i++) {
+    const loadedVault = loadedVaults[i];
+    const requestedVault = vaultEntries[i];
+    const metadata = vaultMetadata.get(requestedVault.address);
+    if (!loadedVault) {
+      results.push({
+        level: 'ERROR',
+        vault: requestedVault.address,
+        name: metadata?.name,
+        tokenSymbol: metadata?.tokenSymbol,
+        hasFarm: false,
+        message: 'vault account not found',
+      });
+      continue;
+    }
+
+    results.push(buildVaultFarmCheckResult(loadedVault, farmStates, metadata));
+  }
+
+  return results;
+}
+
+function printVaultFarmCheckResults(results: VaultFarmCheckResult[]): void {
+  const total = results.length;
+  const okResults = results.filter((result) => result.level === 'OK');
+  const warningResults = results.filter((result) => result.level === 'WARN');
+  const errorResults = results.filter((result) => result.level === 'ERROR');
+
+  console.log('\nVault farm check summary');
+  console.log(`Total UI vaults: ${total}`);
+  console.log(`OK: ${okResults.length}`);
+  console.log(`Warnings: ${warningResults.length}`);
+  console.log(`Errors: ${errorResults.length}`);
+
+  printVaultFarmCheckGroup('Missing or invalid farms', errorResults);
+  printVaultFarmCheckGroup('Admin warnings', warningResults);
+  printVaultFarmCheckGroup('Configured farms', okResults);
+}
+
+function printVaultFarmCheckGroup(title: string, results: VaultFarmCheckResult[]): void {
+  console.log(`\n${title} (${results.length})`);
+  if (results.length === 0) {
+    console.log('  None');
+    return;
+  }
+
+  for (const result of results) {
+    console.log(`- [${result.level}] ${formatUiVaultName(result)}`);
+    console.log(`  Vault: ${result.vault}`);
+    console.log(`  Has farm: ${result.hasFarm ? 'yes' : 'no'}`);
+    if (result.vaultFarm) {
+      console.log(`  Vault farm: ${result.vaultFarm}`);
+    }
+    if (result.farmAdmin) {
+      console.log(`  Farm admin: ${result.farmAdmin}`);
+    }
+    if (result.pendingFarmAdmin) {
+      console.log(`  Pending farm admin: ${result.pendingFarmAdmin}`);
+    }
+    if (result.message) {
+      console.log(`  Issue: ${result.message}`);
+    }
+  }
+}
+
+async function processWhitelistReservesFile({
+  reservesFile,
+  value,
+  mode,
+  globalAdmin,
+  staging,
+  devnet,
+  multisig,
+  CU: cu,
+}: WhitelistReservesFileCommandArgs): Promise<void> {
+  if (mode === 'multisig' && !multisig) {
+    throw new Error('If using multisig mode, multisig pubkey is required');
+  }
+
+  const ms = multisig ? address(multisig) : undefined;
+  const env = await initEnv(staging, ms, undefined, undefined, devnet);
+  const computeUnits = cu ? Number(cu) : DEFAULT_CU_PER_TX;
+  const reserveAddresses = readReserveAddressesFromFile(reservesFile);
+  const flagValue = parseBooleanFlag(value);
+
+  if (reserveAddresses.length === 0) {
+    throw new Error(`No reserve addresses found in ${reservesFile}`);
+  }
+  if (!Number.isFinite(computeUnits)) {
+    throw new Error(`Invalid CU value '${cu}'`);
+  }
+
+  console.log(`Processing ${reserveAddresses.length} reserves from ${reservesFile}`);
+  console.log(`Whitelist modes: Invest AND AddAllocation (both will be set)`);
+  console.log(`Action: ${flagValue ? 'ADD to whitelist' : 'REMOVE from whitelist'}`);
+
+  const kaminoManager = new KaminoManager(
+    env.c.rpc,
+    DEFAULT_RECENT_SLOT_DURATION_MS,
+    env.klendProgramId,
+    env.kvaultProgramId,
+    undefined,
+    env.farmsProgramId
+  );
+
+  const globalAdminSigner =
+    mode === 'multisig' ? noopSigner(address(globalAdmin)) : await parseKeypairFile(globalAdmin as string);
+
+  const investModeEnum = new UpdateReserveWhitelistMode.Invest([flagValue]);
+  const addAllocationModeEnum = new UpdateReserveWhitelistMode.AddAllocation([flagValue]);
+
+  const instructions: Instruction[] = [];
+  for (const reserveAddress of reserveAddresses) {
+    instructions.push(
+      await kaminoManager.addUpdateWhitelistedReserveIx(reserveAddress, investModeEnum, globalAdminSigner)
+    );
+    instructions.push(
+      await kaminoManager.addUpdateWhitelistedReserveIx(reserveAddress, addAllocationModeEnum, globalAdminSigner)
+    );
+  }
+
+  // Keep multisig messages comfortably small: 6 whitelist instructions = 3 reserves per proposal.
+  const batchSize = 6;
+  for (let i = 0; i < instructions.length; i += batchSize) {
+    const batch = instructions.slice(i, i + batchSize);
+    console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(instructions.length / batchSize)}`);
+    await processTx(
+      env.c,
+      globalAdminSigner,
+      [...batch, ...getPriorityFeeAndCuIxs({ priorityFeeMultiplier: 2500, computeUnits })],
+      mode,
+      []
+    );
+  }
+}
+
+function selectPrimaryVaultShareFarmStates<
+  T extends {
+    farmState: Awaited<ReturnType<KaminoManager['loadVaultFarmState']>>;
+    flcFarmState: Awaited<ReturnType<KaminoManager['loadVaultFarmState']>>;
+  }
+>(farmStates: T) {
+  if (farmStates.farmState) {
+    return {
+      farmState: farmStates.farmState,
+      flcFarmState: null,
+    };
+  }
+
+  return {
+    farmState: null,
+    flcFarmState: farmStates.flcFarmState,
+  };
+}
 
 async function main() {
   const commands = new Command();
@@ -269,30 +598,42 @@ async function main() {
           ...instructions.createAtaIfNeededIxs,
           ...instructions.initVaultIxs,
           instructions.createLUTIx,
-          instructions.setFarmToVaultIx,
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
+            computeUnits: 1_400_000,
           }),
         ],
         mode,
         []
       );
       await sleep(2000);
-      // create the farm
+      // create the farms and attach them to the vault
       await processTx(
         env.c,
         admin,
         [
-          ...instructions.createVaultFarm.setupFarmIxs,
-          ...instructions.createVaultFarm.updateFarmIxs,
-          ...getPriorityFeeAndCuIxs({
-            priorityFeeMultiplier: 2500,
-          }),
+          ...instructions.createVaultFarms.createVaultFarmIxs.setupFarmIxs,
+          ...instructions.createVaultFarms.createVaultFarmIxs.updateFarmIxs,
+          instructions.setFarmToVaultIxs.setFarmToVaultIx,
         ],
         mode,
         []
       );
+      if (instructions.createVaultFarms.createFLCVaultFarmIxs) {
+        await processTx(
+          env.c,
+          admin,
+          [
+            ...instructions.createVaultFarms.createFLCVaultFarmIxs!.setupFarmIxs,
+            ...instructions.createVaultFarms.createFLCVaultFarmIxs!.updateFarmIxs,
+            instructions.setFarmToVaultIxs.setFLCFarmToVaultIx!,
+          ],
+          mode,
+          []
+        );
+      }
       await sleep(2000);
+
       await processTx(
         env.c,
         admin,
@@ -391,13 +732,14 @@ async function main() {
       );
 
       const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
-      const vaultState = await kaminoVault.getState();
+      const { vaultState, vaultReservesMap } = await loadVaultInstructionParams(kaminoManager, kaminoVault);
       const signer = await env.getSigner({ vaultState });
 
       const instructions = await kaminoManager.updateVaultConfigIxs(
         kaminoVault,
         new PendingVaultAdmin(),
         newAdmin,
+        vaultReservesMap,
         signer,
         undefined,
         true
@@ -408,6 +750,7 @@ async function main() {
         signer,
         [
           instructions.updateVaultConfigIx,
+          ...instructions.extraIxs,
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
             computeUnits,
@@ -437,8 +780,8 @@ async function main() {
       'If set, it will use the provided signer instead of the default one for the LUT update'
     )
     .option(
-      `--global-admin <string>`,
-      'Global admin signer (keypair path in execute/simulate modes, pubkey in multisig mode). Required when setting AllowInvestInWhitelistedReservesOnly or AllowAllocationsInWhitelistedReservesOnly to false'
+      `--global-admin [string]`,
+      'Use the KVault global admin as signer. Pass a keypair path in execute/simulate modes, or pass the flag without a value in multisig mode to fetch the on-chain global admin and generate the base58 tx'
     )
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
     .option(
@@ -478,14 +821,23 @@ async function main() {
         );
 
         const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
-        const vaultState = await kaminoVault.getState();
+        const { vaultState, vaultReservesMap } = await loadVaultInstructionParams(kaminoManager, kaminoVault);
 
-        // Use global admin signer if provided, otherwise fall back to vault admin/noop signer depending on mode
-        let signer;
-        if (mode === 'multisig' && globalAdmin) {
-          signer = noopSigner(address(globalAdmin));
-        } else if (globalAdmin) {
-          signer = await parseKeypairFile(globalAdmin as string);
+        // Use the current KVault global admin when requested; otherwise fall back to the vault admin.
+        let signer: TransactionSigner;
+        if (globalAdmin !== undefined) {
+          if (mode === 'multisig') {
+            signer =
+              typeof globalAdmin === 'string'
+                ? noopSigner(address(globalAdmin))
+                : await loadKVaultGlobalAdminNoopSigner(kaminoManager);
+          } else if (typeof globalAdmin === 'string') {
+            signer = await parseKeypairFile(globalAdmin);
+          } else {
+            throw new Error(
+              'Bare --global-admin is only supported in multisig mode. Pass the global admin keypair path in execute/simulate modes.'
+            );
+          }
         } else {
           signer = await env.getSigner({ vaultState });
         }
@@ -500,6 +852,7 @@ async function main() {
           kaminoVault,
           field,
           value,
+          vaultReservesMap,
           signer,
           lutSignerOrUndefined,
           shouldSkipLutUpdate,
@@ -512,6 +865,7 @@ async function main() {
           [
             instructions.updateVaultConfigIx,
             ...instructions.updateLUTIxs,
+            ...instructions.extraIxs,
             ...getPriorityFeeAndCuIxs({
               priorityFeeMultiplier: 2500,
               computeUnits,
@@ -614,7 +968,12 @@ async function main() {
     .command('whitelist-reserves')
     .requiredOption(
       '--reserves-file <string>',
-      'Path to a file containing newline-separated reserve addresses to whitelist'
+      'Path to a file containing newline and/or comma-separated reserve addresses'
+    )
+    .option(
+      '--value <string>',
+      'Value: "1" or "true" to add to whitelist, "0" or "false" to remove from whitelist',
+      '1'
     )
     .requiredOption(
       `--mode <string>`,
@@ -625,71 +984,30 @@ async function main() {
       'Global admin signer (keypair path in execute/simulate modes, pubkey in multisig mode)'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
-    .action(async ({ reservesFile, mode, globalAdmin, staging, multisig, CU: cu }) => {
-      if (mode === 'multisig' && !multisig) {
-        throw new Error('If using multisig mode, multisig pubkey is required');
-      }
+    .action(processWhitelistReservesFile);
 
-      const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
-      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
-      const fileContent = fs.readFileSync(reservesFile, 'utf-8');
-      const reserveAddresses = fileContent
-        .split('\n')
-        .map((r: string) => r.trim())
-        .filter((r: string) => r.length > 0)
-        .map((r: string) => address(r));
-
-      const kaminoManager = new KaminoManager(
-        env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
-        env.klendProgramId,
-        env.kvaultProgramId,
-        undefined,
-        env.farmsProgramId
-      );
-
-      let globalAdminSigner;
-      if (mode === 'multisig') {
-        globalAdminSigner = noopSigner(address(globalAdmin));
-      } else {
-        globalAdminSigner = await parseKeypairFile(globalAdmin as string);
-      }
-
-      const instructions: Instruction[] = [];
-      for (const reserveAddress of reserveAddresses) {
-        let instruction = await kaminoManager.addUpdateWhitelistedReserveIx(
-          reserveAddress,
-          new UpdateReserveWhitelistMode.Invest([1]),
-          globalAdminSigner
-        );
-        instructions.push(instruction);
-        instruction = await kaminoManager.addUpdateWhitelistedReserveIx(
-          reserveAddress,
-          new UpdateReserveWhitelistMode.AddAllocation([1]),
-          globalAdminSigner
-        );
-        instructions.push(instruction);
-      }
-
-      // batch the instructions in groups of 6
-      const batchSize = 6;
-      const batchInstructions: Instruction[][] = [];
-      for (let i = 0; i < instructions.length; i += batchSize) {
-        batchInstructions.push(instructions.slice(i, i + batchSize));
-      }
-      for (const batch of batchInstructions) {
-        await processTx(
-          env.c,
-          globalAdminSigner,
-          [...batch, ...getPriorityFeeAndCuIxs({ priorityFeeMultiplier: 2500, computeUnits })],
-          mode,
-          []
-        );
-      }
-    });
+  commands
+    .command('unwhitelist-reserves')
+    .requiredOption(
+      '--reserves-file <string>',
+      'Path to a file containing newline and/or comma-separated reserve addresses to remove from the whitelist'
+    )
+    .requiredOption(
+      `--mode <string>`,
+      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
+    )
+    .requiredOption(
+      '--global-admin <string>',
+      'Global admin signer (keypair path in execute/simulate modes, pubkey in multisig mode)'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async (args) => processWhitelistReservesFile({ ...args, value: '0' }));
 
   commands
     .command('backfill-whitelisted-reserves')
@@ -834,30 +1152,163 @@ async function main() {
     });
 
   commands
-    .command('is-reserve-whitelisted')
+    .command('remove-all-whiteslists-for-market')
+    .requiredOption('--market <string>', 'Market address to inspect and clear reserve whitelist entries for')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
+    )
+    .requiredOption(
+      '--global-admin <string>',
+      'Global admin signer (keypair path in execute/simulate modes, pubkey in multisig mode)'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async ({ market, mode, globalAdmin, staging, devnet, multisig, CU: cu }) => {
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig pubkey is required');
+      }
+
+      const ms = multisig ? address(multisig) : undefined;
+      const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
+      const marketAddress = address(market);
+
+      const kaminoManager = new KaminoManager(
+        env.c.rpc,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        env.kvaultProgramId,
+        undefined,
+        env.farmsProgramId
+      );
+
+      const marketState = await KaminoMarket.load(
+        env.c.rpc,
+        marketAddress,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId
+      );
+      if (!marketState) {
+        throw new Error(`Market ${marketAddress} not found`);
+      }
+
+      const reserves = Array.from(marketState.reserves.values());
+      const marketName = parseTokenSymbol(marketState.state.name);
+
+      console.log(`Market ${marketAddress} (${marketName})`);
+      console.log(`Total reserves in market: ${reserves.length}`);
+
+      if (reserves.length === 0) {
+        console.log('No reserves found for this market');
+        return;
+      }
+
+      const reserveWhitelistEntryPdas = await Promise.all(
+        reserves.map((reserve) => getReserveWhitelistEntryPda(reserve.address, env.kvaultProgramId))
+      );
+      const reserveWhitelistEntries = await ReserveWhitelistEntry.fetchMultiple(
+        env.c.rpc,
+        reserveWhitelistEntryPdas,
+        env.kvaultProgramId
+      );
+
+      const whitelistedReserves = reserves
+        .map((reserve, index) => {
+          const whitelistEntry = reserveWhitelistEntries[index];
+
+          return {
+            reserve,
+            whitelistEntry,
+            whitelistEntryPda: reserveWhitelistEntryPdas[index],
+          };
+        })
+        .filter(
+          ({ whitelistEntry }) =>
+            whitelistEntry !== null &&
+            (whitelistEntry.whitelistInvest !== 0 || whitelistEntry.whitelistAddAllocation !== 0)
+        );
+
+      if (whitelistedReserves.length === 0) {
+        console.log('No whitelisted reserves found in this market');
+        return;
+      }
+
+      console.log(`Whitelisted reserves to clear: ${whitelistedReserves.length}`);
+      whitelistedReserves.forEach(({ reserve, whitelistEntry, whitelistEntryPda }, index) => {
+        console.log(
+          `${index + 1}. reserve=${reserve.address} symbol=${
+            reserve.symbol
+          } mint=${reserve.getLiquidityMint()} pda=${whitelistEntryPda}`
+        );
+        console.log(
+          `   whitelistInvest=${whitelistEntry!.whitelistInvest} whitelistAddAllocation=${
+            whitelistEntry!.whitelistAddAllocation
+          }`
+        );
+      });
+
+      let globalAdminSigner: TransactionSigner;
+      if (mode === 'multisig') {
+        globalAdminSigner = noopSigner(address(globalAdmin));
+      } else {
+        globalAdminSigner = await parseKeypairFile(globalAdmin as string);
+      }
+
+      const batchSize = 3;
+      const disableInvestMode = new UpdateReserveWhitelistMode.Invest([0]);
+      const disableAddAllocationMode = new UpdateReserveWhitelistMode.AddAllocation([0]);
+
+      for (let batchStart = 0; batchStart < whitelistedReserves.length; batchStart += batchSize) {
+        const batch = whitelistedReserves.slice(batchStart, batchStart + batchSize);
+        const instructions: Instruction[] = [];
+
+        for (const { reserve } of batch) {
+          const disableInvestInstruction = await kaminoManager.addUpdateWhitelistedReserveIx(
+            reserve.address,
+            disableInvestMode,
+            globalAdminSigner
+          );
+          const disableAddAllocationInstruction = await kaminoManager.addUpdateWhitelistedReserveIx(
+            reserve.address,
+            disableAddAllocationMode,
+            globalAdminSigner
+          );
+
+          instructions.push(disableInvestInstruction, disableAddAllocationInstruction);
+        }
+
+        console.log(
+          `\nBatch ${Math.floor(batchStart / batchSize) + 1}: ${batch.map(({ reserve }) => reserve.address).join(', ')}`
+        );
+
+        await processTx(
+          env.c,
+          globalAdminSigner,
+          [
+            ...instructions,
+            ...getPriorityFeeAndCuIxs({
+              priorityFeeMultiplier: 2500,
+              computeUnits,
+            }),
+          ],
+          mode,
+          []
+        );
+      }
+
+      mode === 'execute' &&
+        console.log(`Removed Invest/AddAllocation whitelist flags for ${whitelistedReserves.length} reserves`);
+    });
+
+  commands
+    .command('check-reserve-is-whitelisted')
     .requiredOption('--reserve <string>', 'Reserve address to check')
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--devnet`, 'If true, will use devnet programs and RPC')
-    .action(async ({ reserve, staging, devnet }) => {
-      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
-      const reserveAddress = address(reserve);
-
-      const pda = await getReserveWhitelistEntryPda(reserveAddress, env.kvaultProgramId);
-      const entry = await ReserveWhitelistEntry.fetch(env.c.rpc, pda, env.kvaultProgramId);
-
-      if (!entry) {
-        console.log(`Reserve ${reserveAddress}`);
-        console.log(`  PDA: ${pda} (not initialized)`);
-        console.log(`  whitelistInvest: 0`);
-        console.log(`  whitelistAddAllocation: 0`);
-      } else {
-        console.log(`Reserve ${reserveAddress}`);
-        console.log(`  PDA: ${pda}`);
-        console.log(`  tokenMint: ${entry.tokenMint}`);
-        console.log(`  whitelistInvest: ${entry.whitelistInvest}`);
-        console.log(`  whitelistAddAllocation: ${entry.whitelistAddAllocation}`);
-      }
-    });
+    .action(checkReserveWhitelistCommand);
 
   commands
     .command('check-whitelist-for-mint')
@@ -888,8 +1339,7 @@ async function main() {
         [];
       for (const { cfg, market } of markets) {
         if (!market) continue;
-        const reserve = market.getReserveByMint(tokenMint);
-        if (reserve) {
+        for (const reserve of market.getReservesByMint(tokenMint)) {
           reserveEntries.push({
             marketName: cfg.name,
             marketAddress: cfg.lendingMarket,
@@ -967,12 +1417,13 @@ async function main() {
       );
 
       const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
-      const vaultState = await kaminoVault.getState();
+      const { vaultState, vaultReservesMap } = await loadVaultInstructionParams(kaminoManager, kaminoVault);
       const signer = await env.getSigner({ vaultState });
       const instructions = await kaminoManager.updateVaultConfigIxs(
         kaminoVault,
         new ManagementFeeBps(),
         feeBps,
+        vaultReservesMap,
         signer
       );
 
@@ -982,6 +1433,7 @@ async function main() {
         [
           instructions.updateVaultConfigIx,
           ...instructions.updateLUTIxs,
+          ...instructions.extraIxs,
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
             computeUnits,
@@ -1050,7 +1502,8 @@ async function main() {
   commands.command('create-lut').action(async () => {
     const env = await initEnv(false);
     const signer = await env.getSigner();
-    const [initLutIx, lutAddress] = await initLookupTableIx(signer, await env.c.rpc.getSlot().send());
+    const recentSlot = await env.c.rpc.getSlot({ commitment: 'finalized' }).send();
+    const [initLutIx, lutAddress] = await initLookupTableIx(signer, recentSlot);
 
     await processTx(
       env.c,
@@ -1097,7 +1550,9 @@ async function main() {
       if (signer) {
         txSigner = await parseKeypairFile(signer as string);
       }
-      const syncLUTIxs = await kaminoManager.syncVaultLUTIxs(txSigner, kaminoVault);
+      const slot = await env.c.rpc.getSlot().send();
+      const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
+      const syncLUTIxs = await kaminoManager.syncVaultLUTIxs(txSigner, kaminoVault, slot, vaultReservesMap);
 
       // if we need to create the LUT we have to do that in a separate tx and wait a little bit after
       if (syncLUTIxs.setupLUTIfNeededIxs.length > 0) {
@@ -1135,6 +1590,209 @@ async function main() {
     });
 
   commands
+    .command('update-reserve-farm')
+    .requiredOption('--market <string>', 'Lending market address')
+    .requiredOption('--reserve <string>', 'Reserve address')
+    .requiredOption('--farm-kind <string>', 'collateral | debt')
+    .requiredOption('--farm <string>', 'Farm state address to set on the reserve')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .option(`--signer <string>`, 'If set, it will use the provided signer instead of the default one')
+    .action(async ({ market, reserve, farmKind, farm, mode, staging, devnet, multisig, signer }) => {
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig is required');
+      }
+      if (farmKind !== 'collateral' && farmKind !== 'debt') {
+        throw new Error(`Invalid --farm-kind "${farmKind}": expected "collateral" or "debt"`);
+      }
+      const ms = multisig ? address(multisig) : undefined;
+      const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const kaminoManager = new KaminoManager(
+        env.c.rpc,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        env.kvaultProgramId,
+        undefined,
+        env.farmsProgramId
+      );
+
+      const marketAddress = address(market);
+      const kaminoMarket = (await KaminoMarket.load(
+        env.c.rpc,
+        marketAddress,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        false
+      ))!;
+      const marketWithAddress: MarketWithAddress = { address: marketAddress, state: kaminoMarket.state };
+
+      // the lending market owner must authorize the update: getSigner returns the configured admin when it
+      // matches the owner, otherwise a noop signer for the owner (the correct authority for simulate/multisig)
+      const txSigner = signer
+        ? await parseKeypairFile(signer as string)
+        : await env.getSigner({ market: kaminoMarket });
+
+      const kind = farmKind === 'debt' ? new ReserveFarmKind.Debt() : new ReserveFarmKind.Collateral();
+      const ix = await kaminoManager.updateReserveFarmIx(
+        txSigner,
+        marketWithAddress,
+        address(reserve),
+        kind,
+        address(farm)
+      );
+
+      await processTx(
+        env.c,
+        txSigner,
+        [
+          ix,
+          ...getPriorityFeeAndCuIxs({
+            priorityFeeMultiplier: 2500,
+          }),
+        ],
+        mode,
+        []
+      );
+
+      mode === 'execute' && console.log(`Reserve ${reserve} ${farmKind} farm set to ${farm}`);
+    });
+
+  commands
+    .command('create-market-lut')
+    .requiredOption('--market <string>', 'Lending market address')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
+    )
+    .option(
+      '--existing-lut <string>',
+      'Existing market LUT to extend instead of creating a new one (required for --mode multisig)'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .option(`--multisig <string>`, 'Required in multisig mode; sets the LUT authority/payer for generated transactions')
+    .option(
+      `--signer <string>`,
+      'LUT authority/payer keypair for simulate/execute (not allowed with --mode multisig; use --multisig)'
+    )
+    .action(async ({ market, mode, existingLut, staging, devnet, multisig, signer }) => {
+      const sendMode = mode as SendTxMode;
+      assertCreateMarketLutCliOptions({
+        mode: sendMode,
+        multisig,
+        existingLut,
+        signer,
+      });
+
+      const ms = multisig ? address(multisig) : undefined;
+      const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const kaminoManager = new KaminoManager(
+        env.c.rpc,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        env.kvaultProgramId,
+        undefined,
+        env.farmsProgramId
+      );
+
+      const kaminoMarket = (await KaminoMarket.load(
+        env.c.rpc,
+        address(market),
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId
+      ))!;
+
+      // market LUT is client-owned: multisig mode always uses --multisig (not ADMIN via getSigner)
+      const signerOverride = signer ? await parseKeypairFile(signer as string) : undefined;
+      const txSigner = resolveCreateMarketLutTxSigner(
+        sendMode,
+        ms,
+        signerOverride,
+        sendMode === 'multisig' ? undefined : await env.getSigner()
+      );
+
+      const { lut, createLutIx, populateLutIxs } = await kaminoManager.getMarketLookupTableIxs(
+        txSigner,
+        kaminoMarket,
+        existingLut ? address(existingLut) : undefined
+      );
+
+      // the create must be confirmed before the populate ixs can extend it, so it goes in its own tx
+      if (createLutIx) {
+        await processTx(
+          env.c,
+          txSigner,
+          [
+            createLutIx,
+            ...getPriorityFeeAndCuIxs({
+              priorityFeeMultiplier: 2500,
+            }),
+          ],
+          sendMode,
+          []
+        );
+
+        switch (sendMode) {
+          case 'simulate':
+            // simulation does not persist the LUT, so populate would fail against a non-existent account
+            console.log(
+              `Simulated market LUT creation for ${lut}. Skipping populate: simulation does not persist the LUT; run --mode execute to create+populate, or pass --existing-lut to simulate extending an on-chain LUT.`
+            );
+            return;
+          case 'execute': {
+            // wait until the new LUT is fetchable rather than guessing with a fixed delay
+            let lutVisible = false;
+            for (let attempt = 0; attempt < 15 && !lutVisible; attempt++) {
+              try {
+                await fetchAddressLookupTable(env.c.rpc, lut);
+                lutVisible = true;
+              } catch {
+                await sleep(1000);
+              }
+            }
+            if (!lutVisible) {
+              throw new Error(`Market LUT ${lut} not visible on-chain after creation; aborting before extend`);
+            }
+            console.log(`Market LUT created: ${lut}`);
+            break;
+          }
+          case 'multisig':
+            throw new Error(
+              'Internal error: fresh LUT create reached process path in multisig mode; --existing-lut is required'
+            );
+          case 'print':
+            break;
+          default: {
+            const _exhaustive: never = sendMode;
+            throw new Error(`Unhandled mode: ${_exhaustive}`);
+          }
+        }
+      }
+
+      for (const ix of populateLutIxs) {
+        await processTx(
+          env.c,
+          txSigner,
+          [
+            ix,
+            ...getPriorityFeeAndCuIxs({
+              priorityFeeMultiplier: 2500,
+            }),
+          ],
+          sendMode,
+          []
+        );
+      }
+
+      sendMode === 'execute' && console.log(`Market LUT: ${lut}`);
+    });
+
+  commands
     .command('update-vault-perf-fee')
     .requiredOption('--vault <string>', 'Vault address')
     .requiredOption('--fee-bps <string>', 'Performance fee to set (in basis points)')
@@ -1160,12 +1818,13 @@ async function main() {
       );
 
       const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
-      const vaultState = await kaminoVault.getState();
+      const { vaultState, vaultReservesMap } = await loadVaultInstructionParams(kaminoManager, kaminoVault);
       const signer = await env.getSigner({ vaultState });
       const instructions = await kaminoManager.updateVaultConfigIxs(
         kaminoVault,
         new PerformanceFeeBps(),
         feeBps,
+        vaultReservesMap,
         signer
       );
 
@@ -1175,6 +1834,7 @@ async function main() {
         [
           instructions.updateVaultConfigIx,
           ...instructions.updateLUTIxs,
+          ...instructions.extraIxs,
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
             computeUnits,
@@ -1212,18 +1872,19 @@ async function main() {
       );
 
       const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
-      const vaultState = await kaminoVault.getState();
+      const { vaultState, vaultReservesMap } = await loadVaultInstructionParams(kaminoManager, kaminoVault);
       const pendingAdmin = await env.getSigner({
         vaultState,
         useVaultPendingAdmin: true,
       });
-      const instructions = await kaminoManager.acceptVaultOwnershipIxs(kaminoVault, pendingAdmin);
+      const instructions = await kaminoManager.acceptVaultOwnershipIxs(kaminoVault, vaultReservesMap, pendingAdmin);
 
       await processTx(
         env.c,
         pendingAdmin,
         [
           instructions.acceptVaultOwnershipIx,
+          ...(instructions.acceptFLCFarmOwnershipIx ? [instructions.acceptFLCFarmOwnershipIx] : []),
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
             computeUnits,
@@ -1344,7 +2005,9 @@ async function main() {
       const vaultState = await kaminoVault.getState();
       const signer = await env.getSigner({ vaultState });
 
-      const instructions = await kaminoManager.withdrawPendingFeesIxs(kaminoVault, undefined, signer);
+      const slot = await env.c.rpc.getSlot().send();
+      const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
+      const instructions = await kaminoManager.withdrawPendingFeesIxs(kaminoVault, slot, vaultReservesMap, signer);
 
       await processTx(
         env.c,
@@ -1393,7 +2056,18 @@ async function main() {
       const vaultState = await kaminoVault.getState();
       const signer = await env.getSigner({ vaultState });
 
-      const ixs = await kaminoManager.fullRemoveReserveFromVaultIxs(signer, kaminoVault, reserveAddress);
+      const slot = await env.c.rpc.getSlot().send();
+      const reserveState = await Reserve.fetch(env.c.rpc, reserveAddress, env.klendProgramId);
+      if (!reserveState) {
+        throw new Error('Reserve not found');
+      }
+      const ixs = await kaminoManager.fullRemoveReserveFromVaultIxs(
+        signer,
+        kaminoVault,
+        reserveAddress,
+        slot,
+        reserveState
+      );
 
       const transactionIxs = [
         ...ixs,
@@ -1433,15 +2107,19 @@ async function main() {
       const vaultAddress = address(vault);
 
       const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
-
-      const stakeIxs = await new KaminoManager(
+      const stakeManager = new KaminoManager(
         env.c.rpc,
         DEFAULT_RECENT_SLOT_DURATION_MS,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
         env.farmsProgramId
-      ).stakeSharesIxs(user, kaminoVault);
+      );
+      const { farmState } = await loadVaultInstructionParams(stakeManager, kaminoVault);
+      if (!farmState) {
+        throw new Error('Vault farm state is required to stake shares.');
+      }
+      const stakeIxs = await stakeManager.stakeSharesIxs(user, kaminoVault, undefined, farmState);
       await processTx(
         env.c,
         user,
@@ -1468,6 +2146,7 @@ async function main() {
     )
     .option('--allocation-weight <number>', 'Allocation weight')
     .option('--allocation-cap <string>', 'Allocation cap decimal value')
+    .option('--ctoken-allocation-cap <string>', 'Ctoken allocation cap in ctoken lamports')
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
@@ -1481,6 +2160,7 @@ async function main() {
         mode,
         allocationWeight,
         allocationCap,
+        ctokenAllocationCap,
         staging,
         devnet,
         multisig,
@@ -1501,7 +2181,8 @@ async function main() {
         const shouldUpdateLut = skipLutUpdate ? false : true;
         const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
         let allocationWeightValue: number;
-        let allocationCapDecimal: Decimal;
+        let tokenAllocationCapTokens: Decimal;
+        let ctokenAllocationCapLamportsBn: BN | undefined;
 
         const kaminoManager = new KaminoManager(
           env.c.rpc,
@@ -1525,18 +2206,23 @@ async function main() {
         }
 
         if (allocationCap) {
-          allocationCapDecimal = new Decimal(allocationCap);
+          tokenAllocationCapTokens = new Decimal(allocationCap);
         } else if (existentAllocation) {
-          allocationCapDecimal = existentAllocation.tokenAllocationCap.div(
+          tokenAllocationCapTokens = existentAllocation.tokenAllocationCapLamports.div(
             new Decimal(10).pow(Number(vaultState.tokenMintDecimals.toString()))
           );
         } else {
           throw new Error('Allocation cap is required');
         }
 
-        console.log('allocationWeightValue', allocationWeightValue);
-        console.log('allocationCapDecimal', allocationCapDecimal.toString());
+        if (ctokenAllocationCap !== undefined) {
+          ctokenAllocationCapLamportsBn = new BN(ctokenAllocationCap);
+        }
 
+        console.log('allocationWeightValue', allocationWeightValue);
+        console.log('tokenAllocationCapTokens', tokenAllocationCapTokens.toString());
+        ctokenAllocationCapLamportsBn &&
+          console.log('ctokenAllocationCapLamports', ctokenAllocationCapLamportsBn.toString());
         const reserveWithAddress: ReserveWithAddress = {
           address: reserveAddress,
           state: reserveState,
@@ -1544,7 +2230,8 @@ async function main() {
         const firstReserveAllocationConfig = new ReserveAllocationConfig(
           reserveWithAddress,
           allocationWeightValue,
-          allocationCapDecimal
+          tokenAllocationCapTokens,
+          ctokenAllocationCapLamportsBn
         );
 
         const instructions = await kaminoManager.updateVaultReserveAllocationIxs(
@@ -1562,7 +2249,13 @@ async function main() {
         if (shouldUpdateLut) {
           txInstructions.push(...instructions.updateLUTIxs);
         }
-        await processTx(env.c, signer, txInstructions, mode, []);
+
+        const lookupTables: Account<AddressLookupTable>[] = [];
+        if (vaultState.vaultLookupTable !== DEFAULT_PUBLIC_KEY) {
+          const lookupTable = await fetchAddressLookupTable(env.c.rpc, vaultState.vaultLookupTable);
+          lookupTables.push(lookupTable);
+        }
+        await processTx(env.c, signer, txInstructions, mode, lookupTables);
 
         mode === 'execute' && console.log('Vault allocation updated');
       }
@@ -1606,15 +2299,25 @@ async function main() {
       const user = await env.getSigner();
       const feePayer = feePayerPath ? await parseKeypairFile(feePayerPath) : undefined;
       const txPayer = feePayer ?? user;
+      const { vaultReservesMap, farmState, flcFarmState } = await loadVaultInstructionParams(
+        kaminoManager,
+        kaminoVault
+      );
+      const selectedFarmStates = selectPrimaryVaultShareFarmStates({ farmState, flcFarmState });
       const depositInstructions = await kaminoManager.depositToVaultIxs(
         user,
         kaminoVault,
         amount,
-        undefined,
-        undefined,
+        vaultReservesMap,
+        selectedFarmStates.farmState,
+        selectedFarmStates.flcFarmState,
         feePayer
       );
-      const instructions = [...depositInstructions.depositIxs, ...depositInstructions.stakeInFarmIfNeededIxs];
+      const stakeIxs =
+        depositInstructions.stakeInFarmIfNeededIxs.length > 0
+          ? depositInstructions.stakeInFarmIfNeededIxs
+          : depositInstructions.stakeInFlcFarmIfNeededIxs;
+      const instructions = [...depositInstructions.depositIxs, ...stakeIxs];
 
       await processTx(
         env.c,
@@ -1672,19 +2375,25 @@ async function main() {
       );
 
       const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
-      const vaultState = await kaminoVault.getState();
+      const { vaultState, vaultReservesMap, farmState, flcFarmState } = await loadVaultInstructionParams(
+        kaminoManager,
+        kaminoVault
+      );
+      const selectedFarmStates = selectPrimaryVaultShareFarmStates({ farmState, flcFarmState });
       const lookupTableAddresses = [];
       if (vaultState.vaultLookupTable !== DEFAULT_PUBLIC_KEY) {
         lookupTableAddresses.push(vaultState.vaultLookupTable);
       }
       const lookupTables = await fetchAllAddressLookupTable(env.c.rpc, lookupTableAddresses);
+      const confirmedSlot = await env.c.rpc.getSlot({ commitment: 'confirmed' }).send();
       const withdrawIxs = await kaminoManager.withdrawFromVaultIxs(
         user,
         kaminoVault,
         new Decimal(amount),
-        await env.c.rpc.getSlot({ commitment: 'confirmed' }).send(),
-        undefined,
-        undefined,
+        confirmedSlot,
+        vaultReservesMap,
+        selectedFarmStates.farmState,
+        selectedFarmStates.flcFarmState,
         feePayer
       );
 
@@ -1737,8 +2446,10 @@ async function main() {
         env.farmsProgramId
       );
 
+      const slot = await env.c.rpc.getSlot().send();
       const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
-      const instructions = await kaminoManager.investAllReservesIxs(payer, kaminoVault);
+      await kaminoVault.getState();
+      const instructions = await kaminoManager.investAllReservesIxs(payer, kaminoVault, slot, false);
 
       for (let i = 0; i < instructions.length; i++) {
         const txInstructions: Instruction[] = [];
@@ -1804,7 +2515,14 @@ async function main() {
       };
 
       const payer = await env.getSigner();
-      const instructions = await kaminoManager.investSingleReserveIxs(payer, kaminoVault, reserveWithAddress);
+      const vaultState = await kaminoVault.getState();
+      const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
+      const instructions = await kaminoManager.investSingleReserveIxs(
+        payer,
+        kaminoVault,
+        reserveWithAddress,
+        vaultReservesMap
+      );
       await processTx(
         env.c,
         payer,
@@ -1858,9 +2576,14 @@ async function main() {
 
       const vaultAddress = address(vault);
       const vaultState = await new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId).getState();
+      const confirmedSlot = await env.c.rpc.getSlot({ commitment: 'confirmed' }).send();
+      const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
+      const kaminoMarkets = await kaminoManager.loadKaminoMarketsForVaultReserves(vaultReservesMap);
       const vaultCollaterals = await kaminoManager.getVaultCollaterals(
         vaultState,
-        await env.c.rpc.getSlot({ commitment: 'confirmed' }).send()
+        confirmedSlot,
+        vaultReservesMap,
+        kaminoMarkets
       );
       vaultCollaterals.forEach((collateral) => {
         console.log('reserve ', collateral.address);
@@ -1891,10 +2614,24 @@ async function main() {
 
       const vaultAddress = address(vault);
       const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+      const kaminoVaultState = await kaminoVault.getState();
+      const confirmedSlot = await env.c.rpc.getSlot({ commitment: 'confirmed' }).send();
+      const vaultReservesMap = await kaminoManager.loadVaultReserves(kaminoVaultState);
+      const kaminoMarkets = await kaminoManager.loadKaminoMarketsForVaultReserves(vaultReservesMap);
+      const farmsMap = await kaminoManager.loadVaultFarmStates([kaminoVaultState], vaultReservesMap);
+      const { Farms } = await import('@kamino-finance/farms-sdk');
+      const farmsClient = new Farms(env.c.rpc, env.farmsProgramId);
+      const globalConfig = await kaminoManager.loadKVaultGlobalConfig();
       const vaultOverview = await kaminoManager.getVaultOverview(
         kaminoVault,
         new Decimal(tokenPrice),
-        await env.c.rpc.getSlot({ commitment: 'confirmed' }).send()
+        confirmedSlot,
+        vaultReservesMap,
+        kaminoMarkets,
+        farmsMap,
+        farmsClient,
+        globalConfig,
+        confirmedSlot
       );
 
       console.log('vaultOverview', vaultOverview);
@@ -1925,7 +2662,19 @@ async function main() {
       );
 
       const kaminoVault = new KaminoVault(env.c.rpc, address(vault), undefined, env.kvaultProgramId, slotDuration);
-      const farmAPY = await kaminoManager.getVaultFarmRewardsAPY(kaminoVault, new Decimal(tokenPrice));
+      const { vaultReservesMap, farmState } = await loadVaultInstructionParams(kaminoManager, kaminoVault);
+      const slot = await env.c.rpc.getSlot().send();
+      const { Farms } = await import('@kamino-finance/farms-sdk');
+      const farmsClient = new Farms(env.c.rpc, env.farmsProgramId);
+      const farmAPY = await kaminoManager.getVaultFarmRewardsAPY(
+        kaminoVault,
+        new Decimal(tokenPrice),
+        slot,
+        vaultReservesMap,
+        farmsClient,
+        farmState,
+        slot
+      );
       console.log('farmAPY', farmAPY);
     });
 
@@ -1948,7 +2697,17 @@ async function main() {
         env.farmsProgramId
       );
 
-      const farmAPY = await kaminoManager.getReserveFarmRewardsAPY(address(reserve), new Decimal(tokenPrice));
+      const slot = await env.c.rpc.getSlot().send();
+      const reserveState = await Reserve.fetch(env.c.rpc, address(reserve), env.klendProgramId);
+      if (!reserveState) {
+        throw new Error(`Reserve ${reserve} not found on-chain`);
+      }
+      const farmAPY = await kaminoManager.getReserveFarmRewardsAPY(
+        address(reserve),
+        new Decimal(tokenPrice),
+        slot,
+        reserveState
+      );
       console.log('farmAPY', farmAPY);
     });
 
@@ -1973,7 +2732,14 @@ async function main() {
       const vaultAddress = address(vault);
       const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId, slotDuration);
 
-      const allVaultsTokenMints = await kaminoManager.getAllVaultsTokenMintsIncludingRewards([kaminoVault]);
+      const kaminoVaultState = await kaminoVault.getState();
+      const vaultReservesMap = await kaminoManager.loadVaultReserves(kaminoVaultState);
+      const farmsMap = await kaminoManager.loadVaultFarmStates([kaminoVaultState], vaultReservesMap);
+      const allVaultsTokenMints = await kaminoManager.getAllVaultsTokenMintsIncludingRewards(
+        [kaminoVault],
+        vaultReservesMap,
+        farmsMap
+      );
       console.log('allVaultsTokenMints', allVaultsTokenMints);
     });
 
@@ -2009,6 +2775,19 @@ async function main() {
         console.log('reserve ', reserveAddress);
         console.log('allocation', allocation);
       });
+    });
+
+  commands
+    .command('print-kvault-holdings-log [encodedLog]')
+    .description('Decode a kvault Program data holdings log and print it in human-readable format')
+    .option('--encoded-log <string>', 'Base64 holdings payload or full "Program data: <base64>" log line')
+    .action(async (encodedLogArg, { encodedLog }) => {
+      const encodedLogToPrint = encodedLog ?? encodedLogArg;
+      if (!encodedLogToPrint) {
+        throw new Error('Encoded holdings log is required');
+      }
+
+      printKvaultHoldingsLog(encodedLogToPrint);
     });
 
   commands
@@ -2088,9 +2867,14 @@ async function main() {
 
       const vaultAddress = address(vault);
       const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId, slotDuration);
+      const confirmedSlot = await env.c.rpc.getSlot({ commitment: 'confirmed' }).send();
+      const kaminoVaultState = await kaminoVault.getState();
+      const vaultReservesMap = await kaminoManager.loadVaultReserves(kaminoVaultState);
       const tokensPerShare = await kaminoManager.getTokensPerShareSingleVault(
         kaminoVault,
-        await env.c.rpc.getSlot({ commitment: 'confirmed' }).send()
+        confirmedSlot,
+        vaultReservesMap,
+        confirmedSlot
       );
       console.log(`Tokens per share for vault ${vaultAddress.toString()}: ${tokensPerShare}`);
     });
@@ -2118,15 +2902,36 @@ async function main() {
       const vaultState = await kaminoVault.getState();
 
       const slot = await env.c.rpc.getSlot({ commitment: 'confirmed' }).send();
-      const tokensPerShare = await kaminoManager.getTokensPerShareSingleVault(kaminoVault, slot);
-      const holdings = await kaminoManager.getVaultHoldings(kaminoVault.state!, slot);
+      const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
+      const tokensPerShare = await kaminoManager.getTokensPerShareSingleVault(
+        kaminoVault,
+        slot,
+        vaultReservesMap,
+        slot
+      );
+      const holdings = await kaminoManager.getVaultHoldings(kaminoVault.state!, slot, vaultReservesMap, slot);
 
       const sharesIssued = lamportsToDecimal(
         vaultState.sharesIssued.toString(),
         vaultState.sharesMintDecimals.toString()
       );
 
-      const vaultOverview = await kaminoManager.getVaultOverview(kaminoVault, new Decimal(1.0), slot);
+      const kaminoMarkets = await kaminoManager.loadKaminoMarketsForVaultReserves(vaultReservesMap);
+      const farmsMap = await kaminoManager.loadVaultFarmStates([vaultState], vaultReservesMap);
+      const { Farms } = await import('@kamino-finance/farms-sdk');
+      const farmsClient = new Farms(env.c.rpc, env.farmsProgramId);
+      const globalConfig = await kaminoManager.loadKVaultGlobalConfig();
+      const vaultOverview = await kaminoManager.getVaultOverview(
+        kaminoVault,
+        new Decimal(1.0),
+        slot,
+        vaultReservesMap,
+        kaminoMarkets,
+        farmsMap,
+        farmsClient,
+        globalConfig,
+        slot
+      );
 
       console.log('farm', vaultState.vaultFarm.toString());
       console.log('vault token mint', vaultState.tokenMint);
@@ -2134,11 +2939,15 @@ async function main() {
       console.log('Shares issued: ', sharesIssued);
       holdings.print();
       console.log(`Tokens per share for vault ${vaultAddress}: ${tokensPerShare}`);
-      console.log('vaultOverview', vaultOverview);
+      printVaultReserveAllocations(kaminoManager.getVaultAllocations(vaultState), vaultReservesMap);
 
       for (const [reserveAddress, reserveOverview] of vaultOverview.reservesOverview) {
         console.log(`reserve ${reserveAddress} supplyAPY ${reserveOverview.supplyAPY}`);
       }
+      printVaultReserveFarmIncentives(
+        vaultOverview.reservesFarmsIncentives.reserveFarmsIncentives,
+        vaultOverview.reservesFarmsIncentives.totalIncentivesAPY
+      );
     });
 
   commands.command('get-cumulative-delegated-farms-rewards').action(async () => {
@@ -2170,6 +2979,48 @@ async function main() {
     });
   });
 
+  commands.command('check-vaults-farms').action(async () => {
+    const env = await initEnv();
+    const kaminoManager = new KaminoManager(
+      env.c.rpc,
+      DEFAULT_RECENT_SLOT_DURATION_MS,
+      env.klendProgramId,
+      env.kvaultProgramId,
+      undefined,
+      env.farmsProgramId
+    );
+
+    const uiVaults = await loadUiVaultsFromCdn();
+    console.log(`Checking ${uiVaults.length} UI vaults from ${CDN_ENDPOINT}/resources.json`);
+    const results = await checkVaultFarms(kaminoManager, uiVaults);
+    printVaultFarmCheckResults(results);
+  });
+
+  commands
+    .command('check-vault-farm [vault]')
+    .option('--vault <string>', 'Vault address')
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async (vaultArg, { vault, staging, devnet }) => {
+      const vaultAddress = vault ?? vaultArg;
+      if (!vaultAddress) {
+        throw new Error('Vault address is required. Pass it as an argument or with --vault <address>');
+      }
+
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const kaminoManager = new KaminoManager(
+        env.c.rpc,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        env.kvaultProgramId,
+        undefined,
+        env.farmsProgramId
+      );
+
+      const results = await checkVaultFarms(kaminoManager, [{ address: address(vaultAddress) }]);
+      printVaultFarmCheckResults(results);
+    });
+
   commands
     .command('simulate-reserve-apy')
     .requiredOption('--reserve <string>', 'Reserve address')
@@ -2185,7 +3036,11 @@ async function main() {
         address(reserve),
         env.c.rpc,
         DEFAULT_RECENT_SLOT_DURATION_MS,
-        reserveState
+        reserveState,
+        undefined,
+        undefined,
+        undefined,
+        env.klendProgramId
       );
 
       const slot = await env.c.rpc.getSlot({ commitment: 'confirmed' }).send();
@@ -2323,10 +3178,26 @@ async function main() {
         slotDuration
       ).getState();
 
-      const simulatedHoldings = await kaminoManager.calculateSimulatedHoldingsWithInterest(vaultState);
+      const currentLedgerInstant = await getCurrentLedgerInstant(env.c.rpc);
+      const { slot } = currentLedgerInstant;
+      const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
+      const simulatedHoldings = await kaminoManager.calculateSimulatedHoldingsWithInterest(
+        vaultState,
+        slot,
+        vaultReservesMap,
+        undefined,
+        currentLedgerInstant
+      );
 
       console.log('Simulated holdings with interest', simulatedHoldings);
-      const simulatedFees = await kaminoManager.calculateSimulatedFees(vaultState, simulatedHoldings);
+      const simulatedFees = await kaminoManager.calculateSimulatedFees(
+        vaultState,
+        slot,
+        vaultReservesMap,
+        simulatedHoldings,
+        currentLedgerInstant,
+        undefined
+      );
 
       console.log('Simulated fees', simulatedFees);
     });
@@ -2358,7 +3229,14 @@ async function main() {
         slotDuration
       ).getState();
 
-      const computedAllocation = await kaminoManager.getVaultComputedReservesAllocation(vaultState);
+      const slot = await env.c.rpc.getSlot().send();
+      const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
+      const computedAllocation = await kaminoManager.getVaultComputedReservesAllocation(
+        vaultState,
+        slot,
+        vaultReservesMap,
+        slot
+      );
       console.log('computedAllocation', computedAllocation);
     });
 
@@ -2417,8 +3295,10 @@ async function main() {
         undefined,
         env.farmsProgramId
       );
+      const vaultState = await kaminoVault.getState();
+      const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
       const userWallet = user ? noopSigner(address(user)) : await env.getSigner();
-      const rewardsIxs = await kaminoManager.getClaimAllRewardsForVaultIxs(userWallet, kaminoVault);
+      const rewardsIxs = await kaminoManager.getClaimAllRewardsForVaultIxs(userWallet, kaminoVault, vaultReservesMap);
 
       if (rewardsIxs.length > 0) {
         await processTx(
@@ -2595,24 +3475,7 @@ async function main() {
 
       const lutAcc = await fetchAddressLookupTable(env.c.rpc, lut);
 
-      // Split config update instructions into chunks to avoid transaction size limits
-      const CHUNK_SIZE = 8;
-      for (let i = 0; i < configUpdateIxs.length; i += CHUNK_SIZE) {
-        const chunk = configUpdateIxs.slice(i, i + CHUNK_SIZE);
-        await processTx(
-          env.c,
-          signer,
-          [
-            ...chunk.map((ix) => ix.ix),
-            ...getPriorityFeeAndCuIxs({
-              priorityFeeMultiplier: 2500,
-              computeUnits: 400_000,
-            }),
-          ],
-          mode,
-          [lutAcc]
-        );
-      }
+      await sendReserveConfigUpdateIxs(env, signer, configUpdateIxs, mode, [lutAcc]);
 
       mode === 'execute' &&
         console.log(
@@ -2693,24 +3556,7 @@ async function main() {
         return;
       }
 
-      // Split config update instructions into chunks to avoid transaction size limits
-      const CHUNK_SIZE = 8;
-      for (let i = 0; i < updateIxs.length; i += CHUNK_SIZE) {
-        const chunk = updateIxs.slice(i, i + CHUNK_SIZE);
-        await processTx(
-          env.c,
-          signer,
-          [
-            ...chunk.map((ix) => ix.ix),
-            ...getPriorityFeeAndCuIxs({
-              priorityFeeMultiplier: 2500,
-              computeUnits: 400_000,
-            }),
-          ],
-          mode,
-          []
-        );
-      }
+      await sendReserveConfigUpdateIxs(env, signer, updateIxs, mode);
       mode === 'execute' && console.log('Reserve Updated with config -> ', JSON.parse(JSON.stringify(reserveConfig)));
     });
 
@@ -2758,7 +3604,387 @@ async function main() {
       const marketName = parseZeroPaddedUtf8(lendingMarketState.name);
 
       fs.writeFileSync(
-        './configs/' + lendingMarketAddress.toString() + '/market-' + marketName + '-' + lendingMarketAddress.toString() + '.json',
+        './configs/' +
+          lendingMarketAddress.toString() +
+          '/market-' +
+          marketName +
+          '-' +
+          lendingMarketAddress.toString() +
+          '.json',
+        JSON.stringify(lendingMarketConfigForFile, null, 2)
+      );
+    });
+
+  commands
+    .command('check-vault-release-status')
+    .requiredOption('--vault <string>', 'Vault address')
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .action(async ({ vault, staging, devnet }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+      const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
+      const kaminoVault = new KaminoVault(env.c.rpc, address(vault), undefined, env.kvaultProgramId, slotDuration);
+
+      const result = await kaminoManager.checkVaultReleaseStatus(kaminoVault);
+
+      if (result.errors.length > 0) {
+        console.log('\nErrors:');
+        for (const error of result.errors) {
+          console.log(`  ❌ ${error}`);
+        }
+      }
+      if (result.warnings.length > 0) {
+        console.log('\nWarnings:');
+        for (const warning of result.warnings) {
+          console.log(`  ⚠️  ${warning}`);
+        }
+      }
+      if (result.success) {
+        console.log('\n✅ Vault is ready for release');
+      } else {
+        console.log('\n❌ Vault is NOT ready for release');
+      }
+    });
+
+  commands
+    .command('claim-rewards-for-vault')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .option(`--user <string>`, 'User address')
+    .action(async ({ vault, mode, staging, devnet, user }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const vaultAddress = address(vault);
+      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress);
+      const kaminoManager = new KaminoManager(
+        env.c.rpc,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        env.kvaultProgramId,
+        undefined,
+        env.farmsProgramId
+      );
+      const userWallet = user ? noopSigner(address(user)) : await env.getSigner();
+      const vaultState = await kaminoVault.getState();
+      const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
+      const rewardsIxs = await kaminoManager.getClaimAllRewardsForVaultIxs(userWallet, kaminoVault, vaultReservesMap);
+
+      if (rewardsIxs.length > 0) {
+        await processTx(
+          env.c,
+          userWallet,
+          [
+            ...rewardsIxs,
+            ...getPriorityFeeAndCuIxs({
+              priorityFeeMultiplier: 2500,
+              computeUnits: 400_000,
+            }),
+          ],
+          mode,
+          []
+        );
+      } else {
+        console.log('No rewards to claim');
+      }
+    });
+
+  commands
+    .command('create-market')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ mode, staging, devnet, multisig }) => {
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig pubkey is required');
+      }
+      const ms = multisig ? address(multisig) : undefined;
+      const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const admin = await env.getSigner();
+
+      const kaminoManager = new KaminoManager(
+        env.c.rpc,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        env.kvaultProgramId,
+        undefined,
+        env.farmsProgramId
+      );
+
+      const { market: marketKp, ixs: createMarketIxs } = await kaminoManager.createMarketIxs({
+        admin,
+      });
+
+      await processTx(
+        env.c,
+        admin,
+        [
+          ...createMarketIxs,
+          ...getPriorityFeeAndCuIxs({
+            priorityFeeMultiplier: 2500,
+          }),
+        ],
+        mode,
+        []
+      );
+
+      mode === 'execute' && console.log('Market created:', marketKp.address);
+    });
+
+  commands
+    .command('add-asset-to-market')
+    .requiredOption('--market <string>', 'Market address to add asset to')
+    .requiredOption('--mint <string>', 'Reserve liquidity token mint')
+    .requiredOption('--reserve-config-path <string>', 'Path for the reserve config')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
+    )
+    .option(
+      '--global-admin <string>',
+      'Global admin signer (keypair path in execute/simulate modes, pubkey in multisig mode)'
+    )
+    .option('--reserve-key-path <string>', 'Path to the reserve key pair file')
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ market, mint, reserveConfigPath, mode, staging, globalAdmin, multisig, reserveKeyPath }) => {
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig pubkey is required');
+      }
+      const ms = multisig ? address(multisig) : undefined;
+      const env = await initEnv(staging, ms);
+      const tokenMint = address(mint);
+      const marketAddress = address(market);
+      const existingMarket = await KaminoMarket.load(
+        env.c.rpc,
+        marketAddress,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        false
+      );
+      if (existingMarket === null) {
+        throw new Error(`Market ${marketAddress} does not exist`);
+      }
+      const signer = await env.getSigner({ market: existingMarket });
+      const mintAccount = await fetchMint(env.c.rpc, mint);
+      const tokenMintProgramId = mintAccount.programAddress;
+      const kaminoManager = new KaminoManager(
+        env.c.rpc,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        env.kvaultProgramId,
+        undefined,
+        env.farmsProgramId
+      );
+
+      const reserveConfigFromFile = JSON.parse(fs.readFileSync(reserveConfigPath, 'utf8'));
+
+      const reserveConfig = parseReserveConfigFromFile(reserveConfigFromFile);
+      const assetConfig = new AssetReserveConfigCli(tokenMint, tokenMintProgramId, reserveConfig);
+
+      const [adminAta] = await findAssociatedTokenPda({
+        mint: tokenMint,
+        owner: signer.address,
+        tokenProgram: tokenMintProgramId,
+      });
+
+      let globalAdminSigner: TransactionSigner | undefined = undefined;
+      if (globalAdmin) {
+        globalAdminSigner =
+          mode === 'multisig' ? noopSigner(address(globalAdmin)) : await parseKeypairFile(globalAdmin as string);
+      }
+
+      let reserveKeypair: TransactionSigner | undefined = undefined;
+      if (reserveKeyPath) {
+        reserveKeypair = await parseKeypairFile(reserveKeyPath);
+      } else {
+        reserveKeypair = await generateKeyPairSigner();
+      }
+
+      const { createReserveIxs, configUpdateIxs } = await kaminoManager.addAssetToMarketIxs({
+        admin: signer,
+        adminLiquiditySource: adminAta,
+        marketAddress: marketAddress,
+        assetConfig: assetConfig,
+        reserveKeypair,
+        globalAdminSigner,
+      });
+
+      console.log('reserve: ', reserveKeypair.address);
+
+      await processTx(
+        env.c,
+        signer,
+        [
+          ...createReserveIxs,
+          ...getPriorityFeeAndCuIxs({
+            priorityFeeMultiplier: 2500,
+          }),
+        ],
+        mode,
+        []
+      );
+
+      const [lut, createLutIxs] = await createUpdateReserveConfigLutIxs(env, marketAddress, reserveKeypair.address);
+
+      await processTx(
+        env.c,
+        signer,
+        [
+          ...createLutIxs,
+          ...getPriorityFeeAndCuIxs({
+            priorityFeeMultiplier: 2500,
+          }),
+        ],
+        mode
+      );
+
+      const lutAcc = await fetchAddressLookupTable(env.c.rpc, lut);
+
+      await sendReserveConfigUpdateIxs(env, signer, configUpdateIxs, mode, [lutAcc]);
+
+      mode === 'execute' &&
+        console.log(
+          'Reserve Created with config:',
+          JSON.parse(JSON.stringify(reserveConfig)),
+          '\nreserve address:',
+          reserveKeypair.address
+        );
+    });
+
+  commands
+    .command('update-reserve-config')
+    .requiredOption('--reserve <string>', 'Reserve address')
+    .requiredOption('--reserve-config-path <string>', 'Path for the reserve config')
+    .requiredOption(
+      `--mode <string>`,
+      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
+    )
+    .option(
+      '--global-admin <string>',
+      'Global admin signer (keypair path in execute/simulate modes, pubkey in multisig mode)'
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .action(async ({ reserve, reserveConfigPath, mode, staging, globalAdmin, multisig }) => {
+      if (mode === 'multisig' && !multisig) {
+        throw new Error('If using multisig mode, multisig pubkey is required');
+      }
+      const ms = multisig ? address(multisig) : undefined;
+      const env = await initEnv(staging, ms);
+      const reserveAddress = address(reserve);
+      const reserveState = await Reserve.fetch(env.c.rpc, reserveAddress, env.klendProgramId);
+      if (reserveState === null) {
+        throw new Error(`Reserve ${reserveAddress} not found`);
+      }
+
+      const marketAddress = reserveState.lendingMarket;
+      const marketState = await KaminoMarket.load(
+        env.c.rpc,
+        marketAddress,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        false
+      );
+      if (marketState === null) {
+        throw new Error(`Market ${marketAddress} not found`);
+      }
+      const signer = await env.getSigner({ market: marketState });
+      const marketWithAddress: MarketWithAddress = {
+        address: marketAddress,
+        state: marketState.state,
+      };
+
+      const kaminoManager = new KaminoManager(
+        env.c.rpc,
+        DEFAULT_RECENT_SLOT_DURATION_MS,
+        env.klendProgramId,
+        env.kvaultProgramId,
+        undefined,
+        env.farmsProgramId
+      );
+
+      const reserveConfigFromFile = JSON.parse(fs.readFileSync(reserveConfigPath, 'utf8'));
+
+      const reserveConfig = parseReserveConfigFromFile(reserveConfigFromFile);
+
+      const updateIxs = await kaminoManager.updateReserveIxs(
+        signer,
+        marketWithAddress,
+        reserveAddress,
+        reserveConfig,
+        reserveState,
+        globalAdmin
+      );
+
+      if (updateIxs.length === 0) {
+        console.log('No changes to reserve config');
+        return;
+      }
+
+      await sendReserveConfigUpdateIxs(env, signer, updateIxs, mode);
+      mode === 'execute' && console.log('Reserve Updated with config -> ', JSON.parse(JSON.stringify(reserveConfig)));
+    });
+
+  commands
+    .command('download-reserve-config')
+    .requiredOption('--reserve <string>', 'Reserve address')
+    .option(`--staging`, 'If true, will use the staging programs')
+    .action(async ({ reserve, staging }) => {
+      const env = await initEnv(undefined, staging);
+      const reserveAddress = address(reserve);
+      const reserveState = await Reserve.fetch(env.c.rpc, reserveAddress, env.klendProgramId);
+      if (!reserveState) {
+        throw new Error('Reserve not found');
+      }
+
+      fs.mkdirSync('./configs/' + reserveState.lendingMarket, { recursive: true });
+
+      const decoder = new TextDecoder('utf-8');
+      const reserveName = decoder.decode(Uint8Array.from(reserveState.config.tokenInfo.name)).replace(/\0/g, '');
+
+      const reserveConfigDisplay = parseReserveConfigToFile(reserveState.config);
+
+      fs.writeFileSync(
+        './configs/' + reserveState.lendingMarket + '/' + reserveName + '-' + reserveAddress.toString() + '.json',
+        JSON.stringify(reserveConfigDisplay, null, 2)
+      );
+    });
+
+  commands
+    .command('download-lending-market-config')
+    .requiredOption('--lending-market <string>', 'Lending Market Address')
+    .option(`--staging`, 'If true, will use the staging programs')
+    .action(async ({ lendingMarket, staging }) => {
+      const env = await initEnv(false, staging);
+      const lendingMarketAddress = address(lendingMarket);
+      const lendingMarketState = await LendingMarket.fetch(env.c.rpc, lendingMarketAddress, env.klendProgramId);
+
+      if (!lendingMarketState) {
+        throw new Error('Lending Market not found');
+      }
+
+      fs.mkdirSync('./configs/' + lendingMarketAddress.toString(), { recursive: true });
+
+      const lendingMarketConfigForFile = lendingMarketToConfigFileJSON(lendingMarketState);
+      const marketName = parseZeroPaddedUtf8(lendingMarketState.name);
+
+      fs.writeFileSync(
+        './configs/' +
+          lendingMarketAddress.toString() +
+          '/market-' +
+          marketName +
+          '-' +
+          lendingMarketAddress.toString() +
+          '.json',
         JSON.stringify(lendingMarketConfigForFile, null, 2)
       );
     });
@@ -2795,7 +4021,13 @@ async function main() {
       const marketName = parseZeroPaddedUtf8(lendingMarketState.name);
 
       fs.writeFileSync(
-        './configs/' + lendingMarketAddress.toString() + '/market-' + marketName + '-' + lendingMarketAddress.toString() + '.json',
+        './configs/' +
+          lendingMarketAddress.toString() +
+          '/market-' +
+          marketName +
+          '-' +
+          lendingMarketAddress.toString() +
+          '.json',
         JSON.stringify(lendingMarketConfigForFile, null, 2)
       );
 
@@ -3075,32 +4307,45 @@ async function main() {
         newReserveConfig
       );
 
-      await processTx(
-        env.c,
-        admin,
-        [
-          ...updateIxs.map((ix) => ix.ix),
-          ...getPriorityFeeAndCuIxs({
-            priorityFeeMultiplier: 2500,
-            computeUnits: 400_000,
-          }),
-        ],
-        mode,
-        []
-      );
+      await sendReserveConfigUpdateIxs(env, admin, updateIxs, mode);
 
       mode === 'execute' && console.log(`Reserve ${reserveAddress} debt cap updated`);
     });
 
+  // example:  yarn kamino-manager get-market-or-vault-admin-info --address A2wsxhA7pF4B2UKVfXocb6TAAP9ipfPJam6oMKgDE5BK
   commands
     .command('get-market-or-vault-admin-info')
     .requiredOption('--address <string>', 'Address of the market or vault')
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--devnet`, 'If true, will use devnet programs and RPC')
-    .action(async ({ address: addr, staging, devnet }) => {
+    .option(`--fordefi-api-token <string>`, 'Fordefi API token; defaults to FORDEFI_API_TOKEN')
+    .option(`--fordefi-api-base-url <string>`, 'Fordefi API base URL; defaults to https://api.fordefi.com/api/v1')
+    .action(async ({ address: addr, staging, devnet, fordefiApiToken, fordefiApiBaseUrl }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
-      const adminInfo = await KaminoManager.getMarketOrVaultAdminInfo(env.c.rpc, address(addr));
+      const adminInfo = await KaminoManager.getMarketOrVaultAdminInfo(env.c.rpc, address(addr), (adminAuthority) =>
+        getWalletType(adminAuthority, env.c.rpc, {
+          apiToken: fordefiApiToken,
+          apiBaseUrl: fordefiApiBaseUrl,
+        })
+      );
       console.log(adminInfo);
+    });
+
+  // example:  yarn kamino-manager get-wallet-type --wallet H5P3cr5wfiE6gKWtnhtCCENn3csyV35dNiYKRUwH9WGJ
+  commands
+    .command('get-wallet-type')
+    .requiredOption('--wallet <string>', 'Wallet address')
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .option(`--fordefi-api-token <string>`, 'Fordefi API token; defaults to FORDEFI_API_TOKEN')
+    .option(`--fordefi-api-base-url <string>`, 'Fordefi API base URL; defaults to https://api.fordefi.com/api/v1')
+    .action(async ({ wallet, staging, devnet, fordefiApiToken, fordefiApiBaseUrl }) => {
+      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const walletType = await getWalletType(address(wallet), env.c.rpc, {
+        apiToken: fordefiApiToken,
+        apiBaseUrl: fordefiApiBaseUrl,
+      });
+      console.log(walletType);
     });
 
   await commands.parseAsync();
@@ -3118,10 +4363,19 @@ main()
 /** JSON for human-edited market configs: no deprecated/reserved/padding blobs (filled from chain in parse). */
 function lendingMarketToConfigFileJSON(market: LendingMarket): Record<string, unknown> {
   const j = market.toJSON();
-  const { reserved0: _r0, reserved1: _r1, elevationGroupPadding: _egp, padding1: _p1, elevationGroups, name, ...top } = j;
+  const {
+    reserved0: _r0,
+    reserved1: _r1,
+    elevationGroupPadding: _egp,
+    padding1: _p1,
+    elevationGroups,
+    name,
+    ...top
+  } = j;
   return {
     ...top,
     name: parseZeroPaddedUtf8(name),
+    permissionedOps: PermissionedOp.fromBN(market.permissionedOps).toString(),
     elevationGroups: elevationGroups.map(({ padding0: _p0, padding1: _gp1, ...g }) => g),
   };
 }
@@ -3141,6 +4395,7 @@ function parseLendingMarketConfigFromFile(fileObj: Record<string, unknown>, fall
   const mergedMut = merged as unknown as Record<string, unknown>;
   for (const [k, v] of Object.entries(fileObj)) {
     if (LENDING_MARKET_FILE_IGNORE_TOP.has(k)) continue;
+    if (k === 'permissionedOps') continue; // handled after fromJSON, see below
     if (k === 'name' && typeof v === 'string') {
       mergedMut[k] = renderZeroPaddedUtf8(v, 32);
     } else {
@@ -3158,7 +4413,11 @@ function parseLendingMarketConfigFromFile(fileObj: Record<string, unknown>, fall
     });
   }
 
-  return LendingMarket.fromJSON(merged);
+  const result = LendingMarket.fromJSON(merged);
+  return new LendingMarket({
+    ...result,
+    permissionedOps: PermissionedOp.fromUnknown(fileObj.permissionedOps).toBN(),
+  });
 }
 
 function parseReserveConfigFromFile(reserveConfigFromFile: any): ReserveConfig {
@@ -3225,6 +4484,10 @@ function parseReserveConfigFromFile(reserveConfigFromFile: any): ReserveConfig {
     blockCtokenUsage: 0,
     debtMaturityTimestamp: new BN(reserveConfigFromFile.debtMaturityTimestamp),
     debtTermSeconds: new BN(reserveConfigFromFile.debtTermSeconds),
+    earlyRepayRemainingInterestPct: reserveConfigFromFile.earlyRepayRemainingInterestPct,
+    emergencyMode: reserveConfigFromFile.emergencyMode ?? 0,
+    rewardsAmountPerSlot: new BN(reserveConfigFromFile.rewardsAmountPerSlot ?? 0),
+    permissionedOps: PermissionedOp.fromUnknown(reserveConfigFromFile.permissionedOps).toBN(),
   };
 
   return new ReserveConfig(reserveConfigFields);
@@ -3349,7 +4612,42 @@ function parseReserveConfigToFile(reserveConfig: ReserveConfig) {
     deleveragingBonusIncreaseBpsPerDay: reserveConfig.deleveragingBonusIncreaseBpsPerDay.toString(),
     debtMaturityTimestamp: reserveConfig.debtMaturityTimestamp.toString(),
     debtTermSeconds: reserveConfig.debtTermSeconds.toString(),
+    earlyRepayRemainingInterestPct: reserveConfig.earlyRepayRemainingInterestPct,
+    permissionedOps: PermissionedOp.fromBN(reserveConfig.permissionedOps).toString(),
+    reserved1: reserveConfig.reserved1,
   };
+}
+
+/**
+ * Sends reserve config updates in chunks: a whole config's worth of them exceeds what a single transaction can
+ * carry, so they are split rather than sent as one batch.
+ */
+async function sendReserveConfigUpdateIxs(
+  env: ManagerEnv,
+  signer: TransactionSigner,
+  updateIxs: ReserveConfigUpdateIx[],
+  mode: SendTxMode,
+  luts: Account<AddressLookupTable>[] = []
+): Promise<void> {
+  // Each update scans the whole transaction for a durable-nonce instruction, so batching them costs more per
+  // update the bigger the batch: six comfortably fit in the 400k requested below, eight measured 399k.
+  const CHUNK_SIZE = 6;
+  for (let i = 0; i < updateIxs.length; i += CHUNK_SIZE) {
+    const chunk = updateIxs.slice(i, i + CHUNK_SIZE);
+    await processTx(
+      env.c,
+      signer,
+      [
+        ...chunk.map((ix) => ix.ix),
+        ...getPriorityFeeAndCuIxs({
+          priorityFeeMultiplier: 2500,
+          computeUnits: 400_000,
+        }),
+      ],
+      mode,
+      luts
+    );
+  }
 }
 
 async function createUpdateReserveConfigLutIxs(

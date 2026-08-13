@@ -28,7 +28,6 @@ export interface WithdrawPendingFeesAccounts {
   baseVaultAuthority: Address
   tokenAta: Address
   tokenMint: Address
-  /** CPI accounts */
   lendingMarket: Address
   lendingMarketAuthority: Address
   reserveLiquiditySupply: Address

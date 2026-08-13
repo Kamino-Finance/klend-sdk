@@ -107,6 +107,23 @@ export function closeLookupTableIx(authority: TransactionSigner, lookupTable: Ad
 }
 
 /**
+ * Physical LUT size after extending with `keysToAdd`.
+ * On-chain LUTs can contain duplicate addresses; a Set-union of existing+new undercounts those duplicates.
+ * Final physical size = existing physical entry count + unique keys not already present in the existing set.
+ * Duplicate requested keys are counted at most once.
+ */
+export function computeLutFinalPhysicalSize(accountsInLut: Address[], keysToAdd: Address[]): number {
+  const existingAddressSet = new Set(accountsInLut);
+  const missingUnique = new Set<Address>();
+  for (const key of keysToAdd) {
+    if (!existingAddressSet.has(key)) {
+      missingUnique.add(key);
+    }
+  }
+  return accountsInLut.length + missingUnique.size;
+}
+
+/**
  * Returns the accounts in a lookup table
  * @param rpc
  * @param lookupTable - lookup table to get the accounts from

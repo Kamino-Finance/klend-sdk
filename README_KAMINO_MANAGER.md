@@ -28,7 +28,7 @@ KVAULT_PROGRAM_ID_STAGING="stKvQfwRsQiKnLtMNVLHKS3exFJmZFsgfzBPWHECUYK"
 - for the template you can copy `.env.example` to `.env` and then replace the ADMIN and RPC values `cp .env.example .env`
 
 - **ADMIN** - path to a local private key file (it has to be a JSON file and have some SOL). If you don't have one create one. To create it you need to have Solana locally
-  - Install Solana: guide: https://docs.solanalabs.com/cli/install or directly `sh -c "$(curl -sSfL https://release.solana.com/v1.18.18/install)"`. If it suggests a command involving `PATH` after installation, run it.
+  - Install Solana: guide: <https://docs.solanalabs.com/cli/install> or directly `sh -c "$(curl -sSfL https://release.solana.com/v1.18.18/install)"`. If it suggests a command involving `PATH` after installation, run it.
   - Restart the terminal you are using
   - Create new keypair: `solana-keygen new -o admin.json`
   - Get the pubkey: `solana-keygen pubkey admin.json`
@@ -167,13 +167,14 @@ yarn kamino-manager create-vault --mint token_mint --staging --mode execute
 #### Update vault reserve allocation
 
 ```
-yarn kamino-manager update-vault-reserve-allocation --vault vault_address --reserve reserve_address --allocation-weight number --allocation-cap number --staging --mode execute
+yarn kamino-manager update-vault-reserve-allocation --vault vault_address --reserve reserve_address --allocation-weight number --allocation-cap number --ctoken-allocation-cap number --staging --mode execute
 ```
 
 - **vault** - the vault address to add/update the reserve allocation for
 - **reserve** - the reserve address to add/update the reserve allocation for
 - **allocation-weight** - the allocation weight for given reserve; only relevant in relation with the other reserve allocation weights
 - **allocation-cap** - the allocation cap in decimal (not lamports) for given reserve
+- **ctoken-allocation-cap** - optional ctoken allocation cap in ctoken lamports. If omitted, the existing on-chain cap is preserved via the v1 instruction. Pass `0` or `18446744073709551615` (`u64::MAX`) to explicitly clear the cap (uncapped) via v2
 - **mode** - can have these values:
   - *inspect* - will print an url to the explorer txn inspection, where it can be simulated
   - *simulate* - will print the simulation outputs
@@ -182,6 +183,27 @@ yarn kamino-manager update-vault-reserve-allocation --vault vault_address --rese
   It is recommended to **1. inspect/simulate** and then **2. execute/multisig**
 - **staging** - is a boolean flag. If set, staging programs will be used
 - **multisig** - address string to be used as admin PublicKey. To be used in conjunction with multisig mode
+
+#### Print kvault holdings log
+
+```
+yarn kamino-manager print-kvault-holdings-log --encoded-log "Program data: encoded_holdings_log"
+```
+
+- **encoded-log** - base64 holdings payload or full `Program data: <base64>` log line
+
+#### Whitelist or unwhitelist reserves for vault allocation/invest
+
+```
+yarn kamino-manager unwhitelist-reserves --reserves-file ./reserves.txt --mode multisig --global-admin <global_admin_pubkey> --multisig <multisig_pubkey>
+```
+
+- **reserves-file** - path to a file containing reserve addresses separated by newlines, commas, or both
+- **unwhitelist-reserves** - removes both `Invest` and `AddAllocation` whitelist flags for each reserve
+- **whitelist-reserves --value 0** - equivalent unwhitelist flow using the generic command
+- **whitelist-reserves --value 1** - adds both `Invest` and `AddAllocation` whitelist flags for each reserve
+- **check-reserve-is-whitelisted --reserve <reserve_address>** - checks whether a reserve is whitelisted for `Invest` and `AddAllocation`
+- **mode multisig** - prints base58 transaction messages, batched as 3 reserves per proposal
 
 #### Update vault pending admin
 
@@ -359,12 +381,12 @@ To have a strategy under multisig you can:
 
 For all actions that require admin permissions (updating reserves allocation, setting the performance and management fee, collect pending fees, give up fees) at the commands above you will need to add the `--multisig <multisig_pubkey>` flag and the command will return the base58 transaction to be proposed in the multisig.
 
-
 ## Troubleshooting
 
 ### Debugging transactions
 
 #### Common error messages
+
 - `Transaction failed: Error processing Instruction 0: custom program error: 0x1`: you don't have enough SOL in the admin wallet to pay for the transaction fees; you can check the transaction hash to see exactly how much SOL was needed
 - `TransactionExpiredBlockheightExceededError: Signature <signature_value> has expired: block height exceeded.`: this has multiple potential causes:
   - the transaction was not submitted to the network in time because of the RPC/network being congested

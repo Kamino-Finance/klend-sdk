@@ -1,23 +1,34 @@
 import {
+  FlashBorrowType,
   MultiplyObligation,
   PROGRAM_ID,
   getAdjustLeverageIxs,
   getComputeBudgetAndPriorityFeeIxs,
   getUserLutAddressAndSetupIxs,
   getScopeRefreshIxForObligationAndReserves,
+  getCurrentLedgerInstant,
 } from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
-import { JLP_MARKET, JLP_MARKET_LUT, JLP_MINT, JUP_QUOTE_BUFFER_BPS, USDC_MINT } from '../utils/constants';
+import {
+  JLP_MARKET,
+  JLP_MARKET_LUT,
+  JLP_MINT,
+  JLP_RESERVE_JLP_MARKET,
+  JUP_QUOTE_BUFFER_BPS,
+  USDC_MINT,
+  USDC_RESERVE_JLP_MARKET,
+} from '../utils/constants';
 import { executeUserSetupLutsTransactions, getMarket } from '../utils/helpers';
 import { getKaminoResources } from '../utils/kamino_resources';
 import Decimal from 'decimal.js';
 import { Scope } from '@kamino-finance/scope-sdk/';
 import { KswapSdk, RouteOutput } from '@kamino-finance/kswap-sdk/dist';
-import { getKswapQuoter, getKswapSwapper, getTokenPriceFromJupWithFallback, KSWAP_API } from '../utils/kswap_utils';
+import { getKswapQuoter, getKswapSwapper, getTokenPriceFromBirdeye, KSWAP_API } from '../utils/kswap_utils';
 import { address, Address, none } from '@solana/kit';
 import { fetchAllAddressLookupTable } from '@solana-program/address-lookup-table';
 import { sendAndConfirmTx, simulateTx } from '../utils/tx';
+import { getFlashBorrowTypeFromEnv } from '../utils/env';
 
 // For this example we are only using JLP/USDC multiply
 // This can be also used for leverage by using the correct type when creating the obligation
@@ -30,10 +41,14 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
 
   const collTokenMint = JLP_MINT;
   const debtTokenMint = USDC_MINT;
+  const collReserveAddress = JLP_RESERVE_JLP_MARKET;
+  const debtReserveAddress = USDC_RESERVE_JLP_MARKET;
   // const vaultType = 'multiply';
   const targetLeverage = new Decimal(2); // 3x leverage/ 3x multiply
   const ogLeverage = new Decimal(3);
   const slippageBps = 30;
+  // Optional: set to 'coll' or 'debt' to override which token is flash borrowed (default: 'coll' for increase, 'debt' for decrease)
+  const flashBorrowType: FlashBorrowType | undefined = getFlashBorrowTypeFromEnv();
   const kswapSdk = new KswapSdk(KSWAP_API, c.rpc, c.wsRpc);
 
   const kaminoResources = await getKaminoResources();
@@ -43,11 +58,13 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
 
   const multiplyLutKeys = multiplyLut.map((lut) => address(lut));
 
-  const multiplyMints: { coll: Address; debt: Address }[] = [{ coll: collTokenMint, debt: debtTokenMint }];
-  const leverageMints: { coll: Address; debt: Address }[] = [];
-  multiplyMints.push({
-    coll: collTokenMint,
-    debt: debtTokenMint,
+  const multiplyReserveAddresses: { coll: Address; debt: Address }[] = [
+    { coll: collReserveAddress, debt: debtReserveAddress },
+  ];
+  const leverageReserveAddresses: { coll: Address; debt: Address }[] = [];
+  multiplyReserveAddresses.push({
+    coll: collReserveAddress,
+    debt: debtReserveAddress,
   });
 
   // This is the setup step that should happen each time the user has to extend it's LookupTable with missing keys
@@ -58,22 +75,23 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
     wallet,
     undefined,
     true, // always extending LUT
-    multiplyMints,
-    leverageMints
+    multiplyReserveAddresses,
+    leverageReserveAddresses
   );
 
-  const debtTokenReserve = market.getReserveByMint(debtTokenMint)!;
-  const collTokenReserve = market.getReserveByMint(collTokenMint)!;
+  const debtTokenReserve = market.getExistingReserveByAddress(debtReserveAddress);
+  const collTokenReserve = market.getExistingReserveByAddress(collReserveAddress);
 
   await executeUserSetupLutsTransactions(c, wallet, txsIxs);
 
   const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, PROGRAM_ID); // new LeverageObligation(collTokenMint, debtTokenMint, PROGRAM_ID); for leverage
   const obligationAddress = await obligationType.toPda(market.getAddress(), wallet.address);
   const obligation = await market.getObligationByAddress(obligationAddress)!;
-  const depositedLamports = obligation!.getDepositByMint(collTokenMint)!.amount;
-  const borrowedLamports = obligation!.getBorrowByMint(debtTokenMint)!.amount;
+  const depositedLamports = obligation!.getDepositByReserve(collReserveAddress)!.amount;
+  const borrowedLamports = obligation!.getBorrowByReserve(debtReserveAddress)!.amount;
 
-  const currentSlot = await c.rpc.getSlot().send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc, 'processed');
+  const currentSlot = currentLedgerInstant.slot;
   const scopeConfiguration = { scope, scopeConfigurations: await scope.getAllConfigurations() };
   const scopeRefreshIx = await getScopeRefreshIxForObligationAndReserves(
     market,
@@ -85,7 +103,7 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
 
   // Price A in B callback can be defined in different ways. Here we use jupiter price API
   const getPriceAinB = async (tokenAMint: Address, tokenBMint: Address): Promise<Decimal> => {
-    const price = await getTokenPriceFromJupWithFallback(kswapSdk, tokenAMint, tokenBMint);
+    const price = await getTokenPriceFromBirdeye(kswapSdk, tokenAMint, tokenBMint);
     return new Decimal(price);
   };
 
@@ -106,13 +124,14 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
     const adjustUpWithLeverageRoutes = await getAdjustLeverageIxs<RouteOutput>({
       owner: wallet,
       kaminoMarket: market,
-      debtTokenMint: debtTokenMint,
-      collTokenMint: collTokenMint,
+      debtReserveAddress: debtReserveAddress,
+      collReserveAddress: collReserveAddress,
       obligation: obligation!, // obligation does not exist as we are creating it with this deposit
       depositedLamports,
       borrowedLamports,
       referrer: none(),
       currentSlot,
+      currentLedgerInstant,
       targetLeverage: targetLeverage,
       priceCollToDebt,
       priceDebtToColl,
@@ -120,16 +139,11 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
       budgetAndPriorityFeeIxs: computeIxs,
       scopeRefreshIx,
       quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
-      quoter: getKswapQuoter(
-        kswapSdk,
-        wallet.address,
-        slippageBps,
-        market.getReserveByMint(collTokenMint)!,
-        market.getReserveByMint(debtTokenMint)!
-      ), // IMPORTANT!: For deposit the input mint is the debt token mint and the output mint is the collateral token
+      quoter: getKswapQuoter(kswapSdk, wallet.address, slippageBps, collTokenReserve, debtTokenReserve), // IMPORTANT!: For deposit the input mint is the debt token mint and the output mint is the collateral token
       swapper: getKswapSwapper(kswapSdk, wallet.address, slippageBps),
       useV2Ixs: true,
       userSolBalanceLamports,
+      flashBorrowType,
     });
     const klendLookupTableKeys: Address[] = [];
     klendLookupTableKeys.push(userLookupTable);
@@ -177,8 +191,10 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
     }
 
     const transactionToExecute = passingSimulationTxs.reduce((bestTx, currentTx) => {
-      const inputMintReserve = market.getReserveByMint(bestTx.swapInputs.inputMint)!;
-      const outputMintReserve = market.getReserveByMint(bestTx.swapInputs.outputMint)!;
+      const inputMintReserve =
+        bestTx.swapInputs.inputMint === collTokenReserve.getLiquidityMint() ? collTokenReserve : debtTokenReserve;
+      const outputMintReserve =
+        bestTx.swapInputs.outputMint === collTokenReserve.getLiquidityMint() ? collTokenReserve : debtTokenReserve;
       if (!currentTx) return bestTx;
       if (!bestTx) return currentTx;
       const best = bestTx.routeOutput;
@@ -227,30 +243,26 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
     const adjustDownWithLeverageRoutes = await getAdjustLeverageIxs<RouteOutput>({
       owner: wallet,
       kaminoMarket: market,
-      debtTokenMint: debtTokenMint,
-      collTokenMint: collTokenMint,
+      debtReserveAddress: debtReserveAddress,
+      collReserveAddress: collReserveAddress,
       obligation: obligation!, // obligation does not exist as we are creating it with this deposit
       depositedLamports,
       borrowedLamports,
       referrer: none(),
       currentSlot,
+      currentLedgerInstant,
       targetLeverage: ogLeverage,
       priceCollToDebt,
       priceDebtToColl,
-      slippagePct: new Decimal(slippageBps),
+      slippagePct: new Decimal(slippageBps / 100),
       budgetAndPriorityFeeIxs: computeIxs,
       scopeRefreshIx,
       quoteBufferBps: new Decimal(JUP_QUOTE_BUFFER_BPS),
-      quoter: getKswapQuoter(
-        kswapSdk,
-        wallet.address,
-        slippageBps,
-        market.getReserveByMint(debtTokenMint)!,
-        market.getReserveByMint(collTokenMint)!
-      ), // IMPORTANT!: For deposit the input mint is the debt token mint and the output mint is the collateral token
+      quoter: getKswapQuoter(kswapSdk, wallet.address, slippageBps, debtTokenReserve, collTokenReserve), // IMPORTANT!: For deposit the input mint is the debt token mint and the output mint is the collateral token
       swapper: getKswapSwapper(kswapSdk, wallet.address, slippageBps),
       useV2Ixs: true,
       userSolBalanceLamports,
+      flashBorrowType,
     });
 
     const klendLookupTableKeys: Address[] = [];
@@ -294,8 +306,10 @@ import { sendAndConfirmTx, simulateTx } from '../utils/tx';
     const passingSimulationTxs = simulationTxs.filter((tx) => tx !== undefined);
 
     const transactionToExecute = passingSimulationTxs.reduce((bestTx, currentTx) => {
-      const inputMintReserve = market.getReserveByMint(bestTx.swapInputs.inputMint)!;
-      const outputMintReserve = market.getReserveByMint(bestTx.swapInputs.outputMint)!;
+      const inputMintReserve =
+        bestTx.swapInputs.inputMint === collTokenReserve.getLiquidityMint() ? collTokenReserve : debtTokenReserve;
+      const outputMintReserve =
+        bestTx.swapInputs.outputMint === collTokenReserve.getLiquidityMint() ? collTokenReserve : debtTokenReserve;
       if (!currentTx) return bestTx;
       if (!bestTx) return currentTx;
       const best = bestTx.routeOutput;

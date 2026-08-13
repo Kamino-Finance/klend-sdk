@@ -23,8 +23,9 @@ export interface UpdateLendingMarketArgs {
 }
 
 export interface UpdateLendingMarketAccounts {
-  lendingMarketOwner: TransactionSigner
+  signer: TransactionSigner
   lendingMarket: Address
+  instructionSysvarAccount: Address
 }
 
 export const layout = borsh.struct<UpdateLendingMarketArgs>([
@@ -39,12 +40,9 @@ export function updateLendingMarket(
   programAddress: Address = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta | AccountSignerMeta> = [
-    {
-      address: accounts.lendingMarketOwner.address,
-      role: 2,
-      signer: accounts.lendingMarketOwner,
-    },
+    { address: accounts.signer.address, role: 2, signer: accounts.signer },
     { address: accounts.lendingMarket, role: 1 },
+    { address: accounts.instructionSysvarAccount, role: 0 },
     ...remainingAccounts,
   ]
   const buffer = Buffer.alloc(1000)

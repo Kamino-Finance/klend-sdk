@@ -1,7 +1,7 @@
 import { address, Address, TransactionSigner } from '@solana/kit';
 import { CliConnectionPool } from './CliConnectionPool';
 import { PROGRAM_ID as KLEND_PROGRAM_ID } from '../../@codegen/klend/programId';
-import { PROGRAM_ID as FARMS_PROGRAM_ID } from '@kamino-finance/farms-sdk/dist/@codegen/farms/programId';
+import { FARMS_PROGRAM_ADDRESS as FARMS_PROGRAM_ID } from '@kamino-finance/farms-sdk';
 import { STAGING_PROGRAM_ID as KLEND_STAGING_PROGRAM_ID } from '../../utils/constants';
 import { noopSigner, parseKeypairFile } from './keypair';
 import { Chain } from './rpc';

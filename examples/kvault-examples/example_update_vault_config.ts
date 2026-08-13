@@ -17,22 +17,26 @@ import { generateKeyPairSigner } from '@solana/kit';
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
   const kaminoVault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
+  const vaultState = await kaminoVault.getState();
+  const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
 
   // update min invest amount (numerical value)
   const minInvestAmount = new Decimal(100_000);
   const updateMinInvestAmountIxs = await kaminoManager.updateVaultConfigIxs(
     kaminoVault,
     new VaultConfigField.MinInvestAmount(),
-    minInvestAmount.toString()
+    minInvestAmount.toString(),
+    vaultReservesMap
   );
-
-  // read the vault state so we can use the LUT in the tx
-  const vaultState = await kaminoVault.getState();
 
   await sendAndConfirmTx(
     c,
     user,
-    [updateMinInvestAmountIxs.updateVaultConfigIx, ...updateMinInvestAmountIxs.updateLUTIxs],
+    [
+      updateMinInvestAmountIxs.updateVaultConfigIx,
+      ...updateMinInvestAmountIxs.updateLUTIxs,
+      ...updateMinInvestAmountIxs.extraIxs,
+    ],
     [],
     [vaultState.vaultLookupTable],
     'Update Min Invest Amount'
@@ -43,13 +47,14 @@ import { generateKeyPairSigner } from '@solana/kit';
   const updateFarmIxs = await kaminoManager.updateVaultConfigIxs(
     kaminoVault,
     new VaultConfigField.Farm(),
-    farmKeypair.address
+    farmKeypair.address,
+    vaultReservesMap
   );
 
   await sendAndConfirmTx(
     c,
     user,
-    [updateFarmIxs.updateVaultConfigIx, ...updateFarmIxs.updateLUTIxs],
+    [updateFarmIxs.updateVaultConfigIx, ...updateFarmIxs.updateLUTIxs, ...updateFarmIxs.extraIxs],
     [],
     [vaultState.vaultLookupTable],
     'Update Vault Farm'
@@ -58,12 +63,17 @@ import { generateKeyPairSigner } from '@solana/kit';
   // update vault name (string)
   const vaultName = 'new vault name';
 
-  const updateNameIxs = await kaminoManager.updateVaultConfigIxs(kaminoVault, new VaultConfigField.Name(), vaultName);
+  const updateNameIxs = await kaminoManager.updateVaultConfigIxs(
+    kaminoVault,
+    new VaultConfigField.Name(),
+    vaultName,
+    vaultReservesMap
+  );
 
   await sendAndConfirmTx(
     c,
     user,
-    [updateNameIxs.updateVaultConfigIx, ...updateNameIxs.updateLUTIxs],
+    [updateNameIxs.updateVaultConfigIx, ...updateNameIxs.updateLUTIxs, ...updateNameIxs.extraIxs],
     [],
     [vaultState.vaultLookupTable],
     'Update Vault Name'

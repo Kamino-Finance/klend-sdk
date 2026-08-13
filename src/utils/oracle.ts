@@ -43,6 +43,21 @@ export type ScopePriceRefreshConfig = {
   scopeConfigurations: [Address, Configuration][];
 };
 
+export function hasOracleConfigured(reserve: Reserve): boolean {
+  const scopeConfiguration = reserve.config.tokenInfo.scopeConfiguration;
+  return (
+    isNotNullPubkey(reserve.config.tokenInfo.pythConfiguration.price) ||
+    isNotNullPubkey(reserve.config.tokenInfo.switchboardConfiguration.priceAggregator) ||
+    (isNotNullPubkey(scopeConfiguration.priceFeed) && Scope.isScopeChainValid(scopeConfiguration.priceChain))
+  );
+}
+
+export function getUnconfiguredOracleReserveMessage(reserveAddress: Address, reserve: Reserve): string {
+  return `${parseTokenSymbol(reserve.config.tokenInfo.name) || 'unknown'} (${reserveAddress}) reserve in market ${
+    reserve.lendingMarket
+  }: reserve has no oracle configured`;
+}
+
 export function getTokenOracleDataSync(
   allOracleAccounts: AllOracleAccounts,
   reserves: ReserveWithAddress[]
@@ -90,10 +105,12 @@ export function getTokenOracleDataSync(
     }
 
     if (!currentBest) {
-      const reserveSymbol = parseTokenSymbol(reserve.config.tokenInfo.name);
-      console.error(
-        `No price found for reserve: ${reserveSymbol ?? 'unknown'} (${address}) in market: ${reserve.lendingMarket}`
-      );
+      if (hasOracleConfigured(reserve)) {
+        const reserveSymbol = parseTokenSymbol(reserve.config.tokenInfo.name);
+        console.error(
+          `No price found for reserve: ${reserveSymbol ?? 'unknown'} (${address}) in market: ${reserve.lendingMarket}`
+        );
+      }
       tokenOracleDataForReserves.push([reserveWithAddress, undefined]);
       continue;
     }
@@ -285,9 +302,14 @@ export function cacheOrGetScopePrice(
   if (info) {
     const owner = info.programAddress;
     if (owner === getScopeAddress()) {
-      const prices = OraclePrices.decode(Buffer.from(info.data[0], 'base64'));
-      scopeCache.set(oracle, prices);
-      return scopeChainToCandidatePrice(chain, prices);
+      try {
+        const prices = OraclePrices.decode(Buffer.from(info.data[0], 'base64'));
+        scopeCache.set(oracle, prices);
+        return scopeChainToCandidatePrice(chain, prices);
+      } catch (error) {
+        console.debug(`Error parsing scope price account ${oracle.toString()} data`, error);
+        return null;
+      }
     } else {
       console.error('Unrecognized scope owner address: ', owner);
     }

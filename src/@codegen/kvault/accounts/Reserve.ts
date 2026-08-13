@@ -16,83 +16,56 @@ import * as types from "../types" // eslint-disable-line @typescript-eslint/no-u
 import { PROGRAM_ID } from "../programId"
 
 export interface ReserveFields {
-  /** Version of the reserve */
   version: BN
-  /** Last slot when supply and rates updated */
   lastUpdate: types.LastUpdateFields
-  /** Lending market address */
   lendingMarket: Address
   farmCollateral: Address
   farmDebt: Address
-  /** Reserve liquidity */
   liquidity: types.ReserveLiquidityFields
   reserveLiquidityPadding: Array<BN>
-  /** Reserve collateral */
   collateral: types.ReserveCollateralFields
   reserveCollateralPadding: Array<BN>
-  /** Reserve configuration values */
   config: types.ReserveConfigFields
   configPadding: Array<BN>
   borrowedAmountOutsideElevationGroup: BN
-  /**
-   * Amount of token borrowed in lamport of debt asset in the given
-   * elevation group when this reserve is part of the collaterals.
-   */
   borrowedAmountsAgainstThisReserveInElevationGroups: Array<BN>
+  withdrawQueue: types.WithdrawQueueFields
   padding: Array<BN>
 }
 
 export interface ReserveJSON {
-  /** Version of the reserve */
   version: string
-  /** Last slot when supply and rates updated */
   lastUpdate: types.LastUpdateJSON
-  /** Lending market address */
   lendingMarket: string
   farmCollateral: string
   farmDebt: string
-  /** Reserve liquidity */
   liquidity: types.ReserveLiquidityJSON
   reserveLiquidityPadding: Array<string>
-  /** Reserve collateral */
   collateral: types.ReserveCollateralJSON
   reserveCollateralPadding: Array<string>
-  /** Reserve configuration values */
   config: types.ReserveConfigJSON
   configPadding: Array<string>
   borrowedAmountOutsideElevationGroup: string
-  /**
-   * Amount of token borrowed in lamport of debt asset in the given
-   * elevation group when this reserve is part of the collaterals.
-   */
   borrowedAmountsAgainstThisReserveInElevationGroups: Array<string>
+  withdrawQueue: types.WithdrawQueueJSON
   padding: Array<string>
 }
 
 export class Reserve {
-  /** Version of the reserve */
   readonly version: BN
-  /** Last slot when supply and rates updated */
   readonly lastUpdate: types.LastUpdate
-  /** Lending market address */
   readonly lendingMarket: Address
   readonly farmCollateral: Address
   readonly farmDebt: Address
-  /** Reserve liquidity */
   readonly liquidity: types.ReserveLiquidity
   readonly reserveLiquidityPadding: Array<BN>
-  /** Reserve collateral */
   readonly collateral: types.ReserveCollateral
   readonly reserveCollateralPadding: Array<BN>
-  /** Reserve configuration values */
   readonly config: types.ReserveConfig
   readonly configPadding: Array<BN>
   readonly borrowedAmountOutsideElevationGroup: BN
-  /**
-   * Amount of token borrowed in lamport of debt asset in the given
-   * elevation group when this reserve is part of the collaterals.
-   */
   readonly borrowedAmountsAgainstThisReserveInElevationGroups: Array<BN>
+  readonly withdrawQueue: types.WithdrawQueue
   readonly padding: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -110,14 +83,15 @@ export class Reserve {
     types.ReserveCollateral.layout("collateral"),
     borsh.array(borsh.u64(), 150, "reserveCollateralPadding"),
     types.ReserveConfig.layout("config"),
-    borsh.array(borsh.u64(), 116, "configPadding"),
+    borsh.array(borsh.u64(), 112, "configPadding"),
     borsh.u64("borrowedAmountOutsideElevationGroup"),
     borsh.array(
       borsh.u64(),
       32,
       "borrowedAmountsAgainstThisReserveInElevationGroups"
     ),
-    borsh.array(borsh.u64(), 207, "padding"),
+    types.WithdrawQueue.layout("withdrawQueue"),
+    borsh.array(borsh.u64(), 204, "padding"),
   ])
 
   constructor(fields: ReserveFields) {
@@ -136,6 +110,7 @@ export class Reserve {
       fields.borrowedAmountOutsideElevationGroup
     this.borrowedAmountsAgainstThisReserveInElevationGroups =
       fields.borrowedAmountsAgainstThisReserveInElevationGroups
+    this.withdrawQueue = new types.WithdrawQueue({ ...fields.withdrawQueue })
     this.padding = fields.padding
   }
 
@@ -202,6 +177,7 @@ export class Reserve {
         dec.borrowedAmountOutsideElevationGroup,
       borrowedAmountsAgainstThisReserveInElevationGroups:
         dec.borrowedAmountsAgainstThisReserveInElevationGroups,
+      withdrawQueue: types.WithdrawQueue.fromDecoded(dec.withdrawQueue),
       padding: dec.padding,
     })
   }
@@ -229,6 +205,7 @@ export class Reserve {
         this.borrowedAmountsAgainstThisReserveInElevationGroups.map((item) =>
           item.toString()
         ),
+      withdrawQueue: this.withdrawQueue.toJSON(),
       padding: this.padding.map((item) => item.toString()),
     }
   }
@@ -257,6 +234,7 @@ export class Reserve {
         obj.borrowedAmountsAgainstThisReserveInElevationGroups.map(
           (item) => new BN(item)
         ),
+      withdrawQueue: types.WithdrawQueue.fromJSON(obj.withdrawQueue),
       padding: obj.padding.map((item) => new BN(item)),
     })
   }

@@ -37,7 +37,6 @@ import { sendAndConfirmTx } from '../utils/tx';
       ...instructions.initVaultIxs,
       instructions.createLUTIx,
       instructions.initSharesMetadataIx,
-      instructions.setFarmToVaultIx,
     ],
     [],
     [],
@@ -46,15 +45,33 @@ import { sendAndConfirmTx } from '../utils/tx';
   // sleep a little bit so the vault and LUT are created
   await sleep(2000);
 
-  // create the farm
+  // create the farms and attach them to the vault
   await sendAndConfirmTx(
     c,
     wallet,
-    [...instructions.createVaultFarm.setupFarmIxs, ...instructions.createVaultFarm.updateFarmIxs],
+    [
+      ...instructions.createVaultFarms.createVaultFarmIxs.setupFarmIxs,
+      ...instructions.createVaultFarms.createVaultFarmIxs.updateFarmIxs,
+      instructions.setFarmToVaultIxs.setFarmToVaultIx,
+    ],
     [],
     [],
     'CreateVaultFarm'
   );
+  if (instructions.createVaultFarms.createFLCVaultFarmIxs) {
+    await sendAndConfirmTx(
+      c,
+      wallet,
+      [
+        ...instructions.createVaultFarms.createFLCVaultFarmIxs!.setupFarmIxs,
+        ...instructions.createVaultFarms.createFLCVaultFarmIxs!.updateFarmIxs,
+        instructions.setFarmToVaultIxs.setFLCFarmToVaultIx!,
+      ],
+      [],
+      [],
+      'CreateFLCVaultFarm'
+    );
+  }
   // populate the LUT
   await sendAndConfirmTx(c, wallet, instructions.populateLUTIxs, [], [], 'PopulateLUT');
 })().catch(async (e) => {

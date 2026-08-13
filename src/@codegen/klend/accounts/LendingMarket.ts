@@ -16,326 +16,164 @@ import * as types from "../types" // eslint-disable-line @typescript-eslint/no-u
 import { PROGRAM_ID } from "../programId"
 
 export interface LendingMarketFields {
-  /** Version of lending market */
   version: BN
-  /** Bump seed for derived authority address */
   bumpSeed: BN
-  /** Owner authority which can add new reserves */
   lendingMarketOwner: Address
-  /** Temporary cache of the lending market owner, used in update_lending_market_owner */
   lendingMarketOwnerCached: Address
-  /**
-   * Currency market prices are quoted in
-   * e.g. "USD" null padded (`*b"USD\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"`) or a SPL token mint pubkey
-   */
   quoteCurrency: Array<number>
-  /** Referral fee for the lending market, as bps out of the total protocol fee */
   referralFeeBps: number
   emergencyMode: number
-  /**
-   * Whether the obligations on this market should be subject to auto-deleveraging after deposit
-   * or borrow limit is crossed.
-   * Besides this flag, the particular reserve's flag also needs to be enabled (logical `AND`).
-   * **NOTE:** this also affects the individual "target LTV" deleveraging.
-   */
   autodeleverageEnabled: number
   borrowDisabled: number
-  /**
-   * Refresh price from oracle only if it's older than this percentage of the price max age.
-   * e.g. if the max age is set to 100s and this is set to 80%, the price will be refreshed if it's older than 80s.
-   * Price is always refreshed if this set to 0.
-   */
   priceRefreshTriggerToMaxAgePct: number
-  /** Percentage of the total borrowed value in an obligation available for liquidation */
   liquidationMaxDebtCloseFactorPct: number
-  /** Minimum acceptable unhealthy LTV before max_debt_close_factor_pct becomes 100% */
   insolvencyRiskUnhealthyLtvPct: number
-  /** Minimum liquidation value threshold triggering full liquidation for an obligation */
   minFullLiquidationValueThreshold: BN
-  /** Max allowed liquidation value in one ix call */
   maxLiquidatableDebtMarketValueAtOnce: BN
-  /** [DEPRECATED] Global maximum unhealthy borrow value allowed for any obligation */
   reserved0: Array<number>
-  /** Global maximum allowed borrow value allowed for any obligation */
   globalAllowedBorrowValue: BN
-  /** The address of the risk council, in charge of making parameter and risk decisions on behalf of the protocol */
-  riskCouncil: Address
-  /** [DEPRECATED] Reward points multiplier per obligation type */
+  emergencyCouncil: Address
   reserved1: Array<number>
-  /** Elevation groups are used to group together reserves that have the same risk parameters and can bump the ltv and liquidation threshold */
   elevationGroups: Array<types.ElevationGroupFields>
   elevationGroupPadding: Array<BN>
-  /** Min net value accepted to be found in a position after any lending action in an obligation (scaled by quote currency decimals) */
   minNetValueInObligationSf: BN
-  /** Minimum value to enforce smallest ltv priority checks on the collateral reserves on liquidation */
   minValueSkipLiquidationLtvChecks: BN
-  /** Market name, zero-padded. */
   name: Array<number>
-  /** Minimum value to enforce highest borrow factor priority checks on the debt reserves on liquidation */
   minValueSkipLiquidationBfChecks: BN
-  /**
-   * Time (in seconds) that must pass before liquidation is allowed on an obligation that has
-   * been individually marked for auto-deleveraging (by the risk council).
-   */
   individualAutodeleverageMarginCallPeriodSecs: BN
-  /**
-   * Minimum amount of deposit at creation of a reserve to prevent artificial inflation
-   * Note: this amount cannot be recovered, the ctoken associated are never minted
-   */
   minInitialDepositAmount: BN
-  /** Whether the obligation orders should be evaluated during liquidations. */
   obligationOrderExecutionEnabled: number
-  /** Whether the lending market is set as immutable. */
   immutable: number
-  /**
-   * Whether new obligation orders can be created.
-   * Note: updating or cancelling existing orders is *not* affected by this flag.
-   */
   obligationOrderCreationEnabled: number
-  /**
-   * Whether the liquidation operations that are triggered by price changes should be disabled.
-   * This includes regular liquidation (i.e. LTV exceeding the unhealthy threshold) and some
-   * obligation orders' execution.
-   *
-   * *Caution:* this flag is *disabling* the liquidations when `1` - contrary to all the other
-   * liquidation-driving flags (see e.g. [Self::autodeleverage_enabled]).
-   */
   priceTriggeredLiquidationDisabled: number
-  /**
-   * Whether the debts that reached their reserve's [ReserveConfig::debt_maturity_timestamp] can
-   * be liquidated.
-   */
   matureReserveDebtLiquidationEnabled: number
-  /**
-   * Whether the [Obligation::borrows] that reached their [ReserveConfig::debt_term_seconds] can
-   * be liquidated.
-   */
   obligationBorrowDebtTermLiquidationEnabled: number
-  /**
-   * Whether new borrow orders can be created.
-   * Note: updating or cancelling existing orders is *not* affected by this flag.
-   */
   borrowOrderCreationEnabled: number
-  /** Whether the existing borrow orders can be filled. */
   borrowOrderExecutionEnabled: number
-  /** Authority that can propose creating of new reserves but cannot enable them. */
   proposerAuthority: Address
+  minBorrowOrderFillValue: BN
+  withdrawTicketIssuanceEnabled: number
+  withdrawTicketRedemptionEnabled: number
+  obligationBorrowRolloverConfigurationEnabled: number
+  obligationBorrowMigrationToFixedExecutionEnabled: number
+  withdrawTicketCancellationEnabled: number
+  disableNonceBlock: number
+  reserveRewardsMaxAprBps: number
+  minWithdrawQueuedLiquidityValue: BN
+  fixedTermRolloverWindowDurationSeconds: BN
+  openTermRolloverWindowDurationSeconds: BN
+  minPartialRolloverValue: BN
+  termBasedFullLiquidationDurationSecs: BN
+  permissioningAuthority: Address
+  permissionedOps: BN
   padding1: Array<BN>
 }
 
 export interface LendingMarketJSON {
-  /** Version of lending market */
   version: string
-  /** Bump seed for derived authority address */
   bumpSeed: string
-  /** Owner authority which can add new reserves */
   lendingMarketOwner: string
-  /** Temporary cache of the lending market owner, used in update_lending_market_owner */
   lendingMarketOwnerCached: string
-  /**
-   * Currency market prices are quoted in
-   * e.g. "USD" null padded (`*b"USD\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"`) or a SPL token mint pubkey
-   */
   quoteCurrency: Array<number>
-  /** Referral fee for the lending market, as bps out of the total protocol fee */
   referralFeeBps: number
   emergencyMode: number
-  /**
-   * Whether the obligations on this market should be subject to auto-deleveraging after deposit
-   * or borrow limit is crossed.
-   * Besides this flag, the particular reserve's flag also needs to be enabled (logical `AND`).
-   * **NOTE:** this also affects the individual "target LTV" deleveraging.
-   */
   autodeleverageEnabled: number
   borrowDisabled: number
-  /**
-   * Refresh price from oracle only if it's older than this percentage of the price max age.
-   * e.g. if the max age is set to 100s and this is set to 80%, the price will be refreshed if it's older than 80s.
-   * Price is always refreshed if this set to 0.
-   */
   priceRefreshTriggerToMaxAgePct: number
-  /** Percentage of the total borrowed value in an obligation available for liquidation */
   liquidationMaxDebtCloseFactorPct: number
-  /** Minimum acceptable unhealthy LTV before max_debt_close_factor_pct becomes 100% */
   insolvencyRiskUnhealthyLtvPct: number
-  /** Minimum liquidation value threshold triggering full liquidation for an obligation */
   minFullLiquidationValueThreshold: string
-  /** Max allowed liquidation value in one ix call */
   maxLiquidatableDebtMarketValueAtOnce: string
-  /** [DEPRECATED] Global maximum unhealthy borrow value allowed for any obligation */
   reserved0: Array<number>
-  /** Global maximum allowed borrow value allowed for any obligation */
   globalAllowedBorrowValue: string
-  /** The address of the risk council, in charge of making parameter and risk decisions on behalf of the protocol */
-  riskCouncil: string
-  /** [DEPRECATED] Reward points multiplier per obligation type */
+  emergencyCouncil: string
   reserved1: Array<number>
-  /** Elevation groups are used to group together reserves that have the same risk parameters and can bump the ltv and liquidation threshold */
   elevationGroups: Array<types.ElevationGroupJSON>
   elevationGroupPadding: Array<string>
-  /** Min net value accepted to be found in a position after any lending action in an obligation (scaled by quote currency decimals) */
   minNetValueInObligationSf: string
-  /** Minimum value to enforce smallest ltv priority checks on the collateral reserves on liquidation */
   minValueSkipLiquidationLtvChecks: string
-  /** Market name, zero-padded. */
   name: Array<number>
-  /** Minimum value to enforce highest borrow factor priority checks on the debt reserves on liquidation */
   minValueSkipLiquidationBfChecks: string
-  /**
-   * Time (in seconds) that must pass before liquidation is allowed on an obligation that has
-   * been individually marked for auto-deleveraging (by the risk council).
-   */
   individualAutodeleverageMarginCallPeriodSecs: string
-  /**
-   * Minimum amount of deposit at creation of a reserve to prevent artificial inflation
-   * Note: this amount cannot be recovered, the ctoken associated are never minted
-   */
   minInitialDepositAmount: string
-  /** Whether the obligation orders should be evaluated during liquidations. */
   obligationOrderExecutionEnabled: number
-  /** Whether the lending market is set as immutable. */
   immutable: number
-  /**
-   * Whether new obligation orders can be created.
-   * Note: updating or cancelling existing orders is *not* affected by this flag.
-   */
   obligationOrderCreationEnabled: number
-  /**
-   * Whether the liquidation operations that are triggered by price changes should be disabled.
-   * This includes regular liquidation (i.e. LTV exceeding the unhealthy threshold) and some
-   * obligation orders' execution.
-   *
-   * *Caution:* this flag is *disabling* the liquidations when `1` - contrary to all the other
-   * liquidation-driving flags (see e.g. [Self::autodeleverage_enabled]).
-   */
   priceTriggeredLiquidationDisabled: number
-  /**
-   * Whether the debts that reached their reserve's [ReserveConfig::debt_maturity_timestamp] can
-   * be liquidated.
-   */
   matureReserveDebtLiquidationEnabled: number
-  /**
-   * Whether the [Obligation::borrows] that reached their [ReserveConfig::debt_term_seconds] can
-   * be liquidated.
-   */
   obligationBorrowDebtTermLiquidationEnabled: number
-  /**
-   * Whether new borrow orders can be created.
-   * Note: updating or cancelling existing orders is *not* affected by this flag.
-   */
   borrowOrderCreationEnabled: number
-  /** Whether the existing borrow orders can be filled. */
   borrowOrderExecutionEnabled: number
-  /** Authority that can propose creating of new reserves but cannot enable them. */
   proposerAuthority: string
+  minBorrowOrderFillValue: string
+  withdrawTicketIssuanceEnabled: number
+  withdrawTicketRedemptionEnabled: number
+  obligationBorrowRolloverConfigurationEnabled: number
+  obligationBorrowMigrationToFixedExecutionEnabled: number
+  withdrawTicketCancellationEnabled: number
+  disableNonceBlock: number
+  reserveRewardsMaxAprBps: number
+  minWithdrawQueuedLiquidityValue: string
+  fixedTermRolloverWindowDurationSeconds: string
+  openTermRolloverWindowDurationSeconds: string
+  minPartialRolloverValue: string
+  termBasedFullLiquidationDurationSecs: string
+  permissioningAuthority: string
+  permissionedOps: string
   padding1: Array<string>
 }
 
 export class LendingMarket {
-  /** Version of lending market */
   readonly version: BN
-  /** Bump seed for derived authority address */
   readonly bumpSeed: BN
-  /** Owner authority which can add new reserves */
   readonly lendingMarketOwner: Address
-  /** Temporary cache of the lending market owner, used in update_lending_market_owner */
   readonly lendingMarketOwnerCached: Address
-  /**
-   * Currency market prices are quoted in
-   * e.g. "USD" null padded (`*b"USD\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"`) or a SPL token mint pubkey
-   */
   readonly quoteCurrency: Array<number>
-  /** Referral fee for the lending market, as bps out of the total protocol fee */
   readonly referralFeeBps: number
   readonly emergencyMode: number
-  /**
-   * Whether the obligations on this market should be subject to auto-deleveraging after deposit
-   * or borrow limit is crossed.
-   * Besides this flag, the particular reserve's flag also needs to be enabled (logical `AND`).
-   * **NOTE:** this also affects the individual "target LTV" deleveraging.
-   */
   readonly autodeleverageEnabled: number
   readonly borrowDisabled: number
-  /**
-   * Refresh price from oracle only if it's older than this percentage of the price max age.
-   * e.g. if the max age is set to 100s and this is set to 80%, the price will be refreshed if it's older than 80s.
-   * Price is always refreshed if this set to 0.
-   */
   readonly priceRefreshTriggerToMaxAgePct: number
-  /** Percentage of the total borrowed value in an obligation available for liquidation */
   readonly liquidationMaxDebtCloseFactorPct: number
-  /** Minimum acceptable unhealthy LTV before max_debt_close_factor_pct becomes 100% */
   readonly insolvencyRiskUnhealthyLtvPct: number
-  /** Minimum liquidation value threshold triggering full liquidation for an obligation */
   readonly minFullLiquidationValueThreshold: BN
-  /** Max allowed liquidation value in one ix call */
   readonly maxLiquidatableDebtMarketValueAtOnce: BN
-  /** [DEPRECATED] Global maximum unhealthy borrow value allowed for any obligation */
   readonly reserved0: Array<number>
-  /** Global maximum allowed borrow value allowed for any obligation */
   readonly globalAllowedBorrowValue: BN
-  /** The address of the risk council, in charge of making parameter and risk decisions on behalf of the protocol */
-  readonly riskCouncil: Address
-  /** [DEPRECATED] Reward points multiplier per obligation type */
+  readonly emergencyCouncil: Address
   readonly reserved1: Array<number>
-  /** Elevation groups are used to group together reserves that have the same risk parameters and can bump the ltv and liquidation threshold */
   readonly elevationGroups: Array<types.ElevationGroup>
   readonly elevationGroupPadding: Array<BN>
-  /** Min net value accepted to be found in a position after any lending action in an obligation (scaled by quote currency decimals) */
   readonly minNetValueInObligationSf: BN
-  /** Minimum value to enforce smallest ltv priority checks on the collateral reserves on liquidation */
   readonly minValueSkipLiquidationLtvChecks: BN
-  /** Market name, zero-padded. */
   readonly name: Array<number>
-  /** Minimum value to enforce highest borrow factor priority checks on the debt reserves on liquidation */
   readonly minValueSkipLiquidationBfChecks: BN
-  /**
-   * Time (in seconds) that must pass before liquidation is allowed on an obligation that has
-   * been individually marked for auto-deleveraging (by the risk council).
-   */
   readonly individualAutodeleverageMarginCallPeriodSecs: BN
-  /**
-   * Minimum amount of deposit at creation of a reserve to prevent artificial inflation
-   * Note: this amount cannot be recovered, the ctoken associated are never minted
-   */
   readonly minInitialDepositAmount: BN
-  /** Whether the obligation orders should be evaluated during liquidations. */
   readonly obligationOrderExecutionEnabled: number
-  /** Whether the lending market is set as immutable. */
   readonly immutable: number
-  /**
-   * Whether new obligation orders can be created.
-   * Note: updating or cancelling existing orders is *not* affected by this flag.
-   */
   readonly obligationOrderCreationEnabled: number
-  /**
-   * Whether the liquidation operations that are triggered by price changes should be disabled.
-   * This includes regular liquidation (i.e. LTV exceeding the unhealthy threshold) and some
-   * obligation orders' execution.
-   *
-   * *Caution:* this flag is *disabling* the liquidations when `1` - contrary to all the other
-   * liquidation-driving flags (see e.g. [Self::autodeleverage_enabled]).
-   */
   readonly priceTriggeredLiquidationDisabled: number
-  /**
-   * Whether the debts that reached their reserve's [ReserveConfig::debt_maturity_timestamp] can
-   * be liquidated.
-   */
   readonly matureReserveDebtLiquidationEnabled: number
-  /**
-   * Whether the [Obligation::borrows] that reached their [ReserveConfig::debt_term_seconds] can
-   * be liquidated.
-   */
   readonly obligationBorrowDebtTermLiquidationEnabled: number
-  /**
-   * Whether new borrow orders can be created.
-   * Note: updating or cancelling existing orders is *not* affected by this flag.
-   */
   readonly borrowOrderCreationEnabled: number
-  /** Whether the existing borrow orders can be filled. */
   readonly borrowOrderExecutionEnabled: number
-  /** Authority that can propose creating of new reserves but cannot enable them. */
   readonly proposerAuthority: Address
+  readonly minBorrowOrderFillValue: BN
+  readonly withdrawTicketIssuanceEnabled: number
+  readonly withdrawTicketRedemptionEnabled: number
+  readonly obligationBorrowRolloverConfigurationEnabled: number
+  readonly obligationBorrowMigrationToFixedExecutionEnabled: number
+  readonly withdrawTicketCancellationEnabled: number
+  readonly disableNonceBlock: number
+  readonly reserveRewardsMaxAprBps: number
+  readonly minWithdrawQueuedLiquidityValue: BN
+  readonly fixedTermRolloverWindowDurationSeconds: BN
+  readonly openTermRolloverWindowDurationSeconds: BN
+  readonly minPartialRolloverValue: BN
+  readonly termBasedFullLiquidationDurationSecs: BN
+  readonly permissioningAuthority: Address
+  readonly permissionedOps: BN
   readonly padding1: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -359,7 +197,7 @@ export class LendingMarket {
     borsh.u64("maxLiquidatableDebtMarketValueAtOnce"),
     borsh.array(borsh.u8(), 8, "reserved0"),
     borsh.u64("globalAllowedBorrowValue"),
-    borshAddress("riskCouncil"),
+    borshAddress("emergencyCouncil"),
     borsh.array(borsh.u8(), 8, "reserved1"),
     borsh.array(types.ElevationGroup.layout(), 32, "elevationGroups"),
     borsh.array(borsh.u64(), 90, "elevationGroupPadding"),
@@ -378,7 +216,22 @@ export class LendingMarket {
     borsh.u8("borrowOrderCreationEnabled"),
     borsh.u8("borrowOrderExecutionEnabled"),
     borshAddress("proposerAuthority"),
-    borsh.array(borsh.u64(), 165, "padding1"),
+    borsh.u64("minBorrowOrderFillValue"),
+    borsh.u8("withdrawTicketIssuanceEnabled"),
+    borsh.u8("withdrawTicketRedemptionEnabled"),
+    borsh.u8("obligationBorrowRolloverConfigurationEnabled"),
+    borsh.u8("obligationBorrowMigrationToFixedExecutionEnabled"),
+    borsh.u8("withdrawTicketCancellationEnabled"),
+    borsh.u8("disableNonceBlock"),
+    borsh.u16("reserveRewardsMaxAprBps"),
+    borsh.u64("minWithdrawQueuedLiquidityValue"),
+    borsh.u64("fixedTermRolloverWindowDurationSeconds"),
+    borsh.u64("openTermRolloverWindowDurationSeconds"),
+    borsh.u64("minPartialRolloverValue"),
+    borsh.u64("termBasedFullLiquidationDurationSecs"),
+    borshAddress("permissioningAuthority"),
+    borsh.u64("permissionedOps"),
+    borsh.array(borsh.u64(), 153, "padding1"),
   ])
 
   constructor(fields: LendingMarketFields) {
@@ -401,7 +254,7 @@ export class LendingMarket {
       fields.maxLiquidatableDebtMarketValueAtOnce
     this.reserved0 = fields.reserved0
     this.globalAllowedBorrowValue = fields.globalAllowedBorrowValue
-    this.riskCouncil = fields.riskCouncil
+    this.emergencyCouncil = fields.emergencyCouncil
     this.reserved1 = fields.reserved1
     this.elevationGroups = fields.elevationGroups.map(
       (item) => new types.ElevationGroup({ ...item })
@@ -429,6 +282,29 @@ export class LendingMarket {
     this.borrowOrderCreationEnabled = fields.borrowOrderCreationEnabled
     this.borrowOrderExecutionEnabled = fields.borrowOrderExecutionEnabled
     this.proposerAuthority = fields.proposerAuthority
+    this.minBorrowOrderFillValue = fields.minBorrowOrderFillValue
+    this.withdrawTicketIssuanceEnabled = fields.withdrawTicketIssuanceEnabled
+    this.withdrawTicketRedemptionEnabled =
+      fields.withdrawTicketRedemptionEnabled
+    this.obligationBorrowRolloverConfigurationEnabled =
+      fields.obligationBorrowRolloverConfigurationEnabled
+    this.obligationBorrowMigrationToFixedExecutionEnabled =
+      fields.obligationBorrowMigrationToFixedExecutionEnabled
+    this.withdrawTicketCancellationEnabled =
+      fields.withdrawTicketCancellationEnabled
+    this.disableNonceBlock = fields.disableNonceBlock
+    this.reserveRewardsMaxAprBps = fields.reserveRewardsMaxAprBps
+    this.minWithdrawQueuedLiquidityValue =
+      fields.minWithdrawQueuedLiquidityValue
+    this.fixedTermRolloverWindowDurationSeconds =
+      fields.fixedTermRolloverWindowDurationSeconds
+    this.openTermRolloverWindowDurationSeconds =
+      fields.openTermRolloverWindowDurationSeconds
+    this.minPartialRolloverValue = fields.minPartialRolloverValue
+    this.termBasedFullLiquidationDurationSecs =
+      fields.termBasedFullLiquidationDurationSecs
+    this.permissioningAuthority = fields.permissioningAuthority
+    this.permissionedOps = fields.permissionedOps
     this.padding1 = fields.padding1
   }
 
@@ -497,7 +373,7 @@ export class LendingMarket {
         dec.maxLiquidatableDebtMarketValueAtOnce,
       reserved0: dec.reserved0,
       globalAllowedBorrowValue: dec.globalAllowedBorrowValue,
-      riskCouncil: dec.riskCouncil,
+      emergencyCouncil: dec.emergencyCouncil,
       reserved1: dec.reserved1,
       elevationGroups: dec.elevationGroups.map(
         (
@@ -523,6 +399,26 @@ export class LendingMarket {
       borrowOrderCreationEnabled: dec.borrowOrderCreationEnabled,
       borrowOrderExecutionEnabled: dec.borrowOrderExecutionEnabled,
       proposerAuthority: dec.proposerAuthority,
+      minBorrowOrderFillValue: dec.minBorrowOrderFillValue,
+      withdrawTicketIssuanceEnabled: dec.withdrawTicketIssuanceEnabled,
+      withdrawTicketRedemptionEnabled: dec.withdrawTicketRedemptionEnabled,
+      obligationBorrowRolloverConfigurationEnabled:
+        dec.obligationBorrowRolloverConfigurationEnabled,
+      obligationBorrowMigrationToFixedExecutionEnabled:
+        dec.obligationBorrowMigrationToFixedExecutionEnabled,
+      withdrawTicketCancellationEnabled: dec.withdrawTicketCancellationEnabled,
+      disableNonceBlock: dec.disableNonceBlock,
+      reserveRewardsMaxAprBps: dec.reserveRewardsMaxAprBps,
+      minWithdrawQueuedLiquidityValue: dec.minWithdrawQueuedLiquidityValue,
+      fixedTermRolloverWindowDurationSeconds:
+        dec.fixedTermRolloverWindowDurationSeconds,
+      openTermRolloverWindowDurationSeconds:
+        dec.openTermRolloverWindowDurationSeconds,
+      minPartialRolloverValue: dec.minPartialRolloverValue,
+      termBasedFullLiquidationDurationSecs:
+        dec.termBasedFullLiquidationDurationSecs,
+      permissioningAuthority: dec.permissioningAuthority,
+      permissionedOps: dec.permissionedOps,
       padding1: dec.padding1,
     })
   }
@@ -547,7 +443,7 @@ export class LendingMarket {
         this.maxLiquidatableDebtMarketValueAtOnce.toString(),
       reserved0: this.reserved0,
       globalAllowedBorrowValue: this.globalAllowedBorrowValue.toString(),
-      riskCouncil: this.riskCouncil,
+      emergencyCouncil: this.emergencyCouncil,
       reserved1: this.reserved1,
       elevationGroups: this.elevationGroups.map((item) => item.toJSON()),
       elevationGroupPadding: this.elevationGroupPadding.map((item) =>
@@ -573,6 +469,27 @@ export class LendingMarket {
       borrowOrderCreationEnabled: this.borrowOrderCreationEnabled,
       borrowOrderExecutionEnabled: this.borrowOrderExecutionEnabled,
       proposerAuthority: this.proposerAuthority,
+      minBorrowOrderFillValue: this.minBorrowOrderFillValue.toString(),
+      withdrawTicketIssuanceEnabled: this.withdrawTicketIssuanceEnabled,
+      withdrawTicketRedemptionEnabled: this.withdrawTicketRedemptionEnabled,
+      obligationBorrowRolloverConfigurationEnabled:
+        this.obligationBorrowRolloverConfigurationEnabled,
+      obligationBorrowMigrationToFixedExecutionEnabled:
+        this.obligationBorrowMigrationToFixedExecutionEnabled,
+      withdrawTicketCancellationEnabled: this.withdrawTicketCancellationEnabled,
+      disableNonceBlock: this.disableNonceBlock,
+      reserveRewardsMaxAprBps: this.reserveRewardsMaxAprBps,
+      minWithdrawQueuedLiquidityValue:
+        this.minWithdrawQueuedLiquidityValue.toString(),
+      fixedTermRolloverWindowDurationSeconds:
+        this.fixedTermRolloverWindowDurationSeconds.toString(),
+      openTermRolloverWindowDurationSeconds:
+        this.openTermRolloverWindowDurationSeconds.toString(),
+      minPartialRolloverValue: this.minPartialRolloverValue.toString(),
+      termBasedFullLiquidationDurationSecs:
+        this.termBasedFullLiquidationDurationSecs.toString(),
+      permissioningAuthority: this.permissioningAuthority,
+      permissionedOps: this.permissionedOps.toString(),
       padding1: this.padding1.map((item) => item.toString()),
     }
   }
@@ -599,7 +516,7 @@ export class LendingMarket {
       ),
       reserved0: obj.reserved0,
       globalAllowedBorrowValue: new BN(obj.globalAllowedBorrowValue),
-      riskCouncil: address(obj.riskCouncil),
+      emergencyCouncil: address(obj.emergencyCouncil),
       reserved1: obj.reserved1,
       elevationGroups: obj.elevationGroups.map((item) =>
         types.ElevationGroup.fromJSON(item)
@@ -630,6 +547,31 @@ export class LendingMarket {
       borrowOrderCreationEnabled: obj.borrowOrderCreationEnabled,
       borrowOrderExecutionEnabled: obj.borrowOrderExecutionEnabled,
       proposerAuthority: address(obj.proposerAuthority),
+      minBorrowOrderFillValue: new BN(obj.minBorrowOrderFillValue),
+      withdrawTicketIssuanceEnabled: obj.withdrawTicketIssuanceEnabled,
+      withdrawTicketRedemptionEnabled: obj.withdrawTicketRedemptionEnabled,
+      obligationBorrowRolloverConfigurationEnabled:
+        obj.obligationBorrowRolloverConfigurationEnabled,
+      obligationBorrowMigrationToFixedExecutionEnabled:
+        obj.obligationBorrowMigrationToFixedExecutionEnabled,
+      withdrawTicketCancellationEnabled: obj.withdrawTicketCancellationEnabled,
+      disableNonceBlock: obj.disableNonceBlock,
+      reserveRewardsMaxAprBps: obj.reserveRewardsMaxAprBps,
+      minWithdrawQueuedLiquidityValue: new BN(
+        obj.minWithdrawQueuedLiquidityValue
+      ),
+      fixedTermRolloverWindowDurationSeconds: new BN(
+        obj.fixedTermRolloverWindowDurationSeconds
+      ),
+      openTermRolloverWindowDurationSeconds: new BN(
+        obj.openTermRolloverWindowDurationSeconds
+      ),
+      minPartialRolloverValue: new BN(obj.minPartialRolloverValue),
+      termBasedFullLiquidationDurationSecs: new BN(
+        obj.termBasedFullLiquidationDurationSecs
+      ),
+      permissioningAuthority: address(obj.permissioningAuthority),
+      permissionedOps: new BN(obj.permissionedOps),
       padding1: obj.padding1.map((item) => new BN(item)),
     })
   }

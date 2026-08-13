@@ -28,10 +28,17 @@ import { sendAndConfirmTx } from '../utils/tx';
     state: usdcJlpMarketReserveState,
   };
 
-  const investInReserveIxs = await kaminoManager.investSingleReserveIxs(wallet, vault, usdcReserveToInvestWithAddress);
-
   // read the vault state so we can use the LUT in the tx
   const vaultState = await vault.getState();
+  // pre-load vault reserves once and pass to all methods (avoids redundant RPC calls)
+  const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
+
+  const investInReserveIxs = await kaminoManager.investSingleReserveIxs(
+    wallet,
+    vault,
+    usdcReserveToInvestWithAddress,
+    vaultReservesMap
+  );
 
   await sendAndConfirmTx(c, wallet, investInReserveIxs, [], [vaultState.vaultLookupTable], 'Invest Single Reserve');
 })().catch(async (e) => {

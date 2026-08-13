@@ -28,35 +28,44 @@ import {
   CandidatePrice,
   DEFAULT_PUBLIC_KEY,
   DEPOSITS_LIMIT,
+  fetchReserveRewardsMaxAprBps,
   getAllOracleAccounts,
   getProgramAccounts,
   getTokenOracleData,
+  getUnconfiguredOracleReserveMessage,
+  hasOracleConfigured,
   isNotNullPubkey,
   lendingMarketAuthPda,
   LendingObligation,
+  LendingObligationFixedRate,
   LeverageObligation,
+  LeverageObligationFixedRate,
   MultiplyObligation,
+  MultiplyObligationFixedRate,
   ObligationType,
+  FloatRateReserveKind,
   PythPrices,
   referrerTokenStatePda,
+  ReserveKind,
   setOrAppend,
   userMetadataPda,
   VanillaObligation,
 } from '../utils';
 import BN from 'bn.js';
 import Decimal from 'decimal.js';
-import { FarmState } from '@kamino-finance/farms-sdk';
+import { FARMS_PROGRAM_ADDRESS as FARMS_PROGRAM_ID } from '@kamino-finance/farms-sdk';
+import { fetchFarmStateOrNull } from './farm_utils';
 import { PROGRAM_ID } from '../@codegen/klend/programId';
-import { PROGRAM_ID as FARMS_PROGRAM_ID } from '@kamino-finance/farms-sdk/dist/@codegen/farms/programId';
 import { Scope, U16_MAX } from '@kamino-finance/scope-sdk';
 import { OraclePrices } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts/OraclePrices';
 import { Fraction } from './fraction';
 import { batchFetch, chunks, KaminoPrices, MintToPriceMap } from '@kamino-finance/kliquidity-sdk';
 import { parseTokenSymbol, parseZeroPaddedUtf8 } from './utils';
+import { PermissionedOp } from './permission';
 import { ObligationZP } from '../@codegen/klend/zero_padding';
-import { checkDefined } from '../utils/validations';
+import { checkArrayNotEmpty, checkDefined } from '../utils/validations';
 import { Buffer } from 'buffer';
-import { fetchKaminoCdnData } from '../utils/readCdnData';
+import { kaminoCdn } from './cdnClient';
 
 export type KaminoMarketRpcApi = GetAccountInfoApi &
   GetMultipleAccountsApi &
@@ -164,7 +173,7 @@ export class KaminoMarket {
     }
 
     const reserves = withReserves
-      ? await getReservesForMarket(marketAddress, rpc, programId, recentSlotDurationMs)
+      ? await getReservesForMarket(marketAddress, rpc, programId, recentSlotDurationMs, market.reserveRewardsMaxAprBps)
       : new Map<Address, KaminoReserve>();
 
     return new KaminoMarket(rpc, market, marketAddress, reserves, recentSlotDurationMs, programId, farmsProgramId);
@@ -202,6 +211,23 @@ export class KaminoMarket {
     const marketStates = await batchFetch(markets, (market) =>
       LendingMarket.fetchMultiple(connection, market, programId)
     );
+    const rewardsAprBpsByMarket = new Map<Address, number>();
+    for (let i = 0; i < markets.length; i++) {
+      const market = marketStates[i];
+      if (market !== null) {
+        rewardsAprBpsByMarket.set(markets[i], market.reserveRewardsMaxAprBps);
+      }
+    }
+    const marketReservesByMarket = withReserves
+      ? await getReservesForMarkets(
+          markets,
+          connection,
+          programId,
+          recentSlotDurationMs,
+          rewardsAprBpsByMarket,
+          oracleAccounts
+        )
+      : new Map<Address, Map<Address, KaminoReserve>>();
     const kaminoMarkets = new Map<Address, KaminoMarket>();
     for (let i = 0; i < markets.length; i++) {
       const market = marketStates[i];
@@ -211,7 +237,7 @@ export class KaminoMarket {
       }
 
       const marketReserves = withReserves
-        ? await getReservesForMarket(marketAddress, connection, programId, recentSlotDurationMs, oracleAccounts)
+        ? marketReservesByMarket.get(marketAddress) ?? new Map<Address, KaminoReserve>()
         : new Map<Address, KaminoReserve>();
 
       kaminoMarkets.set(
@@ -277,12 +303,26 @@ export class KaminoMarket {
     }
 
     this.state = market;
-    this.reserves = await getReservesForMarket(this.getAddress(), this.rpc, this.programId, this.recentSlotDurationMs);
+    this.reserves = await getReservesForMarket(
+      this.getAddress(),
+      this.rpc,
+      this.programId,
+      this.recentSlotDurationMs,
+      market.reserveRewardsMaxAprBps
+    );
     this.reservesActive = getReservesActive(this.reserves);
   }
 
   async reloadSingleReserve(reservePk: Address, reserveData?: Reserve): Promise<void> {
-    const reserve = await getSingleReserve(reservePk, this.rpc, this.recentSlotDurationMs, reserveData);
+    const reserve = await getSingleReserve(
+      reservePk,
+      this.rpc,
+      this.recentSlotDurationMs,
+      reserveData,
+      undefined,
+      this.state.reserveRewardsMaxAprBps,
+      this.programId
+    );
     this.reserves.set(reservePk, reserve);
     this.reservesActive.set(reservePk, reserve);
   }
@@ -339,14 +379,46 @@ export class KaminoMarket {
     return parseZeroPaddedUtf8(this.state.name);
   }
 
-  async getObligationDepositByWallet(owner: Address, mint: Address, obligationType: ObligationType): Promise<Decimal> {
-    const obligation = await this.getObligationByWallet(owner, obligationType);
-    return obligation?.getDepositByMint(mint)?.amount ?? new Decimal(0);
+  /**
+   * True if any op in `op` is gated by the market's permissioning authority, for an operation touching
+   * `opReserves`. An op is gated when the market itself gates it, or when any of the touched reserves
+   * does — but only on a market that has a permissioning authority, since without one there is nobody
+   * who could authorize it and the reserves' own flags lie dormant.
+   *
+   * Pass every reserve the operation touches; a reserve omitted here is a gate not seen. Passing `[]` still
+   * applies the market's own gating — it means "this operation touches no reserve", not "check nothing".
+   */
+  requiresPermissioner(op: PermissionedOp, opReserves: KaminoReserve[]): boolean {
+    if (this.getPermissioningAuthority() === undefined) {
+      return false;
+    }
+    return (
+      PermissionedOp.fromBN(this.state.permissionedOps).intersects(op) ||
+      opReserves.some((reserve) => PermissionedOp.fromBN(reserve.state.config.permissionedOps).intersects(op))
+    );
   }
 
-  async getObligationBorrowByWallet(owner: Address, mint: Address, obligationType: ObligationType): Promise<Decimal> {
+  /** Address authorized to sign for permissioned ops on this market. */
+  getPermissioningAuthority(): Address | undefined {
+    return this.state.permissioningAuthority === DEFAULT_PUBLIC_KEY ? undefined : this.state.permissioningAuthority;
+  }
+
+  async getObligationDepositByWallet(
+    owner: Address,
+    depositReserveAddress: Address,
+    obligationType: ObligationType
+  ): Promise<Decimal> {
     const obligation = await this.getObligationByWallet(owner, obligationType);
-    return obligation?.getBorrowByMint(mint)?.amount ?? new Decimal(0);
+    return obligation?.getDepositByReserve(depositReserveAddress)?.amount ?? new Decimal(0);
+  }
+
+  async getObligationBorrowByWallet(
+    owner: Address,
+    borrowReserveAddress: Address,
+    obligationType: ObligationType
+  ): Promise<Decimal> {
+    const obligation = await this.getObligationByWallet(owner, obligationType);
+    return obligation?.getBorrowByReserve(borrowReserveAddress)?.amount ?? new Decimal(0);
   }
 
   getTotalDepositTVL(): Decimal {
@@ -365,10 +437,10 @@ export class KaminoMarket {
     return tvl;
   }
 
-  getMaxLeverageForPair(collTokenMint: Address, debtTokenMint: Address): number {
+  getMaxLeverageForPair(collReserveAddress: Address, debtReserveAddress: Address): number {
     const { maxLtv: maxCollateralLtv, borrowFactor } = this.getMaxAndLiquidationLtvAndBorrowFactorForPair(
-      collTokenMint,
-      debtTokenMint
+      collReserveAddress,
+      debtReserveAddress
     );
 
     const maxLeverage =
@@ -392,15 +464,61 @@ export class KaminoMarket {
     );
   }
 
-  getMaxAndLiquidationLtvAndBorrowFactorForPair(
-    collTokenMint: Address,
-    debtTokenMint: Address
-  ): { maxLtv: number; liquidationLtv: number; borrowFactor: number } {
-    const collReserve: KaminoReserve | undefined = this.getReserveByMint(collTokenMint);
-    const debtReserve: KaminoReserve | undefined = this.getReserveByMint(debtTokenMint);
+  /**
+   * The elevation group an on-chain deposit+borrow of this (collateral, debt) pair auto-selects: the common
+   * elevation group with the highest LTV, or `0` (no emode / default) when the pair shares no usable group.
+   *
+   * Single source of truth for the "preferred group for a borrow pair" rule — used by `KaminoAction` when building
+   * deposit+borrow ixs and by the swap-debt migration preview/validation so all three stay consistent.
+   */
+  getPreferredElevationGroupForBorrowPair(collReserve: KaminoReserve, debtReserve: KaminoReserve): number {
+    const commonElevationGroups = this.getCommonElevationGroupsForPair(collReserve, debtReserve);
+    if (commonElevationGroups.length === 0) {
+      return 0;
+    }
+    let selectedId = 0;
+    let selectedMaxLtvPct = -1;
+    for (const group of this.state.elevationGroups) {
+      if (commonElevationGroups.includes(group.id) && group.ltvPct > selectedMaxLtvPct) {
+        selectedId = group.id;
+        selectedMaxLtvPct = group.ltvPct;
+      }
+    }
+    return selectedId;
+  }
 
+  getMaxAndLiquidationLtvAndBorrowFactorForPair(
+    collReserveAddress: Address,
+    debtReserveAddress: Address,
+    elevationGroup?: number
+  ): { maxLtv: number; liquidationLtv: number; borrowFactor: number } {
+    const collReserve: KaminoReserve | undefined = this.getReserveByAddress(collReserveAddress);
+    const debtReserve: KaminoReserve | undefined = this.getReserveByAddress(debtReserveAddress);
     if (!collReserve || !debtReserve) {
       throw Error('Could not find one of the reserves.');
+    }
+
+    // When the caller pins a specific elevation group, evaluate LTV/borrow-factor AT THAT group: `0` means no emode
+    // (the reserves' own config), otherwise the requested group's parameters (borrow factor is always 1 in emode).
+    // With no group pinned, fall back to the best common group (highest max LTV) — the group an on-chain
+    // deposit+borrow auto-selects.
+    if (elevationGroup !== undefined) {
+      if (elevationGroup === 0) {
+        return {
+          maxLtv: collReserve.state.config.loanToValuePct / 100,
+          liquidationLtv: collReserve.state.config.liquidationThresholdPct / 100,
+          borrowFactor: debtReserve.state.config.borrowFactorPct.toNumber() / 100,
+        };
+      }
+      const group = checkDefined(
+        this.state.elevationGroups[elevationGroup - 1],
+        `Elevation group ${elevationGroup} not found`
+      );
+      return {
+        maxLtv: group.ltvPct / 100,
+        liquidationLtv: group.liquidationThresholdPct / 100,
+        borrowFactor: 1,
+      };
     }
 
     const commonElevationGroups = this.getCommonElevationGroupsForPair(collReserve, debtReserve);
@@ -427,9 +545,10 @@ export class KaminoMarket {
   }
 
   async getTotalProductTvl(
-    productType: ObligationType
+    productType: ObligationType,
+    slot: Slot
   ): Promise<{ tvl: Decimal; borrows: Decimal; deposits: Decimal; avgLeverage: Decimal }> {
-    let obligations = (await this.getAllObligationsForMarket(productType.toArgs().tag)).filter(
+    let obligations = (await this.getAllObligationsForMarket(slot, productType.toArgs().tag)).filter(
       (obligation) =>
         obligation.refreshedStats.userTotalBorrow.gt(0) || obligation.refreshedStats.userTotalDeposit.gt(0)
     );
@@ -440,7 +559,7 @@ export class KaminoMarket {
       }
       case LendingObligation.tag: {
         const mint = productType.toArgs().seed1;
-        obligations = obligations.filter((obligation) => obligation.getDepositByMint(mint) !== undefined);
+        obligations = obligations.filter((obligation) => obligation.getDepositsByMint(mint).length > 0);
         break;
       }
       case MultiplyObligation.tag:
@@ -449,8 +568,24 @@ export class KaminoMarket {
         const debtMint = productType.toArgs().seed2;
         obligations = obligations.filter(
           (obligation) =>
-            obligation.getDepositByMint(collMint) !== undefined && obligation.getBorrowByMint(debtMint) !== undefined
+            obligation.getDepositsByMint(collMint).length > 0 && obligation.getBorrowsByMint(debtMint).length > 0
         );
+        break;
+      }
+      case LendingObligationFixedRate.tag: {
+        const reserveAddress = productType.toArgs().seed1;
+        obligations = obligations.filter((obligation) => obligation.getDepositByReserve(reserveAddress) !== undefined);
+        break;
+      }
+      case LeverageObligationFixedRate.tag:
+      case MultiplyObligationFixedRate.tag: {
+        const collReserveAddress = productType.toArgs().seed1;
+        const debtReserveAddress = productType.toArgs().seed2;
+        obligations = obligations.filter((obligation) => {
+          const collDeposit = obligation.getDepositByReserve(collReserveAddress);
+          const debtBorrow = obligation.getBorrowByReserve(debtReserveAddress);
+          return collDeposit !== undefined && debtBorrow !== undefined;
+        });
         break;
       }
       default:
@@ -476,8 +611,8 @@ export class KaminoMarket {
    *
    * @returns Number of active obligations in the market
    */
-  async getNumberOfObligations() {
-    return (await this.getAllObligationsForMarket())
+  async getNumberOfObligations(slot: Slot) {
+    return (await this.getAllObligationsForMarket(slot))
       .filter(
         (obligation) =>
           obligation.refreshedStats.userTotalBorrow.gt(0) || obligation.refreshedStats.userTotalDeposit.gt(0)
@@ -505,7 +640,7 @@ export class KaminoMarket {
     obligation?: KaminoObligation
   ): Decimal {
     return obligation
-      ? obligation.getMaxBorrowAmount(this, debtReserve.getLiquidityMint(), slot, requestElevationGroup)
+      ? obligation.getMaxBorrowAmount(this, debtReserve.address, slot, requestElevationGroup)
       : debtReserve.getMaxBorrowAmountWithCollReserve(this, collReserve);
   }
 
@@ -533,11 +668,14 @@ export class KaminoMarket {
     });
     const [reservesAndOracles, cdnResourcesData] = await Promise.all([
       getTokenOracleData(this.getRpc(), deserializedReserves, oracleAccounts),
-      fetchKaminoCdnData(),
+      kaminoCdn.getData(),
     ]);
     const kaminoReserves = new Map<Address, KaminoReserve>();
     reservesAndOracles.forEach(([{ address: reserveAddress, state: reserve }, oracle]) => {
       if (!oracle) {
+        if (shouldSkipUnconfiguredOracleReserve(reserveAddress, reserve)) {
+          return;
+        }
         throw Error(
           `Could not find oracle for ${parseTokenSymbol(
             reserve.config.tokenInfo.name
@@ -550,7 +688,10 @@ export class KaminoMarket {
         oracle,
         this.rpc,
         this.recentSlotDurationMs,
-        cdnResourcesData
+        this.state.reserveRewardsMaxAprBps,
+        cdnResourcesData,
+        undefined,
+        this.programId
       );
       kaminoReserves.set(kaminoReserve.address, kaminoReserve);
     });
@@ -580,9 +721,55 @@ export class KaminoMarket {
     return checkDefined(this.getReserveByAddress(address), `${description} reserve ${address} not found`);
   }
 
-  getReserveByMint(address: Address): KaminoReserve | undefined {
+  /**
+   * Returns all reserves for the given mint address (both float rate and fixed rate).
+   *
+   * @param mint The liquidity mint address
+   * @returns Array of all reserves for this mint
+   */
+  getReservesByMint(address: Address): KaminoReserve[] {
+    const reserves: KaminoReserve[] = [];
     for (const reserve of this.reserves.values()) {
       if (reserve.getLiquidityMint() === address) {
+        reserves.push(reserve);
+      }
+    }
+    return reserves;
+  }
+
+  getExistingReservesByMint(address: Address, description: string = 'Requested'): KaminoReserve[] {
+    return checkArrayNotEmpty(this.getReservesByMint(address), `${description} reserve with mint ${address} not found`);
+  }
+
+  getLiquidityTokenProgramByMint(mint: Address): Address {
+    const reserves = this.getExistingReservesByMint(mint);
+    const tokenProgram = reserves[0].getLiquidityTokenProgram();
+    for (let i = 1; i < reserves.length; i++) {
+      const otherTokenProgram = reserves[i].getLiquidityTokenProgram();
+      if (otherTokenProgram !== tokenProgram) {
+        throw new Error(
+          `Inconsistent token programs for mint ${mint}: reserve ${reserves[0].address} has ${tokenProgram}, reserve ${reserves[i].address} has ${otherTokenProgram}`
+        );
+      }
+    }
+    return tokenProgram;
+  }
+
+  /**
+   * Returns this market's reserve matching the given mint address and reserve kind.
+   * Since a market can have multiple reserves for the same mint (with different terms),
+   * the reserve kind specifies which reserve to select.
+   *
+   * Example for fixed-term reserves:
+   * const fixedReserveKind = new FixedReserveKind(new BN(30 * 24 * 60 * 60), 500); // 30 days, 5% borrow rate
+   * const fixedReserve = market.getReserveByMintAndKind(tokenMint, fixedReserveKind)!;
+
+   * @param mint The liquidity mint address
+   * @param reserveKind The reserve kind to match (e.g., FloatRateReserveKind or FixedRateReserveKind)
+   */
+  getReserveByMintAndKind(mint: Address, reserveKind: ReserveKind): KaminoReserve | undefined {
+    for (const reserve of this.reserves.values()) {
+      if (reserve.getLiquidityMint() === mint && reserveKind.matches(reserve)) {
         return reserve;
       }
     }
@@ -590,16 +777,117 @@ export class KaminoMarket {
   }
 
   /**
-   * Returns this market's reserve of the given mint address, or throws an error (including the given description) if
-   * such reserve does not exist.
+   * Returns this market's reserve matching the given mint address and reserve kind,
+   * or throws an error if not found.
+   *
+   * @param mint The liquidity mint address
+   * @param reserveKind The reserve kind to match
+   * @param description Optional description for the error message
    */
-  getExistingReserveByMint(address: Address, description: string = 'Requested'): KaminoReserve {
-    return checkDefined(this.getReserveByMint(address), `${description} reserve with mint ${address} not found`);
+  getExistingReserveByMintAndKind(
+    mint: Address,
+    reserveKind: ReserveKind,
+    description: string = 'Requested'
+  ): KaminoReserve {
+    return checkDefined(
+      this.getReserveByMintAndKind(mint, reserveKind),
+      `${description} reserve with mint ${mint} and kind ${reserveKind.toString()} not found`
+    );
   }
 
-  getReserveBySymbol(symbol: string) {
+  /**
+   * Returns this market's float rate reserve for the given mint address.
+   * Float rate reserves are reserves without a fixed term (debtTermSeconds = 0).
+   *
+   * @param mint The liquidity mint address
+   * @returns The float rate reserve, or undefined if not found
+   */
+  getFloatRateReserveByMint(mint: Address): KaminoReserve | undefined {
+    return this.getReserveByMintAndKind(mint, new FloatRateReserveKind());
+  }
+
+  /**
+   * Returns this market's float rate reserve for the given mint address,
+   * or throws an error if not found.
+   *
+   * @param mint The liquidity mint address
+   * @param description Optional description for the error message
+   * @returns The float rate reserve
+   */
+  getExistingFloatRateReserveByMint(mint: Address, description: string = 'Requested'): KaminoReserve {
+    return checkDefined(
+      this.getFloatRateReserveByMint(mint),
+      `${description} float rate reserve with mint ${mint} not found`
+    );
+  }
+
+  /**
+   * Returns all fixed rate reserves for the given mint address.
+   * Fixed rate reserves have a non-zero debt term (debtTermSeconds > 0).
+   *
+   * @param mint The liquidity mint address
+   * @returns Array of all fixed rate reserves for this mint
+   */
+  getFixedRateReservesByMint(mint: Address): KaminoReserve[] {
+    const fixedRateReserves: KaminoReserve[] = [];
+    for (const reserve of this.reserves.values()) {
+      if (reserve.getLiquidityMint() === mint && reserve.getKind().isFixedRate()) {
+        fixedRateReserves.push(reserve);
+      }
+    }
+    return fixedRateReserves;
+  }
+
+  /**
+   * Returns all maturity-timestamp reserves for the given mint address.
+   *
+   * @param mint The liquidity mint address
+   * @returns Array of all maturity-timestamp reserves for this mint
+   */
+  getMaturityTimestampReservesByMint(mint: Address): KaminoReserve[] {
+    const reserves: KaminoReserve[] = [];
+    for (const reserve of this.reserves.values()) {
+      if (reserve.getLiquidityMint() === mint && reserve.getKind().isMaturityTimestampKind()) {
+        reserves.push(reserve);
+      }
+    }
+    return reserves;
+  }
+
+  /**
+   * Returns all reserves for the given symbol (both float rate and fixed rate).
+   *
+   * @param symbol The reserve symbol
+   * @returns Array of all reserves for this symbol
+   */
+  getReservesBySymbol(symbol: string): KaminoReserve[] {
+    const reserves: KaminoReserve[] = [];
     for (const reserve of this.reserves.values()) {
       if (reserve.symbol === symbol) {
+        reserves.push(reserve);
+      }
+    }
+    return reserves;
+  }
+
+  getExistingReservesBySymbol(symbol: string, description: string = 'Requested'): KaminoReserve[] {
+    return checkArrayNotEmpty(
+      this.getReservesBySymbol(symbol),
+      `${description} reserve with symbol ${symbol} not found`
+    );
+  }
+
+  /**
+   * Returns this market's reserve matching the given symbol and reserve kind.
+   * Since a market can have multiple reserves for the same symbol (with different terms),
+   * the reserve kind specifies which reserve to select.
+   *
+   * @param symbol The reserve symbol
+   * @param reserveKind The reserve kind to match (e.g., FloatRateReserveKind or FixedRateReserveKind)
+   */
+  getReserveBySymbolAndKind(symbol: string, reserveKind: ReserveKind): KaminoReserve | undefined {
+    for (const reserve of this.reserves.values()) {
+      if (reserve.symbol === symbol && reserveKind.matches(reserve)) {
         return reserve;
       }
     }
@@ -607,19 +895,93 @@ export class KaminoMarket {
   }
 
   /**
-   * Returns this market's reserve of the given symbol, or throws an error (including the given description) if
-   * such reserve does not exist.
+   * Returns this market's reserve matching the given symbol and reserve kind,
+   * or throws an error if not found.
+   *
+   * @param symbol The reserve symbol
+   * @param reserveKind The reserve kind to match
+   * @param description Optional description for the error message
    */
-  getExistingReserveBySymbol(symbol: string, description: string = 'Requested'): KaminoReserve {
-    return checkDefined(this.getReserveBySymbol(symbol), `${description} reserve with symbol ${symbol} not found`);
+  getExistingReserveBySymbolAndKind(
+    symbol: string,
+    reserveKind: ReserveKind,
+    description: string = 'Requested'
+  ): KaminoReserve {
+    return checkDefined(
+      this.getReserveBySymbolAndKind(symbol, reserveKind),
+      `${description} reserve with symbol ${symbol} and kind ${reserveKind.toString()} not found`
+    );
+  }
+
+  /**
+   * Returns this market's float rate reserve for the given symbol.
+   * Float rate reserves are reserves without a fixed term (debtTermSeconds = 0).
+   *
+   * @param symbol The reserve symbol
+   * @returns The float rate reserve, or undefined if not found
+   */
+  getFloatRateReserveBySymbol(symbol: string): KaminoReserve | undefined {
+    return this.getReserveBySymbolAndKind(symbol, new FloatRateReserveKind());
+  }
+
+  /**
+   * Returns this market's float rate reserve for the given symbol,
+   * or throws an error if not found.
+   *
+   * @param symbol The reserve symbol
+   * @param description Optional description for the error message
+   * @returns The float rate reserve
+   */
+  getExistingFloatRateReserveBySymbol(symbol: string, description: string = 'Requested'): KaminoReserve {
+    return checkDefined(
+      this.getFloatRateReserveBySymbol(symbol),
+      `${description} float rate reserve with symbol ${symbol} not found`
+    );
+  }
+
+  /**
+   * Returns all fixed rate reserves for the given symbol.
+   * Fixed rate reserves have a non-zero debt term (debtTermSeconds > 0).
+   *
+   * @param symbol The reserve symbol
+   * @returns Array of all fixed rate reserves for this symbol
+   */
+  getFixedRateReservesBySymbol(symbol: string): KaminoReserve[] {
+    const fixedRateReserves: KaminoReserve[] = [];
+    for (const reserve of this.reserves.values()) {
+      if (reserve.symbol === symbol && reserve.getKind().isFixedRate()) {
+        fixedRateReserves.push(reserve);
+      }
+    }
+    return fixedRateReserves;
+  }
+
+  /**
+   * Returns all maturity-timestamp reserves for the given symbol.
+   *
+   * @param symbol The reserve symbol
+   * @returns Array of all maturity-timestamp reserves for this symbol
+   */
+  getMaturityTimestampReservesBySymbol(symbol: string): KaminoReserve[] {
+    const reserves: KaminoReserve[] = [];
+    for (const reserve of this.reserves.values()) {
+      if (reserve.symbol === symbol && reserve.getKind().isMaturityTimestampKind()) {
+        reserves.push(reserve);
+      }
+    }
+    return reserves;
   }
 
   getReserveMintBySymbol(symbol: string) {
-    return this.getReserveBySymbol(symbol)?.getLiquidityMint();
+    const reserves = this.getReservesBySymbol(symbol);
+    if (reserves.length === 0) {
+      throw new Error(`No reserves found for symbol ${symbol}`);
+    }
+    return reserves[0].getLiquidityMint();
   }
 
   async getReserveFarmInfo(
-    mint: Address,
+    reserveAddress: Address,
     getRewardPrice: (mint: Address) => Promise<number>
   ): Promise<{ borrowingRewards: ReserveRewardInfo; depositingRewards: ReserveRewardInfo }> {
     const { address } = this;
@@ -631,10 +993,10 @@ export class KaminoMarket {
     }
 
     // Find the reserve
-    const kaminoReserve = this.getReserveByMint(mint);
+    const kaminoReserve = this.getReserveByAddress(reserveAddress);
 
     if (!kaminoReserve) {
-      throw Error(`Could not find reserve. ${mint}`);
+      throw Error(`Could not find reserve ${reserveAddress}`);
     }
 
     const totalDepositAmount = lamportsToNumberDecimal(
@@ -685,26 +1047,26 @@ export class KaminoMarket {
     totalInvestmentUsd: Decimal,
     getRewardPrice: (mint: Address) => Promise<number>
   ): Promise<ReserveRewardInfo> {
-    const farmState = await FarmState.fetch(this.getRpc(), farmAddress, this.farmsProgramId);
+    const farmState = await fetchFarmStateOrNull(this.getRpc(), farmAddress);
     if (!farmState) {
       throw Error(`Could not parse farm state. ${farmAddress}`);
     }
     const { token, rewardsAvailable, rewardScheduleCurve } = farmState.rewardInfos[0];
     // TODO: marius fix
-    const rewardPerSecondLamports = rewardScheduleCurve.points[0].rewardPerTimeUnit.toNumber();
+    const rewardPerSecondLamports = Number(rewardScheduleCurve.points[0].rewardPerTimeUnit);
     const { mint, decimals: rewardDecimals } = token;
     const rewardPriceUsd = await getRewardPrice(mint);
     const rewardApr = this.calculateRewardAPR(
       rewardPerSecondLamports,
       rewardPriceUsd,
       totalInvestmentUsd,
-      rewardDecimals.toNumber()
+      Number(rewardDecimals)
     );
 
     return {
-      rewardsPerSecond: new Decimal(rewardPerSecondLamports).dividedBy(10 ** rewardDecimals.toNumber()),
-      rewardsRemaining: new Decimal(rewardsAvailable.toNumber()).dividedBy(10 ** rewardDecimals.toNumber()),
-      rewardApr: rewardsAvailable.toNumber() > 0 ? rewardApr : new Decimal(0),
+      rewardsPerSecond: new Decimal(rewardPerSecondLamports).dividedBy(10 ** Number(rewardDecimals)),
+      rewardsRemaining: new Decimal(rewardsAvailable.toString()).dividedBy(10 ** Number(rewardDecimals)),
+      rewardApr: rewardsAvailable > 0n ? rewardApr : new Decimal(0),
       rewardMint: mint,
       totalInvestmentUsd,
       rewardPrice: rewardPriceUsd,
@@ -731,7 +1093,7 @@ export class KaminoMarket {
    *
    * @param tag
    */
-  async getAllObligationsForMarket(tag?: number): Promise<KaminoObligation[]> {
+  async getAllObligationsForMarket(slot: Slot, tag?: number): Promise<KaminoObligation[]> {
     const filters: (GetProgramAccountsDatasizeFilter | GetProgramAccountsMemcmpFilter)[] = [
       {
         dataSize: BigInt(Obligation.layout.span + 8),
@@ -758,16 +1120,13 @@ export class KaminoMarket {
     const collateralExchangeRates = new Map<Address, Decimal>();
     const cumulativeBorrowRates = new Map<Address, Decimal>();
 
-    const [slot, obligations] = await Promise.all([
-      this.rpc.getSlot().send(),
-      getProgramAccounts(
-        this.rpc,
-        this.programId,
-        ObligationZP.layout.span + 8,
-        filters,
-        { offset: 0, length: ObligationZP.layout.span + 8 } // truncate the padding
-      ),
-    ]);
+    const obligations = await getProgramAccounts(
+      this.rpc,
+      this.programId,
+      ObligationZP.layout.span + 8,
+      filters,
+      { offset: 0, length: ObligationZP.layout.span + 8 } // truncate the padding
+    );
 
     return obligations.map((obligation) => {
       if (obligation.data === null) {
@@ -781,7 +1140,8 @@ export class KaminoMarket {
 
       KaminoObligation.addRatesForObligation(
         this,
-        obligationAccount,
+        obligationAccount.deposits,
+        obligationAccount.borrows,
         collateralExchangeRates,
         cumulativeBorrowRates,
         slot
@@ -805,7 +1165,7 @@ export class KaminoMarket {
    *   console.log('got a batch of # obligations:', obligations.length);
    * }
    */
-  async *batchGetAllObligationsForMarket(tag?: number): AsyncGenerator<KaminoObligation[], void, unknown> {
+  async *batchGetAllObligationsForMarket(slot: Slot, tag?: number): AsyncGenerator<KaminoObligation[], void, unknown> {
     const filters: (GetProgramAccountsDatasizeFilter | GetProgramAccountsMemcmpFilter)[] = [
       {
         dataSize: BigInt(Obligation.layout.span + 8),
@@ -832,16 +1192,13 @@ export class KaminoMarket {
     const collateralExchangeRates = new Map<Address, Decimal>();
     const cumulativeBorrowRates = new Map<Address, Decimal>();
 
-    const [obligationPubkeys, slot] = await Promise.all([
-      this.rpc
-        .getProgramAccounts(this.programId, {
-          filters,
-          encoding: 'base64',
-          dataSlice: { offset: 0, length: 0 },
-        })
-        .send(),
-      this.rpc.getSlot().send(),
-    ]);
+    const obligationPubkeys = await this.rpc
+      .getProgramAccounts(this.programId, {
+        filters,
+        encoding: 'base64',
+        dataSlice: { offset: 0, length: 0 },
+      })
+      .send();
 
     for (const batch of chunks(
       obligationPubkeys.map((x) => x.pubkey),
@@ -864,7 +1221,8 @@ export class KaminoMarket {
 
         KaminoObligation.addRatesForObligation(
           this,
-          obligationAccount,
+          obligationAccount.deposits,
+          obligationAccount.borrows,
           collateralExchangeRates,
           cumulativeBorrowRates,
           slot
@@ -877,34 +1235,31 @@ export class KaminoMarket {
     }
   }
 
-  async getAllObligationsByTag(tag: number, market: Address) {
-    const [slot, obligations] = await Promise.all([
-      this.rpc.getSlot().send(),
-      this.rpc
-        .getProgramAccounts(this.programId, {
-          filters: [
-            {
-              dataSize: BigInt(Obligation.layout.span + 8),
+  async getAllObligationsByTag(tag: number, market: Address, slot: Slot) {
+    const obligations = await this.rpc
+      .getProgramAccounts(this.programId, {
+        filters: [
+          {
+            dataSize: BigInt(Obligation.layout.span + 8),
+          },
+          {
+            memcmp: {
+              offset: 8n,
+              bytes: base58Decoder.decode(new BN(tag).toBuffer()) as Base58EncodedBytes,
+              encoding: 'base58',
             },
-            {
-              memcmp: {
-                offset: 8n,
-                bytes: base58Decoder.decode(new BN(tag).toBuffer()) as Base58EncodedBytes,
-                encoding: 'base58',
-              },
+          },
+          {
+            memcmp: {
+              offset: 32n,
+              bytes: market.toString() as Base58EncodedBytes,
+              encoding: 'base58',
             },
-            {
-              memcmp: {
-                offset: 32n,
-                bytes: market.toString() as Base58EncodedBytes,
-                encoding: 'base58',
-              },
-            },
-          ],
-          encoding: 'base64',
-        })
-        .send(),
-    ]);
+          },
+        ],
+        encoding: 'base64',
+      })
+      .send();
     const collateralExchangeRates = new Map<Address, Decimal>();
     const cumulativeBorrowRates = new Map<Address, Decimal>();
 
@@ -924,7 +1279,8 @@ export class KaminoMarket {
 
       KaminoObligation.addRatesForObligation(
         this,
-        obligationAccount,
+        obligationAccount.deposits,
+        obligationAccount.borrows,
         collateralExchangeRates,
         cumulativeBorrowRates,
         slot
@@ -952,36 +1308,33 @@ export class KaminoMarket {
    * @returns {Promise<KaminoObligation[]>} A promise that resolves to an array of KaminoObligation objects representing all obligations that have deposited into the specified reserve.
    * @throws {Error} If an account is invalid or does not belong to this program, or if obligation parsing fails.
    */
-  async getAllObligationsByDepositedReserve(reserve: Address) {
+  async getAllObligationsByDepositedReserve(reserve: Address, slot: Slot) {
     const finalObligations: KaminoObligation[] = [];
     for (let i = 0; i < DEPOSITS_LIMIT; i++) {
-      const [slot, obligations] = await Promise.all([
-        this.rpc.getSlot().send(),
-        this.rpc
-          .getProgramAccounts(this.programId, {
-            filters: [
-              {
-                dataSize: BigInt(Obligation.layout.span + 8),
+      const obligations = await this.rpc
+        .getProgramAccounts(this.programId, {
+          filters: [
+            {
+              dataSize: BigInt(Obligation.layout.span + 8),
+            },
+            {
+              memcmp: {
+                offset: 96n + 136n * BigInt(i), // the offset for the borrows array in the obligation account
+                bytes: reserve.toString() as Base58EncodedBytes,
+                encoding: 'base58',
               },
-              {
-                memcmp: {
-                  offset: 96n + 136n * BigInt(i), // the offset for the borrows array in the obligation account
-                  bytes: reserve.toString() as Base58EncodedBytes,
-                  encoding: 'base58',
-                },
+            },
+            {
+              memcmp: {
+                offset: 32n,
+                bytes: this.address.toString() as Base58EncodedBytes,
+                encoding: 'base58',
               },
-              {
-                memcmp: {
-                  offset: 32n,
-                  bytes: this.address.toString() as Base58EncodedBytes,
-                  encoding: 'base58',
-                },
-              },
-            ],
-            encoding: 'base64',
-          })
-          .send(),
-      ]);
+            },
+          ],
+          encoding: 'base64',
+        })
+        .send();
 
       const collateralExchangeRates = new Map<Address, Decimal>();
       const cumulativeBorrowRates = new Map<Address, Decimal>();
@@ -1002,7 +1355,8 @@ export class KaminoMarket {
 
         KaminoObligation.addRatesForObligation(
           this,
-          obligationAccount,
+          obligationAccount.deposits,
+          obligationAccount.borrows,
           collateralExchangeRates,
           cumulativeBorrowRates,
           slot
@@ -1034,36 +1388,33 @@ export class KaminoMarket {
    *   representing all obligations that have borrowed from the specified reserve.
    * @throws {Error} If an account is invalid or does not belong to this program, or if obligation parsing fails.
    */
-  async getAllObligationsByBorrowedReserve(reserve: Address) {
+  async getAllObligationsByBorrowedReserve(reserve: Address, slot: Slot) {
     const finalObligations: KaminoObligation[] = [];
     for (let i = 0; i < BORROWS_LIMIT; i++) {
-      const [slot, obligations] = await Promise.all([
-        this.rpc.getSlot().send(),
-        this.rpc
-          .getProgramAccounts(this.programId, {
-            filters: [
-              {
-                dataSize: BigInt(Obligation.layout.span + 8),
+      const obligations = await this.rpc
+        .getProgramAccounts(this.programId, {
+          filters: [
+            {
+              dataSize: BigInt(Obligation.layout.span + 8),
+            },
+            {
+              memcmp: {
+                offset: 96n + 136n * 8n + 24n + 200n * BigInt(i), // the offset for the borrows array in the obligation account
+                bytes: reserve.toString() as Base58EncodedBytes,
+                encoding: 'base58',
               },
-              {
-                memcmp: {
-                  offset: 96n + 136n * 8n + 24n + 200n * BigInt(i), // the offset for the borrows array in the obligation account
-                  bytes: reserve.toString() as Base58EncodedBytes,
-                  encoding: 'base58',
-                },
+            },
+            {
+              memcmp: {
+                offset: 32n, // lendingMarket address
+                bytes: this.address.toString() as Base58EncodedBytes,
+                encoding: 'base58',
               },
-              {
-                memcmp: {
-                  offset: 32n, // lendingMarket address
-                  bytes: this.address.toString() as Base58EncodedBytes,
-                  encoding: 'base58',
-                },
-              },
-            ],
-            encoding: 'base64',
-          })
-          .send(),
-      ]);
+            },
+          ],
+          encoding: 'base64',
+        })
+        .send();
 
       const collateralExchangeRates = new Map<Address, Decimal>();
       const cumulativeBorrowRates = new Map<Address, Decimal>();
@@ -1084,7 +1435,8 @@ export class KaminoMarket {
 
         KaminoObligation.addRatesForObligation(
           this,
-          obligationAccount,
+          obligationAccount.deposits,
+          obligationAccount.borrows,
           collateralExchangeRates,
           cumulativeBorrowRates,
           slot
@@ -1105,11 +1457,11 @@ export class KaminoMarket {
 
   async getAllUserObligations(
     user: Address,
-    commitment: Commitment = 'processed',
-    slot?: bigint
+    slot: bigint,
+    commitment: Commitment = 'processed'
   ): Promise<KaminoObligation[]> {
     const [currentSlot, obligations] = await Promise.all([
-      slot !== undefined ? Promise.resolve(slot) : this.rpc.getSlot().send(),
+      Promise.resolve(slot),
       this.rpc
         .getProgramAccounts(this.programId, {
           filters: [
@@ -1159,7 +1511,8 @@ export class KaminoMarket {
 
       KaminoObligation.addRatesForObligation(
         this,
-        obligationAccount,
+        obligationAccount.deposits,
+        obligationAccount.borrows,
         collateralExchangeRates,
         cumulativeBorrowRates,
         currentSlot
@@ -1174,7 +1527,7 @@ export class KaminoMarket {
     });
   }
 
-  async getAllUserObligationsForReserve(user: Address, reserve: Address): Promise<KaminoObligation[]> {
+  async getAllUserObligationsForReserve(user: Address, reserve: Address, slot: Slot): Promise<KaminoObligation[]> {
     const obligationAddresses: Address[] = [];
     obligationAddresses.push(await new VanillaObligation(this.programId).toPda(this.getAddress(), user));
     const targetReserve = new Map<Address, KaminoReserve>(Array.from(this.reserves.entries())).get(reserve);
@@ -1219,7 +1572,8 @@ export class KaminoMarket {
     const finalObligations: KaminoObligation[] = [];
     for (let batchStart = 0; batchStart < obligationAddresses.length; batchStart += batchSize) {
       const obligations = await this.getMultipleObligationsByAddress(
-        obligationAddresses.slice(batchStart, batchStart + batchSize)
+        obligationAddresses.slice(batchStart, batchStart + batchSize),
+        slot
       );
       obligations.forEach((obligation) => {
         if (obligation !== null) {
@@ -1267,41 +1621,38 @@ export class KaminoMarket {
     return false;
   }
 
-  async getUserObligationsByTag(tag: number, user: Address): Promise<KaminoObligation[]> {
-    const [currentSlot, obligations] = await Promise.all([
-      this.rpc.getSlot().send(),
-      this.rpc
-        .getProgramAccounts(this.programId, {
-          filters: [
-            {
-              dataSize: BigInt(Obligation.layout.span + 8),
+  async getUserObligationsByTag(tag: number, user: Address, currentSlot: Slot): Promise<KaminoObligation[]> {
+    const obligations = await this.rpc
+      .getProgramAccounts(this.programId, {
+        filters: [
+          {
+            dataSize: BigInt(Obligation.layout.span + 8),
+          },
+          {
+            memcmp: {
+              offset: 8n,
+              bytes: base58Decoder.decode(new BN(tag).toBuffer()) as Base58EncodedBytes,
+              encoding: 'base58',
             },
-            {
-              memcmp: {
-                offset: 8n,
-                bytes: base58Decoder.decode(new BN(tag).toBuffer()) as Base58EncodedBytes,
-                encoding: 'base58',
-              },
+          },
+          {
+            memcmp: {
+              offset: 32n,
+              bytes: this.address.toString() as Base58EncodedBytes,
+              encoding: 'base58',
             },
-            {
-              memcmp: {
-                offset: 32n,
-                bytes: this.address.toString() as Base58EncodedBytes,
-                encoding: 'base58',
-              },
+          },
+          {
+            memcmp: {
+              offset: 64n,
+              bytes: user.toString() as Base58EncodedBytes,
+              encoding: 'base58',
             },
-            {
-              memcmp: {
-                offset: 64n,
-                bytes: user.toString() as Base58EncodedBytes,
-                encoding: 'base58',
-              },
-            },
-          ],
-          encoding: 'base64',
-        })
-        .send(),
-    ]);
+          },
+        ],
+        encoding: 'base64',
+      })
+      .send();
     const collateralExchangeRates = new Map<Address, Decimal>();
     const cumulativeBorrowRates = new Map<Address, Decimal>();
     return obligations.map((obligation) => {
@@ -1316,7 +1667,8 @@ export class KaminoMarket {
       }
       KaminoObligation.addRatesForObligation(
         this,
-        obligationAccount,
+        obligationAccount.deposits,
+        obligationAccount.borrows,
         collateralExchangeRates,
         cumulativeBorrowRates,
         currentSlot
@@ -1338,8 +1690,8 @@ export class KaminoMarket {
     return KaminoObligation.load(this, address);
   }
 
-  async getMultipleObligationsByAddress(addresses: Address[]) {
-    return KaminoObligation.loadAll(this, addresses);
+  async getMultipleObligationsByAddress(addresses: Address[], slot: Slot) {
+    return KaminoObligation.loadAll(this, addresses, slot);
   }
 
   /**
@@ -1747,6 +2099,17 @@ export async function getReserveStatesForMarket(
             encoding: 'base58',
           },
         },
+        {
+          // Match Reserve's 8-byte Anchor discriminator at offset 0 so uninitialized
+          // klend-owned accounts with the same 8624-byte layout (e.g. pre-allocated
+          // placeholders awaiting init_reserve) are filtered out server-side and
+          // never reach Reserve.decode below.
+          memcmp: {
+            offset: 0n,
+            bytes: base58Decoder.decode(Reserve.discriminator) as Base58EncodedBytes,
+            encoding: 'base58',
+          },
+        },
       ],
       encoding: 'base64',
     })
@@ -1768,66 +2131,225 @@ export async function getReserveStatesForMarket(
   });
 }
 
+async function getReservesForMarkets(
+  marketAddresses: Address[],
+  rpc: Rpc<KaminoReserveRpcApi>,
+  programId: Address,
+  recentSlotDurationMs: number,
+  rewardsAprBpsByMarket: Map<Address, number>,
+  oracleAccounts?: AllOracleAccounts
+): Promise<Map<Address, Map<Address, KaminoReserve>>> {
+  const requestedMarkets = new Set(marketAddresses);
+  const reservesByMarket = new Map<Address, Map<Address, KaminoReserve>>();
+
+  marketAddresses.forEach((marketAddress) => {
+    reservesByMarket.set(marketAddress, new Map<Address, KaminoReserve>());
+  });
+
+  if (requestedMarkets.size === 0) {
+    return reservesByMarket;
+  }
+
+  const reserves = await rpc
+    .getProgramAccounts(programId, {
+      filters: [
+        {
+          dataSize: BigInt(Reserve.layout.span + 8),
+        },
+        {
+          memcmp: {
+            offset: 0n,
+            bytes: base58Decoder.decode(Reserve.discriminator) as Base58EncodedBytes,
+            encoding: 'base58',
+          },
+        },
+      ],
+      encoding: 'base64',
+    })
+    .send();
+
+  const deserializedReserves = reserves
+    .map((reserve) => {
+      if (reserve.account === null) {
+        throw new Error(`Reserve account ${reserve.pubkey} does not exist`);
+      }
+
+      const reserveAccount = Reserve.decode(Buffer.from(reserve.account.data[0], 'base64'));
+      if (!reserveAccount) {
+        throw Error(`Could not parse reserve ${reserve.pubkey}`);
+      }
+
+      return {
+        address: reserve.pubkey,
+        state: reserveAccount,
+      };
+    })
+    .filter((reserve) => requestedMarkets.has(reserve.state.lendingMarket));
+
+  if (deserializedReserves.length === 0) {
+    return reservesByMarket;
+  }
+
+  const kaminoReserves = await initializeKaminoReserves(
+    deserializedReserves,
+    rpc,
+    recentSlotDurationMs,
+    (lendingMarket) => {
+      const rewardsAprBps = rewardsAprBpsByMarket.get(lendingMarket);
+      if (rewardsAprBps === undefined) {
+        throw new Error(`Missing reserveRewardsMaxAprBps for lending market ${lendingMarket}`);
+      }
+      return rewardsAprBps;
+    },
+    programId,
+    oracleAccounts
+  );
+
+  kaminoReserves.forEach((kaminoReserve) => {
+    const marketReserves = reservesByMarket.get(kaminoReserve.state.lendingMarket);
+    if (marketReserves) {
+      marketReserves.set(kaminoReserve.address, kaminoReserve);
+    }
+  });
+
+  return reservesByMarket;
+}
+
+/**
+ * `reserveRewardsMaxAprBps` is the market's `LendingMarket::reserveRewardsMaxAprBps`; pass it
+ * when you already hold the market state to save a network call, otherwise the market is fetched
+ * to read it.
+ */
 export async function getReservesForMarket(
   marketAddress: Address,
   rpc: Rpc<KaminoReserveRpcApi>,
   programId: Address,
   recentSlotDurationMs: number,
+  reserveRewardsMaxAprBps?: number,
   oracleAccounts?: AllOracleAccounts
 ): Promise<Map<Address, KaminoReserve>> {
-  const deserializedReserves: ReserveWithAddress[] = await getReserveStatesForMarket(marketAddress, rpc, programId);
-  const [reservesAndOracles, cdnResourcesData] = await Promise.all([
-    getTokenOracleData(rpc, deserializedReserves, oracleAccounts),
-    fetchKaminoCdnData(),
+  const [deserializedReserves, rewardsAprBps] = await Promise.all([
+    getReserveStatesForMarket(marketAddress, rpc, programId),
+    reserveRewardsMaxAprBps !== undefined
+      ? Promise.resolve(reserveRewardsMaxAprBps)
+      : fetchReserveRewardsMaxAprBps(rpc, marketAddress, programId),
   ]);
+  const kaminoReserves = await initializeKaminoReserves(
+    deserializedReserves,
+    rpc,
+    recentSlotDurationMs,
+    () => rewardsAprBps,
+    programId,
+    oracleAccounts
+  );
   const reservesByAddress = new Map<Address, KaminoReserve>();
+  kaminoReserves.forEach((kaminoReserve) => {
+    reservesByAddress.set(kaminoReserve.address, kaminoReserve);
+  });
+  return reservesByAddress;
+}
+
+async function initializeKaminoReserves(
+  reserves: ReserveWithAddress[],
+  rpc: Rpc<KaminoReserveRpcApi>,
+  recentSlotDurationMs: number,
+  getRewardsMaxAprBps: (lendingMarket: Address) => number,
+  programId: Address,
+  oracleAccounts?: AllOracleAccounts
+): Promise<KaminoReserve[]> {
+  const [reservesAndOracles, cdnResourcesData] = await Promise.all([
+    getTokenOracleData(rpc, reserves, oracleAccounts),
+    kaminoCdn.getData(),
+  ]);
+
+  const kaminoReserves: KaminoReserve[] = [];
   reservesAndOracles.forEach(([{ address: reserveAddress, state: reserve }, oracle]) => {
     if (!oracle) {
+      if (shouldSkipUnconfiguredOracleReserve(reserveAddress, reserve)) {
+        return;
+      }
       throw Error(
         `Could not find oracle for ${parseTokenSymbol(
           reserve.config.tokenInfo.name
         )} (${reserveAddress}) reserve in market ${reserve.lendingMarket}`
       );
     }
-    const kaminoReserve = KaminoReserve.initialize(
-      reserveAddress,
-      reserve,
-      oracle,
-      rpc,
-      recentSlotDurationMs,
-      cdnResourcesData
+
+    kaminoReserves.push(
+      KaminoReserve.initialize(
+        reserveAddress,
+        reserve,
+        oracle,
+        rpc,
+        recentSlotDurationMs,
+        getRewardsMaxAprBps(reserve.lendingMarket),
+        cdnResourcesData,
+        undefined,
+        programId
+      )
     );
-    reservesByAddress.set(kaminoReserve.address, kaminoReserve);
   });
-  return reservesByAddress;
+  return kaminoReserves;
 }
 
+/**
+ * `reserveRewardsMaxAprBps` is the parent market's `LendingMarket::reserveRewardsMaxAprBps`; pass
+ * it when you already hold the market state to save a network call, otherwise the reserve's
+ * lending market is fetched to read it.
+ */
 export async function getSingleReserve(
   reservePk: Address,
   rpc: Rpc<KaminoReserveRpcApi>,
   recentSlotDurationMs: number,
   reserveData?: Reserve,
-  oracleAccounts?: AllOracleAccounts
+  oracleAccounts?: AllOracleAccounts,
+  reserveRewardsMaxAprBps?: number,
+  programId: Address = PROGRAM_ID
 ): Promise<KaminoReserve> {
-  const reserve = reserveData ?? (await Reserve.fetch(rpc, reservePk));
+  const reserve = reserveData ?? (await Reserve.fetch(rpc, reservePk, programId));
 
   if (reserve === null) {
     throw new Error(`Reserve account ${reservePk} does not exist`);
   }
-  const [reservesAndOracles, cdnResourcesData] = await Promise.all([
+  const [reservesAndOracles, cdnResourcesData, rewardsAprBps] = await Promise.all([
     getTokenOracleData(rpc, [{ address: reservePk, state: reserve }], oracleAccounts),
-    fetchKaminoCdnData(),
+    kaminoCdn.getData(),
+    reserveRewardsMaxAprBps !== undefined
+      ? Promise.resolve(reserveRewardsMaxAprBps)
+      : fetchReserveRewardsMaxAprBps(rpc, reserve.lendingMarket, programId),
   ]);
   const [, oracle] = reservesAndOracles[0];
 
   if (!oracle) {
+    if (!hasOracleConfigured(reserve)) {
+      throw Error(`Could not load ${getUnconfiguredOracleReserveMessage(reservePk, reserve)}`);
+    }
     throw Error(
       `Could not find oracle for ${parseTokenSymbol(reserve.config.tokenInfo.name)} (${reservePk}) reserve in market ${
         reserve.lendingMarket
       }`
     );
   }
-  return KaminoReserve.initialize(reservePk, reserve, oracle, rpc, recentSlotDurationMs, cdnResourcesData);
+  return KaminoReserve.initialize(
+    reservePk,
+    reserve,
+    oracle,
+    rpc,
+    recentSlotDurationMs,
+    rewardsAprBps,
+    cdnResourcesData,
+    undefined,
+    programId
+  );
+}
+
+function shouldSkipUnconfiguredOracleReserve(reserveAddress: Address, reserve: Reserve): boolean {
+  if (hasOracleConfigured(reserve)) {
+    return false;
+  }
+
+  console.warn(`Skipping ${getUnconfiguredOracleReserveMessage(reserveAddress, reserve)}`);
+  return true;
 }
 
 export function getReservesActive(reserves: Map<Address, KaminoReserve>): Map<Address, KaminoReserve> {

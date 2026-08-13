@@ -23,6 +23,7 @@ export interface InitGlobalConfigAccounts {
   programData: Address
   systemProgram: Address
   rent: Address
+  instructionSysvarAccount: Address
 }
 
 export function initGlobalConfig(
@@ -36,6 +37,7 @@ export function initGlobalConfig(
     { address: accounts.programData, role: 0 },
     { address: accounts.systemProgram, role: 0 },
     { address: accounts.rent, role: 0 },
+    { address: accounts.instructionSysvarAccount, role: 0 },
     ...remainingAccounts,
   ]
   const data = DISCRIMINATOR

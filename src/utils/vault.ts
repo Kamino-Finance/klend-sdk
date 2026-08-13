@@ -54,6 +54,7 @@ export function decodeVaultState(data: Buffer): VaultState {
     firstLossCapitalFarm: dec.firstLossCapitalFarm,
     allowAllocationsInWhitelistedReservesOnly: dec.allowAllocationsInWhitelistedReservesOnly,
     allowInvestInWhitelistedReservesOnly: dec.allowInvestInWhitelistedReservesOnly,
+    depositCap: dec.depositCap,
     rewardInfo: new VaultRewardInfo({ ...dec.rewardInfo }),
     padding3: dec.padding3,
   });

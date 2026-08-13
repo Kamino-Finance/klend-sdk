@@ -138,8 +138,11 @@ export function getJupiterQuoter(
     );
 
     const inAmount = new Decimal(quoteResponse.inAmount).div(inputMintReserve.getMintFactor());
-    const minAmountOut = new Decimal(quoteResponse.otherAmountThreshold).div(outputMintReserve.getMintFactor());
-    const priceAInB = minAmountOut.div(inAmount);
+    // SDK contract: the quoter returns the SIMULATED (mid) priceAInB; the SDK applies its own slippage sizing buffer.
+    // Use Jupiter's expected `outAmount`, NOT `otherAmountThreshold` (the slippage-baked min-out): passing the min-out
+    // would double-apply slippage (once here, once in the SDK), over-sizing the swap input and rejecting valid routes.
+    const expectedOut = new Decimal(quoteResponse.outAmount).div(outputMintReserve.getMintFactor());
+    const priceAInB = expectedOut.div(inAmount);
 
     return {
       priceAInB,

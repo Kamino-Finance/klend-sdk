@@ -1,14 +1,24 @@
 import {
+  FlashBorrowType,
   MultiplyObligation,
   PROGRAM_ID,
   getAdjustLeverageIxs,
   getComputeBudgetAndPriorityFeeIxs,
   getUserLutAddressAndSetupIxs,
   getScopeRefreshIxForObligationAndReserves,
+  getCurrentLedgerInstant,
 } from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
-import { JLP_MARKET, JLP_MARKET_LUT, JLP_MINT, JUP_QUOTE_BUFFER_BPS, USDC_MINT } from '../utils/constants';
+import {
+  JLP_MARKET,
+  JLP_MARKET_LUT,
+  JLP_MINT,
+  JLP_RESERVE_JLP_MARKET,
+  JUP_QUOTE_BUFFER_BPS,
+  USDC_MINT,
+  USDC_RESERVE_JLP_MARKET,
+} from '../utils/constants';
 import { executeUserSetupLutsTransactions, getMarket } from '../utils/helpers';
 import { getKaminoResources } from '../utils/kamino_resources';
 import { address, Address, none } from '@solana/kit';
@@ -17,6 +27,7 @@ import { getJupiterPrice, getJupiterQuoter, getJupiterSwapper } from '../utils/j
 import { QuoteResponse } from '@jup-ag/api/dist/index.js';
 import { Scope } from '@kamino-finance/scope-sdk/';
 import { sendAndConfirmTx } from '../utils/tx';
+import { getFlashBorrowTypeFromEnv } from '../utils/env';
 
 // For this example we are only using JLP/USDC multiply
 // This can be also used for leverage by using the correct type when creating the obligation
@@ -29,10 +40,14 @@ import { sendAndConfirmTx } from '../utils/tx';
 
   const collTokenMint = JLP_MINT;
   const debtTokenMint = USDC_MINT;
+  const collReserveAddress = JLP_RESERVE_JLP_MARKET;
+  const debtReserveAddress = USDC_RESERVE_JLP_MARKET;
   // const vaultType = 'multiply';
   const targetLeverage = new Decimal(2); // 3x leverage/ 3x multiply
   const ogLeverage = new Decimal(3);
   const slippagePct = 0.1;
+  // Optional: set to 'coll' or 'debt' to override which token is flash borrowed (default: 'coll' for increase, 'debt' for decrease)
+  const flashBorrowType: FlashBorrowType | undefined = getFlashBorrowTypeFromEnv();
 
   const kaminoResources = await getKaminoResources();
 
@@ -41,11 +56,13 @@ import { sendAndConfirmTx } from '../utils/tx';
 
   const multiplyLutKeys = multiplyLut.map((lut) => address(lut));
 
-  const multiplyMints: { coll: Address; debt: Address }[] = [{ coll: collTokenMint, debt: debtTokenMint }];
-  const leverageMints: { coll: Address; debt: Address }[] = [];
-  multiplyMints.push({
-    coll: address(collTokenMint),
-    debt: address(debtTokenMint),
+  const multiplyReserveAddresses: { coll: Address; debt: Address }[] = [
+    { coll: collReserveAddress, debt: debtReserveAddress },
+  ];
+  const leverageReserveAddresses: { coll: Address; debt: Address }[] = [];
+  multiplyReserveAddresses.push({
+    coll: address(collReserveAddress),
+    debt: address(debtReserveAddress),
   });
 
   // This is the setup step that should happen each time the user has to extend it's LookupTable with missing keys
@@ -56,20 +73,20 @@ import { sendAndConfirmTx } from '../utils/tx';
     wallet,
     none(),
     true, // always extending LUT
-    multiplyMints,
-    leverageMints
+    multiplyReserveAddresses,
+    leverageReserveAddresses
   );
 
-  const debtTokenReserve = market.getReserveByMint(debtTokenMint);
-  const collTokenReserve = market.getReserveByMint(collTokenMint);
+  const debtTokenReserve = market.getExistingReserveByAddress(debtReserveAddress);
+  const collTokenReserve = market.getExistingReserveByAddress(collReserveAddress);
 
   await executeUserSetupLutsTransactions(c, wallet, txsIxs);
 
   const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, PROGRAM_ID); // new LeverageObligation(collTokenMint, debtTokenMint, PROGRAM_ID); for leverage
   const obligationAddress = await obligationType.toPda(market.getAddress(), wallet.address);
   const obligation = await market.getObligationByAddress(obligationAddress);
-  const depositedLamports = obligation!.getDepositByMint(collTokenMint)!.amount;
-  const borrowedLamports = obligation!.getBorrowByMint(debtTokenMint)!.amount;
+  const depositedLamports = obligation!.getDepositByReserve(collReserveAddress)!.amount;
+  const borrowedLamports = obligation!.getBorrowByReserve(debtReserveAddress)!.amount;
 
   const scopeConfiguration = { scope, scopeConfigurations: await scope.getAllConfigurations() };
   const scopeRefreshIx = await getScopeRefreshIxForObligationAndReserves(
@@ -80,7 +97,8 @@ import { sendAndConfirmTx } from '../utils/tx';
     scopeConfiguration
   );
 
-  const currentSlot = await c.rpc.getSlot().send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc, 'processed');
+  const currentSlot = currentLedgerInstant.slot;
 
   // Price A in B callback can be defined in different ways. Here we use jupiter price API
   const getPriceAinB = async (tokenAMint: Address, tokenBMint: Address): Promise<Decimal> => {
@@ -104,13 +122,14 @@ import { sendAndConfirmTx } from '../utils/tx';
     await getAdjustLeverageIxs<QuoteResponse>({
       owner: wallet,
       kaminoMarket: market,
-      debtTokenMint: debtTokenMint,
-      collTokenMint: collTokenMint,
+      debtReserveAddress: debtReserveAddress,
+      collReserveAddress: collReserveAddress,
       obligation: obligation!, // obligation does not exist as we are creating it with this deposit
       depositedLamports,
       borrowedLamports,
       referrer: none(),
       currentSlot,
+      currentLedgerInstant,
       targetLeverage: targetLeverage,
       priceCollToDebt,
       priceDebtToColl,
@@ -122,6 +141,7 @@ import { sendAndConfirmTx } from '../utils/tx';
       swapper: getJupiterSwapper(c.rpc, wallet.address),
       useV2Ixs: true,
       userSolBalanceLamports,
+      flashBorrowType,
     })
   )[0];
 
@@ -146,13 +166,14 @@ import { sendAndConfirmTx } from '../utils/tx';
       await getAdjustLeverageIxs<QuoteResponse>({
         owner: wallet,
         kaminoMarket: market,
-        debtTokenMint: debtTokenMint,
-        collTokenMint: collTokenMint,
+        debtReserveAddress: debtReserveAddress,
+        collReserveAddress: collReserveAddress,
         obligation: obligation!, // obligation does not exist as we are creating it with this deposit
         depositedLamports,
         borrowedLamports,
         referrer: none(),
         currentSlot,
+        currentLedgerInstant,
         targetLeverage: ogLeverage,
         priceCollToDebt,
         priceDebtToColl,
@@ -164,6 +185,7 @@ import { sendAndConfirmTx } from '../utils/tx';
         swapper: getJupiterSwapper(c.rpc, wallet.address),
         useV2Ixs: true,
         userSolBalanceLamports,
+        flashBorrowType,
       })
     )[0];
 

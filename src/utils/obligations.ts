@@ -59,7 +59,8 @@ export async function getUserObligationsInMarkets(
 
     KaminoObligation.addRatesForObligation(
       market,
-      obligationAccount,
+      obligationAccount.deposits,
+      obligationAccount.borrows,
       collateralExchangeRates,
       cumulativeBorrowRates,
       slot

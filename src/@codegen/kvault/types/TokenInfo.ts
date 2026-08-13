@@ -5,19 +5,13 @@ import * as borsh from "@coral-xyz/borsh"
 import { borshAddress } from "../utils"
 
 export interface TokenInfoFields {
-  /** UTF-8 encoded name of the token (null-terminated) */
   name: Array<number>
-  /** Heuristics limits of acceptable price */
   heuristic: types.PriceHeuristicFields
-  /** Max divergence between twap and price in bps */
   maxTwapDivergenceBps: BN
   maxAgePriceSeconds: BN
   maxAgeTwapSeconds: BN
-  /** Scope price configuration */
   scopeConfiguration: types.ScopeConfigurationFields
-  /** Switchboard configuration */
   switchboardConfiguration: types.SwitchboardConfigurationFields
-  /** Pyth configuration */
   pythConfiguration: types.PythConfigurationFields
   blockPriceUsage: number
   reserved: Array<number>
@@ -25,19 +19,13 @@ export interface TokenInfoFields {
 }
 
 export interface TokenInfoJSON {
-  /** UTF-8 encoded name of the token (null-terminated) */
   name: Array<number>
-  /** Heuristics limits of acceptable price */
   heuristic: types.PriceHeuristicJSON
-  /** Max divergence between twap and price in bps */
   maxTwapDivergenceBps: string
   maxAgePriceSeconds: string
   maxAgeTwapSeconds: string
-  /** Scope price configuration */
   scopeConfiguration: types.ScopeConfigurationJSON
-  /** Switchboard configuration */
   switchboardConfiguration: types.SwitchboardConfigurationJSON
-  /** Pyth configuration */
   pythConfiguration: types.PythConfigurationJSON
   blockPriceUsage: number
   reserved: Array<number>
@@ -45,19 +33,13 @@ export interface TokenInfoJSON {
 }
 
 export class TokenInfo {
-  /** UTF-8 encoded name of the token (null-terminated) */
   readonly name: Array<number>
-  /** Heuristics limits of acceptable price */
   readonly heuristic: types.PriceHeuristic
-  /** Max divergence between twap and price in bps */
   readonly maxTwapDivergenceBps: BN
   readonly maxAgePriceSeconds: BN
   readonly maxAgeTwapSeconds: BN
-  /** Scope price configuration */
   readonly scopeConfiguration: types.ScopeConfiguration
-  /** Switchboard configuration */
   readonly switchboardConfiguration: types.SwitchboardConfiguration
-  /** Pyth configuration */
   readonly pythConfiguration: types.PythConfiguration
   readonly blockPriceUsage: number
   readonly reserved: Array<number>

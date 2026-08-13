@@ -9,7 +9,7 @@ import {
 import { ReserveFarmKind } from '../../../src/@codegen/klend/types';
 import { getFarmAuthorityPDA } from '@kamino-finance/farms-sdk';
 import { getCreateAccountInstruction, SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
-import { SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
+import { SYSVAR_INSTRUCTIONS_ADDRESS, SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 import { CliEnv, SendTxMode } from '../tx/CliEnv';
 import { processTx } from '../tx/processor';
 
@@ -64,6 +64,7 @@ export async function initFarmsForReserve(
       farmsVaultAuthority: await getFarmAuthorityPDA(env.farmsProgramId, farmState.address),
       rent: SYSVAR_RENT_ADDRESS,
       systemProgram: SYSTEM_PROGRAM_ADDRESS,
+      instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
     }
   );
 

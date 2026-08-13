@@ -16,35 +16,23 @@ import * as types from "../types" // eslint-disable-line @typescript-eslint/no-u
 import { PROGRAM_ID } from "../programId"
 
 export interface GlobalConfigFields {
-  /** Global admin of the program */
   globalAdmin: Address
-  /** Pending admin must sign a specific transaction to become the global admin */
   pendingAdmin: Address
-  /** Fee collector is the only allowed owner of token accounts receiving protocol fees */
   feeCollector: Address
-  /** Padding to make the struct size 1024 bytes */
   padding: Array<number>
 }
 
 export interface GlobalConfigJSON {
-  /** Global admin of the program */
   globalAdmin: string
-  /** Pending admin must sign a specific transaction to become the global admin */
   pendingAdmin: string
-  /** Fee collector is the only allowed owner of token accounts receiving protocol fees */
   feeCollector: string
-  /** Padding to make the struct size 1024 bytes */
   padding: Array<number>
 }
 
 export class GlobalConfig {
-  /** Global admin of the program */
   readonly globalAdmin: Address
-  /** Pending admin must sign a specific transaction to become the global admin */
   readonly pendingAdmin: Address
-  /** Fee collector is the only allowed owner of token accounts receiving protocol fees */
   readonly feeCollector: Address
-  /** Padding to make the struct size 1024 bytes */
   readonly padding: Array<number>
 
   static readonly discriminator = Buffer.from([

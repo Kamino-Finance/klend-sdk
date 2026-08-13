@@ -25,7 +25,6 @@ export interface InvestAccounts {
   tokenMint: Address
   baseVaultAuthority: Address
   ctokenVault: Address
-  /** CPI accounts */
   reserve: Address
   lendingMarket: Address
   lendingMarketAuthority: Address

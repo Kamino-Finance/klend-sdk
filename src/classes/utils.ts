@@ -1,4 +1,5 @@
-import { SLOTS_PER_SECOND, SLOTS_PER_YEAR, WRAPPED_SOL_MINT } from '../utils';
+import { SLOTS_PER_SECOND, SLOTS_PER_YEAR } from '../utils/constants';
+import { WRAPPED_SOL_MINT } from '../utils/consts';
 import Decimal from 'decimal.js';
 import { Account, Address } from '@solana/kit';
 import axios from 'axios';
@@ -170,6 +171,8 @@ export function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export const noop = () => {};
+
 export function numberToLamportsDecimal(amount: Decimal.Value, decimals: number): Decimal {
   const factor = 10 ** decimals;
   return new Decimal(amount).mul(factor);
@@ -279,6 +282,11 @@ export function assertNever(x: never): never {
 
 export function orThrow(message: string): never {
   throw new Error(message);
+}
+
+/** Convert a Uint8Array (possibly a subarray) to a Node Buffer for borsh decode. */
+export function toBuffer(data: Uint8Array): Buffer {
+  return Buffer.isBuffer(data) ? data : Buffer.from(data);
 }
 
 export function blobEquals(left: Uint8Array, right: Uint8Array): boolean {

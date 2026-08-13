@@ -18,6 +18,8 @@ import { sendAndConfirmTx } from '../utils/tx';
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
   const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
+  const vaultState = await vault.getState();
+  const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
 
   const newAdmin = await getKeypair();
 
@@ -25,25 +27,30 @@ import { sendAndConfirmTx } from '../utils/tx';
   const changeVaultAdminIx = await kaminoManager.updateVaultConfigIxs(
     vault,
     new VaultConfigField.PendingVaultAdmin(),
-    newAdmin.address
+    newAdmin.address,
+    vaultReservesMap
   );
 
   await sendAndConfirmTx(
     c,
     user,
-    [changeVaultAdminIx.updateVaultConfigIx, ...changeVaultAdminIx.updateLUTIxs],
+    [changeVaultAdminIx.updateVaultConfigIx, ...changeVaultAdminIx.updateLUTIxs, ...changeVaultAdminIx.extraIxs],
     [],
     [],
     'Change Vault Pending Admin'
   );
 
   // 2. Accept admin role + replace the LUT of the vault as the LUT is owned by the admin
-  const acceptAdminIxs = await kaminoManager.acceptVaultOwnershipIxs(vault);
+  const acceptAdminIxs = await kaminoManager.acceptVaultOwnershipIxs(vault, vaultReservesMap);
 
   await sendAndConfirmTx(
     c,
     newAdmin,
-    [acceptAdminIxs.acceptVaultOwnershipIx, acceptAdminIxs.initNewLUTIx],
+    [
+      acceptAdminIxs.acceptVaultOwnershipIx,
+      ...(acceptAdminIxs.acceptFLCFarmOwnershipIx ? [acceptAdminIxs.acceptFLCFarmOwnershipIx] : []),
+      acceptAdminIxs.initNewLUTIx,
+    ],
     [],
     [],
     'Accept Vault Ownership'

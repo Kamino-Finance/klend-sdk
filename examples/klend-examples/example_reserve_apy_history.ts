@@ -1,7 +1,7 @@
 import { ReserveHistoryArgs, ReserveHistoryResponse } from '../utils/models';
 import axios from 'axios';
 import { getConnectionPool } from '../utils/connection';
-import { MAIN_MARKET, PYUSD_RESERVE } from '../utils/constants';
+import { MAIN_MARKET, PYUSD_RESERVE_MAIN_MARKET } from '../utils/constants';
 import { getReserveApy } from './example_reserve_apy';
 
 /**
@@ -34,10 +34,10 @@ export async function getReserveApyHistory({ marketPubkey, reservePubkey, start,
 }
 
 (async () => {
-  console.log(`fetching historical reserve (${PYUSD_RESERVE}) APY for July 2024`);
+  console.log(`fetching historical reserve (${PYUSD_RESERVE_MAIN_MARKET}) APY for July 2024`);
   const history = await getReserveApyHistory({
     marketPubkey: MAIN_MARKET,
-    reservePubkey: PYUSD_RESERVE,
+    reservePubkey: PYUSD_RESERVE_MAIN_MARKET,
     start: new Date('2024-07-01T00:00Z'),
     end: new Date('2024-08-01T00:00Z'),
   });

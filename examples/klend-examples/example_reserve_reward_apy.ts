@@ -1,6 +1,6 @@
 import { loadReserveData } from '../utils/helpers';
 import { getConnectionPool } from '../utils/connection';
-import { MAIN_MARKET, PYUSD_MINT } from '../utils/constants';
+import { MAIN_MARKET, PYUSD_MINT, PYUSD_RESERVE_MAIN_MARKET } from '../utils/constants';
 import { Scope } from '@kamino-finance/scope-sdk/dist/Scope';
 import { Address } from '@solana/kit';
 import { OraclePrices } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts/OraclePrices';
@@ -8,11 +8,15 @@ import { OraclePrices } from '@kamino-finance/scope-sdk/dist/@codegen/scope/acco
 (async () => {
   const c = getConnectionPool();
   console.log(`fetching data for market ${MAIN_MARKET.toString()} reserve for ${PYUSD_MINT.toString()}`);
-  const { market, reserve } = await loadReserveData({
-    rpc: c.rpc,
-    marketPubkey: MAIN_MARKET,
-    mintPubkey: PYUSD_MINT,
-  });
+  const slot = await c.rpc.getSlot().send();
+  const { market, reserve } = await loadReserveData(
+    {
+      rpc: c.rpc,
+      marketPubkey: MAIN_MARKET,
+      reserveAddress: PYUSD_RESERVE_MAIN_MARKET,
+    },
+    slot
+  );
   const scope = new Scope('mainnet-beta', c.rpc);
   const oraclePrices = await scope.getMultipleOraclePrices(Array.from(market.scopeFeeds));
   const oraclePricesMap = new Map<Address, OraclePrices>();

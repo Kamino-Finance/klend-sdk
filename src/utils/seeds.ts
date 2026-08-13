@@ -1,6 +1,6 @@
 import { Address, address, getAddressEncoder, getProgramDerivedAddress, ProgramDerivedAddress } from '@solana/kit';
 import { PROGRAM_ID } from '../@codegen/klend/programId';
-import { PROGRAM_ID as FARMS_PROGRAM_ID } from '@kamino-finance/farms-sdk/dist/@codegen/farms/programId';
+import { FARMS_PROGRAM_ADDRESS as FARMS_PROGRAM_ID } from '@kamino-finance/farms-sdk';
 import { METADATA_PROGRAM_ID, METADATA_SEED } from '../classes/vault';
 import { Buffer } from 'buffer';
 
@@ -45,6 +45,14 @@ export const BASE_SEED_SHORT_URL = 'short_url';
  */
 export const BASE_SEED_GLOBAL_CONFIG_STATE = 'global_config';
 /**
+ * Withdraw ticket seed
+ */
+export const WITHDRAW_TICKET_SEED = 'withdraw_ticket';
+/**
+ * Owner queued collateral vault seed
+ */
+export const OWNER_QUEUED_COLLATERAL_VAULT_SEED = 'owner_queued_collateral_vault';
+/**
  * Farm user state seed
  */
 export const BASE_SEED_USER_STATE = 'user';
@@ -53,6 +61,11 @@ export const BASE_SEED_USER_STATE = 'user';
  * User farm state seed
  */
 export const BASE_SEED_FARM_USER_STATE = Buffer.from('user');
+
+/**
+ * Event authority seed
+ */
+export const EVENT_AUTHORITY_SEED = '__event_authority';
 
 const addressEncoder = getAddressEncoder();
 
@@ -292,4 +305,62 @@ export async function getKVaultSharesMetadataPda(
     seeds: [Buffer.from(METADATA_SEED), addressEncoder.encode(metadataProgramId), addressEncoder.encode(mint)],
     programAddress: metadataProgramId,
   });
+}
+
+/**
+ * Returns the PDA for a withdraw ticket
+ * @param reserve
+ * @param sequenceNumber
+ * @param programId
+ * @returns pda
+ */
+export async function withdrawTicketPda(
+  reserve: Address,
+  sequenceNumber: bigint,
+  programId: Address = PROGRAM_ID
+): Promise<Address> {
+  const sequenceNumberBuffer = Buffer.alloc(8);
+  sequenceNumberBuffer.writeBigUInt64LE(sequenceNumber);
+
+  const [address] = await getProgramDerivedAddress({
+    seeds: [Buffer.from(WITHDRAW_TICKET_SEED), addressEncoder.encode(reserve), sequenceNumberBuffer],
+    programAddress: programId,
+  });
+  return address;
+}
+
+/**
+ * Returns the PDA for the owner's queued collateral vault
+ * @param reserve
+ * @param owner
+ * @param programId
+ * @returns pda
+ */
+export async function ownerQueuedCollateralVaultPda(
+  reserve: Address,
+  owner: Address,
+  programId: Address = PROGRAM_ID
+): Promise<Address> {
+  const [address] = await getProgramDerivedAddress({
+    seeds: [
+      Buffer.from(OWNER_QUEUED_COLLATERAL_VAULT_SEED),
+      addressEncoder.encode(reserve),
+      addressEncoder.encode(owner),
+    ],
+    programAddress: programId,
+  });
+  return address;
+}
+
+/**
+ * Returns the PDA for the event authority
+ * @param programId The program ID to derive the event authority for
+ * @returns The event authority address
+ */
+export async function getEventAuthorityPda(programId: Address): Promise<Address> {
+  const [address] = await getProgramDerivedAddress({
+    seeds: [Buffer.from(EVENT_AUTHORITY_SEED)],
+    programAddress: programId,
+  });
+  return address;
 }

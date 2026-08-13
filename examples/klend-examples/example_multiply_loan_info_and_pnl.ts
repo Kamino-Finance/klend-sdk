@@ -1,5 +1,5 @@
 import { getConnectionPool } from '../utils/connection';
-import { KaminoObligation, ObligationStats } from '@kamino-finance/klend-sdk';
+import { KaminoObligation, ObligationStats, calculateAPYFromAPR } from '@kamino-finance/klend-sdk';
 import { JLP_MARKET } from '../utils/constants';
 import { getLoan, getMarket } from '../utils/helpers';
 import axios from 'axios';
@@ -80,7 +80,7 @@ export async function getObligationPnl(
   const currentSlot = await c.rpc.getSlot().send();
   // Get the deposit
   const deposit = loan.deposits.values().next().value!;
-  const collReserve = market.getReserveByMint(deposit.mintAddress);
+  const collReserve = market.getReserveByAddress(deposit.reserveAddress);
   if (!collReserve) {
     console.error(`reserve not found for ${deposit.mintAddress.toString()}`);
     return;
@@ -93,15 +93,25 @@ export async function getObligationPnl(
   );
   const reserveSupplyApr = collReserve.calculateSupplyAPR(currentSlot, market.state.referralFeeBps);
   const reserveSupplyApy = collReserve.totalSupplyAPY(currentSlot);
+  // Reserve-rewards distribution: extra supply-side yield from the reserve's on-chain rewards budget
+  // (raises the cToken exchange rate, like interest). This is the rate earned right now — zero once the
+  // budget runs dry; see calculateTheoreticalReserveRewardsSupplyAPR for the configured rate.
+  const reserveRewardsApr = collReserve.calculateEffectiveReserveRewardsSupplyAPR(currentSlot, 0);
+  const reserveRewardsApy = calculateAPYFromAPR(reserveRewardsApr);
   console.log(
     `RESERVE ${collReserve.symbol} SUPPLY APY: ${(reserveSupplyApy * 100).toFixed(2)}% APR: ${(
       reserveSupplyApr * 100
     ).toFixed(2)}%`
   );
+  console.log(
+    `RESERVE ${collReserve.symbol} REWARDS DISTRIBUTION APY: ${(reserveRewardsApy * 100).toFixed(2)}% APR: ${(
+      reserveRewardsApr * 100
+    ).toFixed(2)}%`
+  );
 
   // Print all borrows
   const borrow = loan.borrows.values().next().value!;
-  const debtReserve = market.getReserveByMint(borrow.mintAddress);
+  const debtReserve = market.getReserveByAddress(borrow.reserveAddress);
   if (!debtReserve) {
     console.error(`reserve not found for ${borrow.mintAddress.toString()}`);
     return;

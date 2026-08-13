@@ -16,13 +16,6 @@ import * as types from "../types" // eslint-disable-line @typescript-eslint/no-u
 import { PROGRAM_ID } from "../programId"
 
 export interface ReserveWhitelistEntryFields {
-  /**
-   * The token mint is stored to solve the problem of finding all the whitelisted reserves for a particular token mint:
-   * when storing the token mint inside the PDA, finding all the whitelisted reserves becomes a `getProgramAccounts` with
-   * a filter on discriminator + the mint field
-   * The reserve pubkey, as seed of the reserve whitelist PDA account, it stored so you can link back the PDA to its seeds
-   * (for instance, in the operation above we easily find the reserve corresponding to the PDA)
-   */
   tokenMint: Address
   reserve: Address
   whitelistAddAllocation: number
@@ -31,13 +24,6 @@ export interface ReserveWhitelistEntryFields {
 }
 
 export interface ReserveWhitelistEntryJSON {
-  /**
-   * The token mint is stored to solve the problem of finding all the whitelisted reserves for a particular token mint:
-   * when storing the token mint inside the PDA, finding all the whitelisted reserves becomes a `getProgramAccounts` with
-   * a filter on discriminator + the mint field
-   * The reserve pubkey, as seed of the reserve whitelist PDA account, it stored so you can link back the PDA to its seeds
-   * (for instance, in the operation above we easily find the reserve corresponding to the PDA)
-   */
   tokenMint: string
   reserve: string
   whitelistAddAllocation: number
@@ -46,13 +32,6 @@ export interface ReserveWhitelistEntryJSON {
 }
 
 export class ReserveWhitelistEntry {
-  /**
-   * The token mint is stored to solve the problem of finding all the whitelisted reserves for a particular token mint:
-   * when storing the token mint inside the PDA, finding all the whitelisted reserves becomes a `getProgramAccounts` with
-   * a filter on discriminator + the mint field
-   * The reserve pubkey, as seed of the reserve whitelist PDA account, it stored so you can link back the PDA to its seeds
-   * (for instance, in the operation above we easily find the reserve corresponding to the PDA)
-   */
   readonly tokenMint: Address
   readonly reserve: Address
   readonly whitelistAddAllocation: number

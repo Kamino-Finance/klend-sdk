@@ -5,19 +5,16 @@ import * as borsh from "@coral-xyz/borsh"
 import { borshAddress } from "../utils"
 
 export interface SwitchboardConfigurationFields {
-  /** Pubkey of the base price feed (disabled if `null` or `default`) */
   priceAggregator: Address
   twapAggregator: Address
 }
 
 export interface SwitchboardConfigurationJSON {
-  /** Pubkey of the base price feed (disabled if `null` or `default`) */
   priceAggregator: string
   twapAggregator: string
 }
 
 export class SwitchboardConfiguration {
-  /** Pubkey of the base price feed (disabled if `null` or `default`) */
   readonly priceAggregator: Address
   readonly twapAggregator: Address
 

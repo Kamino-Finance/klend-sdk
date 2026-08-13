@@ -212,6 +212,7 @@ export class DeleverageDebtAmount implements OrderOpportunity {
     return {
       mint: singleBorrow.mintAddress,
       amount: Decimal.min(singleBorrow.amount, this.amount),
+      reserveAddress: singleBorrow.reserveAddress,
     };
   }
 }
@@ -247,6 +248,7 @@ export class DeleverageAllDebt implements OrderOpportunity {
     return {
       mint: highestValueBorrow.mintAddress,
       amount: highestValueBorrow.amount,
+      reserveAddress: highestValueBorrow.reserveAddress,
     };
   }
 }
@@ -355,7 +357,7 @@ export class KaminoObligationOrder {
       return undefined; // condition not met - cannot execute
     }
     const maxRepay = this.opportunity.getMaxRepay(obligation.getBorrows());
-    const repayBorrow = obligation.getBorrowByMint(maxRepay.mint)!;
+    const repayBorrow = obligation.getBorrowByReserve(maxRepay.reserveAddress)!;
     const maxRepayValue = tokenAmountToValue(maxRepay, repayBorrow);
     const executionBonusRate = this.calculateExecutionBonusRate(conditionHit, obligation);
     const executionBonusFactor = new Decimal(1).add(executionBonusRate);
@@ -387,7 +389,7 @@ export class KaminoObligationOrder {
           return valueComparison;
         }
         // Just for deterministic selection in case of multiple equally-good deposits: pick the one with lower mint pubkey (mostly for test stability purposes)
-        return leftDeposit.mintAddress.localeCompare(rightDeposit.mintAddress);
+        return leftDeposit.reserveAddress.localeCompare(rightDeposit.reserveAddress);
       })
       .at(-1)!;
     const actualRepayValue = actualWithdrawValue.div(executionBonusFactor);
@@ -556,7 +558,7 @@ export type AvailableOrderExecution = {
 // Internal calculation functions:
 
 function tokenAmountToValue(tokenAmount: TokenAmount, position: Position): Decimal {
-  if (tokenAmount.mint !== position.mintAddress) {
+  if (tokenAmount.reserveAddress !== position.reserveAddress) {
     throw new Error(`Value of token amount ${tokenAmount} cannot be computed using data from ${position}`);
   }
   return tokenAmount.amount.mul(position.marketValueRefreshed).div(position.amount);
@@ -567,6 +569,7 @@ function valueToTokenAmount(value: Decimal, position: Position): TokenAmount {
   return {
     amount: roundNearest(fractionalAmount),
     mint: position.mintAddress,
+    reserveAddress: position.reserveAddress,
   };
 }
 

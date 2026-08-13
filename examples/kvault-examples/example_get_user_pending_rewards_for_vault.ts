@@ -15,8 +15,10 @@ import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } f
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
 
   const vault = new KaminoVault(c.rpc, vaultAddress);
+  const vaultState = await vault.getState();
+  const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
 
-  const pendingRewards = await kaminoManager.getAllPendingRewardsForUserInVault(user, vault);
+  const pendingRewards = await kaminoManager.getAllPendingRewardsForUserInVault(user, vault, vaultReservesMap);
   console.log('Total pending rewards:', pendingRewards.totalPendingRewards);
   console.log('Pending rewards in vault farm:', pendingRewards.pendingRewardsInVaultFarm);
   console.log('Pending rewards in vault delegated farm:', pendingRewards.pendingRewardsInVaultDelegatedFarm);

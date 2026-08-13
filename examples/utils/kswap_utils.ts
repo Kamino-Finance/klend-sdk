@@ -35,8 +35,17 @@ export async function getTokenPriceFromBirdeye(
   outputMint: Address
 ): Promise<number> {
   const prices = await kswapSdk.getBatchTokenPrices([inputMint, outputMint]);
+  const inputPrice = prices.get(inputMint.toString())?.value;
+  const outputPrice = prices.get(outputMint.toString())?.value;
 
-  return prices[inputMint.toString()] / prices[outputMint.toString()];
+  if (!inputPrice || !Number.isFinite(inputPrice)) {
+    throw new Error(`Missing KSwap/Birdeye price for input token ${inputMint}`);
+  }
+  if (!outputPrice || !Number.isFinite(outputPrice)) {
+    throw new Error(`Missing KSwap/Birdeye price for output token ${outputMint}`);
+  }
+
+  return inputPrice / outputPrice;
 }
 
 export function getKswapQuoter(
@@ -44,7 +53,8 @@ export function getKswapQuoter(
   executor: Address,
   slippageBps: number,
   inputMintReserve: KaminoReserve,
-  outputMintReserve: KaminoReserve
+  outputMintReserve: KaminoReserve,
+  preferredMaxAccounts?: number | number[]
 ): SwapQuoteProvider<RouteOutput> {
   const quoter: SwapQuoteProvider<RouteOutput> = async (
     inputs: SwapInputs,
@@ -54,13 +64,14 @@ export function getKswapQuoter(
       executor,
       tokenIn: inputs.inputMint,
       tokenOut: inputs.outputMint,
-      amount: new BN(inputs.inputAmountLamports.toDP(0).toString()),
+      amount: decimalLamportsToBn(inputs.inputAmountLamports),
       maxSlippageBps: slippageBps,
       wrapAndUnwrapSol: false,
       swapType: 'exactIn',
       routerTypes: ALLOWED_ROUTERS,
       includeRfq: false,
       includeLimoLogs: false,
+      preferredMaxAccounts,
     };
 
     const routerContext = await loadRouterContext(kswapSdk.connection, inputs.inputMint, inputs.outputMint);
@@ -85,10 +96,16 @@ export function getKswapQuoter(
     const inAmountBest = new Decimal(bestRoute.amountsExactIn.amountIn.toString()).div(
       inputMintReserve.getMintFactor()
     );
-    const minAmountOutBest = new Decimal(bestRoute.amountsExactIn.amountOutGuaranteed.toString()).div(
+    const guaranteedOutBest = new Decimal(bestRoute.amountsExactIn.amountOutGuaranteed.toString()).div(
       outputMintReserve.getMintFactor()
     );
-    const priceAInBBest = minAmountOutBest.div(inAmountBest);
+    // SDK contract: the quoter returns the SIMULATED (mid) priceAInB; the SDK applies its own slippage sizing buffer.
+    // KSwap's `amountOutGuaranteed` already bakes in `maxSlippageBps`, so divide it back out to recover the mid out —
+    // otherwise slippage is applied twice (here AND in the SDK), over-sizing the swap input and rejecting valid routes.
+    // (Route ranking above is unaffected: the retention factor is constant across routes.)
+    const slippageRetention = new Decimal(1).sub(new Decimal(slippageBps).div(10000));
+    const midOutBest = guaranteedOutBest.div(slippageRetention);
+    const priceAInBBest = midOutBest.div(inAmountBest);
 
     return {
       priceAInB: priceAInBBest,
@@ -103,7 +120,7 @@ export function getKswapSwapper(
   kswapSdk: KswapSdk,
   executor: Address,
   slippageBps: number,
-  preferredMaxAccounts?: number
+  preferredMaxAccounts?: number | number[]
 ): SwapIxsProvider<RouteOutput> {
   const swapper: SwapIxsProvider<RouteOutput> = async (
     inputs: SwapInputs,
@@ -114,7 +131,7 @@ export function getKswapSwapper(
       executor,
       tokenIn: inputs.inputMint,
       tokenOut: inputs.outputMint,
-      amount: new BN(inputs.inputAmountLamports.toString()),
+      amount: decimalLamportsToBn(inputs.inputAmountLamports),
       maxSlippageBps: slippageBps,
       wrapAndUnwrapSol: false,
       swapType: 'exactIn',
@@ -127,12 +144,20 @@ export function getKswapSwapper(
     const routerContext = await loadRouterContext(kswapSdk.connection, inputs.inputMint, inputs.outputMint);
     const routeOutputs = await kswapSdk.getAllRoutes(routeParams, routerContext);
 
+    // SDK contract: the swapper's `quote.priceAInB` must be the SIMULATED (mid) price too — the swap-coll deposit
+    // sizing applies the SDK slippage buffer on top of it (see `SwapQuote.priceAInB`). KSwap's `amountOutGuaranteed`
+    // already bakes in `maxSlippageBps`, so divide it back out to recover the mid out; otherwise slippage is applied
+    // twice (here AND in the SDK), under-sizing the target-coll deposit. Mirrors `getKswapQuoter`.
+    const slippageRetention = new Decimal(1).sub(new Decimal(slippageBps).div(10000));
     return routeOutputs.routes.map((routeOutput) => {
-      const inAmount = new Decimal(routeOutput.amountsExactIn.amountIn.toString()).div(routeOutput.inputTokenDecimals!);
-      const minAmountOut = new Decimal(routeOutput.amountsExactIn.amountOutGuaranteed.toString()).div(
-        routeOutput.outputTokenDecimals!
+      const inAmount = new Decimal(routeOutput.amountsExactIn.amountIn.toString()).div(
+        new Decimal(10).pow(routeOutput.inputTokenDecimals!)
       );
-      const priceAInB = minAmountOut.div(inAmount);
+      const guaranteedOut = new Decimal(routeOutput.amountsExactIn.amountOutGuaranteed.toString()).div(
+        new Decimal(10).pow(routeOutput.outputTokenDecimals!)
+      );
+      const midOut = guaranteedOut.div(slippageRetention);
+      const priceAInB = midOut.div(inAmount);
 
       return {
         preActionIxs: [],
@@ -147,4 +172,8 @@ export function getKswapSwapper(
   };
 
   return swapper;
+}
+
+function decimalLamportsToBn(amountLamports: Decimal): BN {
+  return new BN(amountLamports.toDecimalPlaces(0, Decimal.ROUND_FLOOR).toFixed(0));
 }

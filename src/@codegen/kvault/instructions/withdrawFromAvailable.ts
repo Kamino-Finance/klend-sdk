@@ -49,7 +49,7 @@ export function withdrawFromAvailable(
   programAddress: Address = PROGRAM_ID
 ) {
   const keys: Array<AccountMeta | AccountSignerMeta> = [
-    { address: accounts.user.address, role: 3, signer: accounts.user },
+    { address: accounts.user.address, role: 2, signer: accounts.user },
     { address: accounts.vaultState, role: 1 },
     { address: accounts.globalConfig, role: 0 },
     { address: accounts.tokenVault, role: 1 },

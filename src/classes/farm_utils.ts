@@ -1,6 +1,8 @@
 import {
+  decodeUserState,
   Farms,
   FarmState,
+  fetchMaybeFarmState,
   getUserStatePDA,
   UserState,
   FarmConfigOption,
@@ -16,6 +18,7 @@ import {
   Address,
   fetchEncodedAccount,
   generateKeyPairSigner,
+  GetAccountInfoApi,
   Instruction,
   Rpc,
   SolanaRpcApi,
@@ -27,7 +30,15 @@ import { getScopePricesFromFarm } from '@kamino-finance/farms-sdk/dist/utils/opt
 
 export const FARMS_GLOBAL_CONFIG_MAINNET: Address = address('6UodrBjL2ZreDy7QdR4YV1oxqMBjVYSEyrFpctqqwGwL');
 export const FARMS_GLOBAL_CONFIG_DEVNET: Address = address('5AnzjL3J8FKpQuC1VN7ABRwrFTjdsuaoWEyxYz68rZFb');
-export const FARMS_ADMIN_MAINNET: Address = address('BbM3mbcLsa3QcYEVx8iovwfKaA1iZ6DK5fEbbtHwS3N8');
+
+/** Fetches a farm state account, returning `null` if the account does not exist (mirrors the pre-Codama `FarmState.fetch` behaviour). */
+export async function fetchFarmStateOrNull(
+  rpc: Rpc<GetAccountInfoApi>,
+  farmAddress: Address
+): Promise<FarmState | null> {
+  const farmState = await fetchMaybeFarmState(rpc, farmAddress);
+  return farmState.exists ? farmState.data : null;
+}
 
 export async function getFarmStakeIxs(
   rpc: Rpc<SolanaRpcApi>,
@@ -37,7 +48,7 @@ export async function getFarmStakeIxs(
   fetchedFarmState?: FarmState,
   farmsProgramId?: Address
 ): Promise<Instruction[]> {
-  const farmState = fetchedFarmState ? fetchedFarmState : await FarmState.fetch(rpc, farmAddress, farmsProgramId);
+  const farmState = fetchedFarmState ? fetchedFarmState : await fetchFarmStateOrNull(rpc, farmAddress);
   if (!farmState) {
     throw new Error(`Farm state not found for ${farmAddress}`);
   }
@@ -77,7 +88,7 @@ export async function getFarmUnstakeIx(
   fetchedFarmState?: FarmState,
   farmsProgramId?: Address
 ): Promise<Instruction> {
-  const farmState = fetchedFarmState ? fetchedFarmState : await FarmState.fetch(rpc, farmAddress, farmsProgramId);
+  const farmState = fetchedFarmState ? fetchedFarmState : await fetchFarmStateOrNull(rpc, farmAddress);
   if (!farmState) {
     throw new Error(`Farm state not found for ${farmAddress}`);
   }
@@ -109,9 +120,7 @@ export async function getFarmUnstakeAndWithdrawIxs(
   fetchedFarmState?: FarmState,
   farmsProgramId?: Address
 ): Promise<UnstakeAndWithdrawFromFarmIxs> {
-  const farmState = fetchedFarmState
-    ? fetchedFarmState
-    : await FarmState.fetch(connection, farmAddress, farmsProgramId);
+  const farmState = fetchedFarmState ? fetchedFarmState : await fetchFarmStateOrNull(connection, farmAddress);
   if (!farmState) {
     throw new Error(`Farm state not found for ${farmAddress}`);
   }
@@ -180,13 +189,7 @@ export async function setVaultIdForFarmIx(
   farmsProgramId?: Address
 ): Promise<Instruction> {
   const farmClient = new Farms(rpc, farmsProgramId);
-  return farmClient.updateFarmConfigIx(
-    farmAdmin,
-    farm,
-    DEFAULT_PUBLIC_KEY,
-    new FarmConfigOption.UpdateVaultId(),
-    vault
-  );
+  return farmClient.updateFarmConfigIx(farmAdmin, farm, DEFAULT_PUBLIC_KEY, FarmConfigOption.UpdateVaultId, vault);
 }
 
 /**
@@ -232,11 +235,11 @@ export function getRewardPerTimeUnitSecond(reward: RewardInfo, farmTotalStakeLam
     }
   }
 
-  const rewardTokenDecimals = reward.token.decimals.toNumber();
+  const rewardTokenDecimals = Number(reward.token.decimals);
   const rewardAmountPerUnitDecimals = new Decimal(10).pow(reward.rewardsPerSecondDecimals.toString());
   const rewardAmountPerUnitLamports = new Decimal(10).pow(rewardTokenDecimals.toString());
   const constantRewardStakeAdjustment =
-    reward.rewardType === RewardType.Constant.discriminator ? farmTotalStakeLamports : new Decimal(1);
+    reward.rewardType === RewardType.Constant ? farmTotalStakeLamports : new Decimal(1);
 
   const rpsAdjusted = new Decimal(rewardPerTimeUnitSecond.toString())
     .mul(constantRewardStakeAdjustment)
@@ -267,9 +270,9 @@ export async function getUserPendingRewardsInFarm(
   if (!userStateAccountInfo.exists) {
     return pendingRewardsPerToken;
   }
-  const userState = UserState.decode(Buffer.from(userStateAccountInfo.data));
+  const userState = decodeUserState(userStateAccountInfo).data;
 
-  const farmState = await FarmState.fetch(rpc, farm, farmsProgramId);
+  const farmState = await fetchFarmStateOrNull(rpc, farm);
   if (!farmState) {
     throw new Error(`Farm state not found for ${farm}`);
   }
@@ -293,4 +296,33 @@ export async function getUserPendingRewardsInFarm(
   }
 
   return pendingRewardsPerToken;
+}
+
+/**
+ * This method creates an instruction to update the pending admin of a farm
+ * @param rpc - the rpc connection
+ * @param signer - the signer of the transaction
+ * @param farm - the address of the farm to update
+ * @param newPendingAdmin - the new pending admin to set for the farm
+ * @returns an instruction to update the pending admin of the farm
+ */
+export async function getUpdateFarmPendingAdminIx(
+  rpc: Rpc<SolanaRpcApi>,
+  signer: TransactionSigner,
+  farm: Address,
+  newPendingAdmin: Address,
+  farmsProgramId?: Address
+): Promise<Instruction> {
+  const farmClient = new Farms(rpc, farmsProgramId);
+
+  return await farmClient.updateFarmConfigIx(
+    signer,
+    farm,
+    DEFAULT_PUBLIC_KEY,
+    FarmConfigOption.UpdatePendingFarmAdmin,
+    newPendingAdmin,
+    undefined,
+    undefined,
+    true
+  );
 }

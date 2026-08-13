@@ -277,13 +277,11 @@
   resolved "https://registry.yarnpkg.com/@jup-ag/api/-/api-6.0.39.tgz#540c898c1ee74291450a71d8f4a5d36bb7e1287d"
   integrity sha512-cejW4IWf3dKM5ucmqu5jWtlPZ46LJJOCrx3s5vKmEIB+0X9ykSZsKkcIHFBCOqf3/lSbGyU7THZqXuxjKK9//g==
 
-"@kamino-finance/farms-sdk@^3.2.24":
-  version "3.2.24"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-3.2.24.tgz#4e4794f4933275471783f1c2a2010f7236f0918e"
-  integrity sha512-zeStSvM6Ckd8t1BD5GM/jCz4mCyPc3TCozkI/CDp1ZWdDwP3F3bUb3itQ3wAZNMdxPLPFVoUC9QpmwBOzhs4GA==
+"@kamino-finance/farms-sdk@^3.2.25":
+  version "3.2.26"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/farms-sdk/-/farms-sdk-3.2.26.tgz#f462efbbde54f9d0ef3ad5543c2a32a8cb083f17"
+  integrity sha512-G6aziMz0ounatUEGlkiul14ERPXZD/RtzG21b72E/PKVBiFhKP/4fmpolHJjcgJWF4V4i+ITSXevi9oQ0EkLCA==
   dependencies:
-    "@coral-xyz/anchor" "^0.28.0"
-    "@coral-xyz/borsh" "^0.28.0"
     "@kamino-finance/kliquidity-sdk" "^8.5.7"
     "@kamino-finance/scope-sdk" "^9.1.0"
     "@solana-program/address-lookup-table" "^0.7.0"
@@ -297,12 +295,40 @@
     "@solana/web3.js" "^1.98.2"
     bn.js "^5.2.1"
     decimal.js "^10.4.3"
+    exponential-backoff "^3.1.3"
 
 "@kamino-finance/klend-sdk@link:..":
   version "0.0.0"
   uid ""
 
-"@kamino-finance/kliquidity-sdk@^8.5.7", "@kamino-finance/kliquidity-sdk@^8.5.9":
+"@kamino-finance/kliquidity-sdk@^11.0.3":
+  version "11.0.3"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/kliquidity-sdk/-/kliquidity-sdk-11.0.3.tgz#31f5984d568d48a305e34698bd3f57ad1042e012"
+  integrity sha512-U/wEzDS14Kukd/uEO2HPmPL0c0E0K1agpRyHPdK9u6j4TKLjr4DqGeKXMppzV56dlonyN8upE++SXAGbTdSx6Q==
+  dependencies:
+    "@coral-xyz/anchor" "^0.29.0"
+    "@hubbleprotocol/hubble-config" "^5.0.0"
+    "@jup-ag/api" "6.0.39"
+    "@kamino-finance/scope-sdk" "^10.1.0"
+    "@orca-so/common-sdk" "^0.6.11"
+    "@orca-so/whirlpools" "^2.0.0"
+    "@orca-so/whirlpools-core" "^2.0.0"
+    "@raydium-io/raydium-sdk-v2" "^0.1.126-alpha"
+    "@solana-program/address-lookup-table" "^0.8.0"
+    "@solana-program/compute-budget" "^0.9.0"
+    "@solana-program/system" "^0.8.0"
+    "@solana-program/token" "^0.6.0"
+    "@solana-program/token-2022" "^0.5.0"
+    "@solana/compat" "^2.3.0"
+    "@solana/kit" "^2.3.0"
+    "@solana/sysvars" "^2.3.0"
+    axios "^1.8.4"
+    bn.js "^5.2.1"
+    bs58 "^6.0.0"
+    decimal.js "^10.3.1"
+    fzstd "^0.1.1"
+
+"@kamino-finance/kliquidity-sdk@^8.5.7":
   version "8.5.9"
   resolved "https://registry.yarnpkg.com/@kamino-finance/kliquidity-sdk/-/kliquidity-sdk-8.5.9.tgz#b4eab5f1fa8d43958be537492da8fb751167f58f"
   integrity sha512-YktkmlzVZzLj+eStcgTAbHAM63nNio6BY4pg1R2KiRBSIPVCYN4L7eNzR2XU9iiCDDCT+VTdKlRlzCdhh9rtPA==
@@ -331,10 +357,10 @@
     decimal.js "^10.3.1"
     fzstd "^0.1.1"
 
-"@kamino-finance/kswap-sdk@^2.4.3":
-  version "2.4.3"
-  resolved "https://registry.yarnpkg.com/@kamino-finance/kswap-sdk/-/kswap-sdk-2.4.3.tgz#9202938dd8097a11bc741bf3357a5ea1c835a54f"
-  integrity sha512-axfHUgIuVjnRrgnWEBA/xCnlMvXwf3cI0jfbJrWgbqt/vAP4/rNqYWCyhMmuDYouLr1sL3Wio5/zfA+nbI6uxA==
+"@kamino-finance/kswap-sdk@^2.4.4":
+  version "2.4.4"
+  resolved "https://registry.yarnpkg.com/@kamino-finance/kswap-sdk/-/kswap-sdk-2.4.4.tgz#494201a75baaa6717ea6cb14ab0e17934fdf4afb"
+  integrity sha512-hj53J9fLSGJPJOfYqv74fvhgCKxvAYDnO/ByCYGs8mJL7DoiMvTz9K+zMxTLMQVqLEXZVkng2tVcTTB5DxSI0w==
   dependencies:
     "@coral-xyz/anchor" "^0.30.1"
     "@kamino-finance/limo-sdk" "^2.0.0"
@@ -1543,7 +1569,7 @@ eventemitter3@^5.0.1:
   resolved "https://registry.yarnpkg.com/eventemitter3/-/eventemitter3-5.0.1.tgz#53f5ffd0a492ac800721bb42c66b841de96423c4"
   integrity sha512-GWkBvjiSZK87ELrYOSESUYeVIc9mvLLf/nXalMOS5dYrgZq9o5OVkbZAVM06CVxYsCwH9BDZFPlQTlPA1j4ahA==
 
-exponential-backoff@^3.1.1:
+exponential-backoff@^3.1.1, exponential-backoff@^3.1.3:
   version "3.1.3"
   resolved "https://registry.yarnpkg.com/exponential-backoff/-/exponential-backoff-3.1.3.tgz#51cf92c1c0493c766053f9d3abee4434c244d2f6"
   integrity sha512-ZgEeZXj30q+I0EN+CbSSpIyPaJ5HVQD18Z1m+u1FXbAeT94mr1zw50q4q6jiiC447Nl/YTcIYSAftiGqetwXCA==

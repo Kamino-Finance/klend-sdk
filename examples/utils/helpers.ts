@@ -13,10 +13,10 @@ import {
   VaultOverview,
 } from '@kamino-finance/klend-sdk';
 import Decimal from 'decimal.js';
-import { DEFAULT_PUBLIC_KEY, FarmState, RewardInfo } from '@kamino-finance/farms-sdk';
+import { DEFAULT_PUBLIC_KEY, fetchAllMaybeFarmState, RewardInfo } from '@kamino-finance/farms-sdk';
 import { Scope } from '@kamino-finance/scope-sdk';
 import { aprToApy, KaminoPrices } from '@kamino-finance/kliquidity-sdk';
-import { Address, Instruction, TransactionSigner } from '@solana/kit';
+import { Address, Instruction, Slot, TransactionSigner } from '@solana/kit';
 import { ConnectionPool } from './connection';
 import { sendAndConfirmTx } from './tx';
 import { OraclePrices } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts/OraclePrices';
@@ -45,13 +45,12 @@ export async function getLoan(args: LoanArgs): Promise<KaminoObligation | null> 
   return market.getObligationByAddress(args.obligationPubkey);
 }
 
-export async function loadReserveData({ rpc, marketPubkey, mintPubkey }: ReserveArgs) {
+export async function loadReserveData({ rpc, marketPubkey, reserveAddress }: ReserveArgs, currentSlot: Slot) {
   const market = await getMarket({ rpc: rpc, marketPubkey });
-  const reserve = market.getReserveByMint(mintPubkey);
+  const reserve = market.getReserveByAddress(reserveAddress);
   if (!reserve) {
-    throw Error(`Could not load reserve for ${mintPubkey.toString()}`);
+    throw Error(`Could not load reserve ${reserveAddress.toString()}`);
   }
-  const currentSlot = await rpc.getSlot().send();
 
   return { market, reserve, currentSlot };
 }
@@ -59,8 +58,8 @@ export async function loadReserveData({ rpc, marketPubkey, mintPubkey }: Reserve
 /**
  * Get reserve rewards APY
  */
-export async function getReserveRewardsApy(args: ReserveArgs) {
-  const { market, reserve } = await loadReserveData(args);
+export async function getReserveFarmRewardsApy(args: ReserveArgs, slot: Slot) {
+  const { market, reserve } = await loadReserveData(args, slot);
   const rewardApys: { rewardApy: Decimal; rewardInfo: RewardInfo }[] = [];
 
   const scope = new Scope('mainnet-beta', args.rpc);
@@ -71,7 +70,11 @@ export async function getReserveRewardsApy(args: ReserveArgs) {
   }
   const prices = await market.getAllScopePrices(scope, oraclePricesMap);
 
-  const farmStates = await FarmState.fetchMultiple(args.rpc, [reserve.state.farmDebt, reserve.state.farmCollateral]);
+  const maybeFarmStates = await fetchAllMaybeFarmState(args.rpc, [
+    reserve.state.farmDebt,
+    reserve.state.farmCollateral,
+  ]);
+  const farmStates = maybeFarmStates.map((state) => (state.exists ? state.data : null));
 
   // We are not calculating APY for debt rewards
   const isDebtReward = false;
@@ -132,7 +135,7 @@ function getRewardPerTimeUnitSecond(reward: RewardInfo) {
     }
   }
 
-  const rewardTokenDecimals = reward.token.decimals.toNumber();
+  const rewardTokenDecimals = Number(reward.token.decimals);
   const rewardAmountPerUnitDecimals = new Decimal(10).pow(reward.rewardsPerSecondDecimals.toString());
   const rewardAmountPerUnitLamports = new Decimal(10).pow(rewardTokenDecimals.toString());
 

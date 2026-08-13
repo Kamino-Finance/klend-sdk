@@ -18,7 +18,6 @@ export interface WithdrawalCapsJSON {
   configIntervalLengthSeconds: string
 }
 
-/** Reserve Withdrawal Caps State */
 export class WithdrawalCaps {
   readonly configCapacity: BN
   readonly currentTotal: BN

@@ -143,6 +143,48 @@ export type CustomError =
   | BorrowOrderExecutionDisabled
   | DebtReachedReserveDebtTerm
   | ExpectationNotMet
+  | BorrowOrderFillValueTooSmall
+  | WithdrawTicketIssuanceDisabled
+  | WithdrawTicketRedemptionDisabled
+  | WithdrawTicketStillValid
+  | WithdrawTicketRequiresFullRedemption
+  | UserTokenBalanceMismatch
+  | WithdrawQueuedLiquidityValueTooSmall
+  | InvalidTokenAccountState
+  | WithdrawTicketInvalid
+  | BorrowOrderValueTooSmall
+  | WithdrawTicketValueTooSmall
+  | InvalidWithdrawTicketProgressCallbackConfig
+  | WithdrawTicketProgressCallbackAccountsMissing
+  | BorrowRolloverConfigurationDisabled
+  | InvalidObligationConfigUpdateSubject
+  | BorrowRolloverLiquidityMintMismatch
+  | ObligationBorrowRolloverNotApplicable
+  | ObligationBorrowOutsideRolloverWindow
+  | ObligationBorrowRolloverNotEnabledByOwner
+  | ObligationBorrowRolloverTargetReserveMismatch
+  | BorrowRolloverExecutionDisabled
+  | ObligationAccountingMismatch
+  | PartialRolloverValueTooSmall
+  | ObligationBorrowRolloverConfigMismatch
+  | ObligationBorrowRolloverMustProlongDebtTerm
+  | RolloverNotSupportedInElevationGroup
+  | WithdrawTicketCancellationDisabled
+  | WithdrawTicketFullyCancelled
+  | CloneSourceReserveDisabled
+  | CloneTargetReserveAlreadyInUse
+  | ClonedReserveLiquidityMintMismatch
+  | ReserveEmergencyMode
+  | ObligationOwnershipTransferInProgress
+  | ObligationOwnershipTransferNotInInitiatedState
+  | ObligationPendingOwnerNotSet
+  | ObligationInvalidPendingOwner
+  | ObligationOwnershipTransferNotApproved
+  | ObligationHasActiveBorrowOrders
+  | OnlyComputeBudgetCompanionIxsAllowed
+  | MissingPermissioner
+  | ReserveRewardsDisabled
+  | TransactionIncludesNonceInstruction
 
 export class InvalidMarketAuthority extends Error {
   static readonly code = 6000
@@ -1573,10 +1615,10 @@ export class OrderIndexOutOfBounds extends Error {
   static readonly code = 6123
   readonly code = 6123
   readonly name = "OrderIndexOutOfBounds"
-  readonly msg = "Obligation order of the given index cannot exist"
+  readonly msg = "Order of the given index cannot exist"
 
   constructor(readonly logs?: string[]) {
-    super("6123: Obligation order of the given index cannot exist")
+    super("6123: Order of the given index cannot exist")
   }
 }
 
@@ -1826,6 +1868,540 @@ export class ExpectationNotMet extends Error {
   constructor(readonly logs?: string[]) {
     super(
       "6143: The on-chain state does not meet expectation specified by the caller, so the operation must be aborted (to avoid race conditions)"
+    )
+  }
+}
+
+export class BorrowOrderFillValueTooSmall extends Error {
+  static readonly code = 6144
+  readonly code = 6144
+  readonly name = "BorrowOrderFillValueTooSmall"
+  readonly msg =
+    "Available liquidity could not satisfy the minimum required borrow order fill value"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6144: Available liquidity could not satisfy the minimum required borrow order fill value"
+    )
+  }
+}
+
+export class WithdrawTicketIssuanceDisabled extends Error {
+  static readonly code = 6145
+  readonly code = 6145
+  readonly name = "WithdrawTicketIssuanceDisabled"
+  readonly msg = "Issuing new withdraw tickets is disabled by the market"
+
+  constructor(readonly logs?: string[]) {
+    super("6145: Issuing new withdraw tickets is disabled by the market")
+  }
+}
+
+export class WithdrawTicketRedemptionDisabled extends Error {
+  static readonly code = 6146
+  readonly code = 6146
+  readonly name = "WithdrawTicketRedemptionDisabled"
+  readonly msg = "Redeeming withdraw tickets is disabled by the market"
+
+  constructor(readonly logs?: string[]) {
+    super("6146: Redeeming withdraw tickets is disabled by the market")
+  }
+}
+
+export class WithdrawTicketStillValid extends Error {
+  static readonly code = 6147
+  readonly code = 6147
+  readonly name = "WithdrawTicketStillValid"
+  readonly msg =
+    "Recovering collateral is only available after the withdraw ticket has been marked invalid"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6147: Recovering collateral is only available after the withdraw ticket has been marked invalid"
+    )
+  }
+}
+
+export class WithdrawTicketRequiresFullRedemption extends Error {
+  static readonly code = 6148
+  readonly code = 6148
+  readonly name = "WithdrawTicketRequiresFullRedemption"
+  readonly msg =
+    "The withdraw ticket's current state requires that it is fully redeemed (e.g. due to owner ATA creation), but there is not enough liquidity"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6148: The withdraw ticket's current state requires that it is fully redeemed (e.g. due to owner ATA creation), but there is not enough liquidity"
+    )
+  }
+}
+
+export class UserTokenBalanceMismatch extends Error {
+  static readonly code = 6149
+  readonly code = 6149
+  readonly name = "UserTokenBalanceMismatch"
+  readonly msg =
+    "The user's token account has changed its balance in an unexpected way"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6149: The user's token account has changed its balance in an unexpected way"
+    )
+  }
+}
+
+export class WithdrawQueuedLiquidityValueTooSmall extends Error {
+  static readonly code = 6150
+  readonly code = 6150
+  readonly name = "WithdrawQueuedLiquidityValueTooSmall"
+  readonly msg =
+    "Available liquidity could not satisfy the minimum required ticketed withdrawal value"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6150: Available liquidity could not satisfy the minimum required ticketed withdrawal value"
+    )
+  }
+}
+
+export class InvalidTokenAccountState extends Error {
+  static readonly code = 6151
+  readonly code = 6151
+  readonly name = "InvalidTokenAccountState"
+  readonly msg =
+    "Token account is in a state preventing the handler's operation (e.g. frozen or delegate)"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6151: Token account is in a state preventing the handler's operation (e.g. frozen or delegate)"
+    )
+  }
+}
+
+export class WithdrawTicketInvalid extends Error {
+  static readonly code = 6152
+  readonly code = 6152
+  readonly name = "WithdrawTicketInvalid"
+  readonly msg = "Cannot use ticket that was already marked invalid"
+
+  constructor(readonly logs?: string[]) {
+    super("6152: Cannot use ticket that was already marked invalid")
+  }
+}
+
+export class BorrowOrderValueTooSmall extends Error {
+  static readonly code = 6153
+  readonly code = 6153
+  readonly name = "BorrowOrderValueTooSmall"
+  readonly msg =
+    "Borrow order's value would be below the market-configured minimum"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6153: Borrow order's value would be below the market-configured minimum"
+    )
+  }
+}
+
+export class WithdrawTicketValueTooSmall extends Error {
+  static readonly code = 6154
+  readonly code = 6154
+  readonly name = "WithdrawTicketValueTooSmall"
+  readonly msg =
+    "Withdraw ticket's value would be below the market-configured minimum"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6154: Withdraw ticket's value would be below the market-configured minimum"
+    )
+  }
+}
+
+export class InvalidWithdrawTicketProgressCallbackConfig extends Error {
+  static readonly code = 6155
+  readonly code = 6155
+  readonly name = "InvalidWithdrawTicketProgressCallbackConfig"
+  readonly msg =
+    "Invalid configuration or required custom accounts for the requested withdraw ticket callback type"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6155: Invalid configuration or required custom accounts for the requested withdraw ticket callback type"
+    )
+  }
+}
+
+export class WithdrawTicketProgressCallbackAccountsMissing extends Error {
+  static readonly code = 6156
+  readonly code = 6156
+  readonly name = "WithdrawTicketProgressCallbackAccountsMissing"
+  readonly msg =
+    "One or more accounts required by the ticket's configured progress callback are missing"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6156: One or more accounts required by the ticket's configured progress callback are missing"
+    )
+  }
+}
+
+export class BorrowRolloverConfigurationDisabled extends Error {
+  static readonly code = 6157
+  readonly code = 6157
+  readonly name = "BorrowRolloverConfigurationDisabled"
+  readonly msg =
+    "Configuring auto-rollover on loans is disabled by market owner"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6157: Configuring auto-rollover on loans is disabled by market owner"
+    )
+  }
+}
+
+export class InvalidObligationConfigUpdateSubject extends Error {
+  static readonly code = 6158
+  readonly code = 6158
+  readonly name = "InvalidObligationConfigUpdateSubject"
+  readonly msg =
+    "Invalid specification of the Obligation's part to be configured"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6158: Invalid specification of the Obligation's part to be configured"
+    )
+  }
+}
+
+export class BorrowRolloverLiquidityMintMismatch extends Error {
+  static readonly code = 6159
+  readonly code = 6159
+  readonly name = "BorrowRolloverLiquidityMintMismatch"
+  readonly msg = "Auto-rollover must use a target reserve of the same token"
+
+  constructor(readonly logs?: string[]) {
+    super("6159: Auto-rollover must use a target reserve of the same token")
+  }
+}
+
+export class ObligationBorrowRolloverNotApplicable extends Error {
+  static readonly code = 6160
+  readonly code = 6160
+  readonly name = "ObligationBorrowRolloverNotApplicable"
+  readonly msg =
+    "The given borrow is not fixed-term and does not require rolling over"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6160: The given borrow is not fixed-term and does not require rolling over"
+    )
+  }
+}
+
+export class ObligationBorrowOutsideRolloverWindow extends Error {
+  static readonly code = 6161
+  readonly code = 6161
+  readonly name = "ObligationBorrowOutsideRolloverWindow"
+  readonly msg =
+    "The given borrow is outside the corresponding market-configured rollover window"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6161: The given borrow is outside the corresponding market-configured rollover window"
+    )
+  }
+}
+
+export class ObligationBorrowRolloverNotEnabledByOwner extends Error {
+  static readonly code = 6162
+  readonly code = 6162
+  readonly name = "ObligationBorrowRolloverNotEnabledByOwner"
+  readonly msg =
+    "Obligation's owner did not opt-in for auto-rollover of the given borrow"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6162: Obligation's owner did not opt-in for auto-rollover of the given borrow"
+    )
+  }
+}
+
+export class ObligationBorrowRolloverTargetReserveMismatch extends Error {
+  static readonly code = 6163
+  readonly code = 6163
+  readonly name = "ObligationBorrowRolloverTargetReserveMismatch"
+  readonly msg =
+    "Obligation's owner did not allow to roll over into terms offered by the given reserve"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6163: Obligation's owner did not allow to roll over into terms offered by the given reserve"
+    )
+  }
+}
+
+export class BorrowRolloverExecutionDisabled extends Error {
+  static readonly code = 6164
+  readonly code = 6164
+  readonly name = "BorrowRolloverExecutionDisabled"
+  readonly msg = "Executing auto-rollover is disabled by market owner"
+
+  constructor(readonly logs?: string[]) {
+    super("6164: Executing auto-rollover is disabled by market owner")
+  }
+}
+
+export class ObligationAccountingMismatch extends Error {
+  static readonly code = 6165
+  readonly code = 6165
+  readonly name = "ObligationAccountingMismatch"
+  readonly msg =
+    "Obligation internal state accounting has been unexpectedly modified"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6165: Obligation internal state accounting has been unexpectedly modified"
+    )
+  }
+}
+
+export class PartialRolloverValueTooSmall extends Error {
+  static readonly code = 6166
+  readonly code = 6166
+  readonly name = "PartialRolloverValueTooSmall"
+  readonly msg =
+    "Partial rollover amount is below the market-configured minimum value"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6166: Partial rollover amount is below the market-configured minimum value"
+    )
+  }
+}
+
+export class ObligationBorrowRolloverConfigMismatch extends Error {
+  static readonly code = 6167
+  readonly code = 6167
+  readonly name = "ObligationBorrowRolloverConfigMismatch"
+  readonly msg =
+    "Pre-existing rollover configuration of the loan cannot be overwritten by the operation"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6167: Pre-existing rollover configuration of the loan cannot be overwritten by the operation"
+    )
+  }
+}
+
+export class ObligationBorrowRolloverMustProlongDebtTerm extends Error {
+  static readonly code = 6168
+  readonly code = 6168
+  readonly name = "ObligationBorrowRolloverMustProlongDebtTerm"
+  readonly msg =
+    "Rollover into existing borrow must prolong the remaining debt term"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6168: Rollover into existing borrow must prolong the remaining debt term"
+    )
+  }
+}
+
+export class RolloverNotSupportedInElevationGroup extends Error {
+  static readonly code = 6169
+  readonly code = 6169
+  readonly name = "RolloverNotSupportedInElevationGroup"
+  readonly msg =
+    "Rollover is not supported for obligations in an elevation group"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6169: Rollover is not supported for obligations in an elevation group"
+    )
+  }
+}
+
+export class WithdrawTicketCancellationDisabled extends Error {
+  static readonly code = 6170
+  readonly code = 6170
+  readonly name = "WithdrawTicketCancellationDisabled"
+  readonly msg = "Cancelling withdraw tickets is disabled by the market"
+
+  constructor(readonly logs?: string[]) {
+    super("6170: Cancelling withdraw tickets is disabled by the market")
+  }
+}
+
+export class WithdrawTicketFullyCancelled extends Error {
+  static readonly code = 6171
+  readonly code = 6171
+  readonly name = "WithdrawTicketFullyCancelled"
+  readonly msg = "Cannot use ticket that was already fully-cancelled"
+
+  constructor(readonly logs?: string[]) {
+    super("6171: Cannot use ticket that was already fully-cancelled")
+  }
+}
+
+export class CloneSourceReserveDisabled extends Error {
+  static readonly code = 6172
+  readonly code = 6172
+  readonly name = "CloneSourceReserveDisabled"
+  readonly msg = "Cannot clone config from a reserve that is disabled"
+
+  constructor(readonly logs?: string[]) {
+    super("6172: Cannot clone config from a reserve that is disabled")
+  }
+}
+
+export class CloneTargetReserveAlreadyInUse extends Error {
+  static readonly code = 6173
+  readonly code = 6173
+  readonly name = "CloneTargetReserveAlreadyInUse"
+  readonly msg = "Cannot clone config into a reserve that has been in use"
+
+  constructor(readonly logs?: string[]) {
+    super("6173: Cannot clone config into a reserve that has been in use")
+  }
+}
+
+export class ClonedReserveLiquidityMintMismatch extends Error {
+  static readonly code = 6174
+  readonly code = 6174
+  readonly name = "ClonedReserveLiquidityMintMismatch"
+  readonly msg = "Cannot clone config between reserves of different mints"
+
+  constructor(readonly logs?: string[]) {
+    super("6174: Cannot clone config between reserves of different mints")
+  }
+}
+
+export class ReserveEmergencyMode extends Error {
+  static readonly code = 6175
+  readonly code = 6175
+  readonly name = "ReserveEmergencyMode"
+  readonly msg = "Reserve emergency mode is enabled"
+
+  constructor(readonly logs?: string[]) {
+    super("6175: Reserve emergency mode is enabled")
+  }
+}
+
+export class ObligationOwnershipTransferInProgress extends Error {
+  static readonly code = 6176
+  readonly code = 6176
+  readonly name = "ObligationOwnershipTransferInProgress"
+  readonly msg = "Obligation ownership transfer is in progress"
+
+  constructor(readonly logs?: string[]) {
+    super("6176: Obligation ownership transfer is in progress")
+  }
+}
+
+export class ObligationOwnershipTransferNotInInitiatedState extends Error {
+  static readonly code = 6177
+  readonly code = 6177
+  readonly name = "ObligationOwnershipTransferNotInInitiatedState"
+  readonly msg = "Obligation ownership transfer is not in initiated state"
+
+  constructor(readonly logs?: string[]) {
+    super("6177: Obligation ownership transfer is not in initiated state")
+  }
+}
+
+export class ObligationPendingOwnerNotSet extends Error {
+  static readonly code = 6178
+  readonly code = 6178
+  readonly name = "ObligationPendingOwnerNotSet"
+  readonly msg = "Obligation pending owner not set"
+
+  constructor(readonly logs?: string[]) {
+    super("6178: Obligation pending owner not set")
+  }
+}
+
+export class ObligationInvalidPendingOwner extends Error {
+  static readonly code = 6179
+  readonly code = 6179
+  readonly name = "ObligationInvalidPendingOwner"
+  readonly msg = "Invalid pending owner address"
+
+  constructor(readonly logs?: string[]) {
+    super("6179: Invalid pending owner address")
+  }
+}
+
+export class ObligationOwnershipTransferNotApproved extends Error {
+  static readonly code = 6180
+  readonly code = 6180
+  readonly name = "ObligationOwnershipTransferNotApproved"
+  readonly msg = "Obligation ownership transfer not approved by admin"
+
+  constructor(readonly logs?: string[]) {
+    super("6180: Obligation ownership transfer not approved by admin")
+  }
+}
+
+export class ObligationHasActiveBorrowOrders extends Error {
+  static readonly code = 6181
+  readonly code = 6181
+  readonly name = "ObligationHasActiveBorrowOrders"
+  readonly msg = "Obligation has active borrow orders"
+
+  constructor(readonly logs?: string[]) {
+    super("6181: Obligation has active borrow orders")
+  }
+}
+
+export class OnlyComputeBudgetCompanionIxsAllowed extends Error {
+  static readonly code = 6182
+  readonly code = 6182
+  readonly name = "OnlyComputeBudgetCompanionIxsAllowed"
+  readonly msg =
+    "Only ComputeBudget instructions may accompany this instruction"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6182: Only ComputeBudget instructions may accompany this instruction"
+    )
+  }
+}
+
+export class MissingPermissioner extends Error {
+  static readonly code = 6183
+  readonly code = 6183
+  readonly name = "MissingPermissioner"
+  readonly msg = "Required permissioning account is missing"
+
+  constructor(readonly logs?: string[]) {
+    super("6183: Required permissioning account is missing")
+  }
+}
+
+export class ReserveRewardsDisabled extends Error {
+  static readonly code = 6184
+  readonly code = 6184
+  readonly name = "ReserveRewardsDisabled"
+  readonly msg =
+    "Reserve rewards are disabled on this market (reserve_rewards_max_apr_bps is 0)"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6184: Reserve rewards are disabled on this market (reserve_rewards_max_apr_bps is 0)"
+    )
+  }
+}
+
+export class TransactionIncludesNonceInstruction extends Error {
+  static readonly code = 6185
+  readonly code = 6185
+  readonly name = "TransactionIncludesNonceInstruction"
+  readonly msg =
+    "Transaction includes a nonce instruction, which is not allowed for admin operations"
+
+  constructor(readonly logs?: string[]) {
+    super(
+      "6185: Transaction includes a nonce instruction, which is not allowed for admin operations"
     )
   }
 }
@@ -2120,6 +2696,90 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new DebtReachedReserveDebtTerm(logs)
     case 6143:
       return new ExpectationNotMet(logs)
+    case 6144:
+      return new BorrowOrderFillValueTooSmall(logs)
+    case 6145:
+      return new WithdrawTicketIssuanceDisabled(logs)
+    case 6146:
+      return new WithdrawTicketRedemptionDisabled(logs)
+    case 6147:
+      return new WithdrawTicketStillValid(logs)
+    case 6148:
+      return new WithdrawTicketRequiresFullRedemption(logs)
+    case 6149:
+      return new UserTokenBalanceMismatch(logs)
+    case 6150:
+      return new WithdrawQueuedLiquidityValueTooSmall(logs)
+    case 6151:
+      return new InvalidTokenAccountState(logs)
+    case 6152:
+      return new WithdrawTicketInvalid(logs)
+    case 6153:
+      return new BorrowOrderValueTooSmall(logs)
+    case 6154:
+      return new WithdrawTicketValueTooSmall(logs)
+    case 6155:
+      return new InvalidWithdrawTicketProgressCallbackConfig(logs)
+    case 6156:
+      return new WithdrawTicketProgressCallbackAccountsMissing(logs)
+    case 6157:
+      return new BorrowRolloverConfigurationDisabled(logs)
+    case 6158:
+      return new InvalidObligationConfigUpdateSubject(logs)
+    case 6159:
+      return new BorrowRolloverLiquidityMintMismatch(logs)
+    case 6160:
+      return new ObligationBorrowRolloverNotApplicable(logs)
+    case 6161:
+      return new ObligationBorrowOutsideRolloverWindow(logs)
+    case 6162:
+      return new ObligationBorrowRolloverNotEnabledByOwner(logs)
+    case 6163:
+      return new ObligationBorrowRolloverTargetReserveMismatch(logs)
+    case 6164:
+      return new BorrowRolloverExecutionDisabled(logs)
+    case 6165:
+      return new ObligationAccountingMismatch(logs)
+    case 6166:
+      return new PartialRolloverValueTooSmall(logs)
+    case 6167:
+      return new ObligationBorrowRolloverConfigMismatch(logs)
+    case 6168:
+      return new ObligationBorrowRolloverMustProlongDebtTerm(logs)
+    case 6169:
+      return new RolloverNotSupportedInElevationGroup(logs)
+    case 6170:
+      return new WithdrawTicketCancellationDisabled(logs)
+    case 6171:
+      return new WithdrawTicketFullyCancelled(logs)
+    case 6172:
+      return new CloneSourceReserveDisabled(logs)
+    case 6173:
+      return new CloneTargetReserveAlreadyInUse(logs)
+    case 6174:
+      return new ClonedReserveLiquidityMintMismatch(logs)
+    case 6175:
+      return new ReserveEmergencyMode(logs)
+    case 6176:
+      return new ObligationOwnershipTransferInProgress(logs)
+    case 6177:
+      return new ObligationOwnershipTransferNotInInitiatedState(logs)
+    case 6178:
+      return new ObligationPendingOwnerNotSet(logs)
+    case 6179:
+      return new ObligationInvalidPendingOwner(logs)
+    case 6180:
+      return new ObligationOwnershipTransferNotApproved(logs)
+    case 6181:
+      return new ObligationHasActiveBorrowOrders(logs)
+    case 6182:
+      return new OnlyComputeBudgetCompanionIxsAllowed(logs)
+    case 6183:
+      return new MissingPermissioner(logs)
+    case 6184:
+      return new ReserveRewardsDisabled(logs)
+    case 6185:
+      return new TransactionIncludesNonceInstruction(logs)
   }
 
   return null

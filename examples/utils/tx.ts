@@ -95,6 +95,38 @@ export async function sendAndConfirmTx(
   return sig;
 }
 
+/**
+ * Compile the v0 transaction exactly as it would be sent (fee payer + instructions + LUT compression + signature
+ * placeholders) and return its true wire size in bytes. This is not a heuristic — it serializes the real versioned
+ * transaction, so it includes the signatures section (64 bytes per required signer), the message header, the static
+ * account keys that are NOT covered by a LUT (32 bytes each), and the per-LUT lookup entries (1-byte indices). The
+ * Solana packet limit is 1232 raw bytes; `fitsPacketLimit` reflects that.
+ */
+export function getCompiledTransactionSize(
+  payer: Address,
+  ixs: Instruction[],
+  luts: Account<AddressLookupTable>[] = []
+): { rawBytes: number; base64Bytes: number; fitsPacketLimit: boolean } {
+  const lutsByAddress: AddressesByLookupTableAddress = {};
+  for (const acc of luts) {
+    lutsByAddress[acc.address] = acc.data.addresses;
+  }
+
+  const transactionMessage = pipe(
+    createTransactionMessage({ version: 0 }),
+    (tx) => setTransactionMessageFeePayer(payer, tx),
+    (tx) => appendTransactionMessageInstructions(ixs, tx),
+    (tx) => compressTransactionMessageUsingAddressLookupTables(tx, lutsByAddress),
+    (tx) => setTransactionMessageLifetimeUsingBlockhash(INVALID_BUT_SUFFICIENT_FOR_COMPILATION_BLOCKHASH, tx)
+  );
+
+  const compiled = compileTransaction(transactionMessage);
+  const base64WireTransaction = getBase64EncodedWireTransaction(compiled);
+  const rawBytes = Buffer.from(base64WireTransaction, 'base64').length;
+
+  return { rawBytes, base64Bytes: base64WireTransaction.length, fitsPacketLimit: rawBytes <= 1232 };
+}
+
 export type BlockhashWithHeight = { blockhash: Blockhash; lastValidBlockHeight: bigint; slot: bigint };
 
 export async function simulateTx(

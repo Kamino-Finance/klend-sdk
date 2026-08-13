@@ -377,6 +377,10 @@ function buildReserveConfig(fields: {
     blockCtokenUsage: 0,
     debtMaturityTimestamp: new BN(0),
     debtTermSeconds: new BN(0),
+    earlyRepayRemainingInterestPct: 0,
+    emergencyMode: 0,
+    rewardsAmountPerSlot: new BN(0),
+    permissionedOps: new BN(0),
   };
 
   return new ReserveConfig(reserveConfigFields);

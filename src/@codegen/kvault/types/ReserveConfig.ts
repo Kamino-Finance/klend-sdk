@@ -5,320 +5,135 @@ import * as borsh from "@coral-xyz/borsh"
 import { borshAddress } from "../utils"
 
 export interface ReserveConfigFields {
-  /** Status of the reserve Active/Obsolete/Hidden */
   status: number
-  /** Asset tier -> 0 - regular (collateral & debt), 1 - isolated collateral, 2 - isolated debt */
-  assetTier: number
-  /** Flat rate that goes to the host */
+  paddingDeprecatedAssetTier: number
   hostFixedInterestRateBps: number
-  /** Starting bonus for deleveraging-related liquidations, in bps. */
   minDeleveragingBonusBps: number
-  /**
-   * Boolean flag to block minting/redeeming of ctokens
-   * Blocks usage of ctokens (minting or withdrawing from obligation)
-   * Effectively blocks deposit_reserve_liquidity and withdraw_obligation_collateral
-   */
   blockCtokenUsage: number
-  /** Past reserved space - feel free to reuse. */
+  earlyRepayRemainingInterestPct: number
+  emergencyMode: number
   reserved1: Array<number>
-  /** Cut of the order execution bonus that the protocol receives, as a percentage */
   protocolOrderExecutionFeePct: number
-  /** Protocol take rate is the amount borrowed interest protocol receives, as a percentage */
   protocolTakeRatePct: number
-  /** Cut of the liquidation bonus that the protocol receives, as a percentage */
   protocolLiquidationFeePct: number
-  /**
-   * Target ratio of the value of borrows to deposits, as a percentage
-   * 0 if use as collateral is disabled
-   */
   loanToValuePct: number
-  /** Loan to value ratio at which an obligation can be liquidated, as percentage */
   liquidationThresholdPct: number
-  /** Minimum bonus a liquidator receives when repaying part of an unhealthy obligation, as bps */
   minLiquidationBonusBps: number
-  /** Maximum bonus a liquidator receives when repaying part of an unhealthy obligation, as bps */
   maxLiquidationBonusBps: number
-  /** Bad debt liquidation bonus for an undercollateralized obligation, as bps */
   badDebtLiquidationBonusBps: number
-  /**
-   * Time in seconds that must pass before redemptions are enabled after the deposit limit is
-   * crossed.
-   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
-   */
   deleveragingMarginCallPeriodSecs: BN
-  /**
-   * The rate at which the deleveraging threshold decreases, in bps per day.
-   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
-   */
   deleveragingThresholdDecreaseBpsPerDay: BN
-  /** Program owner fees assessed, separate from gains due to interest accrual */
   fees: types.ReserveFeesFields
-  /** Borrow rate curve based on utilization */
   borrowRateCurve: types.BorrowRateCurveFields
-  /** Borrow factor in percentage - used for risk adjustment */
   borrowFactorPct: BN
-  /** Maximum deposit limit of liquidity in native units, u64::MAX for inf */
   depositLimit: BN
-  /** Maximum amount borrowed, u64::MAX for inf, 0 to disable borrows (protected deposits) */
   borrowLimit: BN
-  /** Token id from TokenInfos struct */
   tokenInfo: types.TokenInfoFields
-  /** Deposit withdrawal caps - deposit & redeem */
   depositWithdrawalCap: types.WithdrawalCapsFields
-  /** Debt withdrawal caps - borrow & repay */
   debtWithdrawalCap: types.WithdrawalCapsFields
   elevationGroups: Array<number>
   disableUsageAsCollOutsideEmode: number
-  /** Utilization (in percentage) above which borrowing is blocked. 0 to disable. */
   utilizationLimitBlockBorrowingAbovePct: number
-  /**
-   * Whether this reserve should be subject to auto-deleveraging after deposit or borrow limit is
-   * crossed.
-   * Besides this flag, the lending market's flag also needs to be enabled (logical `AND`).
-   * **NOTE:** the manual "target LTV" deleveraging (enabled by the risk council for individual
-   * obligations) is NOT affected by this flag.
-   */
   autodeleverageEnabled: number
-  /**
-   * Boolean flag indicating whether the reserve is locked for the proposer authority.
-   *
-   * Once the proposer have finished preparing the reserve, it must be locked to prevent
-   * further changes to the reserve configuration allowing review and voting on the proposal
-   * without alteration during the voting period.
-   */
   proposerAuthorityLocked: number
-  /**
-   * Maximum amount liquidity of this reserve borrowed outside all elevation groups
-   * - u64::MAX for inf
-   * - 0 to disable borrows outside elevation groups
-   */
   borrowLimitOutsideElevationGroup: BN
-  /**
-   * Defines the maximum amount (in lamports of elevation group debt asset)
-   * that can be borrowed when this reserve is used as collateral.
-   * - u64::MAX for inf
-   * - 0 to disable borrows in this elevation group (expected value for the debt asset)
-   */
   borrowLimitAgainstThisCollateralInElevationGroup: Array<BN>
-  /**
-   * The rate at which the deleveraging-related liquidation bonus increases, in bps per day.
-   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
-   */
   deleveragingBonusIncreaseBpsPerDay: BN
+  debtMaturityTimestamp: BN
+  debtTermSeconds: BN
+  rewardsAmountPerSlot: BN
+  permissionedOps: BN
 }
 
 export interface ReserveConfigJSON {
-  /** Status of the reserve Active/Obsolete/Hidden */
   status: number
-  /** Asset tier -> 0 - regular (collateral & debt), 1 - isolated collateral, 2 - isolated debt */
-  assetTier: number
-  /** Flat rate that goes to the host */
+  paddingDeprecatedAssetTier: number
   hostFixedInterestRateBps: number
-  /** Starting bonus for deleveraging-related liquidations, in bps. */
   minDeleveragingBonusBps: number
-  /**
-   * Boolean flag to block minting/redeeming of ctokens
-   * Blocks usage of ctokens (minting or withdrawing from obligation)
-   * Effectively blocks deposit_reserve_liquidity and withdraw_obligation_collateral
-   */
   blockCtokenUsage: number
-  /** Past reserved space - feel free to reuse. */
+  earlyRepayRemainingInterestPct: number
+  emergencyMode: number
   reserved1: Array<number>
-  /** Cut of the order execution bonus that the protocol receives, as a percentage */
   protocolOrderExecutionFeePct: number
-  /** Protocol take rate is the amount borrowed interest protocol receives, as a percentage */
   protocolTakeRatePct: number
-  /** Cut of the liquidation bonus that the protocol receives, as a percentage */
   protocolLiquidationFeePct: number
-  /**
-   * Target ratio of the value of borrows to deposits, as a percentage
-   * 0 if use as collateral is disabled
-   */
   loanToValuePct: number
-  /** Loan to value ratio at which an obligation can be liquidated, as percentage */
   liquidationThresholdPct: number
-  /** Minimum bonus a liquidator receives when repaying part of an unhealthy obligation, as bps */
   minLiquidationBonusBps: number
-  /** Maximum bonus a liquidator receives when repaying part of an unhealthy obligation, as bps */
   maxLiquidationBonusBps: number
-  /** Bad debt liquidation bonus for an undercollateralized obligation, as bps */
   badDebtLiquidationBonusBps: number
-  /**
-   * Time in seconds that must pass before redemptions are enabled after the deposit limit is
-   * crossed.
-   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
-   */
   deleveragingMarginCallPeriodSecs: string
-  /**
-   * The rate at which the deleveraging threshold decreases, in bps per day.
-   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
-   */
   deleveragingThresholdDecreaseBpsPerDay: string
-  /** Program owner fees assessed, separate from gains due to interest accrual */
   fees: types.ReserveFeesJSON
-  /** Borrow rate curve based on utilization */
   borrowRateCurve: types.BorrowRateCurveJSON
-  /** Borrow factor in percentage - used for risk adjustment */
   borrowFactorPct: string
-  /** Maximum deposit limit of liquidity in native units, u64::MAX for inf */
   depositLimit: string
-  /** Maximum amount borrowed, u64::MAX for inf, 0 to disable borrows (protected deposits) */
   borrowLimit: string
-  /** Token id from TokenInfos struct */
   tokenInfo: types.TokenInfoJSON
-  /** Deposit withdrawal caps - deposit & redeem */
   depositWithdrawalCap: types.WithdrawalCapsJSON
-  /** Debt withdrawal caps - borrow & repay */
   debtWithdrawalCap: types.WithdrawalCapsJSON
   elevationGroups: Array<number>
   disableUsageAsCollOutsideEmode: number
-  /** Utilization (in percentage) above which borrowing is blocked. 0 to disable. */
   utilizationLimitBlockBorrowingAbovePct: number
-  /**
-   * Whether this reserve should be subject to auto-deleveraging after deposit or borrow limit is
-   * crossed.
-   * Besides this flag, the lending market's flag also needs to be enabled (logical `AND`).
-   * **NOTE:** the manual "target LTV" deleveraging (enabled by the risk council for individual
-   * obligations) is NOT affected by this flag.
-   */
   autodeleverageEnabled: number
-  /**
-   * Boolean flag indicating whether the reserve is locked for the proposer authority.
-   *
-   * Once the proposer have finished preparing the reserve, it must be locked to prevent
-   * further changes to the reserve configuration allowing review and voting on the proposal
-   * without alteration during the voting period.
-   */
   proposerAuthorityLocked: number
-  /**
-   * Maximum amount liquidity of this reserve borrowed outside all elevation groups
-   * - u64::MAX for inf
-   * - 0 to disable borrows outside elevation groups
-   */
   borrowLimitOutsideElevationGroup: string
-  /**
-   * Defines the maximum amount (in lamports of elevation group debt asset)
-   * that can be borrowed when this reserve is used as collateral.
-   * - u64::MAX for inf
-   * - 0 to disable borrows in this elevation group (expected value for the debt asset)
-   */
   borrowLimitAgainstThisCollateralInElevationGroup: Array<string>
-  /**
-   * The rate at which the deleveraging-related liquidation bonus increases, in bps per day.
-   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
-   */
   deleveragingBonusIncreaseBpsPerDay: string
+  debtMaturityTimestamp: string
+  debtTermSeconds: string
+  rewardsAmountPerSlot: string
+  permissionedOps: string
 }
 
-/** Reserve configuration values */
 export class ReserveConfig {
-  /** Status of the reserve Active/Obsolete/Hidden */
   readonly status: number
-  /** Asset tier -> 0 - regular (collateral & debt), 1 - isolated collateral, 2 - isolated debt */
-  readonly assetTier: number
-  /** Flat rate that goes to the host */
+  readonly paddingDeprecatedAssetTier: number
   readonly hostFixedInterestRateBps: number
-  /** Starting bonus for deleveraging-related liquidations, in bps. */
   readonly minDeleveragingBonusBps: number
-  /**
-   * Boolean flag to block minting/redeeming of ctokens
-   * Blocks usage of ctokens (minting or withdrawing from obligation)
-   * Effectively blocks deposit_reserve_liquidity and withdraw_obligation_collateral
-   */
   readonly blockCtokenUsage: number
-  /** Past reserved space - feel free to reuse. */
+  readonly earlyRepayRemainingInterestPct: number
+  readonly emergencyMode: number
   readonly reserved1: Array<number>
-  /** Cut of the order execution bonus that the protocol receives, as a percentage */
   readonly protocolOrderExecutionFeePct: number
-  /** Protocol take rate is the amount borrowed interest protocol receives, as a percentage */
   readonly protocolTakeRatePct: number
-  /** Cut of the liquidation bonus that the protocol receives, as a percentage */
   readonly protocolLiquidationFeePct: number
-  /**
-   * Target ratio of the value of borrows to deposits, as a percentage
-   * 0 if use as collateral is disabled
-   */
   readonly loanToValuePct: number
-  /** Loan to value ratio at which an obligation can be liquidated, as percentage */
   readonly liquidationThresholdPct: number
-  /** Minimum bonus a liquidator receives when repaying part of an unhealthy obligation, as bps */
   readonly minLiquidationBonusBps: number
-  /** Maximum bonus a liquidator receives when repaying part of an unhealthy obligation, as bps */
   readonly maxLiquidationBonusBps: number
-  /** Bad debt liquidation bonus for an undercollateralized obligation, as bps */
   readonly badDebtLiquidationBonusBps: number
-  /**
-   * Time in seconds that must pass before redemptions are enabled after the deposit limit is
-   * crossed.
-   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
-   */
   readonly deleveragingMarginCallPeriodSecs: BN
-  /**
-   * The rate at which the deleveraging threshold decreases, in bps per day.
-   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
-   */
   readonly deleveragingThresholdDecreaseBpsPerDay: BN
-  /** Program owner fees assessed, separate from gains due to interest accrual */
   readonly fees: types.ReserveFees
-  /** Borrow rate curve based on utilization */
   readonly borrowRateCurve: types.BorrowRateCurve
-  /** Borrow factor in percentage - used for risk adjustment */
   readonly borrowFactorPct: BN
-  /** Maximum deposit limit of liquidity in native units, u64::MAX for inf */
   readonly depositLimit: BN
-  /** Maximum amount borrowed, u64::MAX for inf, 0 to disable borrows (protected deposits) */
   readonly borrowLimit: BN
-  /** Token id from TokenInfos struct */
   readonly tokenInfo: types.TokenInfo
-  /** Deposit withdrawal caps - deposit & redeem */
   readonly depositWithdrawalCap: types.WithdrawalCaps
-  /** Debt withdrawal caps - borrow & repay */
   readonly debtWithdrawalCap: types.WithdrawalCaps
   readonly elevationGroups: Array<number>
   readonly disableUsageAsCollOutsideEmode: number
-  /** Utilization (in percentage) above which borrowing is blocked. 0 to disable. */
   readonly utilizationLimitBlockBorrowingAbovePct: number
-  /**
-   * Whether this reserve should be subject to auto-deleveraging after deposit or borrow limit is
-   * crossed.
-   * Besides this flag, the lending market's flag also needs to be enabled (logical `AND`).
-   * **NOTE:** the manual "target LTV" deleveraging (enabled by the risk council for individual
-   * obligations) is NOT affected by this flag.
-   */
   readonly autodeleverageEnabled: number
-  /**
-   * Boolean flag indicating whether the reserve is locked for the proposer authority.
-   *
-   * Once the proposer have finished preparing the reserve, it must be locked to prevent
-   * further changes to the reserve configuration allowing review and voting on the proposal
-   * without alteration during the voting period.
-   */
   readonly proposerAuthorityLocked: number
-  /**
-   * Maximum amount liquidity of this reserve borrowed outside all elevation groups
-   * - u64::MAX for inf
-   * - 0 to disable borrows outside elevation groups
-   */
   readonly borrowLimitOutsideElevationGroup: BN
-  /**
-   * Defines the maximum amount (in lamports of elevation group debt asset)
-   * that can be borrowed when this reserve is used as collateral.
-   * - u64::MAX for inf
-   * - 0 to disable borrows in this elevation group (expected value for the debt asset)
-   */
   readonly borrowLimitAgainstThisCollateralInElevationGroup: Array<BN>
-  /**
-   * The rate at which the deleveraging-related liquidation bonus increases, in bps per day.
-   * Only relevant when `autodeleverage_enabled == 1`, and must not be 0 in such case.
-   */
   readonly deleveragingBonusIncreaseBpsPerDay: BN
+  readonly debtMaturityTimestamp: BN
+  readonly debtTermSeconds: BN
+  readonly rewardsAmountPerSlot: BN
+  readonly permissionedOps: BN
 
   constructor(fields: ReserveConfigFields) {
     this.status = fields.status
-    this.assetTier = fields.assetTier
+    this.paddingDeprecatedAssetTier = fields.paddingDeprecatedAssetTier
     this.hostFixedInterestRateBps = fields.hostFixedInterestRateBps
     this.minDeleveragingBonusBps = fields.minDeleveragingBonusBps
     this.blockCtokenUsage = fields.blockCtokenUsage
+    this.earlyRepayRemainingInterestPct = fields.earlyRepayRemainingInterestPct
+    this.emergencyMode = fields.emergencyMode
     this.reserved1 = fields.reserved1
     this.protocolOrderExecutionFeePct = fields.protocolOrderExecutionFeePct
     this.protocolTakeRatePct = fields.protocolTakeRatePct
@@ -358,17 +173,23 @@ export class ReserveConfig {
       fields.borrowLimitAgainstThisCollateralInElevationGroup
     this.deleveragingBonusIncreaseBpsPerDay =
       fields.deleveragingBonusIncreaseBpsPerDay
+    this.debtMaturityTimestamp = fields.debtMaturityTimestamp
+    this.debtTermSeconds = fields.debtTermSeconds
+    this.rewardsAmountPerSlot = fields.rewardsAmountPerSlot
+    this.permissionedOps = fields.permissionedOps
   }
 
   static layout(property?: string) {
     return borsh.struct(
       [
         borsh.u8("status"),
-        borsh.u8("assetTier"),
+        borsh.u8("paddingDeprecatedAssetTier"),
         borsh.u16("hostFixedInterestRateBps"),
         borsh.u16("minDeleveragingBonusBps"),
         borsh.u8("blockCtokenUsage"),
-        borsh.array(borsh.u8(), 6, "reserved1"),
+        borsh.u8("earlyRepayRemainingInterestPct"),
+        borsh.u8("emergencyMode"),
+        borsh.array(borsh.u8(), 4, "reserved1"),
         borsh.u8("protocolOrderExecutionFeePct"),
         borsh.u8("protocolTakeRatePct"),
         borsh.u8("protocolLiquidationFeePct"),
@@ -399,6 +220,10 @@ export class ReserveConfig {
           "borrowLimitAgainstThisCollateralInElevationGroup"
         ),
         borsh.u64("deleveragingBonusIncreaseBpsPerDay"),
+        borsh.u64("debtMaturityTimestamp"),
+        borsh.u64("debtTermSeconds"),
+        borsh.u64("rewardsAmountPerSlot"),
+        borsh.u64("permissionedOps"),
       ],
       property
     )
@@ -408,10 +233,12 @@ export class ReserveConfig {
   static fromDecoded(obj: any) {
     return new ReserveConfig({
       status: obj.status,
-      assetTier: obj.assetTier,
+      paddingDeprecatedAssetTier: obj.paddingDeprecatedAssetTier,
       hostFixedInterestRateBps: obj.hostFixedInterestRateBps,
       minDeleveragingBonusBps: obj.minDeleveragingBonusBps,
       blockCtokenUsage: obj.blockCtokenUsage,
+      earlyRepayRemainingInterestPct: obj.earlyRepayRemainingInterestPct,
+      emergencyMode: obj.emergencyMode,
       reserved1: obj.reserved1,
       protocolOrderExecutionFeePct: obj.protocolOrderExecutionFeePct,
       protocolTakeRatePct: obj.protocolTakeRatePct,
@@ -447,16 +274,22 @@ export class ReserveConfig {
         obj.borrowLimitAgainstThisCollateralInElevationGroup,
       deleveragingBonusIncreaseBpsPerDay:
         obj.deleveragingBonusIncreaseBpsPerDay,
+      debtMaturityTimestamp: obj.debtMaturityTimestamp,
+      debtTermSeconds: obj.debtTermSeconds,
+      rewardsAmountPerSlot: obj.rewardsAmountPerSlot,
+      permissionedOps: obj.permissionedOps,
     })
   }
 
   static toEncodable(fields: ReserveConfigFields) {
     return {
       status: fields.status,
-      assetTier: fields.assetTier,
+      paddingDeprecatedAssetTier: fields.paddingDeprecatedAssetTier,
       hostFixedInterestRateBps: fields.hostFixedInterestRateBps,
       minDeleveragingBonusBps: fields.minDeleveragingBonusBps,
       blockCtokenUsage: fields.blockCtokenUsage,
+      earlyRepayRemainingInterestPct: fields.earlyRepayRemainingInterestPct,
+      emergencyMode: fields.emergencyMode,
       reserved1: fields.reserved1,
       protocolOrderExecutionFeePct: fields.protocolOrderExecutionFeePct,
       protocolTakeRatePct: fields.protocolTakeRatePct,
@@ -494,16 +327,22 @@ export class ReserveConfig {
         fields.borrowLimitAgainstThisCollateralInElevationGroup,
       deleveragingBonusIncreaseBpsPerDay:
         fields.deleveragingBonusIncreaseBpsPerDay,
+      debtMaturityTimestamp: fields.debtMaturityTimestamp,
+      debtTermSeconds: fields.debtTermSeconds,
+      rewardsAmountPerSlot: fields.rewardsAmountPerSlot,
+      permissionedOps: fields.permissionedOps,
     }
   }
 
   toJSON(): ReserveConfigJSON {
     return {
       status: this.status,
-      assetTier: this.assetTier,
+      paddingDeprecatedAssetTier: this.paddingDeprecatedAssetTier,
       hostFixedInterestRateBps: this.hostFixedInterestRateBps,
       minDeleveragingBonusBps: this.minDeleveragingBonusBps,
       blockCtokenUsage: this.blockCtokenUsage,
+      earlyRepayRemainingInterestPct: this.earlyRepayRemainingInterestPct,
+      emergencyMode: this.emergencyMode,
       reserved1: this.reserved1,
       protocolOrderExecutionFeePct: this.protocolOrderExecutionFeePct,
       protocolTakeRatePct: this.protocolTakeRatePct,
@@ -539,16 +378,22 @@ export class ReserveConfig {
         ),
       deleveragingBonusIncreaseBpsPerDay:
         this.deleveragingBonusIncreaseBpsPerDay.toString(),
+      debtMaturityTimestamp: this.debtMaturityTimestamp.toString(),
+      debtTermSeconds: this.debtTermSeconds.toString(),
+      rewardsAmountPerSlot: this.rewardsAmountPerSlot.toString(),
+      permissionedOps: this.permissionedOps.toString(),
     }
   }
 
   static fromJSON(obj: ReserveConfigJSON): ReserveConfig {
     return new ReserveConfig({
       status: obj.status,
-      assetTier: obj.assetTier,
+      paddingDeprecatedAssetTier: obj.paddingDeprecatedAssetTier,
       hostFixedInterestRateBps: obj.hostFixedInterestRateBps,
       minDeleveragingBonusBps: obj.minDeleveragingBonusBps,
       blockCtokenUsage: obj.blockCtokenUsage,
+      earlyRepayRemainingInterestPct: obj.earlyRepayRemainingInterestPct,
+      emergencyMode: obj.emergencyMode,
       reserved1: obj.reserved1,
       protocolOrderExecutionFeePct: obj.protocolOrderExecutionFeePct,
       protocolTakeRatePct: obj.protocolTakeRatePct,
@@ -590,6 +435,10 @@ export class ReserveConfig {
       deleveragingBonusIncreaseBpsPerDay: new BN(
         obj.deleveragingBonusIncreaseBpsPerDay
       ),
+      debtMaturityTimestamp: new BN(obj.debtMaturityTimestamp),
+      debtTermSeconds: new BN(obj.debtTermSeconds),
+      rewardsAmountPerSlot: new BN(obj.rewardsAmountPerSlot),
+      permissionedOps: new BN(obj.permissionedOps),
     })
   }
 

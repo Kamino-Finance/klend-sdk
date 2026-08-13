@@ -12,7 +12,6 @@ export interface ElevationGroupFields {
   allowNewLoans: number
   maxReservesAsCollateral: number
   padding0: number
-  /** Mandatory debt reserve for this elevation group */
   debtReserve: Address
   padding1: Array<BN>
 }
@@ -25,7 +24,6 @@ export interface ElevationGroupJSON {
   allowNewLoans: number
   maxReservesAsCollateral: number
   padding0: number
-  /** Mandatory debt reserve for this elevation group */
   debtReserve: string
   padding1: Array<string>
 }
@@ -38,7 +36,6 @@ export class ElevationGroup {
   readonly allowNewLoans: number
   readonly maxReservesAsCollateral: number
   readonly padding0: number
-  /** Mandatory debt reserve for this elevation group */
   readonly debtReserve: Address
   readonly padding1: Array<BN>
 

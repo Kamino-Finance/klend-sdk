@@ -23,6 +23,8 @@ export type {
   ReserveLiquidityFields,
   ReserveLiquidityJSON,
 } from "./ReserveLiquidity"
+export { WithdrawQueue } from "./WithdrawQueue"
+export type { WithdrawQueueFields, WithdrawQueueJSON } from "./WithdrawQueue"
 export { WithdrawalCaps } from "./WithdrawalCaps"
 export type { WithdrawalCapsFields, WithdrawalCapsJSON } from "./WithdrawalCaps"
 export { PriceHeuristic } from "./PriceHeuristic"
@@ -83,6 +85,7 @@ export type VaultConfigFieldKind =
   | VaultConfigField.AllowAllocationsInWhitelistedReservesOnly
   | VaultConfigField.AllowInvestInWhitelistedReservesOnly
   | VaultConfigField.RewardPerSecond
+  | VaultConfigField.DepositCap
 export type VaultConfigFieldJSON =
   | VaultConfigField.PerformanceFeeBpsJSON
   | VaultConfigField.ManagementFeeBpsJSON
@@ -104,6 +107,7 @@ export type VaultConfigFieldJSON =
   | VaultConfigField.AllowAllocationsInWhitelistedReservesOnlyJSON
   | VaultConfigField.AllowInvestInWhitelistedReservesOnlyJSON
   | VaultConfigField.RewardPerSecondJSON
+  | VaultConfigField.DepositCapJSON
 
 export { VaultAllocation } from "./VaultAllocation"
 export type {

@@ -20,26 +20,17 @@ export const DISCRIMINATOR = Buffer.from([102, 4, 167, 76, 131, 170, 93, 19])
 export interface FillBorrowOrderAccounts {
   borrowAccounts: {
     payer: TransactionSigner
-    /** The obligation with a [BorrowOrder]. */
     obligation: Address
-    /** The [Self::obligation]'s market - needed for borrowing-related configuration. */
     lendingMarket: Address
-    /** The [Self::lending_market]'s authority, needed to transfer the newly-borrowed funds out of the [Self::reserve_source_liquidity]. */
     lendingMarketAuthority: Address
-    /** The reserve to borrow from.  Its mint must match the asset requested by the [BorrowOrder::debt_liquidity_mint]. */
     borrowReserve: Address
-    /** The mint of [Self::borrow_reserve] - needed to execute the transfer. */
     borrowReserveLiquidityMint: Address
-    /** The vault of [Self::borrow_reserve], from which the funds are transferred. */
     reserveSourceLiquidity: Address
-    /** The fee vault of [Self::borrow_reserve], to which the fees are transferred. */
     borrowReserveLiquidityFeeReceiver: Address
-    /** The destination token account that should receive the newly borrowed funds.  It must match [BorrowOrder::filled_debt_destination], owner and mint.  **Warning:** An altered destination account will prevent an order from being filled. */
     userDestinationLiquidity: Address
-    /** The referrer's account, for accumulating fees - needed if the [Obligation::has_referrer]. */
     referrerTokenState: Option<Address>
-    /** The token program of [Self::borrow_reserve] - needed to execute the transfer. */
     tokenProgram: Address
+    instructionSysvarAccount: Address
   }
   farmsAccounts: {
     obligationFarmUserState: Option<Address>
@@ -76,6 +67,7 @@ export function fillBorrowOrder(
       ? { address: accounts.borrowAccounts.referrerTokenState.value, role: 1 }
       : { address: programAddress, role: 0 },
     { address: accounts.borrowAccounts.tokenProgram, role: 0 },
+    { address: accounts.borrowAccounts.instructionSysvarAccount, role: 0 },
     isSome(accounts.farmsAccounts.obligationFarmUserState)
       ? {
           address: accounts.farmsAccounts.obligationFarmUserState.value,

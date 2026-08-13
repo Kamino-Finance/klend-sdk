@@ -63,6 +63,8 @@ export class ObligationZP {
   readonly lowestReserveDepositMaxLtvPct: number
   /** The number of obsolete reserves the obligation has a borrow in */
   readonly numOfObsoleteBorrowReserves: number
+  /** State of ownership transfer: 0 = None, 1 = Initiated (by owner), 2 = Approved (by admin) */
+  readonly ownershipTransferState: number
   readonly reserved: Array<number>
   readonly highestBorrowFactorPct: BN
   /**
@@ -76,10 +78,19 @@ export class ObligationZP {
    */
   readonly obligationOrders: Array<types.ObligationOrder>
   /**
-   * Owner-defined, permissionlessly-executed borrow order applicable to this obligation.
-   * Non-zeroed only on a newly-initialized fixed-rate, fixed-term obligation.
+   * The first of the owner-defined, permissionlessly-executed borrow orders applicable to this
+   * obligation. The array of borrow orders is split between this field and
+   * {@link tailBorrowOrders}, since it grew from a single order after `pendingOwner` had already
+   * been released; prefer accessing the two uniformly rather than reading only the head.
    */
-  readonly borrowOrder: types.BorrowOrder
+  readonly headBorrowOrder: types.BorrowOrder
+  /**
+   * Pending owner during ownership transfer process.
+   * Pubkey::default() means no pending owner (similar to Option::None).
+   */
+  readonly pendingOwner: Address
+  /** The tail of the borrow-orders array (see {@link headBorrowOrder}). */
+  readonly tailBorrowOrders: Array<types.BorrowOrder>
   readonly padding3: Array<BN> = new Array(0)
 
   static readonly layout = borsh.struct<ObligationZP>([
@@ -104,11 +115,14 @@ export class ObligationZP {
     borsh.u8("autodeleverageTargetLtvPct"),
     borsh.u8("lowestReserveDepositMaxLtvPct"),
     borsh.u8("numOfObsoleteBorrowReserves"),
-    borsh.array(borsh.u8(), 4, "reserved"),
+    borsh.u8("ownershipTransferState"),
+    borsh.array(borsh.u8(), 3, "reserved"),
     borsh.u64("highestBorrowFactorPct"),
     borsh.u64("autodeleverageMarginCallStartedTimestamp"),
     borsh.array(types.ObligationOrder.layout(), 2, "obligationOrders"),
-    types.BorrowOrder.layout("borrowOrder"),
+    types.BorrowOrder.layout("headBorrowOrder"),
+    borshAddress("pendingOwner"),
+    borsh.array(types.BorrowOrder.layout(), 2, "tailBorrowOrders"),
   ])
 
   constructor(fields: ObligationFields) {
@@ -139,6 +153,7 @@ export class ObligationZP {
     this.autodeleverageTargetLtvPct = fields.autodeleverageTargetLtvPct
     this.lowestReserveDepositMaxLtvPct = fields.lowestReserveDepositMaxLtvPct
     this.numOfObsoleteBorrowReserves = fields.numOfObsoleteBorrowReserves
+    this.ownershipTransferState = fields.ownershipTransferState
     this.reserved = new Array<number>(0)
     this.highestBorrowFactorPct = fields.highestBorrowFactorPct
     this.autodeleverageMarginCallStartedTimestamp =
@@ -146,7 +161,11 @@ export class ObligationZP {
     this.obligationOrders = fields.obligationOrders.map(
       (item) => new types.ObligationOrder({ ...item })
     )
-    this.borrowOrder = new types.BorrowOrder({ ...fields.borrowOrder })
+    this.headBorrowOrder = new types.BorrowOrder({ ...fields.headBorrowOrder })
+    this.pendingOwner = fields.pendingOwner
+    this.tailBorrowOrders = fields.tailBorrowOrders.map(
+      (item) => new types.BorrowOrder({ ...item })
+    )
     this.padding3 = new Array<BN>(0);
   }
 
@@ -224,6 +243,7 @@ export class ObligationZP {
       autodeleverageTargetLtvPct: dec.autodeleverageTargetLtvPct,
       lowestReserveDepositMaxLtvPct: dec.lowestReserveDepositMaxLtvPct,
       numOfObsoleteBorrowReserves: dec.numOfObsoleteBorrowReserves,
+      ownershipTransferState: dec.ownershipTransferState,
       reserved: dec.reserved,
       highestBorrowFactorPct: dec.highestBorrowFactorPct,
       autodeleverageMarginCallStartedTimestamp:
@@ -233,7 +253,13 @@ export class ObligationZP {
           item: any /* eslint-disable-line @typescript-eslint/no-explicit-any */
         ) => types.ObligationOrder.fromDecoded(item)
       ),
-      borrowOrder: types.BorrowOrder.fromDecoded(dec.borrowOrder),
+      headBorrowOrder: types.BorrowOrder.fromDecoded(dec.headBorrowOrder),
+      pendingOwner: dec.pendingOwner,
+      tailBorrowOrders: dec.tailBorrowOrders.map(
+        (
+          item: any /* eslint-disable-line @typescript-eslint/no-explicit-any */
+        ) => types.BorrowOrder.fromDecoded(item)
+      ),
       padding3: [],
     })
   }

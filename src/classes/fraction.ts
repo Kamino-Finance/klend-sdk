@@ -28,6 +28,8 @@ export class Fraction {
   static MAX_SIZE_BF = 256;
   static FRACTIONS = 60;
   static MULTIPLIER = new FractionDecimal(2).pow(Fraction.FRACTIONS);
+  /** The scaled-fraction representation of `1` (2^60) as a BN, for integer fixed-point arithmetic. */
+  static ONE_SF = new BN(2).pow(new BN(Fraction.FRACTIONS));
 
   static MAX_F_BN = new BN(2).pow(new BN(Fraction.MAX_SIZE_F)).sub(new BN(1));
   static MAX_BF_BN = new BN(2).pow(new BN(Fraction.MAX_SIZE_BF)).sub(new BN(1));
@@ -69,6 +71,47 @@ export class Fraction {
 
   getValue(): BN {
     return this.valueSf;
+  }
+
+  /** A fraction representing the integer `n` (i.e. `n * 2^60`). */
+  static fromInt(n: BN | number): Fraction {
+    return new Fraction((BN.isBN(n) ? n : new BN(n)).mul(Fraction.ONE_SF));
+  }
+
+  add(x: Fraction): Fraction {
+    return new Fraction(this.valueSf.add(x.valueSf));
+  }
+
+  sub(x: Fraction): Fraction {
+    return new Fraction(this.valueSf.sub(x.valueSf));
+  }
+
+  /** Subtraction clamped at zero, mirroring the program's `saturating_sub`. */
+  saturatingSub(x: Fraction): Fraction {
+    const diff = this.valueSf.sub(x.valueSf);
+    return new Fraction(diff.isNeg() ? new BN(0) : diff);
+  }
+
+  /** Fixed-point multiply, truncating toward zero: `floor(a_sf * b_sf / 2^60)`. */
+  mul(x: Fraction): Fraction {
+    return new Fraction(this.valueSf.mul(x.valueSf).div(Fraction.ONE_SF));
+  }
+
+  /** `floor(self * numerator / denominator)`, preserving the fixed-point scale (mirrors `full_mul_int_ratio`). */
+  mulIntRatio(numerator: BN | number, denominator: BN | number): Fraction {
+    const num = BN.isBN(numerator) ? numerator : new BN(numerator);
+    const den = BN.isBN(denominator) ? denominator : new BN(denominator);
+    return new Fraction(this.valueSf.mul(num).div(den));
+  }
+
+  /** The integer floor of this fraction (mirrors `to_floor`). */
+  floorToBn(): BN {
+    return this.valueSf.div(Fraction.ONE_SF);
+  }
+
+  /** The integer ceil of this fraction (mirrors `to_ceil`). */
+  ceilToBn(): BN {
+    return this.valueSf.add(Fraction.ONE_SF).subn(1).div(Fraction.ONE_SF);
   }
 
   gt(x: Fraction): boolean {

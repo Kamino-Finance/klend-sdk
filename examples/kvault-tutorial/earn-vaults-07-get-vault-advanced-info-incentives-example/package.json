@@ -11,6 +11,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@kamino-finance/farms-sdk": "^3.2.24",
     "@kamino-finance/klend-sdk": "link:../../../",
     "@solana-program/compute-budget": "^0.7.0",
     "@solana/kit": "^2.1.1",

@@ -7,7 +7,6 @@ import { borshAddress } from "../utils"
 export interface VaultRewardInfoFields {
   rewardPerSecond: BN
   lastIssuanceTs: BN
-  /** Rewards available to distribute (topped up but not yet moved to vault.token_available) */
   rewardsAvailable: BN
   cumulativeRewardsDistributedAnalytics: BN
   padding: Array<BN>
@@ -16,7 +15,6 @@ export interface VaultRewardInfoFields {
 export interface VaultRewardInfoJSON {
   rewardPerSecond: string
   lastIssuanceTs: string
-  /** Rewards available to distribute (topped up but not yet moved to vault.token_available) */
   rewardsAvailable: string
   cumulativeRewardsDistributedAnalytics: string
   padding: Array<string>
@@ -25,7 +23,6 @@ export interface VaultRewardInfoJSON {
 export class VaultRewardInfo {
   readonly rewardPerSecond: BN
   readonly lastIssuanceTs: BN
-  /** Rewards available to distribute (topped up but not yet moved to vault.token_available) */
   readonly rewardsAvailable: BN
   readonly cumulativeRewardsDistributedAnalytics: BN
   readonly padding: Array<BN>

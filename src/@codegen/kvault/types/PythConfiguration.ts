@@ -5,17 +5,14 @@ import * as borsh from "@coral-xyz/borsh"
 import { borshAddress } from "../utils"
 
 export interface PythConfigurationFields {
-  /** Pubkey of the base price feed (disabled if `null` or `default`) */
   price: Address
 }
 
 export interface PythConfigurationJSON {
-  /** Pubkey of the base price feed (disabled if `null` or `default`) */
   price: string
 }
 
 export class PythConfiguration {
-  /** Pubkey of the base price feed (disabled if `null` or `default`) */
   readonly price: Address
 
   constructor(fields: PythConfigurationFields) {

@@ -4,6 +4,7 @@ import { EXAMPLE_USDC_VAULT, USDC_RESERVE_JLP_MARKET } from '../utils/constants'
 import {
   KaminoManager,
   KaminoVault,
+  Reserve,
   getMedianSlotDurationInMsFromLastEpochs,
   DEFAULT_PUBLIC_KEY,
 } from '@kamino-finance/klend-sdk';
@@ -18,7 +19,18 @@ import { Address } from '@solana/kit';
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
   const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
 
-  const ixs = await kaminoManager.fullRemoveReserveFromVaultIxs(wallet, vault, USDC_RESERVE_JLP_MARKET);
+  const slot = await c.rpc.getSlot().send();
+  const reserveState = await Reserve.fetch(c.rpc, USDC_RESERVE_JLP_MARKET);
+  if (!reserveState) {
+    throw new Error('Reserve not found');
+  }
+  const ixs = await kaminoManager.fullRemoveReserveFromVaultIxs(
+    wallet,
+    vault,
+    USDC_RESERVE_JLP_MARKET,
+    slot,
+    reserveState
+  );
 
   const vaultState = await vault.getState();
   const lookupTableAddresses: Address[] = [];

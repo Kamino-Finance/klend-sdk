@@ -1,0 +1,75 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import {
+  Address,
+  isSome,
+  AccountMeta,
+  AccountSignerMeta,
+  Instruction,
+  Option,
+  TransactionSigner,
+} from "@solana/kit"
+/* eslint-enable @typescript-eslint/no-unused-vars */
+import BN from "bn.js" // eslint-disable-line @typescript-eslint/no-unused-vars
+import * as borsh from "@coral-xyz/borsh" // eslint-disable-line @typescript-eslint/no-unused-vars
+import { borshAddress } from "../utils" // eslint-disable-line @typescript-eslint/no-unused-vars
+import * as types from "../types" // eslint-disable-line @typescript-eslint/no-unused-vars
+import { PROGRAM_ID } from "../programId"
+
+export const DISCRIMINATOR = Buffer.from([87, 255, 30, 4, 156, 230, 167, 126])
+
+export interface SetBorrowOrderV2Args {
+  orderIdx: number
+  orderConfig: types.BorrowOrderConfigArgsFields
+  minExpectedCurrentRemainingDebtAmount: BN
+}
+
+export interface SetBorrowOrderV2Accounts {
+  owner: TransactionSigner
+  obligation: Address
+  lendingMarket: Address
+  reserve: Address
+  filledDebtDestination: Address
+  debtLiquidityMint: Address
+  instructionSysvarAccount: Address
+  eventAuthority: Address
+  program: Address
+}
+
+export const layout = borsh.struct([
+  borsh.u8("orderIdx"),
+  types.BorrowOrderConfigArgs.layout("orderConfig"),
+  borsh.u64("minExpectedCurrentRemainingDebtAmount"),
+])
+
+export function setBorrowOrderV2(
+  args: SetBorrowOrderV2Args,
+  accounts: SetBorrowOrderV2Accounts,
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta> = [],
+  programAddress: Address = PROGRAM_ID
+) {
+  const keys: Array<AccountMeta | AccountSignerMeta> = [
+    { address: accounts.owner.address, role: 2, signer: accounts.owner },
+    { address: accounts.obligation, role: 1 },
+    { address: accounts.lendingMarket, role: 0 },
+    { address: accounts.reserve, role: 0 },
+    { address: accounts.filledDebtDestination, role: 0 },
+    { address: accounts.debtLiquidityMint, role: 0 },
+    { address: accounts.instructionSysvarAccount, role: 0 },
+    { address: accounts.eventAuthority, role: 0 },
+    { address: accounts.program, role: 0 },
+    ...remainingAccounts,
+  ]
+  const buffer = Buffer.alloc(1000)
+  const len = layout.encode(
+    {
+      orderIdx: args.orderIdx,
+      orderConfig: types.BorrowOrderConfigArgs.toEncodable(args.orderConfig),
+      minExpectedCurrentRemainingDebtAmount:
+        args.minExpectedCurrentRemainingDebtAmount,
+    },
+    buffer
+  )
+  const data = Buffer.concat([DISCRIMINATOR, buffer]).slice(0, 8 + len)
+  const ix: Instruction = { accounts: keys, programAddress, data }
+  return ix
+}

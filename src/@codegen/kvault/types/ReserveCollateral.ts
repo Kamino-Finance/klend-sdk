@@ -5,34 +5,24 @@ import * as borsh from "@coral-xyz/borsh"
 import { borshAddress } from "../utils"
 
 export interface ReserveCollateralFields {
-  /** Reserve collateral mint address */
   mintPubkey: Address
-  /** Reserve collateral mint supply, used for exchange rate */
   mintTotalSupply: BN
-  /** Reserve collateral supply address */
   supplyVault: Address
   padding1: Array<BN>
   padding2: Array<BN>
 }
 
 export interface ReserveCollateralJSON {
-  /** Reserve collateral mint address */
   mintPubkey: string
-  /** Reserve collateral mint supply, used for exchange rate */
   mintTotalSupply: string
-  /** Reserve collateral supply address */
   supplyVault: string
   padding1: Array<string>
   padding2: Array<string>
 }
 
-/** Reserve collateral */
 export class ReserveCollateral {
-  /** Reserve collateral mint address */
   readonly mintPubkey: Address
-  /** Reserve collateral mint supply, used for exchange rate */
   readonly mintTotalSupply: BN
-  /** Reserve collateral supply address */
   readonly supplyVault: Address
   readonly padding1: Array<BN>
   readonly padding2: Array<BN>

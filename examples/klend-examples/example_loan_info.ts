@@ -1,6 +1,6 @@
 import { getConnectionPool } from '../utils/connection';
-import { KaminoObligation, ObligationStats } from '@kamino-finance/klend-sdk';
-import { EXAMPLE_OBLIGATION, MAIN_MARKET } from '../utils/constants';
+import { KaminoObligation, ObligationStats, calculateAPYFromAPR } from '@kamino-finance/klend-sdk';
+import { EXAMPLE_OBLIGATION, MAIN_MARKET, PYUSD_RESERVE_MAIN_MARKET } from '../utils/constants';
 import { getLoan, getMarket } from '../utils/helpers';
 import { address } from '@solana/kit';
 
@@ -13,6 +13,8 @@ import { address } from '@solana/kit';
     obligationPubkey: EXAMPLE_OBLIGATION,
     marketPubkey: MAIN_MARKET,
   };
+
+  const pyusdReserveAddress = PYUSD_RESERVE_MAIN_MARKET;
 
   const market = await getMarket(args);
   const loan: KaminoObligation | null = await getLoan(args);
@@ -35,11 +37,9 @@ import { address } from '@solana/kit';
   console.log(`LTV: ${loan!.loanToValue().toNumber() * 100}%`);
   console.log(`liquidation LTV threshold: ${loanStats.liquidationLtv.toFixed(2)}`);
 
-  console.log(
-    `Max withdraw amount : ${loan
-      .getMaxWithdrawAmount(market, address('2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo'), currentSlot)
-      .toFixed(2)}`
-  );
+  const maxWithdraw = loan.getMaxWithdrawAmount(market, pyusdReserveAddress, currentSlot);
+  console.log(`Max withdraw amount: ${maxWithdraw.maxWithdrawAmount.toFixed(2)}`);
+  console.log(`Max withdraw amount (via withdrawal queues): ${maxWithdraw.maxWithdrawAmountQueue.toFixed(2)}`);
 
   console.log(`Borrow limt; ${loanStats.borrowLimit.toFixed(2)}`);
   console.log(`Loan MAX LTV: ${loanStats.borrowLimit.div(loanStats.userTotalCollateralDeposit).toFixed(2)}`);
@@ -48,7 +48,7 @@ import { address } from '@solana/kit';
   console.log('\nBreakdown:');
   // Print all deposits
   loan.deposits.forEach((deposit) => {
-    const reserve = market.getReserveByMint(deposit.mintAddress);
+    const reserve = market.getReserveByAddress(deposit.reserveAddress);
     if (!reserve) {
       console.error(`reserve not found for ${deposit.mintAddress.toString()}`);
       return;
@@ -61,16 +61,26 @@ import { address } from '@solana/kit';
     );
     const reserveSupplyApr = reserve.calculateSupplyAPR(currentSlot, market.state.referralFeeBps);
     const reserveSupplyApy = reserve.totalSupplyAPY(currentSlot);
+    // Reserve-rewards distribution: extra supply-side yield from the reserve's on-chain rewards budget
+    // (raises the cToken exchange rate, like interest). This is the rate earned right now — zero once the
+    // budget runs dry; see calculateTheoreticalReserveRewardsSupplyAPR for the configured rate.
+    const reserveRewardsApr = reserve.calculateEffectiveReserveRewardsSupplyAPR(currentSlot, 0);
+    const reserveRewardsApy = calculateAPYFromAPR(reserveRewardsApr);
     console.log(
       `RESERVE ${reserve.symbol} SUPPLY APY: ${(reserveSupplyApy * 100).toFixed(2)}% APR: ${(
         reserveSupplyApr * 100
+      ).toFixed(2)}%`
+    );
+    console.log(
+      `RESERVE ${reserve.symbol} REWARDS DISTRIBUTION APY: ${(reserveRewardsApy * 100).toFixed(2)}% APR: ${(
+        reserveRewardsApr * 100
       ).toFixed(2)}%`
     );
   });
 
   // Print all borrows
   loan.borrows.forEach((borrow) => {
-    const reserve = market.getReserveByMint(borrow.mintAddress);
+    const reserve = market.getReserveByAddress(borrow.reserveAddress);
     if (!reserve) {
       console.error(`reserve not found for ${borrow.mintAddress.toString()}`);
       return;

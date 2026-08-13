@@ -9,14 +9,17 @@ import { sendAndConfirmTx } from '../utils/tx';
   const c = getConnectionPool();
   const wallet = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+  const slot = await c.rpc.getSlot().send();
 
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
   const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
 
-  const investAllResvesIxs = await kaminoManager.investAllReservesIxs(wallet, vault);
-
   // read the vault state so we can use the LUT in the tx
   const vaultState = await vault.getState();
+
+  const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
+
+  const investAllResvesIxs = await kaminoManager.investAllReservesIxs(wallet, vault, slot);
 
   // Note: for a vault with many reserves this may not fit in a single transaction so you will need to split the instructions into multiple transactions but the transactions must preserve the order of the instructions
   await sendAndConfirmTx(c, wallet, investAllResvesIxs, [], [vaultState.vaultLookupTable], 'Invest All Reserves');

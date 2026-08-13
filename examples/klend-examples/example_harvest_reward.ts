@@ -1,6 +1,6 @@
 import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
-import { MAIN_MARKET, PYUSD_MINT } from '../utils/constants';
+import { MAIN_MARKET, PYUSD_RESERVE_MAIN_MARKET } from '../utils/constants';
 import { loadReserveData } from '../utils/helpers';
 import { Farms } from '@kamino-finance/farms-sdk';
 import { sendAndConfirmTx } from '../utils/tx';
@@ -11,11 +11,15 @@ import { sendAndConfirmTx } from '../utils/tx';
 
   const farm = new Farms(c.rpc);
 
-  const { reserve: pyusdReserve } = await loadReserveData({
-    rpc: c.rpc,
-    marketPubkey: MAIN_MARKET,
-    mintPubkey: PYUSD_MINT,
-  });
+  const slot = await c.rpc.getSlot().send();
+  const { reserve: pyusdReserve } = await loadReserveData(
+    {
+      rpc: c.rpc,
+      marketPubkey: MAIN_MARKET,
+      reserveAddress: PYUSD_RESERVE_MAIN_MARKET,
+    },
+    slot
+  );
 
   // Get all farms that the user is eligible to harvest rewards from
   let txInstructions = await farm.claimForUserForFarmAllRewardsIx(

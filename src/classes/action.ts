@@ -3,6 +3,7 @@ import {
   Address,
   fetchEncodedAccount,
   AccountMeta,
+  AccountSignerMeta,
   Instruction,
   isNone,
   isSome,
@@ -15,6 +16,9 @@ import {
 import BN from 'bn.js';
 import Decimal from 'decimal.js';
 import {
+  abortObligationOwnershipTransfer,
+  acceptObligationOwnership,
+  approveObligationOwnershipTransfer,
   borrowObligationLiquidity,
   borrowObligationLiquidityV2,
   depositAndWithdraw,
@@ -23,6 +27,9 @@ import {
   depositReserveLiquidity,
   depositReserveLiquidityAndObligationCollateral,
   depositReserveLiquidityAndObligationCollateralV2,
+  enqueueToWithdraw,
+  fillBorrowOrderV2,
+  initiateObligationOwnershipTransfer,
   initObligation,
   initObligationFarmsForReserve,
   InitObligationFarmsForReserveAccounts,
@@ -43,9 +50,15 @@ import {
   requestElevationGroup,
   RequestElevationGroupAccounts,
   RequestElevationGroupArgs,
+  rolloverFixedTermBorrow,
+  setBorrowOrderV2,
   setObligationOrder,
+  updateObligationConfig,
+  type UpdateObligationConfigAccounts,
   withdrawObligationCollateralAndRedeemReserveCollateral,
   withdrawObligationCollateralAndRedeemReserveCollateralV2,
+  withdrawObligationCollateralV2,
+  withdrawQueuedLiquidity,
   withdrawReferrerFees,
 } from '../@codegen/klend/instructions';
 import {
@@ -55,20 +68,26 @@ import {
   createLookupTableIx,
   DEFAULT_PUBLIC_KEY,
   getAssociatedTokenAddress,
+  getEventAuthorityPda,
+  globalConfigPda,
   isNotNullPubkey,
   obligationFarmStatePda,
   ObligationType,
+  ownerQueuedCollateralVaultPda,
   referrerTokenStatePda,
   ScopePriceRefreshConfig,
   SOL_PADDING_FOR_INTEREST,
   U64_MAX,
   userMetadataPda,
+  withdrawTicketPda,
   WRAPPED_SOL_MINT,
 } from '../utils';
+import { KaminoBorrowOrder } from './borrowOrder';
+import { FixedRateReserveKind } from '../utils/ReserveKind';
 import { getTokenIdsForScopeRefresh, KaminoMarket } from './market';
 import { isKaminoObligation, KaminoObligation } from './obligation';
 import { KaminoReserve } from './reserve';
-import { ReserveFarmKind } from '../@codegen/klend/types';
+import { ProgressCallbackType, ReserveFarmKind, UpdateObligationConfigMode } from '../@codegen/klend/types';
 import { Reserve } from '../@codegen/klend/accounts';
 import { VanillaObligation } from '../utils/ObligationType';
 import { Scope } from '@kamino-finance/scope-sdk';
@@ -82,6 +101,30 @@ import {
 } from '@solana-program/token-2022';
 import { getTransferSolInstruction, SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
 import { noopSigner } from '../utils/signer';
+import {
+  BuildDepositTxnsProps,
+  BuildBorrowTxnsProps,
+  BuildBorrowRolloverConfigIxsProps,
+  BuildDepositReserveLiquidityTxnsProps,
+  BuildRedeemReserveCollateralTxnsProps,
+  BuildWithdrawTxnsProps,
+  BuildWithdrawFromObligationAndEnqueueTxnsProps,
+  BuildRepayTxnsProps,
+  BuildDepositAndBorrowTxnsProps,
+  BuildRefreshObligationTxnsProps,
+  BuildRolloverFixedTermBorrowTxnsProps,
+  BuildRequestElevationGroupTxnsProps,
+  BuildDepositAndWithdrawV2TxnsProps,
+  BuildRepayAndWithdrawTxnsProps,
+  BuildRepayAndWithdrawV2TxnsProps,
+  BuildLiquidateTxnsProps,
+  BuildWithdrawReferrerFeeTxnsProps,
+  BuildDepositObligationCollateralTxnsProps,
+  BuildDepositAndSetBorrowOrderTxnsProps,
+  BuildDepositAndFillBorrowOrderTxnsProps,
+  InitializeActionProps,
+  ObligationCustomizations,
+} from './actionTypes';
 
 export type ActionType =
   | 'deposit'
@@ -98,9 +141,37 @@ export type ActionType =
   | 'requestElevationGroup'
   | 'withdrawReferrerFees'
   | 'repayAndWithdrawV2'
-  | 'depositAndWithdraw';
+  | 'depositAndWithdraw'
+  | 'withdrawAndEnqueue'
+  | 'setBorrowOrder'
+  | 'fillBorrowOrder';
 
 export type AuxiliaryIx = 'setup' | 'inBetween' | 'cleanup';
+type InitUserMetadataConfig = { skipInitialization: boolean; skipLutCreation: boolean };
+
+interface InstructionBundle {
+  ixs: Instruction[];
+  labels: string[];
+  luts: Address[];
+}
+
+interface AddSupportIxsOptions {
+  action: ActionType;
+  includeAtaIxs: boolean;
+  requestElevationGroup?: boolean;
+  addInitObligationForFarm?: boolean;
+  useV2Ixs: boolean;
+  scopeRefreshConfig: ScopePriceRefreshConfig | undefined;
+  initUserMetadata: InitUserMetadataConfig;
+  twoTokenAction?: boolean;
+  overrideElevationGroupRequest?: number;
+  addUserAndObligationInitIxs?: boolean;
+}
+
+interface DepositSupportIxsOptions {
+  addUserAndObligationInitIxs?: boolean;
+  addInitObligationForFarm?: boolean;
+}
 
 export class KaminoAction {
   kaminoMarket: KaminoMarket;
@@ -135,12 +206,16 @@ export class KaminoAction {
 
   setupIxs: Array<Instruction>;
   setupIxsLabels: Array<string>;
+  luts: Array<Address>;
 
   inBetweenIxs: Array<Instruction>;
   inBetweenIxsLabels: Array<string>;
 
   lendingIxs: Array<Instruction>;
   lendingIxsLabels: Array<string>;
+
+  postLendingIxs: Array<Instruction>;
+  postLendingIxsLabels: Array<string>;
 
   cleanupIxs: Array<Instruction>;
   cleanupIxsLabels: Array<string>;
@@ -154,6 +229,8 @@ export class KaminoAction {
   preLoadedDepositReservesSameTx: Array<Address>;
 
   currentSlot: Slot;
+
+  permissionAuthority?: TransactionSigner;
 
   private constructor(
     kaminoMarket: KaminoMarket,
@@ -170,7 +247,8 @@ export class KaminoAction {
     outflowReserveState?: KaminoReserve,
     outflowAmount?: string | BN,
     referrer: Option<Address> = none(),
-    payer?: TransactionSigner
+    payer?: TransactionSigner,
+    permissionAuthority?: TransactionSigner
   ) {
     this.kaminoMarket = kaminoMarket;
     this.obligation = obligation;
@@ -183,10 +261,13 @@ export class KaminoAction {
     this.computeBudgetIxsLabels = [];
     this.setupIxs = [];
     this.setupIxsLabels = [];
+    this.luts = [];
     this.inBetweenIxs = [];
     this.inBetweenIxsLabels = [];
     this.lendingIxs = [];
     this.lendingIxsLabels = [];
+    this.postLendingIxs = [];
+    this.postLendingIxsLabels = [];
     this.cleanupIxs = [];
     this.cleanupIxsLabels = [];
     this.refreshFarmsCleanupTxnIxs = [];
@@ -200,22 +281,42 @@ export class KaminoAction {
     this.preLoadedDepositReservesSameTx = [];
     this.referrer = referrer;
     this.currentSlot = currentSlot;
+    this.permissionAuthority = permissionAuthority;
   }
 
-  static async initialize(
-    action: ActionType,
-    amount: string | BN,
-    mint: Address,
-    owner: TransactionSigner,
-    kaminoMarket: KaminoMarket,
-    obligation: KaminoObligation | ObligationType,
-    referrer: Option<Address> = none(),
-    currentSlot: Slot = 0n,
-    payer: TransactionSigner = owner
-  ) {
-    const reserve = kaminoMarket.getReserveByMint(mint);
+  private appendLendingIx(ix: Instruction): void {
+    if (!this.permissionAuthority) {
+      this.lendingIxs.push(ix);
+      return;
+    }
+    const permissioner: AccountSignerMeta = {
+      address: this.permissionAuthority.address,
+      role: AccountRole.READONLY_SIGNER,
+      signer: this.permissionAuthority,
+    };
+    this.lendingIxs.push({
+      ...ix,
+      accounts: (ix.accounts ?? []).concat(permissioner),
+    });
+  }
+
+  static async initialize(props: InitializeActionProps) {
+    const {
+      kaminoMarket,
+      action,
+      amount,
+      reserveAddress,
+      owner,
+      obligation,
+      referrer = none(),
+      currentSlot,
+      payer = owner,
+      permissionAuthority = undefined,
+    } = props;
+
+    const reserve = kaminoMarket.getReserveByAddress(reserveAddress);
     if (reserve === undefined) {
-      throw new Error(`Reserve ${mint} not found in market ${kaminoMarket.getAddress()}`);
+      throw new Error(`Reserve ${reserveAddress} not found in market ${kaminoMarket.getAddress()}`);
     }
 
     const { kaminoObligation, depositReserves, borrowReserves, distinctReserveCount } =
@@ -227,7 +328,7 @@ export class KaminoAction {
       kaminoMarket,
       owner,
       kaminoObligation || obligation,
-      mint,
+      reserve.getLiquidityMint(),
       distinctReserveCount,
       amount,
       depositReserves,
@@ -238,7 +339,8 @@ export class KaminoAction {
       undefined,
       undefined,
       referrerKey,
-      payer
+      payer,
+      permissionAuthority
     );
   }
 
@@ -308,29 +410,23 @@ export class KaminoAction {
     };
   }
 
-  static async buildRefreshObligationTxns(
-    kaminoMarket: KaminoMarket,
-    payer: TransactionSigner,
-    obligation: KaminoObligation,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
-    currentSlot: Slot = 0n
-  ) {
+  static async buildRefreshObligationTxns(props: BuildRefreshObligationTxnsProps) {
+    const { kaminoMarket, payer, obligation, extraComputeBudget = 1_000_000, currentSlot } = props;
     //  placeholder for action initialization
     const firstReserve = obligation.getDeposits()[0].reserveAddress;
     const firstKaminoReserve = kaminoMarket.getReserveByAddress(firstReserve);
     if (!firstKaminoReserve) {
       throw new Error(`Reserve ${firstReserve} not found`);
     }
-    const axn = await KaminoAction.initialize(
-      'refreshObligation',
-      '0',
-      firstKaminoReserve?.getLiquidityMint(),
-      noopSigner(obligation.state.owner), // owner does not need to sign for refresh
+    const axn = await KaminoAction.initialize({
       kaminoMarket,
+      action: 'refreshObligation',
+      amount: '0',
+      reserveAddress: firstKaminoReserve.address,
+      owner: noopSigner(obligation.state.owner), // owner does not need to sign for refresh
       obligation,
-      undefined,
-      currentSlot
-    );
+      currentSlot,
+    });
 
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIx(extraComputeBudget);
@@ -341,29 +437,22 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildRequestElevationGroupTxns(
-    kaminoMarket: KaminoMarket,
-    owner: TransactionSigner,
-    obligation: KaminoObligation,
-    elevationGroup: number,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
-    currentSlot: Slot = 0n
-  ) {
+  static async buildRequestElevationGroupTxns(props: BuildRequestElevationGroupTxnsProps) {
+    const { kaminoMarket, owner, obligation, elevationGroup, extraComputeBudget = 1_000_000, currentSlot } = props;
     const firstReserve = obligation.state.deposits.find((x) => x.depositReserve !== DEFAULT_PUBLIC_KEY)!.depositReserve;
     const firstKaminoReserve = kaminoMarket.getReserveByAddress(firstReserve);
     if (!firstKaminoReserve) {
       throw new Error(`Reserve ${firstReserve} not found`);
     }
-    const axn = await KaminoAction.initialize(
-      'requestElevationGroup',
-      '0',
-      firstKaminoReserve?.getLiquidityMint(),
-      owner,
+    const axn = await KaminoAction.initialize({
       kaminoMarket,
+      action: 'requestElevationGroup',
+      amount: '0',
+      reserveAddress: firstKaminoReserve.address,
+      owner,
       obligation,
-      undefined,
-      currentSlot
-    );
+      currentSlot,
+    });
 
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIx(extraComputeBudget);
@@ -375,52 +464,63 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildDepositTxns(
-    kaminoMarket: KaminoMarket,
-    amount: string | BN,
-    mint: Address,
-    owner: TransactionSigner,
-    obligation: KaminoObligation | ObligationType,
-    useV2Ixs: boolean,
-    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
-    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
-    requestElevationGroup: boolean = false, // to be requested *before* the deposit
-    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
-      skipInitialization: false,
-      skipLutCreation: false,
-    },
-    referrer: Option<Address> = none(),
-    currentSlot: Slot = 0n,
-    overrideElevationGroupRequest: number | undefined = undefined // if set, when an elevationgroup request is made, it will use this value
+  static async buildDepositTxns(props: BuildDepositTxnsProps) {
+    return KaminoAction.buildDepositTxnsInternal(props);
+  }
+
+  private static async buildDepositTxnsInternal(
+    props: BuildDepositTxnsProps,
+    supportOptions: DepositSupportIxsOptions = {}
   ) {
-    const axn = await KaminoAction.initialize(
-      'deposit',
-      amount,
-      mint,
-      owner,
+    const {
       kaminoMarket,
+      amount,
+      reserveAddress,
+      owner,
+      obligation,
+      useV2Ixs,
+      scopeRefreshConfig,
+      extraComputeBudget = 1_000_000,
+      includeAtaIxs = true,
+      requestElevationGroup = false,
+      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
+      referrer = none(),
+      currentSlot,
+      overrideElevationGroupRequest,
+      permissionAuthority = undefined,
+      obligationCustomizations,
+    } = props;
+
+    const axn = await KaminoAction.initialize({
+      kaminoMarket,
+      action: 'deposit',
+      amount,
+      reserveAddress,
+      owner,
       obligation,
       referrer,
-      currentSlot
-    );
-    const addInitObligationForFarm = true;
+      currentSlot,
+      permissionAuthority,
+    });
+    applyObligationCustomizations(axn, obligationCustomizations);
+    const addInitObligationForFarm = supportOptions.addInitObligationForFarm ?? true;
+    const addUserAndObligationInitIxs = supportOptions.addUserAndObligationInitIxs ?? true;
 
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIx(extraComputeBudget);
     }
 
-    await axn.addSupportIxs(
-      'deposit',
+    await axn.addSupportIxs({
+      action: 'deposit',
       includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarm,
       useV2Ixs,
       scopeRefreshConfig,
       initUserMetadata,
-      undefined,
-      overrideElevationGroupRequest
-    );
+      overrideElevationGroupRequest,
+      addUserAndObligationInitIxs,
+    });
     if (useV2Ixs) {
       await axn.addDepositIxV2();
     } else {
@@ -431,6 +531,188 @@ export class KaminoAction {
     return axn;
   }
 
+  static async buildDepositAndSetBorrowOrderTxns(props: BuildDepositAndSetBorrowOrderTxnsProps) {
+    const { borrowOrder, orderIdx, minExpectedCurrentRemainingDebtAmount, ...depositProps } = props;
+
+    const axn = await KaminoAction.buildDepositTxns(depositProps);
+
+    const obligationAddress = await axn.getObligationPda();
+    const setBorrowOrderIxs = await KaminoAction.buildSetBorrowOrderIxs(
+      props.owner,
+      props.kaminoMarket,
+      obligationAddress,
+      borrowOrder,
+      orderIdx,
+      minExpectedCurrentRemainingDebtAmount
+    );
+    axn.postLendingIxs.push(...setBorrowOrderIxs);
+    axn.postLendingIxsLabels.push('setBorrowOrder');
+
+    return axn;
+  }
+
+  /**
+   * Builds a transaction that rolls an existing borrow over from one reserve into another (the
+   * `rolloverFixedTermBorrow` instruction). The target reserve may be fixed-term or variable/open-term.
+   * The program requires a single signer (the `payer`) but not specifically the obligation owner, so the
+   * transaction can be signed by the owner directly or cranked by a keeper.
+   *
+   * The returned action includes the setup refresh/farm-init instructions and the rollover instruction.
+   * The program enforces several additional rollover preconditions at execution time (shared liquidity
+   * mint, rollover config opt-in, matching borrow factor, target rate/term limits, the market's rollover
+   * execution window, etc.) that this method does not pre-validate; a violation fails the transaction.
+   * Rollover is configured on the borrow via {@link KaminoAction.buildBorrowRolloverConfigIxs}.
+   */
+  static async buildRolloverFixedTermBorrowTxns(props: BuildRolloverFixedTermBorrowTxnsProps) {
+    const {
+      kaminoMarket,
+      obligation,
+      sourceReserveAddress,
+      targetReserveAddress,
+      payer,
+      scopeRefreshConfig,
+      extraComputeBudget = 1_000_000,
+      currentSlot,
+    } = props;
+
+    const sourceReserve = kaminoMarket.getReserveByAddress(sourceReserveAddress);
+    if (!sourceReserve) {
+      throw new Error(`Source reserve ${sourceReserveAddress} not found in market ${kaminoMarket.getAddress()}`);
+    }
+    const targetReserve = kaminoMarket.getReserveByAddress(targetReserveAddress);
+    if (!targetReserve) {
+      throw new Error(`Target reserve ${targetReserveAddress} not found in market ${kaminoMarket.getAddress()}`);
+    }
+
+    // The rollover only ever moves liquidity between the two reserves' vaults (it never touches a user
+    // token account), so the program rejects a mint mismatch. Fail early with a clearer message.
+    if (sourceReserve.getLiquidityMint() !== targetReserve.getLiquidityMint()) {
+      throw new Error(
+        `Rollover target reserve ${targetReserveAddress} liquidity mint ${targetReserve.getLiquidityMint()} does not match source reserve ${sourceReserveAddress} mint ${sourceReserve.getLiquidityMint()}`
+      );
+    }
+
+    const axn = await KaminoAction.initialize({
+      kaminoMarket,
+      action: 'refreshObligation',
+      amount: '0',
+      reserveAddress: sourceReserve.address,
+      // The rollover's only signer is `payer`; this owner slot just supplies the owner pubkey for
+      // PDA/account derivation and never signs (the caller passes the owner as `payer` if they sign).
+      owner: noopSigner(obligation.state.owner),
+      obligation,
+      currentSlot,
+      payer,
+    });
+
+    if (extraComputeBudget > 0) {
+      axn.addComputeBudgetIx(extraComputeBudget);
+    }
+
+    await axn.addRolloverFixedTermBorrowSupportIxs(sourceReserve, targetReserve, scopeRefreshConfig);
+    await axn.addRolloverFixedTermBorrowIx(sourceReserve, targetReserve);
+
+    return axn;
+  }
+
+  /**
+   * Emits the setup instructions for a rollover: refreshes every reserve the obligation touches (plus the
+   * source and target), then refreshes the obligation. No farm-refresh instructions are emitted - the
+   * `rolloverFixedTermBorrow` handler refreshes the source and target debt farms internally. The source's
+   * and target's debt obligation farm-user-states are initialized first if missing, since that internal
+   * refresh loads them and fails if absent (the source's usually already exists from its borrow, but not
+   * guaranteed if its debt farm was added later); both inits are idempotent no-ops when already present.
+   *
+   * When a {@link ScopePriceRefreshConfig} is provided, the Scope price refresh is prepended so the reserve
+   * refreshes below (which read the Scope feed) succeed for Scope-priced reserves.
+   */
+  private async addRolloverFixedTermBorrowSupportIxs(
+    sourceReserve: KaminoReserve,
+    targetReserve: KaminoReserve,
+    scopeRefreshConfig: ScopePriceRefreshConfig | undefined
+  ): Promise<void> {
+    // The source's and target's existence checks are independent, so run them concurrently; append the ixs
+    // source-then-target afterwards to keep the emitted order deterministic.
+    const [sourceInitIxs, targetInitIxs] = await Promise.all([
+      this.buildInitObligationForFarmIxs(sourceReserve, ReserveFarmKind.Debt),
+      this.buildInitObligationForFarmIxs(targetReserve, ReserveFarmKind.Debt),
+    ]);
+    this.pushInitObligationForFarmIxs([...sourceInitIxs, ...targetInitIxs], 'setup');
+
+    // Refresh every reserve the obligation touches (the source is already among its borrows) plus the
+    // target, which may be new to the obligation.
+    const reservesToRefresh = [
+      ...new Set<Address>([...this.depositReserves, ...this.borrowReserves, targetReserve.address]),
+    ];
+
+    // For Scope-priced reserves the refreshReserve ixs below read the Scope price feed, which must have been
+    // refreshed earlier in the transaction; prepend the Scope refresh covering this same reserve set (the
+    // target included). addScopeRefreshIxs unshifts, so it lands ahead of the reserve refreshes.
+    const scopeTokensMap = getTokenIdsForScopeRefresh(this.kaminoMarket, reservesToRefresh);
+    if (scopeTokensMap.size > 0 && scopeRefreshConfig) {
+      for (const [configPubkey, config] of scopeRefreshConfig.scopeConfigurations) {
+        const tokenIds = scopeTokensMap.get(config.oraclePrices);
+        if (tokenIds && tokenIds.length > 0) {
+          await this.addScopeRefreshIxs(scopeRefreshConfig.scope, tokenIds, configPubkey);
+        }
+      }
+    }
+
+    this.addRefreshReserveIxs(reservesToRefresh, 'setup');
+
+    // refresh_obligation only validates the obligation's current reserves, so the target is intentionally
+    // not added here (it is refreshed as a reserve above).
+    await this.addRefreshObligationIx('setup');
+  }
+
+  /**
+   * Appends the `rolloverFixedTermBorrow` instruction, resolving the source/target reserve vaults and
+   * their debt-farm accounts (the on-chain handler refreshes debt farms only).
+   */
+  private async addRolloverFixedTermBorrowIx(
+    sourceReserve: KaminoReserve,
+    targetReserve: KaminoReserve
+  ): Promise<void> {
+    const farmsProgramId = this.kaminoMarket.farmsProgramId;
+
+    const [obligationPda, lendingMarketAuthority] = await Promise.all([
+      this.getObligationPda(),
+      this.kaminoMarket.getLendingMarketAuthority(),
+    ]);
+    // Source and target farm accounts are independent, so resolve them concurrently.
+    const [{ debtFarmAccounts: sourceFarmsAccounts }, { debtFarmAccounts: targetFarmsAccounts }] = await Promise.all([
+      KaminoAction.getFarmAccountsForReserve(obligationPda, sourceReserve, farmsProgramId),
+      KaminoAction.getFarmAccountsForReserve(obligationPda, targetReserve, farmsProgramId),
+    ]);
+
+    const rolloverIx = rolloverFixedTermBorrow(
+      {
+        rolloverAccounts: {
+          payer: this.payer,
+          obligation: obligationPda,
+          lendingMarket: this.kaminoMarket.getAddress(),
+          lendingMarketAuthority,
+          sourceBorrowReserve: sourceReserve.address,
+          targetBorrowReserve: targetReserve.address,
+          liquidityMint: sourceReserve.getLiquidityMint(),
+          sourceBorrowReserveLiquidity: sourceReserve.state.liquidity.supplyVault,
+          targetBorrowReserveLiquidity: targetReserve.state.liquidity.supplyVault,
+          tokenProgram: sourceReserve.getLiquidityTokenProgram(),
+        },
+        sourceFarmsAccounts,
+        targetFarmsAccounts,
+        farmsProgram: farmsProgramId,
+      },
+      undefined,
+      this.kaminoMarket.programId
+    );
+
+    this.lendingIxs.push(rolloverIx);
+    this.lendingIxsLabels.push(
+      `rolloverFixedTermBorrow[source=${sourceReserve.address}, target=${targetReserve.address}]`
+    );
+  }
+
   async addScopeRefreshIxs(scope: Scope, tokens: number[], scopeConfig: Address) {
     const refreshIx = await scope.refreshPriceListIx({ config: scopeConfig }, tokens);
     if (refreshIx) {
@@ -439,35 +721,69 @@ export class KaminoAction {
     }
   }
 
-  static async buildBorrowTxns(
-    kaminoMarket: KaminoMarket,
-    amount: string | BN,
-    mint: Address,
-    owner: TransactionSigner,
-    obligation: KaminoObligation | ObligationType,
-    useV2Ixs: boolean,
+  /**
+   * Add the opt-in borrow support instructions used when creating and filling a borrow order from vaults.
+   * These setup instructions mirror the borrow builder's user-metadata initialization, elevation switching,
+   * and Scope refresh flow for an existing obligation.
+   */
+  async addBorrowOrderSupportIxs(
     scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
-    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
-    requestElevationGroup: boolean = false,
     initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
       skipInitialization: false,
       skipLutCreation: false,
     },
-    referrer: Option<Address> = none(),
-    currentSlot: Slot = 0n,
-    overrideElevationGroupRequest: number | undefined = undefined // if set, when an elevationgroup request is made, it will use this value
+    requestElevationGroup: boolean = false,
+    overrideElevationGroupRequest?: number
   ) {
-    const axn = await KaminoAction.initialize(
-      'borrow',
-      amount,
-      mint,
-      owner,
+    if (!isKaminoObligation(this.obligation)) {
+      throw new Error('Borrow order support ixs require an existing KaminoObligation');
+    }
+
+    await this.maybeAddUserMetadataIxs(initUserMetadata);
+
+    if (requestElevationGroup) {
+      const newElevationGroup = this.getBorrowElevationGroupRequest(overrideElevationGroupRequest);
+      if (newElevationGroup !== undefined) {
+        await this.addBorrowElevationSupportIxs(newElevationGroup, 'setup', true);
+      }
+    }
+
+    await this.addSupportScopeRefreshIxs(scopeRefreshConfig);
+  }
+
+  static async buildBorrowTxns(props: BuildBorrowTxnsProps) {
+    const {
       kaminoMarket,
+      amount,
+      reserveAddress,
+      owner,
+      obligation,
+      useV2Ixs,
+      scopeRefreshConfig,
+      extraComputeBudget = 1_000_000,
+      includeAtaIxs = true,
+      requestElevationGroup = false,
+      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
+      referrer = none(),
+      currentSlot,
+      overrideElevationGroupRequest,
+      rollOver = false,
+      permissionAuthority = undefined,
+      obligationCustomizations,
+    } = props;
+
+    const axn = await KaminoAction.initialize({
+      kaminoMarket,
+      action: 'borrow',
+      amount,
+      reserveAddress,
+      owner,
       obligation,
       referrer,
-      currentSlot
-    );
+      currentSlot,
+      permissionAuthority,
+    });
+    applyObligationCustomizations(axn, obligationCustomizations);
     const addInitObligationForFarm = true;
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIx(extraComputeBudget);
@@ -485,156 +801,160 @@ export class KaminoAction {
       }
     }
 
-    await axn.addSupportIxs(
-      'borrow',
+    await axn.addSupportIxs({
+      action: 'borrow',
       includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarm,
       useV2Ixs,
       scopeRefreshConfig,
       initUserMetadata,
-      undefined,
-      overrideElevationGroupRequest
-    );
+      overrideElevationGroupRequest,
+    });
     if (useV2Ixs) {
       await axn.addBorrowIxV2();
     } else {
       await axn.addBorrowIx();
     }
+    if (rollOver && axn.reserve.getKind().isFixedRate()) {
+      await axn.addBorrowRolloverConfigIxs();
+    }
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
 
     return axn;
   }
 
-  static async buildDepositReserveLiquidityTxns(
-    kaminoMarket: KaminoMarket,
-    amount: string | BN,
-    mint: Address,
-    owner: TransactionSigner,
-    obligation: KaminoObligation | ObligationType,
-    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
-    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas
-    requestElevationGroup: boolean = false,
-    referrer: Option<Address> = none(),
-    currentSlot: Slot = 0n
-  ) {
-    const axn = await KaminoAction.initialize(
-      'mint',
-      amount,
-      mint,
-      owner,
+  static async buildDepositReserveLiquidityTxns(props: BuildDepositReserveLiquidityTxnsProps) {
+    const {
       kaminoMarket,
+      amount,
+      reserveAddress,
+      owner,
+      obligation,
+      scopeRefreshConfig,
+      extraComputeBudget = 1_000_000,
+      includeAtaIxs = true,
+      requestElevationGroup = false,
+      referrer = none(),
+      currentSlot,
+      permissionAuthority = undefined,
+    } = props;
+
+    const axn = await KaminoAction.initialize({
+      kaminoMarket,
+      action: 'mint',
+      amount,
+      reserveAddress,
+      owner,
       obligation,
       referrer,
-      currentSlot
-    );
-    const addInitObligationForFarm = true;
-
+      currentSlot,
+      permissionAuthority,
+    });
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIx(extraComputeBudget);
     }
 
-    await axn.addSupportIxs(
-      'mint',
+    await axn.addSupportIxs({
+      action: 'mint',
       includeAtaIxs,
       requestElevationGroup,
-      false,
-      addInitObligationForFarm,
+      addInitObligationForFarm: false,
+      useV2Ixs: true,
       scopeRefreshConfig,
-      { skipInitialization: true, skipLutCreation: true }
-    );
+      initUserMetadata: { skipInitialization: true, skipLutCreation: true },
+    });
     await axn.addDepositReserveLiquidityIx();
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
     return axn;
   }
 
-  static async buildRedeemReserveCollateralTxns(
-    kaminoMarket: KaminoMarket,
-    amount: string | BN,
-    mint: Address,
-    owner: TransactionSigner,
-    obligation: KaminoObligation | ObligationType,
-    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
-    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas
-    requestElevationGroup: boolean = false,
-    referrer: Option<Address> = none(),
-    currentSlot: Slot = 0n
-  ) {
-    const axn = await KaminoAction.initialize(
-      'redeem',
-      amount,
-      mint,
-      owner,
+  static async buildRedeemReserveCollateralTxns(props: BuildRedeemReserveCollateralTxnsProps) {
+    const {
       kaminoMarket,
+      amount,
+      reserveAddress,
+      owner,
+      obligation,
+      scopeRefreshConfig,
+      extraComputeBudget = 1_000_000,
+      includeAtaIxs = true,
+      requestElevationGroup = false,
+      referrer = none(),
+      currentSlot,
+    } = props;
+
+    const axn = await KaminoAction.initialize({
+      kaminoMarket,
+      action: 'redeem',
+      amount,
+      reserveAddress,
+      owner,
       obligation,
       referrer,
-      currentSlot
-    );
-    const addInitObligationForFarm = true;
-
+      currentSlot,
+    });
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIx(extraComputeBudget);
     }
 
-    await axn.addSupportIxs(
-      'redeem',
+    await axn.addSupportIxs({
+      action: 'redeem',
       includeAtaIxs,
       requestElevationGroup,
-      false,
-      addInitObligationForFarm,
+      addInitObligationForFarm: false,
+      useV2Ixs: true,
       scopeRefreshConfig,
-      { skipInitialization: true, skipLutCreation: true }
-    );
+      initUserMetadata: { skipInitialization: true, skipLutCreation: true },
+    });
     await axn.addRedeemReserveCollateralIx();
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
     return axn;
   }
 
-  static async buildDepositObligationCollateralTxns(
-    kaminoMarket: KaminoMarket,
-    amount: string | BN,
-    mint: Address,
-    owner: TransactionSigner,
-    obligation: KaminoObligation | ObligationType,
-    useV2Ixs: boolean,
-    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
-    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas
-    requestElevationGroup: boolean = false,
-    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
-      skipInitialization: false,
-      skipLutCreation: false,
-    },
-    referrer: Option<Address> = none(),
-    currentSlot: Slot = 0n
-  ) {
-    const axn = await KaminoAction.initialize(
-      'depositCollateral',
-      amount,
-      mint,
-      owner,
+  static async buildDepositObligationCollateralTxns(props: BuildDepositObligationCollateralTxnsProps) {
+    const {
       kaminoMarket,
+      amount,
+      reserveAddress,
+      owner,
+      obligation,
+      useV2Ixs,
+      scopeRefreshConfig,
+      extraComputeBudget = 1_000_000,
+      includeAtaIxs = true,
+      requestElevationGroup = false,
+      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
+      referrer = none(),
+      currentSlot,
+      permissionAuthority = undefined,
+    } = props;
+    const axn = await KaminoAction.initialize({
+      kaminoMarket,
+      action: 'depositCollateral',
+      amount,
+      reserveAddress,
+      owner,
       obligation,
       referrer,
-      currentSlot
-    );
+      currentSlot,
+      permissionAuthority,
+    });
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIx(extraComputeBudget);
     }
 
-    await axn.addSupportIxs(
-      'depositCollateral',
+    await axn.addSupportIxs({
+      action: 'depositCollateral',
       includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarm,
       useV2Ixs,
       scopeRefreshConfig,
-      initUserMetadata
-    );
+      initUserMetadata,
+    });
     if (useV2Ixs) {
       await axn.addDepositObligationCollateralIxV2();
     } else {
@@ -644,38 +964,40 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildDepositAndBorrowTxns(
-    kaminoMarket: KaminoMarket,
-    depositAmount: string | BN,
-    depositMint: Address,
-    borrowAmount: string | BN,
-    borrowMint: Address,
-    owner: TransactionSigner,
-    obligation: KaminoObligation | ObligationType,
-    useV2Ixs: boolean,
-    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
-    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
-    requestElevationGroup: boolean = false,
-    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
-      skipInitialization: false,
-      skipLutCreation: false,
-    },
-    referrer: Option<Address> = none(),
-    currentSlot: Slot = 0n
-  ) {
+  static async buildDepositAndBorrowTxns(props: BuildDepositAndBorrowTxnsProps) {
+    const {
+      kaminoMarket,
+      depositAmount,
+      depositReserveAddress,
+      borrowAmount,
+      borrowReserveAddress,
+      owner,
+      obligation,
+      useV2Ixs,
+      scopeRefreshConfig,
+      extraComputeBudget = 1_000_000,
+      includeAtaIxs = true,
+      requestElevationGroup = false,
+      overrideElevationGroupRequest,
+      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
+      referrer = none(),
+      currentSlot,
+      rollOver = false,
+      permissionAuthority = undefined,
+    } = props;
     const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
       'depositAndBorrow',
       depositAmount,
-      depositMint,
-      borrowMint,
+      depositReserveAddress,
+      borrowReserveAddress,
       owner,
       owner.address,
       obligation,
       borrowAmount,
       referrer,
-      currentSlot
+      currentSlot,
+      permissionAuthority
     );
     const addInitObligationForFarmForDeposit = true;
     const addInitObligationForFarmForBorrow = false;
@@ -696,16 +1018,16 @@ export class KaminoAction {
         axn.addInitReferrerTokenStateIx(axn.outflowReserve!, referrerTokenState);
       }
     }
-    await axn.addSupportIxs(
-      'deposit',
+    await axn.addSupportIxs({
+      action: 'deposit',
       includeAtaIxs,
       requestElevationGroup,
-      addInitObligationForFarmForDeposit,
+      addInitObligationForFarm: addInitObligationForFarmForDeposit,
       useV2Ixs,
-      undefined,
+      scopeRefreshConfig: undefined,
       initUserMetadata,
-      twoTokenAction
-    );
+      twoTokenAction,
+    });
 
     if (useV2Ixs) {
       await axn.addDepositAndBorrowIxV2();
@@ -717,8 +1039,23 @@ export class KaminoAction {
       includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarmForBorrow,
-      useV2Ixs
+      useV2Ixs,
+      overrideElevationGroupRequest
     );
+    if (rollOver && axn.outflowReserve?.getKind().isFixedRate()) {
+      const obligationAddress = await axn.getObligationPda();
+      const rolloverIxs = KaminoAction.buildBorrowRolloverConfigIxs({
+        reserve: axn.outflowReserve,
+        rollover: true,
+        openTermAllowed: false,
+        owner: axn.owner,
+        obligation: obligationAddress,
+        lendingMarket: axn.kaminoMarket.getAddress(),
+        programId: axn.kaminoMarket.programId,
+      });
+      axn.postLendingIxs.push(...rolloverIxs);
+      axn.postLendingIxsLabels.push('updateObligationConfig[BorrowRolloverConfig]');
+    }
     axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
 
     // Create the scope refresh ix in here to ensure it's the first ix in the tx
@@ -744,37 +1081,37 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildDepositAndWithdrawV2Txns(
-    kaminoMarket: KaminoMarket,
-    depositAmount: string | BN,
-    depositMint: Address,
-    withdrawAmount: string | BN,
-    withdrawMint: Address,
-    owner: TransactionSigner,
-    currentSlot: Slot,
-    obligation: KaminoObligation | ObligationType,
-    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
-    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
-    requestElevationGroup: boolean = false,
-    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
-      skipInitialization: false,
-      skipLutCreation: false,
-    },
-    referrer: Option<Address> = none()
-  ) {
+  static async buildDepositAndWithdrawV2Txns(props: BuildDepositAndWithdrawV2TxnsProps) {
+    const {
+      kaminoMarket,
+      depositAmount,
+      depositReserveAddress,
+      withdrawAmount,
+      withdrawReserveAddress,
+      owner,
+      currentSlot,
+      obligation,
+      scopeRefreshConfig,
+      extraComputeBudget = 1_000_000,
+      includeAtaIxs = true,
+      requestElevationGroup = false,
+      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
+      referrer = none(),
+      permissionAuthority = undefined,
+    } = props;
     const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
       'depositAndWithdraw',
       depositAmount,
-      depositMint,
-      withdrawMint,
+      depositReserveAddress,
+      withdrawReserveAddress,
       owner,
       owner.address,
       obligation,
       withdrawAmount,
       referrer,
-      currentSlot
+      currentSlot,
+      permissionAuthority
     );
     const addInitObligationForFarm = true;
     const twoTokenAction = true;
@@ -782,47 +1119,45 @@ export class KaminoAction {
       axn.addComputeBudgetIx(extraComputeBudget);
     }
 
-    await axn.addSupportIxs(
-      'depositAndWithdraw',
+    await axn.addSupportIxs({
+      action: 'depositAndWithdraw',
       includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarm,
-      true,
+      useV2Ixs: true,
       scopeRefreshConfig,
       initUserMetadata,
-      twoTokenAction
-    );
+      twoTokenAction,
+    });
     const withdrawCollateralAmount = axn.getWithdrawCollateralAmount(axn.outflowReserve!, axn.outflowAmount!);
     await axn.addDepositAndWithdrawV2Ixs(withdrawCollateralAmount);
 
     return axn;
   }
 
-  static async buildRepayAndWithdrawV2Txns(
-    kaminoMarket: KaminoMarket,
-    repayAmount: string | BN,
-    repayMint: Address,
-    withdrawAmount: string | BN,
-    withdrawMint: Address,
-    payer: TransactionSigner,
-    currentSlot: Slot,
-    obligation: KaminoObligation | ObligationType,
-    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
-    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
-    requestElevationGroup: boolean = false,
-    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
-      skipInitialization: false,
-      skipLutCreation: false,
-    },
-    referrer: Option<Address> = none()
-  ) {
+  static async buildRepayAndWithdrawV2Txns(props: BuildRepayAndWithdrawV2TxnsProps) {
+    const {
+      kaminoMarket,
+      repayAmount,
+      repayReserveAddress,
+      withdrawAmount,
+      withdrawReserveAddress,
+      payer,
+      currentSlot,
+      obligation,
+      scopeRefreshConfig,
+      extraComputeBudget = 1_000_000,
+      includeAtaIxs = true,
+      requestElevationGroup = false,
+      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
+      referrer = none(),
+    } = props;
     const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
       'repayAndWithdrawV2',
       repayAmount,
-      repayMint,
-      withdrawMint,
+      repayReserveAddress,
+      withdrawReserveAddress,
       payer,
       payer.address,
       obligation,
@@ -836,48 +1171,46 @@ export class KaminoAction {
       axn.addComputeBudgetIx(extraComputeBudget);
     }
 
-    await axn.addSupportIxs(
-      'repayAndWithdrawV2',
+    await axn.addSupportIxs({
+      action: 'repayAndWithdrawV2',
       includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarm,
-      true,
+      useV2Ixs: true,
       scopeRefreshConfig,
       initUserMetadata,
-      twoTokenAction
-    );
+      twoTokenAction,
+    });
     const withdrawCollateralAmount = axn.getWithdrawCollateralAmount(axn.outflowReserve!, axn.outflowAmount!);
     await axn.addRepayAndWithdrawV2Ixs(withdrawCollateralAmount);
 
     return axn;
   }
 
-  static async buildRepayAndWithdrawTxns(
-    kaminoMarket: KaminoMarket,
-    repayAmount: string | BN,
-    repayMint: Address,
-    withdrawAmount: string | BN,
-    withdrawMint: Address,
-    payer: TransactionSigner,
-    currentSlot: Slot,
-    obligation: KaminoObligation | ObligationType,
-    useV2Ixs: boolean,
-    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
-    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
-    requestElevationGroup: boolean = false,
-    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
-      skipInitialization: false,
-      skipLutCreation: false,
-    },
-    referrer: Option<Address> = none()
-  ) {
+  static async buildRepayAndWithdrawTxns(props: BuildRepayAndWithdrawTxnsProps) {
+    const {
+      kaminoMarket,
+      repayAmount,
+      repayReserveAddress,
+      withdrawAmount,
+      withdrawReserveAddress,
+      payer,
+      currentSlot,
+      obligation,
+      useV2Ixs,
+      scopeRefreshConfig,
+      extraComputeBudget = 1_000_000,
+      includeAtaIxs = true,
+      requestElevationGroup = false,
+      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
+      referrer = none(),
+    } = props;
     const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
       'repayAndWithdraw',
       repayAmount,
-      repayMint,
-      withdrawMint,
+      repayReserveAddress,
+      withdrawReserveAddress,
       payer,
       payer.address,
       obligation,
@@ -892,16 +1225,16 @@ export class KaminoAction {
       axn.addComputeBudgetIx(extraComputeBudget);
     }
 
-    await axn.addSupportIxs(
-      'repay',
+    await axn.addSupportIxs({
+      action: 'repay',
       includeAtaIxs,
       requestElevationGroup,
-      addInitObligationForFarmForRepay,
+      addInitObligationForFarm: addInitObligationForFarmForRepay,
       useV2Ixs,
-      undefined,
+      scopeRefreshConfig: undefined,
       initUserMetadata,
-      twoTokenAction
-    );
+      twoTokenAction,
+    });
 
     const withdrawCollateralAmount = axn.getWithdrawCollateralAmount(axn.outflowReserve!, axn.outflowAmount!);
     if (useV2Ixs) {
@@ -941,59 +1274,53 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildWithdrawTxns(
-    kaminoMarket: KaminoMarket,
-    amount: string | BN,
-    mint: Address,
-    owner: TransactionSigner,
-    obligation: KaminoObligation | ObligationType,
-    useV2Ixs: boolean,
-    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
-    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas,
-    requestElevationGroup: boolean = false, // to be requested *after* the withdraw
-    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
-      skipInitialization: false,
-      skipLutCreation: false,
-    },
-    referrer: Option<Address> = none(),
-    currentSlot: Slot = 0n,
-    overrideElevationGroupRequest?: number,
-    // Optional customizations which may be needed if the obligation was mutated by some previous ix.
-    obligationCustomizations?: {
-      // Any newly-added deposit reserves.
-      addedDepositReserves?: Address[];
-    }
-  ) {
-    const axn = await KaminoAction.initialize(
-      'withdraw',
-      amount,
-      mint,
-      owner,
+  static async buildWithdrawTxns(props: BuildWithdrawTxnsProps) {
+    const {
       kaminoMarket,
+      amount,
+      reserveAddress,
+      owner,
+      obligation,
+      useV2Ixs,
+      scopeRefreshConfig,
+      extraComputeBudget = 1_000_000,
+      includeAtaIxs = true,
+      requestElevationGroup = false,
+      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
+      referrer = none(),
+      currentSlot,
+      overrideElevationGroupRequest,
+      obligationCustomizations,
+    } = props;
+
+    const axn = await KaminoAction.initialize({
+      kaminoMarket,
+      action: 'withdraw',
+      amount,
+      reserveAddress,
+      owner,
       obligation,
       referrer,
-      currentSlot
-    );
+      currentSlot,
+    });
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIx(extraComputeBudget);
     }
 
-    axn.depositReserves.push(...(obligationCustomizations?.addedDepositReserves || []));
+    applyObligationCustomizations(axn, obligationCustomizations);
 
-    await axn.addSupportIxs(
-      'withdraw',
+    await axn.addSupportIxs({
+      action: 'withdraw',
       includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarm,
       useV2Ixs,
       scopeRefreshConfig,
       initUserMetadata,
-      false,
-      overrideElevationGroupRequest
-    );
+      overrideElevationGroupRequest,
+    });
 
     const collateralAmount = axn.getWithdrawCollateralAmount(axn.reserve, axn.amount);
     if (useV2Ixs) {
@@ -1007,68 +1334,121 @@ export class KaminoAction {
     return axn;
   }
 
-  /**
-   *
-   * @param kaminoMarket
-   * @param amount
-   * @param mint
-   * @param owner
-   * @param obligation - obligation to repay or the PDA seeds
-   * @param useV2Ixs
-   * @param scopeRefreshConfig
-   * @param currentSlot
-   * @param payer - if not set then owner is used
-   * @param extraComputeBudget - if > 0 then adds the ix
-   * @param includeAtaIxs - if true it includes create and close wsol and token atas
-   * @param requestElevationGroup
-   * @param initUserMetadata
-   * @param referrer
-   */
-  static async buildRepayTxns(
-    kaminoMarket: KaminoMarket,
-    amount: string | BN,
-    mint: Address,
-    owner: TransactionSigner,
-    obligation: KaminoObligation | ObligationType,
-    useV2Ixs: boolean,
-    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    currentSlot: Slot,
-    payer: TransactionSigner = owner,
-    extraComputeBudget: number = 1_000_000,
-    includeAtaIxs: boolean = true,
-    requestElevationGroup: boolean = false,
-    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
-      skipInitialization: false,
-      skipLutCreation: false,
-    },
-    referrer: Option<Address> = none()
-  ) {
-    const axn = await KaminoAction.initialize(
-      'repay',
-      amount,
-      mint,
-      owner,
+  static async buildWithdrawFromObligationAndEnqueueTxns(props: BuildWithdrawFromObligationAndEnqueueTxnsProps) {
+    const {
       kaminoMarket,
+      withdrawAmount,
+      reserveAddress,
+      owner,
+      obligation,
+      scopeRefreshConfig,
+      extraComputeBudget = 1_000_000,
+      includeAtaIxs = true,
+      requestElevationGroup = false,
+      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
+      referrer = none(),
+      currentSlot,
+      userDestinationLiquidityAta,
+      progressCallbackType = new ProgressCallbackType.None(),
+      progressCallbackCustomAccount0 = none(),
+      progressCallbackCustomAccount1 = none(),
+    } = props;
+
+    const axn = await KaminoAction.initialize({
+      kaminoMarket,
+      action: 'withdrawAndEnqueue',
+      amount: withdrawAmount,
+      reserveAddress,
+      owner,
       obligation,
       referrer,
       currentSlot,
-      payer
+    });
+
+    if (extraComputeBudget > 0) {
+      axn.addComputeBudgetIx(extraComputeBudget);
+    }
+
+    await axn.addSupportIxs({
+      action: 'withdrawAndEnqueue',
+      includeAtaIxs,
+      requestElevationGroup,
+      addInitObligationForFarm: true,
+      useV2Ixs: true,
+      scopeRefreshConfig,
+      initUserMetadata,
+    });
+
+    const withdrawCollateralAmount = axn.getWithdrawCollateralAmount(axn.reserve, axn.amount);
+    await axn.addWithdrawObligationCollateralIxV2(withdrawCollateralAmount);
+
+    const destinationLiquidityAta = userDestinationLiquidityAta ?? (await axn.getUserTokenAccountAddress(axn.reserve));
+    const enqueueIx = await KaminoAction.buildEnqueueToWithdrawIx(
+      owner,
+      kaminoMarket,
+      axn.reserve,
+      withdrawCollateralAmount,
+      destinationLiquidityAta,
+      progressCallbackType,
+      progressCallbackCustomAccount0,
+      progressCallbackCustomAccount1
     );
+    axn.lendingIxs.push(enqueueIx);
+    axn.lendingIxsLabels.push(`enqueueToWithdraw`);
+
+    axn.addRefreshFarmsCleanupTxnIxsToCleanupIxs();
+
+    return axn;
+  }
+
+  /**
+   * Build repay transactions
+   * @param props - BuildRepayTxnsProps containing all required and optional parameters
+   */
+  static async buildRepayTxns(props: BuildRepayTxnsProps) {
+    const {
+      kaminoMarket,
+      amount,
+      reserveAddress,
+      owner,
+      obligation,
+      useV2Ixs,
+      scopeRefreshConfig,
+      currentSlot,
+      payer = owner,
+      extraComputeBudget = 1_000_000,
+      includeAtaIxs = true,
+      requestElevationGroup = false,
+      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
+      referrer = none(),
+    } = props;
+
+    const axn = await KaminoAction.initialize({
+      kaminoMarket,
+      action: 'repay',
+      amount,
+      reserveAddress,
+      owner,
+      obligation,
+      referrer,
+      currentSlot,
+      payer,
+    });
     const addInitObligationForFarm = true;
 
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIx(extraComputeBudget);
     }
 
-    await axn.addSupportIxs(
-      'repay',
+    await axn.addSupportIxs({
+      action: 'repay',
       includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarm,
       useV2Ixs,
       scopeRefreshConfig,
-      initUserMetadata
-    );
+      initUserMetadata,
+    });
     if (useV2Ixs) {
       await axn.addRepayIxV2();
     } else {
@@ -1079,40 +1459,40 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildLiquidateTxns(
-    kaminoMarket: KaminoMarket,
-    amount: string | BN,
-    minCollateralReceiveAmount: string | BN,
-    repayTokenMint: Address,
-    withdrawTokenMint: Address,
-    liquidator: TransactionSigner,
-    obligationOwner: Address,
-    obligation: KaminoObligation | ObligationType,
-    useV2Ixs: boolean,
-    scopeRefreshConfig: ScopePriceRefreshConfig | undefined = undefined,
-    extraComputeBudget: number = 1_000_000, // if > 0 then adds the ix
-    includeAtaIxs: boolean = true, // if true it includes create and close wsol and token atas, and creates all other token atas if they don't exist
-    requestElevationGroup: boolean = false,
-    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean } = {
-      skipInitialization: false,
-      skipLutCreation: false,
-    },
-    referrer: Option<Address> = none(),
-    maxAllowedLtvOverridePercent: number = 0,
-    currentSlot: Slot = 0n
-  ): Promise<KaminoAction> {
+  static async buildLiquidateTxns(props: BuildLiquidateTxnsProps): Promise<KaminoAction> {
+    const {
+      kaminoMarket,
+      amount,
+      minCollateralReceiveAmount,
+      repayReserveAddress,
+      withdrawReserveAddress,
+      liquidator,
+      obligationOwner,
+      obligation,
+      useV2Ixs,
+      scopeRefreshConfig,
+      extraComputeBudget = 1_000_000,
+      includeAtaIxs = true,
+      requestElevationGroup = false,
+      initUserMetadata = { skipInitialization: false, skipLutCreation: false },
+      referrer = none(),
+      maxAllowedLtvOverridePercent = 0,
+      currentSlot,
+      permissionAuthority = undefined,
+    } = props;
     const axn = await KaminoAction.initializeMultiTokenAction(
       kaminoMarket,
       'liquidate',
       amount,
-      repayTokenMint,
-      withdrawTokenMint,
+      repayReserveAddress,
+      withdrawReserveAddress,
       liquidator,
       obligationOwner,
       obligation,
       minCollateralReceiveAmount,
       referrer,
-      currentSlot
+      currentSlot,
+      permissionAuthority
     );
     const addInitObligationForFarm = true;
 
@@ -1120,15 +1500,15 @@ export class KaminoAction {
       axn.addComputeBudgetIx(extraComputeBudget);
     }
 
-    await axn.addSupportIxs(
-      'liquidate',
+    await axn.addSupportIxs({
+      action: 'liquidate',
       includeAtaIxs,
       requestElevationGroup,
       addInitObligationForFarm,
       useV2Ixs,
       scopeRefreshConfig,
-      initUserMetadata
-    );
+      initUserMetadata,
+    });
     if (useV2Ixs) {
       await axn.addLiquidateIxV2(maxAllowedLtvOverridePercent);
     } else {
@@ -1139,14 +1519,10 @@ export class KaminoAction {
     return axn;
   }
 
-  static async buildWithdrawReferrerFeeTxns(
-    owner: TransactionSigner,
-    tokenMint: Address,
-    kaminoMarket: KaminoMarket,
-    currentSlot: Slot = 0n
-  ) {
+  static async buildWithdrawReferrerFeeTxns(props: BuildWithdrawReferrerFeeTxnsProps) {
+    const { owner, reserveAddress, kaminoMarket, currentSlot } = props;
     const { axn, createAtaIxs } = await KaminoAction.initializeWithdrawReferrerFees(
-      tokenMint,
+      reserveAddress,
       owner,
       kaminoMarket,
       currentSlot
@@ -1199,9 +1575,522 @@ export class KaminoAction {
     );
   }
 
+  /**
+   * Builds an instruction for the current obligation owner to initiate an ownership transfer
+   * to a new owner. Once this instruction succeeds, the obligation is locked for user-facing
+   * operations until the transfer is approved by the global admin and accepted by the new owner
+   * (or aborted by the current owner).
+   *
+   * Four-step flow:
+   * 1. Current owner calls this (buildInitiateObligationOwnershipTransferIxn)
+   * 2. Global admin calls buildApproveObligationOwnershipTransferIxn
+   * 3. New owner calls buildAcceptObligationOwnershipIxn
+   *
+   * Between steps 1 and 2 the current owner can also call
+   * {@link buildAbortObligationOwnershipTransferIxn} to cancel.
+   */
+  static buildInitiateObligationOwnershipTransferIxn(
+    owner: TransactionSigner,
+    kaminoMarket: KaminoMarket,
+    obligation: KaminoObligation,
+    newOwner: Address
+  ): Instruction {
+    return initiateObligationOwnershipTransfer(
+      { newOwner },
+      {
+        owner,
+        obligation: obligation.obligationAddress,
+        instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
+      },
+      undefined,
+      kaminoMarket.programId
+    );
+  }
+
+  /**
+   * Builds an instruction for the global admin to approve a pending obligation ownership transfer.
+   * Must be called after {@link buildInitiateObligationOwnershipTransferIxn} and before
+   * {@link buildAcceptObligationOwnershipIxn}.
+   *
+   * `pendingOwner` must match the pending owner set on the obligation; if omitted it is read from
+   * {@link KaminoObligation.state.pendingOwner}.
+   */
+  static async buildApproveObligationOwnershipTransferIxn(
+    globalAdmin: TransactionSigner,
+    kaminoMarket: KaminoMarket,
+    obligation: KaminoObligation,
+    pendingOwner?: Address
+  ): Promise<Instruction> {
+    const globalConfig = await globalConfigPda(kaminoMarket.programId);
+    return approveObligationOwnershipTransfer(
+      {
+        globalAdmin,
+        globalConfig,
+        obligation: obligation.obligationAddress,
+        pendingOwner: pendingOwner ?? obligation.state.pendingOwner,
+        instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
+      },
+      undefined,
+      kaminoMarket.programId
+    );
+  }
+
+  /**
+   * Builds an instruction for the pending owner (set via
+   * {@link buildInitiateObligationOwnershipTransferIxn} and approved via
+   * {@link buildApproveObligationOwnershipTransferIxn}) to accept and finalize the ownership transfer.
+   */
+  static buildAcceptObligationOwnershipIxn(
+    pendingOwner: TransactionSigner,
+    kaminoMarket: KaminoMarket,
+    obligation: KaminoObligation
+  ): Instruction {
+    return acceptObligationOwnership(
+      {
+        pendingOwner,
+        obligation: obligation.obligationAddress,
+        instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
+      },
+      undefined,
+      kaminoMarket.programId
+    );
+  }
+
+  /**
+   * Builds an instruction for the current obligation owner to abort an in-progress ownership
+   * transfer. Valid only while the transfer is in the Initiated state (i.e. has not yet been
+   * approved by the global admin).
+   */
+  static buildAbortObligationOwnershipTransferIxn(
+    owner: TransactionSigner,
+    kaminoMarket: KaminoMarket,
+    obligation: KaminoObligation
+  ): Instruction {
+    return abortObligationOwnershipTransfer(
+      {
+        owner,
+        obligation: obligation.obligationAddress,
+        instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
+      },
+      undefined,
+      kaminoMarket.programId
+    );
+  }
+
+  /**
+   * Builds an instruction for enqueueing a withdrawal request to the withdraw queue.
+   * This is used when there isn't enough liquidity to immediately withdraw.
+   */
+  static async buildEnqueueToWithdrawIx(
+    owner: TransactionSigner,
+    kaminoMarket: KaminoMarket,
+    reserve: KaminoReserve,
+    collateralAmount: BN,
+    userDestinationLiquidityTa: Address,
+    progressCallbackType:
+      | ProgressCallbackType.None
+      | ProgressCallbackType.KlendQueueAccountingHandlerOnKvault = new ProgressCallbackType.None(),
+    progressCallbackCustomAccount0: Option<Address> = none(),
+    progressCallbackCustomAccount1: Option<Address> = none()
+  ): Promise<Instruction> {
+    const lendingMarketAuthority = await kaminoMarket.getLendingMarketAuthority();
+    const userSourceCollateralTa = await getAssociatedTokenAddress(reserve.getCTokenMint(), owner.address);
+    const withdrawTicket = await withdrawTicketPda(
+      reserve.address,
+      BigInt(reserve.state.withdrawQueue.nextIssuedTicketSequenceNumber.toString()),
+      kaminoMarket.programId
+    );
+    const ownerQueuedCollateralVault = await ownerQueuedCollateralVaultPda(
+      reserve.address,
+      owner.address,
+      kaminoMarket.programId
+    );
+
+    return enqueueToWithdraw(
+      {
+        collateralAmount,
+        progressCallbackType,
+      },
+      {
+        owner,
+        lendingMarket: kaminoMarket.getAddress(),
+        lendingMarketAuthority,
+        reserve: reserve.address,
+        userSourceCollateralTa,
+        userDestinationLiquidityTa,
+        reserveLiquidityMint: reserve.getLiquidityMint(),
+        reserveCollateralMint: reserve.getCTokenMint(),
+        collateralTokenProgram: TOKEN_PROGRAM_ADDRESS,
+        withdrawTicket,
+        ownerQueuedCollateralVault,
+        systemProgram: SYSTEM_PROGRAM_ADDRESS,
+        progressCallbackCustomAccount0,
+        progressCallbackCustomAccount1,
+        instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
+      },
+      undefined,
+      kaminoMarket.programId
+    );
+  }
+
+  /**
+   * Builds an instruction for withdrawing queued liquidity (permissionless).
+   * This allows anyone to process a withdraw ticket when liquidity becomes available.
+   */
+  static async buildWithdrawQueuedLiquidityIx(
+    payer: TransactionSigner,
+    kaminoMarket: KaminoMarket,
+    reserve: KaminoReserve,
+    withdrawTicket: Address,
+    withdrawTicketOwner: Address,
+    userDestinationLiquidity: Address,
+    progressCallbackProgram: Option<Address> = none(),
+    progressCallbackCustomAccount0: Option<Address> = none(),
+    progressCallbackCustomAccount1: Option<Address> = none()
+  ): Promise<Instruction> {
+    const lendingMarketAuthority = await kaminoMarket.getLendingMarketAuthority();
+    const resolvedProgressCallbackProgram = isNone(progressCallbackProgram)
+      ? some(SYSTEM_PROGRAM_ADDRESS)
+      : progressCallbackProgram;
+    const resolvedProgressCallbackCustomAccount0 = isNone(progressCallbackCustomAccount0)
+      ? some(SYSTEM_PROGRAM_ADDRESS)
+      : progressCallbackCustomAccount0;
+    const resolvedProgressCallbackCustomAccount1 = isNone(progressCallbackCustomAccount1)
+      ? some(SYSTEM_PROGRAM_ADDRESS)
+      : progressCallbackCustomAccount1;
+    const ownerQueuedCollateralVault = await ownerQueuedCollateralVaultPda(
+      reserve.address,
+      withdrawTicketOwner,
+      kaminoMarket.programId
+    );
+
+    return withdrawQueuedLiquidity(
+      {
+        payer,
+        lendingMarket: kaminoMarket.getAddress(),
+        lendingMarketAuthority,
+        reserve: reserve.address,
+        reserveLiquidityMint: reserve.getLiquidityMint(),
+        reserveCollateralMint: reserve.getCTokenMint(),
+        reserveLiquiditySupply: reserve.state.liquidity.supplyVault,
+        ownerQueuedCollateralVault,
+        userDestinationLiquidity,
+        collateralTokenProgram: TOKEN_PROGRAM_ADDRESS,
+        liquidityTokenProgram: reserve.getLiquidityTokenProgram(),
+        withdrawTicket,
+        withdrawTicketOwner,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+        systemProgram: SYSTEM_PROGRAM_ADDRESS,
+        progressCallbackProgram: resolvedProgressCallbackProgram,
+        progressCallbackCustomAccount0: resolvedProgressCallbackCustomAccount0,
+        progressCallbackCustomAccount1: resolvedProgressCallbackCustomAccount1,
+        instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
+      },
+      undefined,
+      kaminoMarket.programId
+    );
+  }
+
+  /**
+   * Builds instructions for setting a borrow order on an obligation.
+   * Includes an idempotent ATA creation for the filled debt destination when setting an order.
+   *
+   * @param owner - the obligation owner and signer for the instruction
+   * @param kaminoMarket - the lending market that owns the obligation
+   * @param obligation - the obligation to attach the borrow order to
+   * @param borrowOrder - the order to set, or null to cancel the existing order
+   * @param orderIdx - which of the obligation's borrow orders to write
+   * @param minExpectedCurrentRemainingDebtAmount - minimum expected remaining debt amount
+   */
+  static async buildSetBorrowOrderIxs(
+    owner: TransactionSigner,
+    kaminoMarket: KaminoMarket,
+    obligation: KaminoObligation | Address,
+    borrowOrder: KaminoBorrowOrder | null,
+    orderIdx: number,
+    minExpectedCurrentRemainingDebtAmount: BN = new BN(0)
+  ): Promise<Instruction[]> {
+    let obligationAddress: Address;
+    let order: KaminoBorrowOrder;
+
+    if (obligation instanceof KaminoObligation) {
+      obligationAddress = obligation.obligationAddress;
+      order = borrowOrder ?? KaminoBorrowOrder.createCancelBorrowOrder(obligation.getBorrowOrder(orderIdx));
+    } else {
+      obligationAddress = obligation;
+      if (!borrowOrder) {
+        throw new Error(
+          'Cancelling a borrow order is not supported when passing in an obligation address, pass in a KaminoObligation instead'
+        );
+      }
+      order = borrowOrder;
+    }
+
+    const ixs: Instruction[] = [];
+
+    if (borrowOrder) {
+      const debtTokenProgram = kaminoMarket.getLiquidityTokenProgramByMint(order.debtLiquidityMint);
+      const [, createDebtAtaIx] = await createAssociatedTokenAccountIdempotentInstruction(
+        owner,
+        order.debtLiquidityMint,
+        owner.address,
+        debtTokenProgram
+      );
+      ixs.push(createDebtAtaIx);
+    }
+
+    const eventAuthority = await getEventAuthorityPda(kaminoMarket.programId);
+    // Any reserve with the matching debt mint works here — the program only uses it for
+    // price and decimals in the min-value check, which are the same across all reserve kinds.
+    const reserve = kaminoMarket.getExistingReservesByMint(order.debtLiquidityMint)[0];
+
+    ixs.push(
+      setBorrowOrderV2(
+        {
+          orderIdx,
+          orderConfig: order.toConfigArgs(),
+          minExpectedCurrentRemainingDebtAmount,
+        },
+        {
+          owner,
+          obligation: obligationAddress,
+          lendingMarket: kaminoMarket.getAddress(),
+          reserve: reserve.address,
+          filledDebtDestination: order.filledDebtDestination,
+          debtLiquidityMint: order.debtLiquidityMint,
+          eventAuthority,
+          program: kaminoMarket.programId,
+          instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
+        },
+        undefined,
+        kaminoMarket.programId
+      )
+    );
+
+    return ixs;
+  }
+
+  /**
+   * Builds an instruction for filling a borrow order on an obligation.
+   * This allows lenders to provide liquidity for fixed-term loan requests.
+   * @param payer - the signer paying for the transaction
+   * @param kaminoMarket - the lending market that owns the obligation
+   * @param obligation - the obligation that holds the borrow order
+   * @param reserve - the reserve that provides the borrow liquidity
+   * @param currentTimestamp - current unix time in seconds, used to resolve which order is still fillable
+   * @param orderIdx - which of the obligation's borrow orders to fill; omit to fill its only fillable one
+   */
+  static async buildFillBorrowOrderIx(
+    payer: TransactionSigner,
+    kaminoMarket: KaminoMarket,
+    obligation: KaminoObligation,
+    reserve: KaminoReserve,
+    currentTimestamp: number,
+    orderIdx: number = obligation.requireSoleActiveBorrowOrderIdx(currentTimestamp)
+  ): Promise<Instruction> {
+    const obligationAddress = obligation.obligationAddress;
+    const { debtFarmAccounts: farmsAccounts } = await KaminoAction.getFarmAccountsForReserve(
+      obligationAddress,
+      reserve,
+      kaminoMarket.farmsProgramId
+    );
+
+    const referrer = obligation.state.referrer;
+    const referrerTokenState =
+      referrer !== DEFAULT_PUBLIC_KEY
+        ? some(await referrerTokenStatePda(referrer, reserve.address, kaminoMarket.programId))
+        : none<Address>();
+
+    const eventAuthority = await getEventAuthorityPda(kaminoMarket.programId);
+
+    // The fill delegates to the normal borrow logic, which uses the obligation's deposit reserves (passed as
+    // remaining accounts) to update elevation-group debt trackers. Append them when the obligation is in an
+    // elevation group, mirroring addBorrowIx; outside an elevation group they are not needed.
+    const remainingAccounts: AccountMeta[] =
+      obligation.state.elevationGroup > 0
+        ? obligation.getDeposits().map((position) => ({ address: position.reserveAddress, role: AccountRole.WRITABLE }))
+        : [];
+
+    return fillBorrowOrderV2(
+      { orderIdx },
+      {
+        borrowAccounts: {
+          payer,
+          obligation: obligationAddress,
+          lendingMarket: kaminoMarket.getAddress(),
+          lendingMarketAuthority: await kaminoMarket.getLendingMarketAuthority(),
+          borrowReserve: reserve.address,
+          borrowReserveLiquidityMint: reserve.getLiquidityMint(),
+          reserveSourceLiquidity: reserve.state.liquidity.supplyVault,
+          borrowReserveLiquidityFeeReceiver: reserve.state.liquidity.feeVault,
+          // The program pins this to the order's `filled_debt_destination` (which the borrower chose and need
+          // not be the owner's canonical ATA), so pass that account rather than re-deriving the owner's ATA.
+          userDestinationLiquidity: obligation.getBorrowOrder(orderIdx).filledDebtDestination,
+          referrerTokenState,
+          tokenProgram: reserve.getLiquidityTokenProgram(),
+          instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
+        },
+        farmsAccounts,
+        farmsProgram: kaminoMarket.farmsProgramId,
+        eventAuthority,
+        program: kaminoMarket.programId,
+      },
+      remainingAccounts,
+      kaminoMarket.programId
+    );
+  }
+
+  /**
+   * Builds a lender flow that deposits liquidity into the reserve matching a borrower's borrow order and fills
+   * that order in the same flow. The lender deposit is recorded as lender obligation collateral, not as cTokens
+   * in the lender's wallet. The fill reserve is selected from the order's debt mint among the
+   * reserves that can fill the order on-chain (the term + rate gates of
+   * {@link KaminoObligation.getCompatibleBorrowOrderFillReserves}); a fixed-term order is restricted to
+   * fixed/maturity-term reserves (never an open-term float reserve). Among those, it picks the lender-favorable
+   * one: the highest peak borrow rate, tie-broken by the shortest remaining term (the shortest active cap among
+   * configured term and/or seconds until maturity). It throws if no reserve can fill the order. By default the
+   * lender deposits exactly enough to fully fill the order (its
+   * remaining debt plus the borrow origination/referrer fees); pass `amount` to deposit a specific amount
+   * instead - a smaller amount may partially fill the order (subject to the order's on-chain min-fill and
+   * min-remainder constraints), a larger one fully fills it and leaves the excess as lender obligation collateral.
+   *
+   * The borrower's obligation is expected to hold an active borrow order. When the flow requires accounts that can
+   * be initialized before the main deposit/fill transaction - lender metadata, the lender obligation, lender
+   * collateral farm state, borrower debt farm state, or the referrer's token state for the fill reserve - the
+   * result returns those setup instructions separately in `preFillSetupIxs`. Send them before the main `action`
+   * when the array is non-empty. This means the lender may pay rent for borrower-side accounts, and that rent is
+   * not reclaimable.
+   *
+   * @returns the composed {@link KaminoAction} together with the chosen fill reserve and the deposited amount.
+   */
+  static async buildDepositAndFillBorrowOrderTxns(
+    props: BuildDepositAndFillBorrowOrderTxnsProps
+  ): Promise<DepositAndFillBorrowOrderResult> {
+    const {
+      kaminoMarket,
+      lender,
+      borrowerObligation,
+      amount,
+      orderIdx,
+      lenderObligation = new VanillaObligation(kaminoMarket.programId),
+      useV2Ixs = true,
+      scopeRefreshConfig,
+      extraComputeBudget = 1_000_000,
+      includeAtaIxs = true,
+      referrer = none(),
+      currentSlot,
+      currentTimestamp,
+    } = props;
+
+    const filledOrderIdx = orderIdx ?? borrowerObligation.requireSoleActiveBorrowOrderIdx(currentTimestamp);
+    const borrowOrder = borrowerObligation.getBorrowOrder(filledOrderIdx);
+    if (!borrowOrder.isActive()) {
+      throw new Error(
+        `Borrow order ${filledOrderIdx} on obligation ${borrowerObligation.obligationAddress} has no remaining debt to fill`
+      );
+    }
+
+    // Select the fill reserve of the order's debt mint with the lender-favorable policy (highest peak borrow
+    // rate, tie-broken by shortest remaining term; a fixed-term order never uses an open-term float reserve).
+    const fillReserve = KaminoObligation.selectBorrowOrderFillReserve(
+      kaminoMarket,
+      borrowOrder,
+      Math.floor(Date.now() / 1000)
+    );
+    if (fillReserve === undefined) {
+      throw new Error(
+        `No reserve of mint ${borrowOrder.debtLiquidityMint} can fill the borrow order on obligation ` +
+          `${borrowerObligation.obligationAddress} (order max rate ${borrowOrder.maxBorrowRateBps} bps, ` +
+          `min term ${borrowOrder.minDebtTermSeconds.toString()}s)`
+      );
+    }
+
+    const preFillSetup = await KaminoAction.buildDepositAndFillBorrowOrderSetupIxs({
+      kaminoMarket,
+      lender,
+      lenderObligation,
+      borrowerObligation,
+      fillReserve,
+      referrer,
+    });
+
+    // Omitting `amount` deposits exactly enough to fully fill the order: its remaining debt plus the on-chain
+    // origination fee (getBorrowOrderRemainingDebtAmountWithFees returns the exact rounded-fee integer). A
+    // provided `amount` is deposited as-is - a smaller one partially fills the order, a larger one fully fills it
+    // with the excess left as lender obligation collateral; the on-chain fill borrows at most the order's
+    // remaining amount, bounded by the available liquidity.
+    const hasReferrer = borrowerObligation.state.referrer !== DEFAULT_PUBLIC_KEY;
+    const depositedAmount =
+      amount !== undefined
+        ? new BN(amount)
+        : new BN(
+            KaminoObligation.getBorrowOrderRemainingDebtAmountWithFees(
+              borrowOrder,
+              kaminoMarket,
+              fillReserve,
+              hasReferrer
+            ).toFixed(0)
+          );
+
+    // The lender deposit must go into the lender's obligation, not to the lender's cToken ATA. The deposit marks
+    // the fill reserve stale, so the fill re-refreshes it together with the borrower's obligation reserves,
+    // refreshes the borrower's obligation, then fills - all appended after the deposit instruction. The deposit,
+    // obligation refresh, and fill instructions are independent, so build them in parallel.
+    const refreshReserveIxs = KaminoAction.getRefreshAllReserves(kaminoMarket, [
+      ...new Set<Address>([fillReserve.address, ...borrowerObligation.getAllReserves()]),
+    ]);
+    const [action, refreshBorrowerObligationIx, fillBorrowOrderIx] = await Promise.all([
+      KaminoAction.buildDepositTxnsInternal(
+        {
+          kaminoMarket,
+          amount: depositedAmount,
+          reserveAddress: fillReserve.address,
+          owner: lender,
+          obligation: lenderObligation,
+          useV2Ixs,
+          scopeRefreshConfig,
+          extraComputeBudget,
+          includeAtaIxs,
+          initUserMetadata: { skipInitialization: true, skipLutCreation: true },
+          referrer,
+          currentSlot,
+        },
+        {
+          addUserAndObligationInitIxs: false,
+          addInitObligationForFarm: false,
+        }
+      ),
+      borrowerObligation.getRefreshObligationIx(),
+      KaminoAction.buildFillBorrowOrderIx(
+        lender,
+        kaminoMarket,
+        borrowerObligation,
+        fillReserve,
+        currentTimestamp,
+        filledOrderIdx
+      ),
+    ]);
+
+    action.lendingIxs.push(...refreshReserveIxs, refreshBorrowerObligationIx, fillBorrowOrderIx);
+    action.lendingIxsLabels.push(
+      ...refreshReserveIxs.map(() => 'refreshReserve'),
+      `refreshObligation[${borrowerObligation.obligationAddress}]`,
+      'fillBorrowOrder'
+    );
+
+    return {
+      action,
+      fillReserve,
+      depositedAmount,
+      preFillSetupIxs: preFillSetup.ixs,
+      preFillSetupIxsLabels: preFillSetup.labels,
+      preFillSetupLuts: preFillSetup.luts,
+    };
+  }
+
   async addDepositReserveLiquidityIx() {
     this.lendingIxsLabels.push(`depositReserveLiquidity`);
-    this.lendingIxs.push(
+    this.appendLendingIx(
       depositReserveLiquidity(
         {
           liquidityAmount: this.amount,
@@ -1256,7 +2145,7 @@ export class KaminoAction {
   // @deprecated -- use addDepositIxV2 instead
   async addDepositIx() {
     this.lendingIxsLabels.push(`depositReserveLiquidityAndObligationCollateral`);
-    this.lendingIxs.push(
+    this.appendLendingIx(
       depositReserveLiquidityAndObligationCollateral(
         {
           liquidityAmount: this.amount,
@@ -1290,7 +2179,7 @@ export class KaminoAction {
       this.kaminoMarket.farmsProgramId
     );
     this.lendingIxsLabels.push(`depositReserveLiquidityAndObligationCollateralV2`);
-    this.lendingIxs.push(
+    this.appendLendingIx(
       depositReserveLiquidityAndObligationCollateralV2(
         {
           liquidityAmount: this.amount,
@@ -1324,7 +2213,7 @@ export class KaminoAction {
   /// @deprecated -- use addDepositObligationCollateralIxV2 instead
   async addDepositObligationCollateralIx() {
     this.lendingIxsLabels.push(`depositObligationCollateral`);
-    this.lendingIxs.push(
+    this.appendLendingIx(
       depositObligationCollateral(
         {
           collateralAmount: this.amount,
@@ -1354,7 +2243,7 @@ export class KaminoAction {
     );
 
     this.lendingIxsLabels.push(`depositObligationCollateralV2`);
-    this.lendingIxs.push(
+    this.appendLendingIx(
       depositObligationCollateralV2(
         {
           collateralAmount: this.amount,
@@ -1419,7 +2308,7 @@ export class KaminoAction {
           ? borrowIx.accounts!.concat(depositReserveAccountMetas)
           : borrowIx.accounts,
     };
-    this.lendingIxs.push(borrowIx);
+    this.appendLendingIx(borrowIx);
   }
 
   async addBorrowIxV2() {
@@ -1471,7 +2360,120 @@ export class KaminoAction {
           ? borrowIx.accounts!.concat(depositReserveAccountMetas)
           : borrowIx.accounts,
     };
-    this.lendingIxs.push(borrowIx);
+    this.appendLendingIx(borrowIx);
+  }
+
+  /**
+   * Creates the instructions to configure rollover settings for fixed-rate borrows: 4, plus one more when
+   * {@link BuildBorrowRolloverConfigIxsProps.fixedTermRolloverWindowDurationDays} is given.
+   *
+   * @param props - BuildBorrowRolloverConfigIxsProps containing all required parameters
+   * @returns Array of update obligation config instructions
+   */
+  static buildBorrowRolloverConfigIxs(props: BuildBorrowRolloverConfigIxsProps): Instruction[] {
+    const {
+      reserve,
+      rollover,
+      openTermAllowed,
+      fixedTermRolloverWindowDurationDays,
+      owner,
+      obligation,
+      lendingMarket,
+      programId,
+    } = props;
+    const reserveKind = reserve.getKind() as FixedRateReserveKind;
+    const borrowRateBps = reserveKind.borrowRateBps;
+    const maxBorrowRateBpsBytes = Buffer.alloc(4);
+    maxBorrowRateBpsBytes.writeUInt32LE(borrowRateBps, 0);
+
+    const minDebtTermSecondsBytes = Buffer.alloc(8);
+    minDebtTermSecondsBytes.writeBigUInt64LE(BigInt(reserveKind.debtTermSeconds.toString()), 0);
+
+    const accounts: UpdateObligationConfigAccounts = {
+      owner,
+      obligation,
+      borrowReserve: some(reserve.address),
+      depositReserve: none<Address>(),
+      lendingMarket,
+    };
+
+    const rolloverValue = rollover ? 1 : 0;
+    const openTermAllowedValue = openTermAllowed ? 1 : 0;
+
+    const enabledIx = updateObligationConfig(
+      { mode: new UpdateObligationConfigMode.FixedTermRolloverEnabled(), value: Uint8Array.from([rolloverValue]) },
+      accounts,
+      undefined,
+      programId
+    );
+    const maxBorrowRateIx = updateObligationConfig(
+      { mode: new UpdateObligationConfigMode.FixedTermRolloverMaxBorrowRateBps(), value: maxBorrowRateBpsBytes },
+      accounts,
+      undefined,
+      programId
+    );
+    const minDebtTermIx = updateObligationConfig(
+      { mode: new UpdateObligationConfigMode.FixedTermRolloverMinDebtTermSeconds(), value: minDebtTermSecondsBytes },
+      accounts,
+      undefined,
+      programId
+    );
+    const openTermAllowedIx = updateObligationConfig(
+      {
+        mode: new UpdateObligationConfigMode.FixedTermRolloverOpenTermAllowed(),
+        value: Uint8Array.from([openTermAllowedValue]),
+      },
+      accounts,
+      undefined,
+      programId
+    );
+
+    // On-chain check_enabled_rollover_config_integrity runs after each config update.
+    // It requires max_borrow_rate_bps > 0 when either auto-rollover or migration-to-fixed is enabled,
+    // and requires min_debt_term_seconds > 0 when migration-to-fixed is enabled.
+    // So when enabling rollover, set criteria first and then enable it.
+    // When disabling rollover, clear the enabled flag first and then zero the criteria.
+    const ixs = rollover
+      ? [maxBorrowRateIx, minDebtTermIx, enabledIx, openTermAllowedIx]
+      : [enabledIx, openTermAllowedIx, maxBorrowRateIx, minDebtTermIx];
+
+    if (fixedTermRolloverWindowDurationDays !== undefined) {
+      // Written through a u8 buffer rather than `Uint8Array.from`, which would silently wrap a value the
+      // on-chain field cannot hold (300 days becoming 44).
+      const windowDurationDaysBytes = Buffer.alloc(1);
+      windowDurationDaysBytes.writeUInt8(fixedTermRolloverWindowDurationDays);
+      // A non-zero window is rejected while auto-rollover is on and the min debt term is zero, so this goes
+      // last either way: by now the enabling path has set the term, and the disabling path has cleared the flag.
+      ixs.push(
+        updateObligationConfig(
+          {
+            mode: new UpdateObligationConfigMode.FixedTermRolloverWindowDurationDays(),
+            value: windowDurationDaysBytes,
+          },
+          accounts,
+          undefined,
+          programId
+        )
+      );
+    }
+
+    return ixs;
+  }
+
+  private async addBorrowRolloverConfigIxs(): Promise<void> {
+    const obligation = await this.getObligationPda();
+    const rolloverIxs = KaminoAction.buildBorrowRolloverConfigIxs({
+      reserve: this.reserve,
+      rollover: true,
+      openTermAllowed: false,
+      owner: this.owner,
+      obligation,
+      lendingMarket: this.kaminoMarket.getAddress(),
+      programId: this.kaminoMarket.programId,
+    });
+
+    this.lendingIxs.push(...rolloverIxs);
+    this.lendingIxsLabels.push('updateObligationConfig[BorrowRolloverConfig]');
   }
 
   /// @deprecated -- use addWithdrawIxV2 instead
@@ -1535,6 +2537,40 @@ export class KaminoAction {
             instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
           },
           farmsAccounts: farmsAccounts,
+          farmsProgram: this.kaminoMarket.farmsProgramId,
+        },
+        undefined,
+        this.kaminoMarket.programId
+      )
+    );
+  }
+
+  async addWithdrawObligationCollateralIxV2(collateralAmount: BN): Promise<void> {
+    const obligationAddress = await this.getObligationPda();
+    const { collateralFarmAccounts: farmsAccounts } = await KaminoAction.getFarmAccountsForReserve(
+      obligationAddress,
+      this.reserve,
+      this.kaminoMarket.farmsProgramId
+    );
+    this.lendingIxsLabels.push(`withdrawObligationCollateralV2`);
+    this.lendingIxs.push(
+      withdrawObligationCollateralV2(
+        {
+          collateralAmount,
+        },
+        {
+          withdrawAccounts: {
+            owner: this.owner,
+            obligation: obligationAddress,
+            lendingMarket: this.kaminoMarket.getAddress(),
+            lendingMarketAuthority: await this.kaminoMarket.getLendingMarketAuthority(),
+            withdrawReserve: this.reserve.address,
+            reserveSourceCollateral: this.reserve.state.collateral.supplyVault,
+            userDestinationCollateral: await this.getUserCollateralAccountAddress(this.reserve),
+            tokenProgram: TOKEN_PROGRAM_ADDRESS,
+            instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
+          },
+          farmsAccounts,
           farmsProgram: this.kaminoMarket.farmsProgramId,
         },
         undefined,
@@ -1813,13 +2849,13 @@ export class KaminoAction {
       accounts: depositAndWithdrawIx.accounts!.concat(depositReserveAccountMetas).concat(borrowReserveAccountMetas),
     };
 
-    this.lendingIxs.push(depositAndWithdrawIx);
+    this.appendLendingIx(depositAndWithdrawIx);
   }
 
   async addDepositAndBorrowIx() {
     this.lendingIxsLabels.push(`depositReserveLiquidityAndObligationCollateral`);
     this.lendingIxsLabels.push(`borrowObligationLiquidity`);
-    this.lendingIxs.push(
+    this.appendLendingIx(
       depositReserveLiquidityAndObligationCollateral(
         {
           liquidityAmount: this.amount,
@@ -1888,7 +2924,7 @@ export class KaminoAction {
       accounts: borrowIx.accounts!.concat(depositReserveAccountMetas),
     };
 
-    this.lendingIxs.push(borrowIx);
+    this.appendLendingIx(borrowIx);
   }
 
   async addDepositAndBorrowIxV2(): Promise<void> {
@@ -1901,7 +2937,7 @@ export class KaminoAction {
 
     this.lendingIxsLabels.push(`depositReserveLiquidityAndObligationCollateralV2`);
     this.lendingIxsLabels.push(`borrowObligationLiquidityV2`);
-    this.lendingIxs.push(
+    this.appendLendingIx(
       depositReserveLiquidityAndObligationCollateralV2(
         {
           liquidityAmount: this.amount,
@@ -1984,7 +3020,7 @@ export class KaminoAction {
       accounts: borrowIx.accounts!.concat(depositReserveAccountMetas),
     };
 
-    this.lendingIxs.push(borrowIx);
+    this.appendLendingIx(borrowIx);
   }
 
   async addRepayAndWithdrawIxs(withdrawCollateralAmount: BN) {
@@ -2214,7 +3250,7 @@ export class KaminoAction {
           ? liquidateIx.accounts!.concat(depositReserveAccountMetas)
           : liquidateIx.accounts,
     };
-    this.lendingIxs.push(liquidateIx);
+    this.appendLendingIx(liquidateIx);
   }
 
   async addLiquidateIxV2(maxAllowedLtvOverridePercent: number = 0) {
@@ -2288,7 +3324,7 @@ export class KaminoAction {
           ? liquidateIx.accounts!.concat(depositReserveAccountMetas)
           : liquidateIx.accounts,
     };
-    this.lendingIxs.push(liquidateIx);
+    this.appendLendingIx(liquidateIx);
   }
 
   async addInBetweenIxs(
@@ -2296,7 +3332,8 @@ export class KaminoAction {
     includeAtaIxs: boolean,
     requestElevationGroup: boolean,
     addInitObligationForFarm: boolean,
-    useV2Ixs: boolean
+    useV2Ixs: boolean,
+    overrideElevationGroupRequest?: number
   ) {
     await this.addSupportIxsWithoutInitObligation(
       action,
@@ -2304,7 +3341,9 @@ export class KaminoAction {
       useV2Ixs,
       'inBetween',
       requestElevationGroup,
-      addInitObligationForFarm
+      addInitObligationForFarm,
+      false,
+      overrideElevationGroupRequest
     );
   }
 
@@ -2351,6 +3390,7 @@ export class KaminoAction {
         'depositCollateral',
         'deposit',
         'withdraw',
+        'withdrawAndEnqueue',
         'borrow',
         'liquidate',
         'repay',
@@ -2425,6 +3465,7 @@ export class KaminoAction {
           action === 'depositAndBorrow' ||
           action === 'depositCollateral' ||
           action === 'withdraw' ||
+          action === 'withdrawAndEnqueue' ||
           action === 'deposit' ||
           action === 'depositAndWithdraw'
         ) {
@@ -2492,69 +3533,32 @@ export class KaminoAction {
             await this.addRequestElevationIx(overrideElevationGroupRequest ?? 0, 'cleanup', [this.reserve.address]);
           }
         } else if (action === 'depositAndBorrow' || action === 'borrow') {
-          let newElevationGroup: number = -1;
+          let newElevationGroup: number | undefined;
           let addAsSupportIx: AuxiliaryIx = 'setup';
-          let debtReserve = this.reserve;
-          let collReserve = this.reserve;
+          const currentElevationGroup = isKaminoObligation(this.obligation) ? this.obligation.state.elevationGroup : 0;
 
           if (overrideElevationGroupRequest !== undefined) {
             newElevationGroup = overrideElevationGroupRequest;
           } else {
             if (action === 'depositAndBorrow') {
-              debtReserve = this.outflowReserve!;
               addAsSupportIx = 'inBetween';
-            } else if (action === 'borrow') {
-              if (!isKaminoObligation(this.obligation)) {
-                throw new Error(`obligation is not a KaminoObligation`);
+              const nextElevationGroup = this.getPreferredElevationGroupForBorrowPair(
+                this.reserve,
+                this.outflowReserve!
+              );
+              if (nextElevationGroup !== undefined && nextElevationGroup !== currentElevationGroup) {
+                newElevationGroup = nextElevationGroup;
               }
-              const depositReserve = this.obligation.deposits.values().next().value;
-              if (!depositReserve) {
-                throw new Error('No deposit reserve found in obligation, cannot borrow against it');
-              }
-              collReserve = this.kaminoMarket.getExistingReserveByAddress(depositReserve.reserveAddress);
-
-              addAsSupportIx = 'setup';
-            }
-
-            const groups = this.kaminoMarket.state.elevationGroups;
-
-            const commonElevationGroups = this.kaminoMarket.getCommonElevationGroupsForPair(collReserve, debtReserve);
-
-            if (commonElevationGroups.length === 0) {
-              console.log('No common elevation groups found, staying with default');
             } else {
-              const eModeGroupWithMaxLtvAndDebtReserve = commonElevationGroups.reduce((prev, curr) => {
-                const prevGroup = groups.find((group) => group.id === prev);
-                const currGroup = groups.find((group) => group.id === curr);
-                return prevGroup!.ltvPct > currGroup!.ltvPct ? prev : curr;
-              });
-
-              const eModeGroup = groups.find((group) => group.id === eModeGroupWithMaxLtvAndDebtReserve)!.id;
-
-              if (
-                eModeGroup !== 0 &&
-                eModeGroup !== (isKaminoObligation(this.obligation) ? this.obligation.state.elevationGroup : 0)
-              ) {
-                newElevationGroup = eModeGroup;
-              }
+              newElevationGroup = this.getBorrowElevationGroupRequest();
             }
           }
 
           if (
-            newElevationGroup >= 0 &&
+            newElevationGroup !== undefined &&
             newElevationGroup !== (isKaminoObligation(this.obligation) ? this.obligation.state.elevationGroup : 0)
           ) {
-            await this.addRequestElevationIx(newElevationGroup, addAsSupportIx);
-            this.addRefreshReserveIxs(allReservesExcludingCurrent, addAsSupportIx);
-            this.addRefreshReserveIxs([...currentReserveAddresses], addAsSupportIx);
-            await this.addRefreshObligationIx(addAsSupportIx);
-
-            if (action === 'borrow') {
-              if (!isKaminoObligation(this.obligation)) {
-                throw new Error(`obligation is not a KaminoObligation`);
-              }
-              this.obligation.refreshedStats.potentialElevationGroupUpdate = newElevationGroup;
-            }
+            await this.addBorrowElevationSupportIxs(newElevationGroup, addAsSupportIx, action === 'borrow');
           }
         } else if (
           action === 'deposit' &&
@@ -2592,6 +3596,7 @@ export class KaminoAction {
             action === 'depositAndBorrow' ||
             action === 'depositCollateral' ||
             action === 'withdraw' ||
+            action === 'withdrawAndEnqueue' ||
             action === 'deposit'
           ) {
             await this.addRefreshFarmsForReserve(
@@ -2628,30 +3633,21 @@ export class KaminoAction {
     }
   }
 
-  async addSupportIxs(
-    action: ActionType,
-    includeAtaIxs: boolean,
-    requestElevationGroup: boolean,
-    addInitObligationForFarm: boolean,
-    useV2Ixs: boolean,
-    scopeRefreshConfig: ScopePriceRefreshConfig | undefined,
-    initUserMetadata: { skipInitialization: boolean; skipLutCreation: boolean },
-    twoTokenAction: boolean = false,
-    overrideElevationGroupRequest?: number
-  ) {
-    if (!['mint', 'redeem'].includes(action)) {
-      const [, ownerUserMetadata] = await this.kaminoMarket.getUserMetadata(this.owner.address);
-      if (!ownerUserMetadata && !initUserMetadata.skipInitialization) {
-        let lookupTable: Address = DEFAULT_PUBLIC_KEY;
-        if (!initUserMetadata.skipLutCreation) {
-          const [createLutIx, lookupTableAddress] = await createLookupTableIx(this.kaminoMarket.getRpc(), this.owner);
-          lookupTable = lookupTableAddress;
-          this.setupIxs.push(createLutIx);
-          this.setupIxsLabels.push(`createUserLutIx[${lookupTableAddress}]`);
-        }
-        await this.addInitUserMetadataIxs(lookupTable);
-      }
-
+  async addSupportIxs({
+    action,
+    includeAtaIxs,
+    requestElevationGroup = false,
+    addInitObligationForFarm = false,
+    useV2Ixs,
+    scopeRefreshConfig,
+    initUserMetadata,
+    twoTokenAction = false,
+    overrideElevationGroupRequest,
+    addUserAndObligationInitIxs,
+  }: AddSupportIxsOptions) {
+    const shouldAddUserAndObligationInitIxs = addUserAndObligationInitIxs ?? !['mint', 'redeem'].includes(action);
+    if (shouldAddUserAndObligationInitIxs) {
+      await this.maybeAddUserMetadataIxs(initUserMetadata);
       await this.addInitObligationIxs();
     }
 
@@ -2666,7 +3662,11 @@ export class KaminoAction {
       overrideElevationGroupRequest
     );
 
-    const allReserves = [
+    await this.addSupportScopeRefreshIxs(scopeRefreshConfig);
+  }
+
+  private getSupportScopeRefreshReserves(): Address[] {
+    return [
       ...new Set<Address>([
         ...this.depositReserves,
         ...this.borrowReserves,
@@ -2675,7 +3675,10 @@ export class KaminoAction {
         ...(this.preLoadedDepositReservesSameTx ? this.preLoadedDepositReservesSameTx : []),
       ]),
     ];
-    const scopeTokensMap = getTokenIdsForScopeRefresh(this.kaminoMarket, allReserves);
+  }
+
+  private async addSupportScopeRefreshIxs(scopeRefreshConfig: ScopePriceRefreshConfig | undefined) {
+    const scopeTokensMap = getTokenIdsForScopeRefresh(this.kaminoMarket, this.getSupportScopeRefreshReserves());
 
     if (scopeTokensMap.size > 0 && scopeRefreshConfig) {
       for (const [configPubkey, config] of scopeRefreshConfig.scopeConfigurations) {
@@ -2685,6 +3688,161 @@ export class KaminoAction {
         }
       }
     }
+  }
+
+  private static emptyInstructionBundle(): InstructionBundle {
+    return { ixs: [], labels: [], luts: [] };
+  }
+
+  private static appendInstructionBundle(target: InstructionBundle, source: InstructionBundle): void {
+    target.ixs.push(...source.ixs);
+    target.labels.push(...source.labels);
+    target.luts.push(...source.luts);
+  }
+
+  private static combineInstructionBundles(...sources: InstructionBundle[]): InstructionBundle {
+    const bundle = KaminoAction.emptyInstructionBundle();
+    sources.forEach((source) => KaminoAction.appendInstructionBundle(bundle, source));
+    return bundle;
+  }
+
+  private appendInstructionBundle(bundle: InstructionBundle, addAsSupportIx: AuxiliaryIx = 'setup'): void {
+    if (addAsSupportIx === 'setup') {
+      this.setupIxs.push(...bundle.ixs);
+      this.setupIxsLabels.push(...bundle.labels);
+    } else if (addAsSupportIx === 'inBetween') {
+      this.inBetweenIxs.push(...bundle.ixs);
+      this.inBetweenIxsLabels.push(...bundle.labels);
+    } else {
+      this.cleanupIxs.push(...bundle.ixs);
+      this.cleanupIxsLabels.push(...bundle.labels);
+    }
+    this.luts.push(...bundle.luts);
+  }
+
+  private async maybeAddUserMetadataIxs(initUserMetadata: InitUserMetadataConfig) {
+    this.appendInstructionBundle(
+      await KaminoAction.buildUserMetadataSetupIxs({
+        kaminoMarket: this.kaminoMarket,
+        owner: this.owner,
+        payer: this.payer,
+        referrer: this.referrer,
+        initUserMetadata,
+      })
+    );
+  }
+
+  private static async buildUserMetadataSetupIxs({
+    kaminoMarket,
+    owner,
+    payer,
+    referrer,
+    initUserMetadata: initUserMetadataConfig,
+  }: {
+    kaminoMarket: KaminoMarket;
+    owner: TransactionSigner;
+    payer: TransactionSigner;
+    referrer: Option<Address>;
+    initUserMetadata: InitUserMetadataConfig;
+  }): Promise<InstructionBundle> {
+    const bundle = KaminoAction.emptyInstructionBundle();
+    const [, ownerUserMetadata] = await kaminoMarket.getUserMetadata(owner.address);
+    if (ownerUserMetadata || initUserMetadataConfig.skipInitialization) {
+      return bundle;
+    }
+
+    let lookupTable: Address = DEFAULT_PUBLIC_KEY;
+    if (!initUserMetadataConfig.skipLutCreation) {
+      const [createLutIx, lookupTableAddress] = await createLookupTableIx(kaminoMarket.getRpc(), owner);
+      lookupTable = lookupTableAddress;
+      bundle.ixs.push(createLutIx);
+      bundle.labels.push(`createUserLutIx[${lookupTableAddress}]`);
+      bundle.luts.push(lookupTableAddress);
+    }
+
+    const [userMetadataAddress] = await userMetadataPda(owner.address, kaminoMarket.programId);
+    const referrerUserMetadataAddress = await KaminoAction.getReferrerMetadataAccount(referrer, kaminoMarket.programId);
+    bundle.ixs.push(
+      initUserMetadata(
+        {
+          userLookupTable: lookupTable,
+        },
+        {
+          owner,
+          feePayer: payer,
+          userMetadata: userMetadataAddress,
+          referrerUserMetadata: referrerUserMetadataAddress,
+          rent: SYSVAR_RENT_ADDRESS,
+          systemProgram: SYSTEM_PROGRAM_ADDRESS,
+        },
+        undefined,
+        kaminoMarket.programId
+      )
+    );
+    bundle.labels.push(`initUserMetadata[${userMetadataAddress.toString()}]`);
+    return bundle;
+  }
+
+  private async addBorrowElevationSupportIxs(
+    newElevationGroup: number,
+    addAsSupportIx: AuxiliaryIx,
+    trackPotentialElevationGroupUpdate: boolean = false
+  ) {
+    const currentReserveAddresses = new Set<Address>([this.reserve.address]);
+    if (this.outflowReserve) {
+      currentReserveAddresses.add(this.outflowReserve.address);
+    }
+    const allReservesExcludingCurrent = [...new Set<Address>(this.depositReserves.concat(this.borrowReserves))].filter(
+      (address) => !currentReserveAddresses.has(address)
+    );
+
+    await this.addRequestElevationIx(newElevationGroup, addAsSupportIx);
+    this.addRefreshReserveIxs(allReservesExcludingCurrent, addAsSupportIx);
+    this.addRefreshReserveIxs([...currentReserveAddresses], addAsSupportIx);
+    await this.addRefreshObligationIx(addAsSupportIx);
+
+    if (trackPotentialElevationGroupUpdate && isKaminoObligation(this.obligation)) {
+      this.obligation.refreshedStats.potentialElevationGroupUpdate = newElevationGroup;
+    }
+  }
+
+  private getBorrowElevationGroupRequest(overrideElevationGroupRequest?: number): number | undefined {
+    if (!isKaminoObligation(this.obligation)) {
+      throw new Error(`obligation is not a KaminoObligation`);
+    }
+
+    let newElevationGroup: number | undefined = overrideElevationGroupRequest;
+
+    if (newElevationGroup === undefined) {
+      const depositReserve = this.obligation.deposits.values().next().value;
+      if (!depositReserve) {
+        throw new Error('No deposit reserve found in obligation, cannot borrow against it');
+      }
+
+      const collReserve = this.kaminoMarket.getExistingReserveByAddress(depositReserve.reserveAddress);
+      newElevationGroup = this.getPreferredElevationGroupForBorrowPair(collReserve, this.reserve);
+    }
+
+    if (newElevationGroup === undefined || newElevationGroup === this.obligation.state.elevationGroup) {
+      return undefined;
+    }
+
+    return newElevationGroup;
+  }
+
+  private getPreferredElevationGroupForBorrowPair(
+    collReserve: KaminoReserve,
+    debtReserve: KaminoReserve
+  ): number | undefined {
+    const selectedElevationGroupId = this.kaminoMarket.getPreferredElevationGroupForBorrowPair(
+      collReserve,
+      debtReserve
+    );
+    if (selectedElevationGroupId === 0) {
+      console.log('No common elevation groups found, staying with default');
+      return undefined;
+    }
+    return selectedElevationGroupId;
   }
 
   private static optionalAccount(pubkey: Address): Option<Address> {
@@ -2994,118 +4152,290 @@ export class KaminoAction {
     mode: typeof ReserveFarmKind.Collateral | typeof ReserveFarmKind.Debt,
     addAsSupportIx: AuxiliaryIx = 'setup'
   ): Promise<void> {
+    this.pushInitObligationForFarmIxs(await this.buildInitObligationForFarmIxs(reserve, mode), addAsSupportIx);
+  }
+
+  /**
+   * Appends already-built init-obligation-for-farm instructions (from {@link buildInitObligationForFarmIxs}) to
+   * the requested support instruction list. Callers that build several reserves' ixs concurrently use this to
+   * append them in a deterministic order afterwards.
+   */
+  private pushInitObligationForFarmIxs(initIxs: { ix: Instruction; label: string }[], addAsSupportIx: AuxiliaryIx) {
+    const bundle = KaminoAction.emptyInstructionBundle();
+    bundle.ixs.push(...initIxs.map(({ ix }) => ix));
+    bundle.labels.push(...initIxs.map(({ label }) => label));
+    this.appendInstructionBundle(bundle, addAsSupportIx);
+  }
+
+  /**
+   * Builds the `initObligationFarmsForReserve` instruction(s) needed for this reserve's farm of the given kind,
+   * without mutating the action. Returns an entry only when the reserve has that farm and the obligation's
+   * farm-user-state does not yet exist. This lets callers fetch existence checks concurrently and then append the
+   * resulting ixs in a deterministic order via {@link pushInitObligationForFarmIxs}.
+   */
+  private async buildInitObligationForFarmIxs(
+    reserve: KaminoReserve,
+    mode: typeof ReserveFarmKind.Collateral | typeof ReserveFarmKind.Debt
+  ): Promise<{ ix: Instruction; label: string }[]> {
+    const obligationAddress = await this.getObligationPda();
+    const bundle = await KaminoAction.buildInitObligationFarmForReserveSetupIxs({
+      kaminoMarket: this.kaminoMarket,
+      reserve,
+      mode,
+      obligationAddress,
+      obligationOwner: isKaminoObligation(this.obligation) ? this.obligation.state.owner : this.owner.address,
+      // The farm user-state account is rent-paid by the transaction's payer, which is not necessarily
+      // the obligation owner (e.g. a keeper-cranked rollover where `owner` is a non-signing noopSigner).
+      payer: this.payer,
+    });
+    return bundle.ixs.map((ix, index) => ({ ix, label: bundle.labels[index] }));
+  }
+
+  private static async buildInitObligationFarmForReserveSetupIxs({
+    kaminoMarket,
+    reserve,
+    mode,
+    obligationAddress,
+    obligationOwner,
+    payer,
+    label,
+  }: {
+    kaminoMarket: KaminoMarket;
+    reserve: KaminoReserve;
+    mode: typeof ReserveFarmKind.Collateral | typeof ReserveFarmKind.Debt;
+    obligationAddress: Address;
+    obligationOwner: Address;
+    payer: TransactionSigner;
+    label?: string;
+  }): Promise<InstructionBundle> {
+    const bundle = KaminoAction.emptyInstructionBundle();
     const farms: [number, Address, Address][] = [];
 
-    const obligationAddress = await this.getObligationPda();
     if (mode === ReserveFarmKind.Collateral && isNotNullPubkey(reserve.state.farmCollateral)) {
       const pda = await obligationFarmStatePda(
         reserve.state.farmCollateral,
         obligationAddress,
-        this.kaminoMarket.farmsProgramId
+        kaminoMarket.farmsProgramId
       );
-      const account = await fetchEncodedAccount(this.kaminoMarket.getRpc(), pda);
+      const account = await fetchEncodedAccount(kaminoMarket.getRpc(), pda);
       if (!account.exists) {
         farms.push([ReserveFarmKind.Collateral.discriminator, reserve.state.farmCollateral, pda]);
       }
     }
 
     if (mode === ReserveFarmKind.Debt && isNotNullPubkey(reserve.state.farmDebt)) {
-      const pda = await obligationFarmStatePda(
-        reserve.state.farmDebt,
-        obligationAddress,
-        this.kaminoMarket.farmsProgramId
-      );
-      const account = await fetchEncodedAccount(this.kaminoMarket.getRpc(), pda);
+      const pda = await obligationFarmStatePda(reserve.state.farmDebt, obligationAddress, kaminoMarket.farmsProgramId);
+      const account = await fetchEncodedAccount(kaminoMarket.getRpc(), pda);
       if (!account.exists) {
         farms.push([ReserveFarmKind.Debt.discriminator, reserve.state.farmDebt, pda]);
       }
     }
 
-    const lendingMarketAuthority = await this.kaminoMarket.getLendingMarketAuthority();
+    const lendingMarketAuthority = await kaminoMarket.getLendingMarketAuthority();
     farms.forEach((arg: [number, Address, Address]) => {
       const args: InitObligationFarmsForReserveArgs = { mode: arg[0] };
       const accounts: InitObligationFarmsForReserveAccounts = {
-        owner: isKaminoObligation(this.obligation) ? this.obligation.state.owner : this.owner.address,
-        payer: this.owner,
+        owner: obligationOwner,
+        payer,
         obligation: obligationAddress,
         lendingMarketAuthority,
         reserve: reserve.address,
         reserveFarmState: arg[1],
         obligationFarm: arg[2],
-        lendingMarket: this.kaminoMarket.getAddress(),
-        farmsProgram: this.kaminoMarket.farmsProgramId,
+        lendingMarket: kaminoMarket.getAddress(),
+        farmsProgram: kaminoMarket.farmsProgramId,
         rent: SYSVAR_RENT_ADDRESS,
         systemProgram: SYSTEM_PROGRAM_ADDRESS,
       };
-      const initObligationForFarm = initObligationFarmsForReserve(args, accounts, [], this.kaminoMarket.programId);
-      if (addAsSupportIx === 'setup') {
-        this.setupIxs.push(initObligationForFarm);
-        this.setupIxsLabels.push(
-          `InitObligationForFarm[${reserve.address.toString()}, ${obligationAddress.toString()}]`
-        );
-      } else if (addAsSupportIx === 'inBetween') {
-        this.inBetweenIxs.push(initObligationForFarm);
-        this.inBetweenIxsLabels.push(
-          `InitObligationForFarm[${reserve.address.toString()}, ${obligationAddress.toString()}]`
-        );
-      }
+      bundle.ixs.push(initObligationFarmsForReserve(args, accounts, [], kaminoMarket.programId));
+      bundle.labels.push(label ?? `InitObligationForFarm[${reserve.address.toString()}, ${obligationAddress}]`);
     });
+    return bundle;
   }
 
   private async addInitObligationIxs(): Promise<void> {
-    if (!isKaminoObligation(this.obligation)) {
-      const obligationPda = await this.getObligationPda();
-      const [userMetadataAddress] = await userMetadataPda(this.owner.address, this.kaminoMarket.programId);
-      const initObligationIx = initObligation(
+    this.appendInstructionBundle(
+      await KaminoAction.buildInitObligationSetupIxs({
+        kaminoMarket: this.kaminoMarket,
+        owner: this.owner,
+        payer: this.payer,
+        obligation: this.obligation,
+      })
+    );
+  }
+
+  private static async buildInitObligationSetupIxs({
+    kaminoMarket,
+    owner,
+    payer,
+    obligation,
+  }: {
+    kaminoMarket: KaminoMarket;
+    owner: TransactionSigner;
+    payer: TransactionSigner;
+    obligation: KaminoObligation | ObligationType;
+  }): Promise<InstructionBundle> {
+    const bundle = KaminoAction.emptyInstructionBundle();
+    if (isKaminoObligation(obligation)) {
+      return bundle;
+    }
+
+    const obligationPda = await obligation.toPda(kaminoMarket.getAddress(), owner.address);
+    const [userMetadataAddress] = await userMetadataPda(owner.address, kaminoMarket.programId);
+    const obligationArgs = obligation.toArgs();
+    bundle.ixs.push(
+      initObligation(
         {
           args: {
-            tag: this.obligation.toArgs().tag,
-            id: this.obligation.toArgs().id,
+            tag: obligationArgs.tag,
+            id: obligationArgs.id,
           },
         },
         {
-          obligationOwner: this.owner,
-          feePayer: this.payer,
+          obligationOwner: owner,
+          feePayer: payer,
           obligation: obligationPda,
-          lendingMarket: this.kaminoMarket.getAddress(),
-          seed1Account: this.obligation.toArgs().seed1,
-          seed2Account: this.obligation.toArgs().seed2,
+          lendingMarket: kaminoMarket.getAddress(),
+          seed1Account: obligationArgs.seed1,
+          seed2Account: obligationArgs.seed2,
           ownerUserMetadata: userMetadataAddress,
           rent: SYSVAR_RENT_ADDRESS,
           systemProgram: SYSTEM_PROGRAM_ADDRESS,
         },
         undefined,
-        this.kaminoMarket.programId
-      );
-      this.setupIxs.push(initObligationIx);
-      this.setupIxsLabels.push(`InitObligation[${obligationPda.toString()}]`);
-    }
+        kaminoMarket.programId
+      )
+    );
+    bundle.labels.push(`InitObligation[${obligationPda.toString()}]`);
+    return bundle;
   }
 
-  private async addInitUserMetadataIxs(lookupTableAddress: Address): Promise<void> {
-    const [userMetadataAddress] = await userMetadataPda(this.owner.address, this.kaminoMarket.programId);
-    const referrerUserMetadataAddress = await KaminoAction.getReferrerMetadataAccount(
-      this.referrer,
-      this.kaminoMarket.programId
-    );
+  private static async buildDepositOwnerPreActionSetupIxs({
+    kaminoMarket,
+    owner,
+    payer,
+    obligation,
+    reserve,
+    referrer,
+    initUserMetadata,
+  }: {
+    kaminoMarket: KaminoMarket;
+    owner: TransactionSigner;
+    payer: TransactionSigner;
+    obligation: KaminoObligation | ObligationType;
+    reserve: KaminoReserve;
+    referrer: Option<Address>;
+    initUserMetadata: InitUserMetadataConfig;
+  }): Promise<InstructionBundle> {
+    const obligationAddress = isKaminoObligation(obligation)
+      ? obligation.obligationAddress
+      : await obligation.toPda(kaminoMarket.getAddress(), owner.address);
 
-    const initUserMetadataIx = initUserMetadata(
-      {
-        userLookupTable: lookupTableAddress,
-      },
-      {
-        owner: this.owner,
-        feePayer: this.payer,
-        userMetadata: userMetadataAddress,
-        referrerUserMetadata: referrerUserMetadataAddress,
-        rent: SYSVAR_RENT_ADDRESS,
-        systemProgram: SYSTEM_PROGRAM_ADDRESS,
-      },
-      undefined,
-      this.kaminoMarket.programId
+    const userMetadataSetup = await KaminoAction.buildUserMetadataSetupIxs({
+      kaminoMarket,
+      owner,
+      payer,
+      referrer,
+      initUserMetadata,
+    });
+    const obligationSetup = await KaminoAction.buildInitObligationSetupIxs({ kaminoMarket, owner, payer, obligation });
+    const farmSetup = await KaminoAction.buildInitObligationFarmForReserveSetupIxs({
+      kaminoMarket,
+      reserve,
+      mode: ReserveFarmKind.Collateral,
+      obligationAddress,
+      obligationOwner: isKaminoObligation(obligation) ? obligation.state.owner : owner.address,
+      payer,
+      label: `InitObligationForFarm[${reserve.address.toString()}, ${obligationAddress.toString()}]`,
+    });
+
+    return KaminoAction.combineInstructionBundles(userMetadataSetup, obligationSetup, farmSetup);
+  }
+
+  private static async buildDepositAndFillBorrowOrderSetupIxs({
+    kaminoMarket,
+    lender,
+    lenderObligation,
+    borrowerObligation,
+    fillReserve,
+    referrer,
+  }: {
+    kaminoMarket: KaminoMarket;
+    lender: TransactionSigner;
+    lenderObligation: KaminoObligation | ObligationType;
+    borrowerObligation: KaminoObligation;
+    fillReserve: KaminoReserve;
+    referrer: Option<Address>;
+  }): Promise<InstructionBundle> {
+    const [lenderSetup, borrowerDebtFarmSetup, borrowerReferrerTokenStateSetup] = await Promise.all([
+      KaminoAction.buildDepositOwnerPreActionSetupIxs({
+        kaminoMarket,
+        owner: lender,
+        payer: lender,
+        obligation: lenderObligation,
+        reserve: fillReserve,
+        referrer,
+        initUserMetadata: { skipInitialization: false, skipLutCreation: false },
+      }),
+      KaminoAction.buildInitObligationFarmForReserveSetupIxs({
+        kaminoMarket,
+        reserve: fillReserve,
+        mode: ReserveFarmKind.Debt,
+        obligationAddress: borrowerObligation.obligationAddress,
+        obligationOwner: borrowerObligation.state.owner,
+        payer: lender,
+        label: 'initObligationFarmsForReserve[debt]',
+      }),
+      KaminoAction.buildReferrerTokenStateSetupIxs({
+        kaminoMarket,
+        payer: lender,
+        reserve: fillReserve,
+        referrer: borrowerObligation.state.referrer,
+      }),
+    ]);
+
+    return KaminoAction.combineInstructionBundles(lenderSetup, borrowerDebtFarmSetup, borrowerReferrerTokenStateSetup);
+  }
+
+  private static async buildReferrerTokenStateSetupIxs({
+    kaminoMarket,
+    payer,
+    reserve,
+    referrer,
+  }: {
+    kaminoMarket: KaminoMarket;
+    payer: TransactionSigner;
+    reserve: KaminoReserve;
+    referrer: Address;
+  }): Promise<InstructionBundle> {
+    const bundle = KaminoAction.emptyInstructionBundle();
+    if (referrer === DEFAULT_PUBLIC_KEY) {
+      return bundle;
+    }
+
+    const referrerTokenState = await referrerTokenStatePda(referrer, reserve.address, kaminoMarket.programId);
+    const referrerTokenStateAccount = await fetchEncodedAccount(kaminoMarket.getRpc(), referrerTokenState);
+    if (referrerTokenStateAccount.exists) {
+      return bundle;
+    }
+
+    bundle.ixs.push(
+      initReferrerTokenState(
+        {
+          lendingMarket: kaminoMarket.getAddress(),
+          payer,
+          reserve: reserve.address,
+          referrer,
+          referrerTokenState,
+          rent: SYSVAR_RENT_ADDRESS,
+          systemProgram: SYSTEM_PROGRAM_ADDRESS,
+        },
+        undefined,
+        kaminoMarket.programId
+      )
     );
-    this.setupIxs.push(initUserMetadataIx);
-    this.setupIxsLabels.push(`initUserMetadata[${userMetadataAddress.toString()}]`);
+    bundle.labels.push('initReferrerTokenState');
+    return bundle;
   }
 
   private addInitReferrerTokenStateIx(reserve: KaminoReserve, referrerTokenState: Address) {
@@ -3166,7 +4496,10 @@ export class KaminoAction {
       await this.updateWSOLAccount(action);
     }
 
-    if ((action === 'withdraw' || action === 'borrow' || action === 'redeem') && this.mint !== WRAPPED_SOL_MINT) {
+    if (
+      (action === 'withdraw' || action === 'withdrawAndEnqueue' || action === 'borrow' || action === 'redeem') &&
+      this.mint !== WRAPPED_SOL_MINT
+    ) {
       const reserveAta = await this.getUserTokenAccountAddress(this.reserve);
       const [, createUserTokenAccountIx] = await createAssociatedTokenAccountIdempotentInstruction(
         this.owner,
@@ -3248,7 +4581,7 @@ export class KaminoAction {
       this.setupIxs.unshift(createUserTokenAccountIx);
       this.setupIxsLabels.unshift(`CreateUserAta[${reserveAta}]`);
     }
-    if (action === 'mint') {
+    if (action === 'mint' || action === 'withdrawAndEnqueue') {
       const ctokenAta = await this.getUserCollateralAccountAddress(this.reserve);
       const [, createUserCollateralAccountIx] = await createAssociatedTokenAccountIdempotentInstruction(
         this.owner,
@@ -3379,17 +4712,18 @@ export class KaminoAction {
     kaminoMarket: KaminoMarket,
     action: ActionType,
     inflowAmount: string | BN,
-    inflowTokenMint: Address,
-    outflowTokenMint: Address,
+    inflowReserveAddress: Address,
+    outflowReserveAddress: Address,
     signer: TransactionSigner,
     obligationOwner: Address,
     obligation: KaminoObligation | ObligationType,
-    outflowAmount?: string | BN,
-    referrer: Option<Address> = none(),
-    currentSlot: Slot = 0n
+    outflowAmount: string | BN | undefined,
+    referrer: Option<Address>,
+    currentSlot: Slot,
+    permissionAuthority?: TransactionSigner
   ) {
-    const inflowReserve = kaminoMarket.getExistingReserveByMint(inflowTokenMint);
-    const outflowReserve = kaminoMarket.getExistingReserveByMint(outflowTokenMint);
+    const inflowReserve = kaminoMarket.getExistingReserveByAddress(inflowReserveAddress);
+    const outflowReserve = kaminoMarket.getExistingReserveByAddress(outflowReserveAddress);
 
     const { kaminoObligation, depositReserves, borrowReserves, distinctReserveCount } =
       await KaminoAction.loadObligation(
@@ -3411,8 +4745,8 @@ export class KaminoAction {
       action === 'repayAndWithdraw' ||
       action === 'repayAndWithdrawV2'
     ) {
-      primaryMint = inflowTokenMint;
-      secondaryMint = outflowTokenMint;
+      primaryMint = inflowReserve.getLiquidityMint();
+      secondaryMint = outflowReserve.getLiquidityMint();
     } else {
       throw new Error('Invalid action');
     }
@@ -3431,19 +4765,21 @@ export class KaminoAction {
       secondaryMint,
       outflowReserve,
       outflowAmount,
-      referrerKey
+      referrerKey,
+      undefined,
+      permissionAuthority
     );
   }
 
   static async initializeWithdrawReferrerFees(
-    mint: Address,
+    reserveAddress: Address,
     owner: TransactionSigner,
     kaminoMarket: KaminoMarket,
-    currentSlot: Slot = 0n
+    currentSlot: Slot
   ) {
-    const reserve = kaminoMarket.getReserveByMint(mint);
+    const reserve = kaminoMarket.getReserveByAddress(reserveAddress);
     if (reserve === undefined) {
-      throw new Error(`Reserve ${mint} not found in market ${kaminoMarket.getAddress()}`);
+      throw new Error(`Reserve ${reserveAddress} not found in market ${kaminoMarket.getAddress()}`);
     }
 
     const [{ createAtaIx }] = await createAtasIdempotent(owner, [
@@ -3458,7 +4794,7 @@ export class KaminoAction {
         kaminoMarket,
         owner,
         new VanillaObligation(kaminoMarket.programId),
-        mint,
+        reserve.getLiquidityMint(),
         0,
         new BN(0),
         [],
@@ -3566,6 +4902,7 @@ export class KaminoAction {
   public static actionToIxs(action: KaminoAction): Array<Instruction> {
     const ixs: Instruction[] = [...action.computeBudgetIxs, ...action.setupIxs];
     ixs.push(...KaminoAction.actionToLendingIxs(action));
+    ixs.push(...action.postLendingIxs);
     ixs.push(...action.cleanupIxs);
     return ixs;
   }
@@ -3584,6 +4921,7 @@ export class KaminoAction {
   public static actionToIxLabels(action: KaminoAction): Array<string> {
     const labels: string[] = [...action.computeBudgetIxsLabels, ...action.setupIxsLabels];
     labels.push(...KaminoAction.actionToLendingIxLabels(action));
+    labels.push(...action.postLendingIxsLabels);
     labels.push(...action.cleanupIxsLabels);
     return labels;
   }
@@ -3683,4 +5021,56 @@ export class KaminoAction {
     }
     return none();
   }
+}
+
+/**
+ * Result of {@link KaminoAction.buildDepositAndFillBorrowOrderTxns}.
+ */
+export interface DepositAndFillBorrowOrderResult {
+  /**
+   * Setup instructions that must be sent before `action` when non-empty. These create accounts that are safe to
+   * initialize before the main deposit/fill transaction, such as lender user metadata, the lender obligation,
+   * lender collateral farm state, borrower debt farm state, or referrer token state.
+   */
+  preFillSetupIxs: Instruction[];
+  /**
+   * Labels for `preFillSetupIxs`.
+   */
+  preFillSetupIxsLabels: string[];
+  /**
+   * Lookup table addresses created by `preFillSetupIxs`.
+   */
+  preFillSetupLuts: Address[];
+  /**
+   * The composed main action: the lender deposit, reserve refreshes, borrower-obligation refresh, and fill. Send
+   * `preFillSetupIxs` first when they are non-empty.
+   */
+  action: KaminoAction;
+  /**
+   * The reserve selected for the fill: among the order's debt-mint reserves that can fill it on-chain (a
+   * fixed-term order excludes open-term float reserves), the lender-favorable one - highest peak borrow rate,
+   * tie-broken by shortest remaining term.
+   */
+  fillReserve: KaminoReserve;
+  /**
+   * The liquidity amount the lender deposits: the `amount` prop when provided, otherwise exactly enough to fully
+   * fill the order (its remaining debt plus the borrow origination/referrer fees).
+   */
+  depositedAmount: BN;
+}
+
+/**
+ * Applies `obligationCustomizations` to an in-progress `KaminoAction`. Adds reserves that will be present at execution
+ * time but missing from the obligation snapshot, and removes reserves that will be gone before the action runs.
+ */
+function applyObligationCustomizations(axn: KaminoAction, customizations: ObligationCustomizations | undefined): void {
+  if (!customizations) {
+    return;
+  }
+  axn.depositReserves.push(...(customizations.addedDepositReserves ?? []));
+  axn.borrowReserves.push(...(customizations.addedBorrowReserves ?? []));
+  const removedBorrowSet = new Set<Address>(customizations.removedBorrowReserves ?? []);
+  const removedDepositSet = new Set<Address>(customizations.removedDepositReserves ?? []);
+  axn.borrowReserves = axn.borrowReserves.filter((r) => !removedBorrowSet.has(r));
+  axn.depositReserves = axn.depositReserves.filter((r) => !removedDepositSet.has(r));
 }

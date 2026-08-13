@@ -3,19 +3,21 @@ import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
 import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } from '@kamino-finance/klend-sdk';
 import { sendAndConfirmTx } from '../utils/tx';
-import { address } from '@solana/kit';
 
 (async () => {
   const c = getConnectionPool();
   const investor = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+  const slot = await c.rpc.getSlot().send();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
   const kaminoVault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
-  const reserveToDisinvestFrom = address('Ga4rZytCpq1unD4DbEJ5bkHeUz9g3oh9AAFEi6vSauXp');
+  const vaultState = await kaminoVault.getState();
+  const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
 
   const withdrawAllAndBlockReserveIxs = await kaminoManager.withdrawEverythingFromAllReservesAndBlockInvest(
     kaminoVault,
-    undefined,
+    slot,
+    vaultReservesMap,
     investor
   );
 

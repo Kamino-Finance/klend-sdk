@@ -61,6 +61,9 @@ export type CustomError =
   | RewardWithdrawAmountZero
   | RewardWithdrawAmountNotExpected
   | RewardsStaleForFeeUpdate
+  | VaultDepositCapReached
+  | MaxInvestAmountMustBeGreaterThanZero
+  | SharesOutBelowMinimum
 
 export class DepositAmountsZero extends Error {
   static readonly code = 7000
@@ -750,6 +753,39 @@ export class RewardsStaleForFeeUpdate extends Error {
   }
 }
 
+export class VaultDepositCapReached extends Error {
+  static readonly code = 7062
+  readonly code = 7062
+  readonly name = "VaultDepositCapReached"
+  readonly msg = "Vault deposit cap reached"
+
+  constructor(readonly logs?: string[]) {
+    super("7062: Vault deposit cap reached")
+  }
+}
+
+export class MaxInvestAmountMustBeGreaterThanZero extends Error {
+  static readonly code = 7063
+  readonly code = 7063
+  readonly name = "MaxInvestAmountMustBeGreaterThanZero"
+  readonly msg = "max_amount must be greater than 0"
+
+  constructor(readonly logs?: string[]) {
+    super("7063: max_amount must be greater than 0")
+  }
+}
+
+export class SharesOutBelowMinimum extends Error {
+  static readonly code = 7064
+  readonly code = 7064
+  readonly name = "SharesOutBelowMinimum"
+  readonly msg = "Shares out is below minimum requested"
+
+  constructor(readonly logs?: string[]) {
+    super("7064: Shares out is below minimum requested")
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 7000:
@@ -876,6 +912,12 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new RewardWithdrawAmountNotExpected(logs)
     case 7061:
       return new RewardsStaleForFeeUpdate(logs)
+    case 7062:
+      return new VaultDepositCapReached(logs)
+    case 7063:
+      return new MaxInvestAmountMustBeGreaterThanZero(logs)
+    case 7064:
+      return new SharesOutBelowMinimum(logs)
   }
 
   return null

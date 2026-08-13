@@ -16,16 +16,24 @@ import { sendAndConfirmTx } from '../utils/tx';
   // read the vault state so we can use the LUT in the tx
   const vaultState = await vault.getState();
 
+  // pre-load vault reserves once and pass to all methods (avoids redundant RPC calls)
+  const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
+  const farmState = await kaminoManager.loadVaultFarmState(vaultState);
+
   // withdraw 100 shares from the vault
   const sharesToWithdraw = new Decimal(100.0);
+  const slot = await c.rpc.getSlot({ commitment: 'confirmed' }).send();
   const withdrawIx = await kaminoManager.withdrawFromVaultIxs(
     user,
     vault,
     sharesToWithdraw,
-    await c.rpc.getSlot({ commitment: 'confirmed' }).send()
+    slot,
+    vaultReservesMap,
+    farmState,
+    null
   );
 
-  // send in the tx the instruction to withdraw + the instruction to unstake the shares from the vault farm if the vault has any farm; the unstake instruction has to be before the withdraw instruction as the shares need to be unstaked before they can be withdrawn
+  // send the vault-farm unstake ixs first if the vault farm was provided, then the withdraw ixs
   await sendAndConfirmTx(
     c,
     user,

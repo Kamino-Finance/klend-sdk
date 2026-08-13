@@ -20,6 +20,7 @@ export const DISCRIMINATOR = Buffer.from([118, 224, 10, 62, 196, 230, 184, 89])
 export interface UpdateLendingMarketOwnerAccounts {
   lendingMarketOwnerCached: TransactionSigner
   lendingMarket: Address
+  instructionSysvarAccount: Address
 }
 
 export function updateLendingMarketOwner(
@@ -34,6 +35,7 @@ export function updateLendingMarketOwner(
       signer: accounts.lendingMarketOwnerCached,
     },
     { address: accounts.lendingMarket, role: 1 },
+    { address: accounts.instructionSysvarAccount, role: 0 },
     ...remainingAccounts,
   ]
   const data = DISCRIMINATOR

@@ -30,6 +30,7 @@ export interface WithdrawProtocolFeeAccounts {
   feeVault: Address
   feeCollectorAta: Address
   tokenProgram: Address
+  instructionSysvarAccount: Address
 }
 
 export const layout = borsh.struct<WithdrawProtocolFeeArgs>([
@@ -51,6 +52,7 @@ export function withdrawProtocolFee(
     { address: accounts.feeVault, role: 1 },
     { address: accounts.feeCollectorAta, role: 1 },
     { address: accounts.tokenProgram, role: 0 },
+    { address: accounts.instructionSysvarAccount, role: 0 },
     ...remainingAccounts,
   ]
   const buffer = Buffer.alloc(1000)

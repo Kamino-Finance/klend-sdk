@@ -2,10 +2,22 @@ import * as UpdateConfigMode from "./UpdateConfigMode"
 import * as UpdateLendingMarketConfigValue from "./UpdateLendingMarketConfigValue"
 import * as UpdateLendingMarketMode from "./UpdateLendingMarketMode"
 import * as UpdateGlobalConfigMode from "./UpdateGlobalConfigMode"
+import * as UpdateObligationConfigMode from "./UpdateObligationConfigMode"
 import * as FeeCalculation from "./FeeCalculation"
 import * as ReserveFarmKind from "./ReserveFarmKind"
 import * as ReserveStatus from "./ReserveStatus"
+import * as ProgressCallbackType from "./ProgressCallbackType"
 
+export { ExchangeRateWithDecimals } from "./ExchangeRateWithDecimals"
+export type {
+  ExchangeRateWithDecimalsFields,
+  ExchangeRateWithDecimalsJSON,
+} from "./ExchangeRateWithDecimals"
+export { ReserveConfigCustomizationArgs } from "./ReserveConfigCustomizationArgs"
+export type {
+  ReserveConfigCustomizationArgsFields,
+  ReserveConfigCustomizationArgsJSON,
+} from "./ReserveConfigCustomizationArgs"
 export { BorrowOrderConfigArgs } from "./BorrowOrderConfigArgs"
 export type {
   BorrowOrderConfigArgsFields,
@@ -38,7 +50,7 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateSwitchboardFeed
   | UpdateConfigMode.UpdateSwitchboardTwapFeed
   | UpdateConfigMode.UpdateBorrowRateCurve
-  | UpdateConfigMode.UpdateEntireReserveConfig
+  | UpdateConfigMode.DeprecatedUpdateEntireReserveConfig
   | UpdateConfigMode.UpdateDebtWithdrawalCap
   | UpdateConfigMode.UpdateDepositWithdrawalCap
   | UpdateConfigMode.DeprecatedUpdateDebtWithdrawalCapCurrentTotal
@@ -69,6 +81,10 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateBlockCTokenUsage
   | UpdateConfigMode.UpdateDebtMaturityTimestamp
   | UpdateConfigMode.UpdateDebtTermSeconds
+  | UpdateConfigMode.UpdateEarlyRepayRemainingInterestPct
+  | UpdateConfigMode.UpdateReserveEmergencyMode
+  | UpdateConfigMode.UpdateRewardsAmountPerSlot
+  | UpdateConfigMode.UpdateReservePermissionedOps
 export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateLoanToValuePctJSON
   | UpdateConfigMode.UpdateMaxLiquidationBonusBpsJSON
@@ -94,7 +110,7 @@ export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateSwitchboardFeedJSON
   | UpdateConfigMode.UpdateSwitchboardTwapFeedJSON
   | UpdateConfigMode.UpdateBorrowRateCurveJSON
-  | UpdateConfigMode.UpdateEntireReserveConfigJSON
+  | UpdateConfigMode.DeprecatedUpdateEntireReserveConfigJSON
   | UpdateConfigMode.UpdateDebtWithdrawalCapJSON
   | UpdateConfigMode.UpdateDepositWithdrawalCapJSON
   | UpdateConfigMode.DeprecatedUpdateDebtWithdrawalCapCurrentTotalJSON
@@ -125,6 +141,10 @@ export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateBlockCTokenUsageJSON
   | UpdateConfigMode.UpdateDebtMaturityTimestampJSON
   | UpdateConfigMode.UpdateDebtTermSecondsJSON
+  | UpdateConfigMode.UpdateEarlyRepayRemainingInterestPctJSON
+  | UpdateConfigMode.UpdateReserveEmergencyModeJSON
+  | UpdateConfigMode.UpdateRewardsAmountPerSlotJSON
+  | UpdateConfigMode.UpdateReservePermissionedOpsJSON
 
 export { UpdateLendingMarketConfigValue }
 
@@ -158,7 +178,7 @@ export type UpdateLendingMarketModeKind =
   | UpdateLendingMarketMode.UpdateLiquidationMaxValue
   | UpdateLendingMarketMode.DeprecatedUpdateGlobalUnhealthyBorrow
   | UpdateLendingMarketMode.UpdateGlobalAllowedBorrow
-  | UpdateLendingMarketMode.UpdateRiskCouncil
+  | UpdateLendingMarketMode.UpdateEmergencyCouncil
   | UpdateLendingMarketMode.UpdateMinFullLiquidationThreshold
   | UpdateLendingMarketMode.UpdateInsolvencyRiskLtv
   | UpdateLendingMarketMode.UpdateElevationGroup
@@ -183,6 +203,22 @@ export type UpdateLendingMarketModeKind =
   | UpdateLendingMarketMode.UpdateObligationBorrowDebtTermLiquidationEnabled
   | UpdateLendingMarketMode.UpdateBorrowOrderCreationEnabled
   | UpdateLendingMarketMode.UpdateBorrowOrderExecutionEnabled
+  | UpdateLendingMarketMode.UpdateMinBorrowOrderFillValue
+  | UpdateLendingMarketMode.UpdateWithdrawTicketIssuanceEnabled
+  | UpdateLendingMarketMode.UpdateWithdrawTicketRedemptionEnabled
+  | UpdateLendingMarketMode.UpdateMinWithdrawQueuedLiquidityValue
+  | UpdateLendingMarketMode.UpdateFixedTermRolloverWindowDurationSeconds
+  | UpdateLendingMarketMode.UpdateOpenTermRolloverWindowDurationSeconds
+  | UpdateLendingMarketMode.UpdateObligationBorrowRolloverConfigurationEnabled
+  | UpdateLendingMarketMode.UpdateTermBasedFullLiquidationDurationSecs
+  | UpdateLendingMarketMode.UpdateObligationBorrowMigrationToFixedExecutionEnabled
+  | UpdateLendingMarketMode.UpdateMinPartialRolloverValue
+  | UpdateLendingMarketMode.UpdateWithdrawTicketCancellationEnabled
+  | UpdateLendingMarketMode.UpdatePermissioningAuthority
+  | UpdateLendingMarketMode.UpdatePermissionedOps
+  | UpdateLendingMarketMode.DeprecatedUpdateReserveRewardsMaxAprPct
+  | UpdateLendingMarketMode.UpdateReserveRewardsMaxAprBps
+  | UpdateLendingMarketMode.UpdateDisableNonceBlock
 export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateOwnerJSON
   | UpdateLendingMarketMode.UpdateEmergencyModeJSON
@@ -190,7 +226,7 @@ export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateLiquidationMaxValueJSON
   | UpdateLendingMarketMode.DeprecatedUpdateGlobalUnhealthyBorrowJSON
   | UpdateLendingMarketMode.UpdateGlobalAllowedBorrowJSON
-  | UpdateLendingMarketMode.UpdateRiskCouncilJSON
+  | UpdateLendingMarketMode.UpdateEmergencyCouncilJSON
   | UpdateLendingMarketMode.UpdateMinFullLiquidationThresholdJSON
   | UpdateLendingMarketMode.UpdateInsolvencyRiskLtvJSON
   | UpdateLendingMarketMode.UpdateElevationGroupJSON
@@ -215,6 +251,22 @@ export type UpdateLendingMarketModeJSON =
   | UpdateLendingMarketMode.UpdateObligationBorrowDebtTermLiquidationEnabledJSON
   | UpdateLendingMarketMode.UpdateBorrowOrderCreationEnabledJSON
   | UpdateLendingMarketMode.UpdateBorrowOrderExecutionEnabledJSON
+  | UpdateLendingMarketMode.UpdateMinBorrowOrderFillValueJSON
+  | UpdateLendingMarketMode.UpdateWithdrawTicketIssuanceEnabledJSON
+  | UpdateLendingMarketMode.UpdateWithdrawTicketRedemptionEnabledJSON
+  | UpdateLendingMarketMode.UpdateMinWithdrawQueuedLiquidityValueJSON
+  | UpdateLendingMarketMode.UpdateFixedTermRolloverWindowDurationSecondsJSON
+  | UpdateLendingMarketMode.UpdateOpenTermRolloverWindowDurationSecondsJSON
+  | UpdateLendingMarketMode.UpdateObligationBorrowRolloverConfigurationEnabledJSON
+  | UpdateLendingMarketMode.UpdateTermBasedFullLiquidationDurationSecsJSON
+  | UpdateLendingMarketMode.UpdateObligationBorrowMigrationToFixedExecutionEnabledJSON
+  | UpdateLendingMarketMode.UpdateMinPartialRolloverValueJSON
+  | UpdateLendingMarketMode.UpdateWithdrawTicketCancellationEnabledJSON
+  | UpdateLendingMarketMode.UpdatePermissioningAuthorityJSON
+  | UpdateLendingMarketMode.UpdatePermissionedOpsJSON
+  | UpdateLendingMarketMode.DeprecatedUpdateReserveRewardsMaxAprPctJSON
+  | UpdateLendingMarketMode.UpdateReserveRewardsMaxAprBpsJSON
+  | UpdateLendingMarketMode.UpdateDisableNonceBlockJSON
 
 export { UpdateGlobalConfigMode }
 
@@ -231,6 +283,11 @@ export { ElevationGroup } from "./ElevationGroup"
 export type { ElevationGroupFields, ElevationGroupJSON } from "./ElevationGroup"
 export { BorrowOrder } from "./BorrowOrder"
 export type { BorrowOrderFields, BorrowOrderJSON } from "./BorrowOrder"
+export { FixedTermBorrowRolloverConfig } from "./FixedTermBorrowRolloverConfig"
+export type {
+  FixedTermBorrowRolloverConfigFields,
+  FixedTermBorrowRolloverConfigJSON,
+} from "./FixedTermBorrowRolloverConfig"
 export { InitObligationArgs } from "./InitObligationArgs"
 export type {
   InitObligationArgsFields,
@@ -251,6 +308,23 @@ export type {
   ObligationOrderFields,
   ObligationOrderJSON,
 } from "./ObligationOrder"
+export { UpdateObligationConfigMode }
+
+export type UpdateObligationConfigModeKind =
+  | UpdateObligationConfigMode.FixedTermRolloverEnabled
+  | UpdateObligationConfigMode.FixedTermRolloverMaxBorrowRateBps
+  | UpdateObligationConfigMode.FixedTermRolloverMinDebtTermSeconds
+  | UpdateObligationConfigMode.FixedTermRolloverOpenTermAllowed
+  | UpdateObligationConfigMode.MigrationToFixedEnabled
+  | UpdateObligationConfigMode.FixedTermRolloverWindowDurationDays
+export type UpdateObligationConfigModeJSON =
+  | UpdateObligationConfigMode.FixedTermRolloverEnabledJSON
+  | UpdateObligationConfigMode.FixedTermRolloverMaxBorrowRateBpsJSON
+  | UpdateObligationConfigMode.FixedTermRolloverMinDebtTermSecondsJSON
+  | UpdateObligationConfigMode.FixedTermRolloverOpenTermAllowedJSON
+  | UpdateObligationConfigMode.MigrationToFixedEnabledJSON
+  | UpdateObligationConfigMode.FixedTermRolloverWindowDurationDaysJSON
+
 export { BigFractionBytes } from "./BigFractionBytes"
 export type {
   BigFractionBytesFields,
@@ -258,7 +332,6 @@ export type {
 } from "./BigFractionBytes"
 export { FeeCalculation }
 
-/** Calculate fees exlusive or inclusive of an amount */
 export type FeeCalculationKind =
   | FeeCalculation.Exclusive
   | FeeCalculation.Inclusive
@@ -300,6 +373,8 @@ export type ReserveStatusJSON =
   | ReserveStatus.ObsoleteJSON
   | ReserveStatus.HiddenJSON
 
+export { WithdrawQueue } from "./WithdrawQueue"
+export type { WithdrawQueueFields, WithdrawQueueJSON } from "./WithdrawQueue"
 export { WithdrawalCaps } from "./WithdrawalCaps"
 export type { WithdrawalCapsFields, WithdrawalCapsJSON } from "./WithdrawalCaps"
 export { PriceHeuristic } from "./PriceHeuristic"
@@ -321,6 +396,15 @@ export type {
 } from "./SwitchboardConfiguration"
 export { TokenInfo } from "./TokenInfo"
 export type { TokenInfoFields, TokenInfoJSON } from "./TokenInfo"
+export { ProgressCallbackType }
+
+export type ProgressCallbackTypeKind =
+  | ProgressCallbackType.None
+  | ProgressCallbackType.KlendQueueAccountingHandlerOnKvault
+export type ProgressCallbackTypeJSON =
+  | ProgressCallbackType.NoneJSON
+  | ProgressCallbackType.KlendQueueAccountingHandlerOnKvaultJSON
+
 export { BorrowRateCurve } from "./BorrowRateCurve"
 export type {
   BorrowRateCurveFields,
