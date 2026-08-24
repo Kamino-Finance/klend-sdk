@@ -23,7 +23,7 @@ import { sendAndConfirmTx } from '../utils/tx';
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
 
-  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
+  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT, slotDuration);
 
   const usdcJlpMarketReserveState = await Reserve.fetch(c.rpc, USDC_RESERVE_JLP_MARKET);
   if (!usdcJlpMarketReserveState) {

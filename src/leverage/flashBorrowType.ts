@@ -20,7 +20,7 @@ import {
 } from './calcs';
 import type { FlashBorrowType } from './types';
 import { determineFlashBorrowType } from './utils';
-import { normalizeLedgerInstantArgument, type LedgerInstantInput } from '../utils/ledger';
+import type { LedgerInstant } from '../utils/ledger';
 
 /**
  * Intent-level helpers that pick a viable `FlashBorrowType` for each leverage operation.
@@ -113,26 +113,26 @@ export function determineDepositLeverageFlashBorrowType(props: {
  *
  * @throws if neither side is viable.
  */
-export function determineWithdrawLeverageFlashBorrowType(
-  props: {
-    kaminoMarket: KaminoMarket;
-    obligation: KaminoObligation;
-    collReserveAddress: Address;
-    debtReserveAddress: Address;
-    /** Withdraw amount in selectedToken decimals — ignored when `isClosingPosition=true`. */
-    withdrawAmount: Decimal;
-    /** Which token the user wants back — must equal coll mint or debt mint. */
-    selectedTokenMint: Address;
-    isClosingPosition: boolean;
-    /** Price expressed as debt-per-coll. */
-    priceCollToDebt: Decimal;
-    /** Current obligation deposit (coll lamports decimal). Defaults to obligation's coll position. */
-    depositedLamports?: Decimal;
-    /** Current obligation borrow (debt lamports decimal). Defaults to obligation's debt position. */
-    borrowedLamports?: Decimal;
-    slippagePct: Decimal;
-  } & LedgerInstantInput
-): FlashBorrowType {
+export function determineWithdrawLeverageFlashBorrowType(props: {
+  kaminoMarket: KaminoMarket;
+  obligation: KaminoObligation;
+  collReserveAddress: Address;
+  debtReserveAddress: Address;
+  /** Withdraw amount in selectedToken decimals — ignored when `isClosingPosition=true`. */
+  withdrawAmount: Decimal;
+  /** Which token the user wants back — must equal coll mint or debt mint. */
+  selectedTokenMint: Address;
+  isClosingPosition: boolean;
+  /** Price expressed as debt-per-coll. */
+  priceCollToDebt: Decimal;
+  /** Current obligation deposit (coll lamports decimal). Defaults to obligation's coll position. */
+  depositedLamports?: Decimal;
+  /** Current obligation borrow (debt lamports decimal). Defaults to obligation's debt position. */
+  borrowedLamports?: Decimal;
+  slippagePct: Decimal;
+  /** The ledger instant (slot + block time) the repay sizing is estimated at. */
+  currentLedgerInstant: LedgerInstant;
+}): FlashBorrowType {
   const {
     kaminoMarket,
     obligation,
@@ -142,19 +142,9 @@ export function determineWithdrawLeverageFlashBorrowType(
     selectedTokenMint,
     isClosingPosition,
     priceCollToDebt,
-    currentSlot: suppliedCurrentSlot,
     currentLedgerInstant,
     slippagePct,
   } = props;
-  const slotOrInstant = suppliedCurrentSlot ?? currentLedgerInstant;
-  if (slotOrInstant === undefined) {
-    throw new Error('determineWithdrawLeverageFlashBorrowType: either currentSlot or currentLedgerInstant is required');
-  }
-  const { currentSlot } = normalizeLedgerInstantArgument(
-    slotOrInstant,
-    currentLedgerInstant,
-    'determineWithdrawLeverageFlashBorrowType'
-  );
   const collReserve = kaminoMarket.getExistingReserveByAddress(collReserveAddress);
   const debtReserve = kaminoMarket.getExistingReserveByAddress(debtReserveAddress);
 
@@ -184,14 +174,13 @@ export function determineWithdrawLeverageFlashBorrowType(
     withdrawAmount,
     deposited,
     borrowed,
-    currentSlot,
+    currentLedgerInstant,
     isClosingPosition,
     selectedTokenIsCollToken,
     selectedTokenMint,
     obligation,
     debtReserve.getFlashLoanFee(),
-    slippagePct,
-    currentLedgerInstant
+    slippagePct
   );
   // Size against the funding amount (principal + fixed-term early-repay penalty): debt-flash borrows the debt the
   // on-chain repay actually debits (`repay + penalty`), matching the build flow. Open-term debt → penalty 0 → funding
@@ -207,14 +196,13 @@ export function determineWithdrawLeverageFlashBorrowType(
     withdrawAmount,
     deposited,
     borrowed,
-    currentSlot,
+    currentLedgerInstant,
     isClosingPosition,
     selectedTokenIsCollToken,
     selectedTokenMint,
     obligation,
     collReserve.getFlashLoanFee(),
-    slippagePct,
-    currentLedgerInstant
+    slippagePct
   );
   // Coll-flash also redeems collateral from the SAME reserve in the same tx
   // (WithdrawObligationCollateralAndRedeemReserveCollateral), before the flash loan is repaid. On a close that's the
@@ -254,20 +242,20 @@ export function determineWithdrawLeverageFlashBorrowType(
  * @throws if neither side is viable, or if `targetLeverage` equals the current leverage exactly
  *   (nothing to adjust — caller should skip the op).
  */
-export function determineAdjustLeverageFlashBorrowType(
-  props: {
-    kaminoMarket: KaminoMarket;
-    obligation: KaminoObligation;
-    collReserveAddress: Address;
-    debtReserveAddress: Address;
-    targetLeverage: Decimal;
-    /** Price expressed as debt-per-coll. */
-    priceCollToDebt: Decimal;
-    /** Price expressed as coll-per-debt. */
-    priceDebtToColl: Decimal;
-    slippagePct: Decimal;
-  } & LedgerInstantInput
-): FlashBorrowType {
+export function determineAdjustLeverageFlashBorrowType(props: {
+  kaminoMarket: KaminoMarket;
+  obligation: KaminoObligation;
+  collReserveAddress: Address;
+  debtReserveAddress: Address;
+  targetLeverage: Decimal;
+  /** Price expressed as debt-per-coll. */
+  priceCollToDebt: Decimal;
+  /** Price expressed as coll-per-debt. */
+  priceDebtToColl: Decimal;
+  slippagePct: Decimal;
+  /** The ledger instant (slot + block time) the repay sizing is estimated at. */
+  currentLedgerInstant: LedgerInstant;
+}): FlashBorrowType {
   const {
     kaminoMarket,
     obligation,
@@ -275,19 +263,9 @@ export function determineAdjustLeverageFlashBorrowType(
     debtReserveAddress,
     targetLeverage,
     priceCollToDebt,
-    currentSlot: suppliedCurrentSlot,
     currentLedgerInstant,
     slippagePct,
   } = props;
-  const slotOrInstant = suppliedCurrentSlot ?? currentLedgerInstant;
-  if (slotOrInstant === undefined) {
-    throw new Error('determineAdjustLeverageFlashBorrowType: either currentSlot or currentLedgerInstant is required');
-  }
-  const { currentSlot } = normalizeLedgerInstantArgument(
-    slotOrInstant,
-    currentLedgerInstant,
-    'determineAdjustLeverageFlashBorrowType'
-  );
   const collReserve = kaminoMarket.getExistingReserveByAddress(collReserveAddress);
   const debtReserve = kaminoMarket.getExistingReserveByAddress(debtReserveAddress);
 
@@ -351,7 +329,6 @@ export function determineAdjustLeverageFlashBorrowType(
       slippagePct,
       obligation,
       debtReserve,
-      currentSlot,
       currentLedgerInstant
     );
     requiredDebtLamports = collFlashCalcs.repayFundingAmount.mul(debtReserve.getMintFactor()).ceil();
@@ -391,21 +368,21 @@ export function determineAdjustLeverageFlashBorrowType(
  *
  * @throws if neither reserve supports flash borrowing the required amount.
  */
-export function determineRepayWithCollFlashBorrowType(
-  props: {
-    kaminoMarket: KaminoMarket;
-    obligation: KaminoObligation;
-    debtReserveAddress: Address;
-    collReserveAddress: Address;
-    /** Debt-token-denominated repay amount (decimal — not lamports). */
-    repayAmount: Decimal;
-    /** Price expressed as debt-per-coll, i.e. 1 unit of coll = `priceCollToDebt` units of debt. */
-    priceCollToDebt: Decimal;
-    /** Swap slippage tolerance for the coll→debt swap, percent (e.g. `0.5` = 0.5%). */
-    slippagePct: Decimal;
-    referrer: Option<Address>;
-  } & LedgerInstantInput
-): FlashBorrowType {
+export function determineRepayWithCollFlashBorrowType(props: {
+  kaminoMarket: KaminoMarket;
+  obligation: KaminoObligation;
+  debtReserveAddress: Address;
+  collReserveAddress: Address;
+  /** Debt-token-denominated repay amount (decimal — not lamports). */
+  repayAmount: Decimal;
+  /** Price expressed as debt-per-coll, i.e. 1 unit of coll = `priceCollToDebt` units of debt. */
+  priceCollToDebt: Decimal;
+  /** Swap slippage tolerance for the coll→debt swap, percent (e.g. `0.5` = 0.5%). */
+  slippagePct: Decimal;
+  referrer: Option<Address>;
+  /** The ledger instant (slot + block time) the repay sizing is estimated at. */
+  currentLedgerInstant: LedgerInstant;
+}): FlashBorrowType {
   const {
     kaminoMarket,
     obligation,
@@ -413,20 +390,10 @@ export function determineRepayWithCollFlashBorrowType(
     collReserveAddress,
     repayAmount,
     priceCollToDebt,
-    currentSlot: suppliedCurrentSlot,
     currentLedgerInstant,
     referrer,
     slippagePct,
   } = props;
-  const slotOrInstant = suppliedCurrentSlot ?? currentLedgerInstant;
-  if (slotOrInstant === undefined) {
-    throw new Error('determineRepayWithCollFlashBorrowType: either currentSlot or currentLedgerInstant is required');
-  }
-  const { currentSlot } = normalizeLedgerInstantArgument(
-    slotOrInstant,
-    currentLedgerInstant,
-    'determineRepayWithCollFlashBorrowType'
-  );
 
   const collReserve = kaminoMarket.getExistingReserveByAddress(collReserveAddress);
   const debtReserve = kaminoMarket.getExistingReserveByAddress(debtReserveAddress);
@@ -436,11 +403,10 @@ export function determineRepayWithCollFlashBorrowType(
   const { repayFundingLamports } = calcRepayAmountWithSlippage(
     kaminoMarket,
     debtReserve,
-    currentSlot,
+    currentLedgerInstant,
     obligation,
     repayAmount,
-    referrer,
-    currentLedgerInstant
+    referrer
   );
 
   // Size against the FUNDING amount (principal + fixed-term early-repay penalty), NOT the bare principal: the on-chain

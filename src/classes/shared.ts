@@ -26,6 +26,27 @@ export enum ReserveStatus {
   Hidden = 'Hidden',
 }
 
+/**
+ * Mirrors the on-chain `InterestRateBasis` (stored as a `u8` in `ReserveConfig.interestRateBasis`): selects how a
+ * reserve's time-related settings (the borrow rate curve, the host fixed interest rate and the rewards amount per
+ * accrual unit) are interpreted when accruing interest/rewards.
+ *
+ * The klend program does not expose this enum in its IDL (it is only ever serialized as a `u8`), hence this local copy.
+ */
+export enum InterestRateBasis {
+  /**
+   * Rates are nominal "slot-year" APRs (assuming {@link SLOTS_PER_SECOND} slots per second): interest/rewards accrue
+   * per slot over {@link SLOTS_PER_YEAR}, so the realized wall-clock rate tracks the real slot rate (see
+   * `KaminoReserve.slotAdjustmentFactor()`).
+   */
+  Legacy = 0,
+  /**
+   * Rates are real, wall-clock APRs: interest/rewards accrue per second over {@link TRUE_APR_SECONDS_PER_YEAR},
+   * independently of the slot rate. All reserves created by klend >= 1.25.0 use this basis.
+   */
+  TrueApr = 1,
+}
+
 export type ReserveDataType = {
   status: ReserveStatus;
   mintAddress: Address;
@@ -51,6 +72,8 @@ export type ReserveRewardYield = {
   apy: Decimal;
   apr: Decimal;
   rewardInfo: RewardInfo;
+  /** Farm-wide tokens/second (stake-adjusted for `Constant` rewards); the rate `apr`/`apy` derive from. */
+  rewardsPerSecond: Decimal;
 };
 
 export type ReserveFarmInfo = {

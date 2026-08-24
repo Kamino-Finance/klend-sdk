@@ -1,5 +1,5 @@
 import { getConnectionPool } from '../utils/connection';
-import { KaminoAction, KaminoBorrowOrder } from '@kamino-finance/klend-sdk';
+import { KaminoAction, KaminoBorrowOrder, getCurrentLedgerInstant } from '@kamino-finance/klend-sdk';
 import { EXAMPLE_OBLIGATION, MAIN_MARKET, USDC_MINT, USDC_RESERVE_MAIN_MARKET } from '../utils/constants';
 import { getLoan, getMarket } from '../utils/helpers';
 import { checkNotNull } from '../../src/utils/validations';
@@ -34,6 +34,7 @@ import BN from 'bn.js';
     termSeconds: new BN(30 * 24 * 60 * 60), // Fixed term of at least 30 days
     expirySeconds: new BN(7 * 24 * 60 * 60), // Order expires if not filled within 7 days
     maxRateBps: 1000, // Max 10% APY (1000 bps)
+    currentLedgerInstant: await getCurrentLedgerInstant(c.rpc),
   });
 
   // Example 2: Borrower sets the borrow order on their obligation

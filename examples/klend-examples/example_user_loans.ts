@@ -1,7 +1,7 @@
 import { UserLoansArgs } from '../utils/models';
 import { getMarket } from '../utils/helpers';
 import { address } from '@solana/kit';
-import { ObligationTypeTag } from '@kamino-finance/klend-sdk';
+import { ObligationTypeTag, getCurrentLedgerInstant } from '@kamino-finance/klend-sdk';
 import { MAIN_MARKET } from '../utils/constants';
 import { getConnectionPool } from '../utils/connection';
 
@@ -11,8 +11,8 @@ import { getConnectionPool } from '../utils/connection';
  */
 export async function getUserLoansForMarket(args: UserLoansArgs) {
   const market = await getMarket(args);
-  const slot = await args.rpc.getSlot().send();
-  return market.getAllUserObligations(args.wallet, slot);
+  const currentLedgerInstant = await getCurrentLedgerInstant(args.rpc);
+  return market.getAllUserObligations(args.wallet, currentLedgerInstant);
 }
 
 (async () => {

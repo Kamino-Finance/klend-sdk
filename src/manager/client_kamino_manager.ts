@@ -3,12 +3,10 @@ import { Command } from 'commander';
 import { Account, Address, address, generateKeyPairSigner, Instruction, TransactionSigner } from '@solana/kit';
 import {
   AssetReserveConfigCli,
-  calculateAPYFromAPR,
   CDN_ENDPOINT,
   createLookupTableIx,
   DEFAULT_CU_PER_TX,
   DEFAULT_PUBLIC_KEY,
-  DEFAULT_RECENT_SLOT_DURATION_MS,
   encodeTokenName,
   extendLookupTableIxs,
   getKvaultGlobalConfigPda,
@@ -48,8 +46,10 @@ import {
   WithdrawalCaps,
 } from '../@codegen/klend/types';
 import { Fraction } from '../classes/fraction';
+import { simulateReserveApy } from './simulateReserveApy';
 import { trimPoints } from '../classes/curve';
 import { PermissionedOp } from '../classes/permission';
+import { InterestRateBasis } from '../classes/shared';
 import Decimal from 'decimal.js';
 import BN from 'bn.js';
 import { PythConfiguration, SwitchboardConfiguration, UpdateReserveWhitelistMode } from '../@codegen/kvault/types';
@@ -321,6 +321,7 @@ async function processWhitelistReservesFile({
 
   const ms = multisig ? address(multisig) : undefined;
   const env = await initEnv(staging, ms, undefined, undefined, devnet);
+  const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const computeUnits = cu ? Number(cu) : DEFAULT_CU_PER_TX;
   const reserveAddresses = readReserveAddressesFromFile(reservesFile);
   const flagValue = parseBooleanFlag(value);
@@ -338,7 +339,7 @@ async function processWhitelistReservesFile({
 
   const kaminoManager = new KaminoManager(
     env.c.rpc,
-    DEFAULT_RECENT_SLOT_DURATION_MS,
+    slotDuration,
     env.klendProgramId,
     env.kvaultProgramId,
     undefined,
@@ -416,9 +417,10 @@ async function main() {
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms, signerPath, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -474,9 +476,10 @@ async function main() {
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms, signerPath, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -516,9 +519,10 @@ async function main() {
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -561,11 +565,12 @@ async function main() {
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const tokenMint = address(mint);
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -676,12 +681,13 @@ async function main() {
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
     .action(async ({ vault, mode, symbol, extraName, staging, CU: cu }) => {
       const env = await initEnv(undefined, staging);
-      const kVault = new KaminoVault(env.c.rpc, address(vault));
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+      const kVault = new KaminoVault(env.c.rpc, address(vault), slotDuration);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -719,19 +725,26 @@ async function main() {
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
     .action(async ({ vault, newAdmin, mode, staging, devnet, CU: cu }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const vaultAddress = address(vault);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
         env.farmsProgramId
       );
 
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+      const kaminoVault = new KaminoVault(
+        env.c.rpc,
+        vaultAddress,
+        kaminoManager.recentSlotDurationMs,
+        undefined,
+        env.kvaultProgramId
+      );
       const { vaultState, vaultReservesMap } = await loadVaultInstructionParams(kaminoManager, kaminoVault);
       const signer = await env.getSigner({ vaultState });
 
@@ -810,17 +823,19 @@ async function main() {
 
         const ms = multisig ? address(multisig) : undefined;
         const env = await initEnv(staging, ms, undefined, undefined, devnet);
+        const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
         const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
         const vaultAddress = address(vault);
 
-        const kaminoManager = new KaminoManager(
+        const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
+
+        const kaminoVault = new KaminoVault(
           env.c.rpc,
-          DEFAULT_RECENT_SLOT_DURATION_MS,
-          env.klendProgramId,
+          vaultAddress,
+          kaminoManager.recentSlotDurationMs,
+          undefined,
           env.kvaultProgramId
         );
-
-        const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
         const { vaultState, vaultReservesMap } = await loadVaultInstructionParams(kaminoManager, kaminoVault);
 
         // Use the current KVault global admin when requested; otherwise fall back to the vault admin.
@@ -906,12 +921,13 @@ async function main() {
 
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const reserveAddress = address(reserve);
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -1039,10 +1055,11 @@ async function main() {
 
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -1063,12 +1080,7 @@ async function main() {
         console.log(`Processing ${marketAddresses.length} specified markets...`);
         marketsToProcess = await Promise.all(
           marketAddresses.map(async (marketAddress: Address) => {
-            const market = await KaminoMarket.load(
-              env.c.rpc,
-              marketAddress,
-              DEFAULT_RECENT_SLOT_DURATION_MS,
-              env.klendProgramId
-            );
+            const market = await KaminoMarket.load(env.c.rpc, marketAddress, slotDuration, env.klendProgramId);
             if (!market) {
               throw new Error(`Market ${marketAddress} not found`);
             }
@@ -1173,24 +1185,20 @@ async function main() {
 
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const marketAddress = address(market);
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
         env.farmsProgramId
       );
 
-      const marketState = await KaminoMarket.load(
-        env.c.rpc,
-        marketAddress,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
-        env.klendProgramId
-      );
+      const marketState = await KaminoMarket.load(env.c.rpc, marketAddress, slotDuration, env.klendProgramId);
       if (!marketState) {
         throw new Error(`Market ${marketAddress} not found`);
       }
@@ -1317,6 +1325,7 @@ async function main() {
     .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .action(async ({ mint, staging, devnet }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const tokenMint = address(mint);
 
       const marketsConfig = await getMarketsFromApi({ api: { programId: env.klendProgramId } });
@@ -1327,7 +1336,7 @@ async function main() {
           const market = await KaminoMarket.load(
             env.c.rpc,
             address(cfg.lendingMarket),
-            DEFAULT_RECENT_SLOT_DURATION_MS,
+            slotDuration,
             env.klendProgramId
           );
           return { cfg, market };
@@ -1405,18 +1414,25 @@ async function main() {
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
     .action(async ({ vault, feeBps, mode, staging, devnet, CU: cu }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const vaultAddress = address(vault);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
         env.farmsProgramId
       );
 
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+      const kaminoVault = new KaminoVault(
+        env.c.rpc,
+        vaultAddress,
+        kaminoManager.recentSlotDurationMs,
+        undefined,
+        env.kvaultProgramId
+      );
       const { vaultState, vaultReservesMap } = await loadVaultInstructionParams(kaminoManager, kaminoVault);
       const signer = await env.getSigner({ vaultState });
       const instructions = await kaminoManager.updateVaultConfigIxs(
@@ -1464,6 +1480,7 @@ async function main() {
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const lutAddress = address(lut);
       let txSigner = await env.getSigner();
       // if the signer is provided (path to a keypair) we use it, otherwise we use the default one
@@ -1474,7 +1491,7 @@ async function main() {
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -1532,18 +1549,25 @@ async function main() {
     .option(`--signer <string>`, 'If set, it will use the provided signer instead of the default one')
     .action(async ({ vault, mode, staging, devnet, signer }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const vaultAddress = address(vault);
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
         env.farmsProgramId
       );
 
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+      const kaminoVault = new KaminoVault(
+        env.c.rpc,
+        vaultAddress,
+        kaminoManager.recentSlotDurationMs,
+        undefined,
+        env.kvaultProgramId
+      );
       const vaultState = await kaminoVault.getState();
       let txSigner = await env.getSigner({ vaultState });
       // if the signer is provided (path to a keypair) we use it, otherwise we use the default one
@@ -1612,9 +1636,10 @@ async function main() {
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -1625,7 +1650,7 @@ async function main() {
       const kaminoMarket = (await KaminoMarket.load(
         env.c.rpc,
         marketAddress,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         false
       ))!;
@@ -1691,21 +1716,17 @@ async function main() {
 
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
         env.farmsProgramId
       );
 
-      const kaminoMarket = (await KaminoMarket.load(
-        env.c.rpc,
-        address(market),
-        DEFAULT_RECENT_SLOT_DURATION_MS,
-        env.klendProgramId
-      ))!;
+      const kaminoMarket = (await KaminoMarket.load(env.c.rpc, address(market), slotDuration, env.klendProgramId))!;
 
       // market LUT is client-owned: multisig mode always uses --multisig (not ADMIN via getSigner)
       const signerOverride = signer ? await parseKeypairFile(signer as string) : undefined;
@@ -1805,19 +1826,26 @@ async function main() {
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
     .action(async ({ vault, feeBps, mode, staging, devnet, CU: cu }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const vaultAddress = address(vault);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
         env.farmsProgramId
       );
 
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+      const kaminoVault = new KaminoVault(
+        env.c.rpc,
+        vaultAddress,
+        kaminoManager.recentSlotDurationMs,
+        undefined,
+        env.kvaultProgramId
+      );
       const { vaultState, vaultReservesMap } = await loadVaultInstructionParams(kaminoManager, kaminoVault);
       const signer = await env.getSigner({ vaultState });
       const instructions = await kaminoManager.updateVaultConfigIxs(
@@ -1859,19 +1887,26 @@ async function main() {
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
     .action(async ({ vault, mode, staging, devnet, CU: cu }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const vaultAddress = address(vault);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
         env.farmsProgramId
       );
 
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+      const kaminoVault = new KaminoVault(
+        env.c.rpc,
+        vaultAddress,
+        kaminoManager.recentSlotDurationMs,
+        undefined,
+        env.kvaultProgramId
+      );
       const { vaultState, vaultReservesMap } = await loadVaultInstructionParams(kaminoManager, kaminoVault);
       const pendingAdmin = await env.getSigner({
         vaultState,
@@ -1943,19 +1978,26 @@ async function main() {
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
     .action(async ({ vault, maxAmountToGiveUp, mode, staging, multisig, CU: cu }) => {
       const env = await initEnv(multisig, staging);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const vaultAddress = address(vault);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
         env.farmsProgramId
       );
 
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+      const kaminoVault = new KaminoVault(
+        env.c.rpc,
+        vaultAddress,
+        kaminoManager.recentSlotDurationMs,
+        undefined,
+        env.kvaultProgramId
+      );
       const vaultState = await kaminoVault.getState();
       const signer = await env.getSigner({ vaultState });
       const instruction = await kaminoManager.giveUpPendingFeesIx(kaminoVault, new Decimal(maxAmountToGiveUp), signer);
@@ -1989,25 +2031,37 @@ async function main() {
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
     .action(async ({ vault, mode, staging, devnet, CU: cu }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const vaultAddress = address(vault);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
         env.farmsProgramId
       );
 
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+      const kaminoVault = new KaminoVault(
+        env.c.rpc,
+        vaultAddress,
+        kaminoManager.recentSlotDurationMs,
+        undefined,
+        env.kvaultProgramId
+      );
       const vaultState = await kaminoVault.getState();
       const signer = await env.getSigner({ vaultState });
 
-      const slot = await env.c.rpc.getSlot().send();
+      const currentLedgerInstant = await getCurrentLedgerInstant(env.c.rpc);
       const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
-      const instructions = await kaminoManager.withdrawPendingFeesIxs(kaminoVault, slot, vaultReservesMap, signer);
+      const instructions = await kaminoManager.withdrawPendingFeesIxs(
+        kaminoVault,
+        currentLedgerInstant,
+        vaultReservesMap,
+        signer
+      );
 
       await processTx(
         env.c,
@@ -2039,24 +2093,31 @@ async function main() {
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
     .action(async ({ vault, reserve, mode, staging, devnet, CU: cu }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const reserveAddress = address(reserve);
       const vaultAddress = address(vault);
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
         env.farmsProgramId
       );
 
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+      const kaminoVault = new KaminoVault(
+        env.c.rpc,
+        vaultAddress,
+        kaminoManager.recentSlotDurationMs,
+        undefined,
+        env.kvaultProgramId
+      );
       const vaultState = await kaminoVault.getState();
       const signer = await env.getSigner({ vaultState });
 
-      const slot = await env.c.rpc.getSlot().send();
+      const currentLedgerInstant = await getCurrentLedgerInstant(env.c.rpc);
       const reserveState = await Reserve.fetch(env.c.rpc, reserveAddress, env.klendProgramId);
       if (!reserveState) {
         throw new Error('Reserve not found');
@@ -2065,7 +2126,7 @@ async function main() {
         signer,
         kaminoVault,
         reserveAddress,
-        slot,
+        currentLedgerInstant,
         reserveState
       );
 
@@ -2106,10 +2167,11 @@ async function main() {
       const user = await env.getSigner();
       const vaultAddress = address(vault);
 
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, slotDuration, undefined, env.kvaultProgramId);
       const stakeManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -2173,9 +2235,16 @@ async function main() {
         }
         const ms = multisig ? address(multisig) : undefined;
         const env = await initEnv(staging, ms, undefined, undefined, devnet);
+        const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
         const reserveAddress = address(reserve);
         const vaultAddress = address(vault);
-        const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+        const kaminoVault = new KaminoVault(
+          env.c.rpc,
+          vaultAddress,
+          await getMedianSlotDurationInMsFromLastEpochs(),
+          undefined,
+          env.kvaultProgramId
+        );
         const vaultState = await kaminoVault.getState();
         const signer = await env.getSigner({ vaultState, useVaultAllocationAdmin: useAllocationAdmin });
         const shouldUpdateLut = skipLutUpdate ? false : true;
@@ -2184,12 +2253,7 @@ async function main() {
         let tokenAllocationCapTokens: Decimal;
         let ctokenAllocationCapLamportsBn: BN | undefined;
 
-        const kaminoManager = new KaminoManager(
-          env.c.rpc,
-          DEFAULT_RECENT_SLOT_DURATION_MS,
-          env.klendProgramId,
-          env.kvaultProgramId
-        );
+        const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
         const reserveState = await Reserve.fetch(env.c.rpc, reserveAddress, env.klendProgramId);
         if (!reserveState) {
           throw new Error('Reserve not found');
@@ -2283,19 +2347,26 @@ async function main() {
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const vaultAddress = address(vault);
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
         env.farmsProgramId
       );
 
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+      const kaminoVault = new KaminoVault(
+        env.c.rpc,
+        vaultAddress,
+        kaminoManager.recentSlotDurationMs,
+        undefined,
+        env.kvaultProgramId
+      );
       const user = await env.getSigner();
       const feePayer = feePayerPath ? await parseKeypairFile(feePayerPath) : undefined;
       const txPayer = feePayer ?? user;
@@ -2358,6 +2429,7 @@ async function main() {
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
 
       const user = await env.getSigner();
@@ -2367,14 +2439,20 @@ async function main() {
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
         env.farmsProgramId
       );
 
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+      const kaminoVault = new KaminoVault(
+        env.c.rpc,
+        vaultAddress,
+        kaminoManager.recentSlotDurationMs,
+        undefined,
+        env.kvaultProgramId
+      );
       const { vaultState, vaultReservesMap, farmState, flcFarmState } = await loadVaultInstructionParams(
         kaminoManager,
         kaminoVault
@@ -2385,7 +2463,7 @@ async function main() {
         lookupTableAddresses.push(vaultState.vaultLookupTable);
       }
       const lookupTables = await fetchAllAddressLookupTable(env.c.rpc, lookupTableAddresses);
-      const confirmedSlot = await env.c.rpc.getSlot({ commitment: 'confirmed' }).send();
+      const confirmedSlot = await getCurrentLedgerInstant(env.c.rpc, 'confirmed');
       const withdrawIxs = await kaminoManager.withdrawFromVaultIxs(
         user,
         kaminoVault,
@@ -2433,23 +2511,30 @@ async function main() {
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const payer = await env.getSigner();
       const vaultAddress = address(vault);
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
         env.farmsProgramId
       );
 
-      const slot = await env.c.rpc.getSlot().send();
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+      const currentLedgerInstant = await getCurrentLedgerInstant(env.c.rpc);
+      const kaminoVault = new KaminoVault(
+        env.c.rpc,
+        vaultAddress,
+        kaminoManager.recentSlotDurationMs,
+        undefined,
+        env.kvaultProgramId
+      );
       await kaminoVault.getState();
-      const instructions = await kaminoManager.investAllReservesIxs(payer, kaminoVault, slot, false);
+      const instructions = await kaminoManager.investAllReservesIxs(payer, kaminoVault, currentLedgerInstant, false);
 
       for (let i = 0; i < instructions.length; i++) {
         const txInstructions: Instruction[] = [];
@@ -2489,19 +2574,26 @@ async function main() {
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
       const vaultAddress = address(vault);
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
         env.farmsProgramId
       );
 
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+      const kaminoVault = new KaminoVault(
+        env.c.rpc,
+        vaultAddress,
+        kaminoManager.recentSlotDurationMs,
+        undefined,
+        env.kvaultProgramId
+      );
 
       const reserveAddress = address(reserve);
       const reserveState = await Reserve.fetch(env.c.rpc, reserveAddress, env.klendProgramId);
@@ -2575,8 +2667,14 @@ async function main() {
       );
 
       const vaultAddress = address(vault);
-      const vaultState = await new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId).getState();
-      const confirmedSlot = await env.c.rpc.getSlot({ commitment: 'confirmed' }).send();
+      const vaultState = await new KaminoVault(
+        env.c.rpc,
+        vaultAddress,
+        slotDuration,
+        undefined,
+        env.kvaultProgramId
+      ).getState();
+      const confirmedSlot = await getCurrentLedgerInstant(env.c.rpc, 'confirmed');
       const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
       const kaminoMarkets = await kaminoManager.loadKaminoMarketsForVaultReserves(vaultReservesMap);
       const vaultCollaterals = await kaminoManager.getVaultCollaterals(
@@ -2613,9 +2711,9 @@ async function main() {
       );
 
       const vaultAddress = address(vault);
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId);
+      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, slotDuration, undefined, env.kvaultProgramId);
       const kaminoVaultState = await kaminoVault.getState();
-      const confirmedSlot = await env.c.rpc.getSlot({ commitment: 'confirmed' }).send();
+      const confirmedSlot = await getCurrentLedgerInstant(env.c.rpc, 'confirmed');
       const vaultReservesMap = await kaminoManager.loadVaultReserves(kaminoVaultState);
       const kaminoMarkets = await kaminoManager.loadKaminoMarketsForVaultReserves(vaultReservesMap);
       const farmsMap = await kaminoManager.loadVaultFarmStates([kaminoVaultState], vaultReservesMap);
@@ -2661,19 +2759,19 @@ async function main() {
         env.farmsProgramId
       );
 
-      const kaminoVault = new KaminoVault(env.c.rpc, address(vault), undefined, env.kvaultProgramId, slotDuration);
+      const kaminoVault = new KaminoVault(env.c.rpc, address(vault), slotDuration, undefined, env.kvaultProgramId);
       const { vaultReservesMap, farmState } = await loadVaultInstructionParams(kaminoManager, kaminoVault);
-      const slot = await env.c.rpc.getSlot().send();
+      const currentLedgerInstant = await getCurrentLedgerInstant(env.c.rpc);
       const { Farms } = await import('@kamino-finance/farms-sdk');
       const farmsClient = new Farms(env.c.rpc, env.farmsProgramId);
       const farmAPY = await kaminoManager.getVaultFarmRewardsAPY(
         kaminoVault,
         new Decimal(tokenPrice),
-        slot,
+        currentLedgerInstant,
         vaultReservesMap,
         farmsClient,
         farmState,
-        slot
+        currentLedgerInstant
       );
       console.log('farmAPY', farmAPY);
     });
@@ -2697,7 +2795,7 @@ async function main() {
         env.farmsProgramId
       );
 
-      const slot = await env.c.rpc.getSlot().send();
+      const currentLedgerInstant = await getCurrentLedgerInstant(env.c.rpc);
       const reserveState = await Reserve.fetch(env.c.rpc, address(reserve), env.klendProgramId);
       if (!reserveState) {
         throw new Error(`Reserve ${reserve} not found on-chain`);
@@ -2705,7 +2803,7 @@ async function main() {
       const farmAPY = await kaminoManager.getReserveFarmRewardsAPY(
         address(reserve),
         new Decimal(tokenPrice),
-        slot,
+        currentLedgerInstant,
         reserveState
       );
       console.log('farmAPY', farmAPY);
@@ -2730,7 +2828,7 @@ async function main() {
       );
 
       const vaultAddress = address(vault);
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId, slotDuration);
+      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, slotDuration, undefined, env.kvaultProgramId);
 
       const kaminoVaultState = await kaminoVault.getState();
       const vaultReservesMap = await kaminoManager.loadVaultReserves(kaminoVaultState);
@@ -2765,9 +2863,9 @@ async function main() {
       const vaultState = await new KaminoVault(
         env.c.rpc,
         vaultAddress,
+        slotDuration,
         undefined,
-        env.kvaultProgramId,
-        slotDuration
+        env.kvaultProgramId
       ).getState();
       const allocationDistribution = kaminoManager.getAllocationsDistribuionPct(vaultState);
 
@@ -2811,7 +2909,7 @@ async function main() {
 
       const vaultAddress = address(vault);
       const walletAddress = address(wallet);
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId, slotDuration);
+      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, slotDuration, undefined, env.kvaultProgramId);
       const userShares = await kaminoManager.getUserSharesBalanceSingleVault(walletAddress, kaminoVault);
       console.log(
         `User shares for vault ${vaultAddress}: unstaked shares: ${userShares.unstakedShares} staked shares: ${userShares.stakedShares} total shares: ${userShares.totalShares}`
@@ -2866,8 +2964,8 @@ async function main() {
       );
 
       const vaultAddress = address(vault);
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId, slotDuration);
-      const confirmedSlot = await env.c.rpc.getSlot({ commitment: 'confirmed' }).send();
+      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, slotDuration, undefined, env.kvaultProgramId);
+      const confirmedSlot = await getCurrentLedgerInstant(env.c.rpc, 'confirmed');
       const kaminoVaultState = await kaminoVault.getState();
       const vaultReservesMap = await kaminoManager.loadVaultReserves(kaminoVaultState);
       const tokensPerShare = await kaminoManager.getTokensPerShareSingleVault(
@@ -2898,18 +2996,23 @@ async function main() {
       );
 
       const vaultAddress = address(vault);
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, undefined, env.kvaultProgramId, slotDuration);
+      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, slotDuration, undefined, env.kvaultProgramId);
       const vaultState = await kaminoVault.getState();
 
-      const slot = await env.c.rpc.getSlot({ commitment: 'confirmed' }).send();
+      const currentLedgerInstant = await getCurrentLedgerInstant(env.c.rpc, 'confirmed');
       const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
       const tokensPerShare = await kaminoManager.getTokensPerShareSingleVault(
         kaminoVault,
-        slot,
+        currentLedgerInstant,
         vaultReservesMap,
-        slot
+        currentLedgerInstant
       );
-      const holdings = await kaminoManager.getVaultHoldings(kaminoVault.state!, slot, vaultReservesMap, slot);
+      const holdings = await kaminoManager.getVaultHoldings(
+        kaminoVault.state!,
+        currentLedgerInstant,
+        vaultReservesMap,
+        currentLedgerInstant
+      );
 
       const sharesIssued = lamportsToDecimal(
         vaultState.sharesIssued.toString(),
@@ -2924,13 +3027,13 @@ async function main() {
       const vaultOverview = await kaminoManager.getVaultOverview(
         kaminoVault,
         new Decimal(1.0),
-        slot,
+        currentLedgerInstant,
         vaultReservesMap,
         kaminoMarkets,
         farmsMap,
         farmsClient,
         globalConfig,
-        slot
+        currentLedgerInstant
       );
 
       console.log('farm', vaultState.vaultFarm.toString());
@@ -2952,12 +3055,8 @@ async function main() {
 
   commands.command('get-cumulative-delegated-farms-rewards').action(async () => {
     const env = await initEnv();
-    const kaminoManager = new KaminoManager(
-      env.c.rpc,
-      DEFAULT_RECENT_SLOT_DURATION_MS,
-      env.klendProgramId,
-      env.kvaultProgramId
-    );
+    const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+    const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
     const cumulativeRewards = await kaminoManager.getCumulativeDelegatedFarmsRewardsIssuedForAllVaults();
     cumulativeRewards.forEach((reward, tokenMint) => {
       console.log(`token mint ${tokenMint} rewards issued (lamports) ${reward}`);
@@ -2966,12 +3065,8 @@ async function main() {
 
   commands.command('get-vaults-with-delegated-farm').action(async () => {
     const env = await initEnv();
-    const kaminoManager = new KaminoManager(
-      env.c.rpc,
-      DEFAULT_RECENT_SLOT_DURATION_MS,
-      env.klendProgramId,
-      env.kvaultProgramId
-    );
+    const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+    const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
 
     const vaultsWithDelegatedFarm = await kaminoManager.getVaultsWithDelegatedFarm();
     vaultsWithDelegatedFarm.forEach((delegatedFarm, vault) => {
@@ -2981,9 +3076,10 @@ async function main() {
 
   commands.command('check-vaults-farms').action(async () => {
     const env = await initEnv();
+    const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
     const kaminoManager = new KaminoManager(
       env.c.rpc,
-      DEFAULT_RECENT_SLOT_DURATION_MS,
+      slotDuration,
       env.klendProgramId,
       env.kvaultProgramId,
       undefined,
@@ -3008,9 +3104,10 @@ async function main() {
       }
 
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -3035,7 +3132,7 @@ async function main() {
       const kaminoReserve = await KaminoReserve.initializeFromAddress(
         address(reserve),
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        await getMedianSlotDurationInMsFromLastEpochs(), // a live duration - a `Legacy` reserve's rates scale with it
         reserveState,
         undefined,
         undefined,
@@ -3043,17 +3140,15 @@ async function main() {
         env.klendProgramId
       );
 
-      const slot = await env.c.rpc.getSlot({ commitment: 'confirmed' }).send();
-      const amount = new Decimal(0);
-      const simulatedApr = kaminoReserve.calcSimulatedSupplyAPR(amount, 'deposit', slot, 0);
+      const currentLedgerInstant = await getCurrentLedgerInstant(env.c.rpc, 'confirmed');
+      const { simulatedApr, simulatedApy, computedApr, computedApy } = simulateReserveApy(
+        kaminoReserve,
+        currentLedgerInstant
+      );
       console.log('simulated apr', simulatedApr);
-      const apy = calculateAPYFromAPR(simulatedApr);
-      console.log('simulated apy', apy);
-
-      const computedAPR = kaminoReserve.calculateSupplyAPR(slot, 0);
-      console.log('computed apr', computedAPR);
-      const computedAPY = kaminoReserve.totalSupplyAPY(slot);
-      console.log('computed apy', computedAPY);
+      console.log('simulated apy', simulatedApy);
+      console.log('computed apr', computedApr);
+      console.log('computed apy', computedApy);
     });
 
   commands
@@ -3063,20 +3158,16 @@ async function main() {
     .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .action(async ({ staging, devnet, lendingMarket }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
         env.farmsProgramId
       );
-      const market = await KaminoMarket.load(
-        env.c.rpc,
-        address(lendingMarket),
-        DEFAULT_RECENT_SLOT_DURATION_MS,
-        env.klendProgramId
-      );
+      const market = await KaminoMarket.load(env.c.rpc, address(lendingMarket), slotDuration, env.klendProgramId);
       if (!market) {
         throw Error(`Lending market ${lendingMarket} not found`);
       }
@@ -3135,9 +3226,10 @@ async function main() {
     .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .action(async ({ staging, devnet }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -3173,17 +3265,16 @@ async function main() {
       const vaultState = await new KaminoVault(
         env.c.rpc,
         vaultAddress,
+        slotDuration,
         undefined,
-        env.kvaultProgramId,
-        slotDuration
+        env.kvaultProgramId
       ).getState();
 
       const currentLedgerInstant = await getCurrentLedgerInstant(env.c.rpc);
-      const { slot } = currentLedgerInstant;
       const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
       const simulatedHoldings = await kaminoManager.calculateSimulatedHoldingsWithInterest(
         vaultState,
-        slot,
+        currentLedgerInstant,
         vaultReservesMap,
         undefined,
         currentLedgerInstant
@@ -3192,7 +3283,7 @@ async function main() {
       console.log('Simulated holdings with interest', simulatedHoldings);
       const simulatedFees = await kaminoManager.calculateSimulatedFees(
         vaultState,
-        slot,
+        currentLedgerInstant,
         vaultReservesMap,
         simulatedHoldings,
         currentLedgerInstant,
@@ -3224,18 +3315,18 @@ async function main() {
       const vaultState = await new KaminoVault(
         env.c.rpc,
         vaultAddress,
+        slotDuration,
         undefined,
-        env.kvaultProgramId,
-        slotDuration
+        env.kvaultProgramId
       ).getState();
 
-      const slot = await env.c.rpc.getSlot().send();
+      const currentLedgerInstant = await getCurrentLedgerInstant(env.c.rpc);
       const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
       const computedAllocation = await kaminoManager.getVaultComputedReservesAllocation(
         vaultState,
-        slot,
+        currentLedgerInstant,
         vaultReservesMap,
-        slot
+        currentLedgerInstant
       );
       console.log('computedAllocation', computedAllocation);
     });
@@ -3250,7 +3341,7 @@ async function main() {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
-      const kaminoVault = new KaminoVault(env.c.rpc, address(vault), undefined, env.kvaultProgramId, slotDuration);
+      const kaminoVault = new KaminoVault(env.c.rpc, address(vault), slotDuration, undefined, env.kvaultProgramId);
 
       const result = await kaminoManager.checkVaultReleaseStatus(kaminoVault);
 
@@ -3286,10 +3377,11 @@ async function main() {
     .action(async ({ vault, mode, staging, devnet, user }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const vaultAddress = address(vault);
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, slotDuration);
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -3298,7 +3390,12 @@ async function main() {
       const vaultState = await kaminoVault.getState();
       const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
       const userWallet = user ? noopSigner(address(user)) : await env.getSigner();
-      const rewardsIxs = await kaminoManager.getClaimAllRewardsForVaultIxs(userWallet, kaminoVault, vaultReservesMap);
+      const rewardsIxs = await kaminoManager.getClaimAllRewardsForVaultIxs(
+        userWallet,
+        kaminoVault,
+        vaultReservesMap,
+        await getCurrentLedgerInstant(env.c.rpc)
+      );
 
       if (rewardsIxs.length > 0) {
         await processTx(
@@ -3334,11 +3431,12 @@ async function main() {
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const admin = await env.getSigner();
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -3387,15 +3485,10 @@ async function main() {
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const tokenMint = address(mint);
       const marketAddress = address(market);
-      const existingMarket = await KaminoMarket.load(
-        env.c.rpc,
-        marketAddress,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
-        env.klendProgramId,
-        false
-      );
+      const existingMarket = await KaminoMarket.load(env.c.rpc, marketAddress, slotDuration, env.klendProgramId, false);
       if (existingMarket === null) {
         throw new Error(`Market ${marketAddress} does not exist`);
       }
@@ -3404,7 +3497,7 @@ async function main() {
       const tokenMintProgramId = mintAccount.programAddress;
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -3506,6 +3599,7 @@ async function main() {
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const reserveAddress = address(reserve);
       const reserveState = await Reserve.fetch(env.c.rpc, reserveAddress, env.klendProgramId);
       if (reserveState === null) {
@@ -3513,13 +3607,7 @@ async function main() {
       }
 
       const marketAddress = reserveState.lendingMarket;
-      const marketState = await KaminoMarket.load(
-        env.c.rpc,
-        marketAddress,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
-        env.klendProgramId,
-        false
-      );
+      const marketState = await KaminoMarket.load(env.c.rpc, marketAddress, slotDuration, env.klendProgramId, false);
       if (marketState === null) {
         throw new Error(`Market ${marketAddress} not found`);
       }
@@ -3531,7 +3619,7 @@ async function main() {
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -3540,7 +3628,7 @@ async function main() {
 
       const reserveConfigFromFile = JSON.parse(fs.readFileSync(reserveConfigPath, 'utf8'));
 
-      const reserveConfig = parseReserveConfigFromFile(reserveConfigFromFile);
+      const reserveConfig = parseReserveConfigFromFile(reserveConfigFromFile, reserveState.config);
 
       const updateIxs = await kaminoManager.updateReserveIxs(
         signer,
@@ -3624,7 +3712,7 @@ async function main() {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
-      const kaminoVault = new KaminoVault(env.c.rpc, address(vault), undefined, env.kvaultProgramId, slotDuration);
+      const kaminoVault = new KaminoVault(env.c.rpc, address(vault), slotDuration, undefined, env.kvaultProgramId);
 
       const result = await kaminoManager.checkVaultReleaseStatus(kaminoVault);
 
@@ -3660,10 +3748,11 @@ async function main() {
     .action(async ({ vault, mode, staging, devnet, user }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
       const vaultAddress = address(vault);
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, slotDuration);
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -3672,7 +3761,12 @@ async function main() {
       const userWallet = user ? noopSigner(address(user)) : await env.getSigner();
       const vaultState = await kaminoVault.getState();
       const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
-      const rewardsIxs = await kaminoManager.getClaimAllRewardsForVaultIxs(userWallet, kaminoVault, vaultReservesMap);
+      const rewardsIxs = await kaminoManager.getClaimAllRewardsForVaultIxs(
+        userWallet,
+        kaminoVault,
+        vaultReservesMap,
+        await getCurrentLedgerInstant(env.c.rpc)
+      );
 
       if (rewardsIxs.length > 0) {
         await processTx(
@@ -3708,11 +3802,12 @@ async function main() {
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const admin = await env.getSigner();
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -3761,15 +3856,10 @@ async function main() {
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const tokenMint = address(mint);
       const marketAddress = address(market);
-      const existingMarket = await KaminoMarket.load(
-        env.c.rpc,
-        marketAddress,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
-        env.klendProgramId,
-        false
-      );
+      const existingMarket = await KaminoMarket.load(env.c.rpc, marketAddress, slotDuration, env.klendProgramId, false);
       if (existingMarket === null) {
         throw new Error(`Market ${marketAddress} does not exist`);
       }
@@ -3778,7 +3868,7 @@ async function main() {
       const tokenMintProgramId = mintAccount.programAddress;
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -3880,6 +3970,7 @@ async function main() {
       }
       const ms = multisig ? address(multisig) : undefined;
       const env = await initEnv(staging, ms);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const reserveAddress = address(reserve);
       const reserveState = await Reserve.fetch(env.c.rpc, reserveAddress, env.klendProgramId);
       if (reserveState === null) {
@@ -3887,13 +3978,7 @@ async function main() {
       }
 
       const marketAddress = reserveState.lendingMarket;
-      const marketState = await KaminoMarket.load(
-        env.c.rpc,
-        marketAddress,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
-        env.klendProgramId,
-        false
-      );
+      const marketState = await KaminoMarket.load(env.c.rpc, marketAddress, slotDuration, env.klendProgramId, false);
       if (marketState === null) {
         throw new Error(`Market ${marketAddress} not found`);
       }
@@ -3905,7 +3990,7 @@ async function main() {
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -3914,7 +3999,7 @@ async function main() {
 
       const reserveConfigFromFile = JSON.parse(fs.readFileSync(reserveConfigPath, 'utf8'));
 
-      const reserveConfig = parseReserveConfigFromFile(reserveConfigFromFile);
+      const reserveConfig = parseReserveConfigFromFile(reserveConfigFromFile, reserveState.config);
 
       const updateIxs = await kaminoManager.updateReserveIxs(
         signer,
@@ -3995,15 +4080,11 @@ async function main() {
     .option(`--staging`, 'If true, will use the staging programs')
     .action(async ({ lendingMarket, staging }) => {
       const env = await initEnv(false, staging);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const decoder = new TextDecoder('utf-8');
       const lendingMarketAddress = address(lendingMarket);
 
-      const kaminoMarket = await KaminoMarket.load(
-        env.c.rpc,
-        lendingMarketAddress,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
-        env.klendProgramId
-      );
+      const kaminoMarket = await KaminoMarket.load(env.c.rpc, lendingMarketAddress, slotDuration, env.klendProgramId);
 
       if (!kaminoMarket) {
         throw new Error('Lending Market not found');
@@ -4062,11 +4143,12 @@ async function main() {
     .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .action(async ({ lendingMarket, lendingMarketConfigPath, mode, staging, devnet }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const lendingMarketAddress = address(lendingMarket);
       const lendingMarketAccount = await KaminoMarket.load(
         env.c.rpc,
         lendingMarketAddress,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         false
       );
@@ -4080,7 +4162,7 @@ async function main() {
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -4128,11 +4210,12 @@ async function main() {
     .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .action(async ({ lendingMarket, mode, staging, devnet }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const lendingMarketAddress = address(lendingMarket);
       const lendingMarketState = await KaminoMarket.load(
         env.c.rpc,
         lendingMarketAddress,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         false
       );
@@ -4146,7 +4229,7 @@ async function main() {
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -4189,11 +4272,12 @@ async function main() {
     .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .action(async ({ lendingMarket, newName, mode, staging, devnet }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const lendingMarketAddress = address(lendingMarket);
       const lendingMarketState = await KaminoMarket.load(
         env.c.rpc,
         lendingMarketAddress,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         false
       );
@@ -4207,7 +4291,7 @@ async function main() {
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -4260,6 +4344,7 @@ async function main() {
     .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .action(async ({ reserve, mode, staging, devnet }) => {
       const env = await initEnv(staging, undefined, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
       const reserveAddress = address(reserve);
       const reserveState = await Reserve.fetch(env.c.rpc, reserveAddress, env.klendProgramId);
       if (!reserveState) {
@@ -4270,7 +4355,7 @@ async function main() {
       const lendingMarketState = await KaminoMarket.load(
         env.c.rpc,
         lendingMarketAddress,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         false
       );
@@ -4285,7 +4370,7 @@ async function main() {
 
       const kaminoManager = new KaminoManager(
         env.c.rpc,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        slotDuration,
         env.klendProgramId,
         env.kvaultProgramId,
         undefined,
@@ -4420,7 +4505,16 @@ function parseLendingMarketConfigFromFile(fileObj: Record<string, unknown>, fall
   });
 }
 
-function parseReserveConfigFromFile(reserveConfigFromFile: any): ReserveConfig {
+/**
+ * Parses a human-edited reserve config file into a {@link ReserveConfig}.
+ *
+ * `existingConfig` is the reserve's current on-chain config (pass it when updating an existing reserve): the fields
+ * which the file may omit and which must NOT silently change fall back to it - notably `interestRateBasis`, since the
+ * basis is only ever flipped as part of a deliberate migration (a curve/rate rescale accompanies it, and the program
+ * rejects flipping back to `Legacy`), and `rewardsAmountPerAccrualUnit`. Without an existing config (a new reserve),
+ * they default to the `init_reserve` state: `TrueApr` and no rewards.
+ */
+function parseReserveConfigFromFile(reserveConfigFromFile: any, existingConfig?: ReserveConfig): ReserveConfig {
   const reserveConfigFields: ReserveConfigFields = {
     status: reserveConfigFromFile.status,
     loanToValuePct: reserveConfigFromFile.loanToValuePct,
@@ -4478,7 +4572,11 @@ function parseReserveConfigFromFile(reserveConfigFromFile: any): ReserveConfig {
     borrowLimitOutsideElevationGroup: new BN(reserveConfigFromFile.borrowLimitOutsideElevationGroup),
     borrowLimitAgainstThisCollateralInElevationGroup: parseReserveBorrowLimitAgainstCollInEmode(reserveConfigFromFile),
     deleveragingBonusIncreaseBpsPerDay: new BN(reserveConfigFromFile.deleveragingBonusIncreaseBpsPerDay),
-    reserved1: Array(6).fill(0),
+    interestRateBasis: parseInterestRateBasis(
+      reserveConfigFromFile.interestRateBasis,
+      existingConfig?.interestRateBasis ?? InterestRateBasis.TrueApr
+    ),
+    reserved1: Array(3).fill(0),
     minDeleveragingBonusBps: reserveConfigFromFile.minDeleveragingBonusBps,
     proposerAuthorityLocked: 0,
     blockCtokenUsage: 0,
@@ -4486,11 +4584,29 @@ function parseReserveConfigFromFile(reserveConfigFromFile: any): ReserveConfig {
     debtTermSeconds: new BN(reserveConfigFromFile.debtTermSeconds),
     earlyRepayRemainingInterestPct: reserveConfigFromFile.earlyRepayRemainingInterestPct,
     emergencyMode: reserveConfigFromFile.emergencyMode ?? 0,
-    rewardsAmountPerSlot: new BN(reserveConfigFromFile.rewardsAmountPerSlot ?? 0),
+    rewardsAmountPerAccrualUnit: new BN(
+      reserveConfigFromFile.rewardsAmountPerAccrualUnit ?? existingConfig?.rewardsAmountPerAccrualUnit ?? 0
+    ),
     permissionedOps: PermissionedOp.fromUnknown(reserveConfigFromFile.permissionedOps).toBN(),
   };
 
   return new ReserveConfig(reserveConfigFields);
+}
+
+/** Accepts the numeric discriminant (`0`/`1`) or the enum name (`"Legacy"`/`"TrueApr"`) from a config file. */
+function parseInterestRateBasis(value: unknown, fallback: InterestRateBasis): InterestRateBasis {
+  if (value === undefined || value === null) {
+    return fallback;
+  }
+  if (typeof value === 'number' && (value === InterestRateBasis.Legacy || value === InterestRateBasis.TrueApr)) {
+    return value;
+  }
+  if (typeof value === 'string' && value in InterestRateBasis && isNaN(Number(value))) {
+    return InterestRateBasis[value as keyof typeof InterestRateBasis];
+  }
+  throw new Error(
+    `Invalid interestRateBasis in reserve config file: ${JSON.stringify(value)} (expected 0/1 or Legacy/TrueApr)`
+  );
 }
 
 function parseOracleConfiguration(reserveConfigFromFile: any): {
@@ -4614,6 +4730,8 @@ function parseReserveConfigToFile(reserveConfig: ReserveConfig) {
     debtTermSeconds: reserveConfig.debtTermSeconds.toString(),
     earlyRepayRemainingInterestPct: reserveConfig.earlyRepayRemainingInterestPct,
     permissionedOps: PermissionedOp.fromBN(reserveConfig.permissionedOps).toString(),
+    interestRateBasis: InterestRateBasis[reserveConfig.interestRateBasis] ?? reserveConfig.interestRateBasis,
+    rewardsAmountPerAccrualUnit: reserveConfig.rewardsAmountPerAccrualUnit.toString(),
     reserved1: reserveConfig.reserved1,
   };
 }

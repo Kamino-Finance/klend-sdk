@@ -1,6 +1,11 @@
 import { getConnectionPool } from '../utils/connection';
 import { address } from '@solana/kit';
-import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } from '@kamino-finance/klend-sdk';
+import {
+  getCurrentLedgerInstant,
+  getMedianSlotDurationInMsFromLastEpochs,
+  KaminoManager,
+  KaminoVault,
+} from '@kamino-finance/klend-sdk';
 
 /// there are 3 types of rewards and here we have example of reading all of them
 /// 1. vault farm where the vault shares are staked
@@ -14,11 +19,16 @@ import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } f
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
 
-  const vault = new KaminoVault(c.rpc, vaultAddress);
+  const vault = new KaminoVault(c.rpc, vaultAddress, slotDuration);
   const vaultState = await vault.getState();
   const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
 
-  const pendingRewards = await kaminoManager.getAllPendingRewardsForUserInVault(user, vault, vaultReservesMap);
+  const pendingRewards = await kaminoManager.getAllPendingRewardsForUserInVault(
+    user,
+    vault,
+    vaultReservesMap,
+    await getCurrentLedgerInstant(c.rpc)
+  );
   console.log('Total pending rewards:', pendingRewards.totalPendingRewards);
   console.log('Pending rewards in vault farm:', pendingRewards.pendingRewardsInVaultFarm);
   console.log('Pending rewards in vault delegated farm:', pendingRewards.pendingRewardsInVaultDelegatedFarm);

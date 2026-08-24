@@ -1,9 +1,9 @@
 import Decimal from 'decimal.js';
 import { KaminoMarket, KaminoObligation, KaminoReserve, numberToLamportsDecimal } from '../classes';
-import { Address, isSome, Option, Slot } from '@solana/kit';
+import { Address, isSome, Option } from '@solana/kit';
 import { lamportsToDecimal } from '../classes/utils';
 import { assertPositiveFiniteDecimal, getSlippageFactor } from './swap_calcs';
-import { LedgerInstant, normalizeLedgerInstantArgument, requireMatchingLedgerInstant } from '../utils/ledger';
+import { LedgerInstant } from '../utils/ledger';
 
 export enum MaxWithdrawLtvCheck {
   MAX_LTV,
@@ -13,11 +13,10 @@ export enum MaxWithdrawLtvCheck {
 export function calcRepayAmountWithSlippage(
   kaminoMarket: KaminoMarket,
   debtReserve: KaminoReserve,
-  currentSlotOrLedgerInstant: Slot | LedgerInstant,
+  currentLedgerInstant: LedgerInstant,
   obligation: KaminoObligation,
   amount: Decimal,
-  referrer: Option<Address>,
-  currentLedgerInstant?: LedgerInstant
+  referrer: Option<Address>
 ): {
   repayAmount: Decimal;
   /** The repay principal (debt lamports). This is the `liquidity_amount` of the on-chain repay instruction. */
@@ -32,17 +31,12 @@ export function calcRepayAmountWithSlippage(
   repayFundingLamports: Decimal;
   flashRepayAmountLamports: Decimal;
 } {
-  const { currentSlot, currentLedgerInstant: normalizedLedgerInstant } = normalizeLedgerInstantArgument(
-    currentSlotOrLedgerInstant,
-    currentLedgerInstant,
-    'calcRepayAmountWithSlippage'
-  );
   const interestRateAccrued = obligation
     .estimateObligationInterestRate(
       kaminoMarket,
       debtReserve,
       obligation.state.borrows.find((borrow) => borrow.borrowReserve === debtReserve.address)!,
-      currentSlot
+      currentLedgerInstant
     )
     .toDecimalPlaces(debtReserve.state.liquidity.mintDecimals.toNumber(), Decimal.ROUND_CEIL);
   // add 0.1% to interestRateAccrued because we don't want to estimate slightly less than SC and end up not repaying enough
@@ -73,11 +67,7 @@ export function calcRepayAmountWithSlippage(
   const { penaltyLamports: earlyRepayPenaltyLamports, fundingLamports: repayFundingLamports } = debtReserve
     .getKind()
     .isFixedRate()
-    ? obligation.calculateEarlyRepayFunding(
-        debtReserve,
-        repayAmountLamports,
-        requireMatchingLedgerInstant(currentSlot, normalizedLedgerInstant, 'calcRepayAmountWithSlippage')
-      )
+    ? obligation.calculateEarlyRepayFunding(debtReserve, repayAmountLamports, currentLedgerInstant)
     : { penaltyLamports: new Decimal(0), fundingLamports: repayAmountLamports };
 
   const { flashRepayAmountLamports } = calcFlashRepayAmount({
@@ -241,7 +231,7 @@ export function estimateDebtRepaymentWithColl(props: {
   kaminoMarket: KaminoMarket;
   debtReserveAddress: Address;
   obligation: KaminoObligation;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
 }): Decimal {
   const {
     collAmount,
@@ -251,7 +241,7 @@ export function estimateDebtRepaymentWithColl(props: {
     kaminoMarket,
     debtReserveAddress,
     obligation,
-    currentSlot,
+    currentLedgerInstant,
   } = props;
   const slippageMultiplier = new Decimal(1.0).add(slippagePct.div('100'));
   const flashLoanFeeMultiplier = new Decimal(1.0).add(flashLoanFeePct.div('100'));
@@ -265,7 +255,7 @@ export function estimateDebtRepaymentWithColl(props: {
       kaminoMarket,
       debtReserve,
       obligation.getObligationLiquidityByReserve(debtReserve.address),
-      currentSlot
+      currentLedgerInstant
     )
     .toDecimalPlaces(debtReserve.state.liquidity.mintDecimals.toNumber(), Decimal.ROUND_CEIL);
 

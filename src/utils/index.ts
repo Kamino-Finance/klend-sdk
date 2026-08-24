@@ -9,7 +9,6 @@ export * from './kvaultHoldingsLog';
 export * from './ReserveKind';
 export * from './seeds';
 export * from './signer';
-export * from './slots';
 export * from './userMetadata';
 export {
   computeReservesAllocation,

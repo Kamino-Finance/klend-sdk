@@ -1,4 +1,5 @@
 import { getConnectionPool } from '../utils/connection';
+import { getCurrentLedgerInstant } from '@kamino-finance/klend-sdk';
 import { getKeypair } from '../utils/keypair';
 import { MAIN_MARKET, PYUSD_RESERVE_MAIN_MARKET } from '../utils/constants';
 import { loadReserveData } from '../utils/helpers';
@@ -11,14 +12,14 @@ import { sendAndConfirmTx } from '../utils/tx';
 
   const farm = new Farms(c.rpc);
 
-  const slot = await c.rpc.getSlot().send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc);
   const { reserve: pyusdReserve } = await loadReserveData(
     {
       rpc: c.rpc,
       marketPubkey: MAIN_MARKET,
       reserveAddress: PYUSD_RESERVE_MAIN_MARKET,
     },
-    slot
+    currentLedgerInstant
   );
 
   // Get all farms that the user is eligible to harvest rewards from

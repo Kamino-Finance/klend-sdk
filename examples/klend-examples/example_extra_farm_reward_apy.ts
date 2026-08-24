@@ -1,4 +1,5 @@
 import { address } from '@solana/kit';
+import { getCurrentLedgerInstant } from '@kamino-finance/klend-sdk';
 import { getExtraFarms, loadReserveData } from '../utils/helpers';
 import { getConnectionPool } from '../utils/connection';
 import { MAIN_MARKET, PYUSD_MINT } from '../utils/constants';
@@ -14,14 +15,14 @@ import { getRewardPerTimeUnitSecond } from '../../src/classes/farm_utils';
   const extraFarms = await getExtraFarms();
   const xbtcMint = address('CtzPWv73Sn1dMGVU3ZtLv9yWSyUAanBni19YWDaznnkn');
   const xbtcReserveAddress = address('4Hyrqb9Mq7y1wkq4YoqHkPdPx3VQyFY3mxMj67naC1Cb');
-  const slot = await c.rpc.getSlot().send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc);
   const { market, reserve } = await loadReserveData(
     {
       rpc: c.rpc,
       marketPubkey: MAIN_MARKET,
       reserveAddress: xbtcReserveAddress,
     },
-    slot
+    currentLedgerInstant
   );
   const scope = new Scope('mainnet-beta', c.rpc);
   const oraclePrices = await scope.getSingleOraclePrices({ feed: 'hubble' });
@@ -46,7 +47,8 @@ import { getRewardPerTimeUnitSecond } from '../../src/classes/farm_utils';
 
   const rewardsPerSecond = getRewardPerTimeUnitSecond(
     farmState.rewardInfos[0],
-    new Decimal(farmState?.totalStakedAmount.toString())
+    new Decimal(farmState?.totalStakedAmount.toString()),
+    Number(currentLedgerInstant.blockTime)
   );
   const hasAvailableRewards = farmState.rewardInfos[0].rewardsAvailable > 0n;
   if (!hasAvailableRewards) {

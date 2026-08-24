@@ -1,5 +1,10 @@
 import { getConnectionPool } from '../utils/connection';
-import { KaminoObligation, ObligationStats, calculateAPYFromAPR } from '@kamino-finance/klend-sdk';
+import {
+  KaminoObligation,
+  ObligationStats,
+  calculateAPYFromAPR,
+  getCurrentLedgerInstant,
+} from '@kamino-finance/klend-sdk';
 import { EXAMPLE_OBLIGATION, MAIN_MARKET, PYUSD_RESERVE_MAIN_MARKET } from '../utils/constants';
 import { getLoan, getMarket } from '../utils/helpers';
 import { address } from '@solana/kit';
@@ -25,7 +30,7 @@ import { address } from '@solana/kit';
   }
 
   // General net stats
-  const currentSlot = await c.rpc.getSlot().send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc);
   const loanStats: ObligationStats = loan.refreshedStats;
   console.log(
     `\nLoan ${loan.obligationAddress} \nhttps://app.kamino.finance/lending/obligation/${loan.obligationAddress} \n`
@@ -37,7 +42,7 @@ import { address } from '@solana/kit';
   console.log(`LTV: ${loan!.loanToValue().toNumber() * 100}%`);
   console.log(`liquidation LTV threshold: ${loanStats.liquidationLtv.toFixed(2)}`);
 
-  const maxWithdraw = loan.getMaxWithdrawAmount(market, pyusdReserveAddress, currentSlot);
+  const maxWithdraw = loan.getMaxWithdrawAmount(market, pyusdReserveAddress, currentLedgerInstant);
   console.log(`Max withdraw amount: ${maxWithdraw.maxWithdrawAmount.toFixed(2)}`);
   console.log(`Max withdraw amount (via withdrawal queues): ${maxWithdraw.maxWithdrawAmountQueue.toFixed(2)}`);
 
@@ -59,12 +64,12 @@ import { address } from '@solana/kit';
         reserve!.symbol
       } value: $${deposit.marketValueRefreshed.toFixed(2)}`
     );
-    const reserveSupplyApr = reserve.calculateSupplyAPR(currentSlot, market.state.referralFeeBps);
-    const reserveSupplyApy = reserve.totalSupplyAPY(currentSlot);
+    const reserveSupplyApr = reserve.calculateSupplyAPR(currentLedgerInstant, market.state.referralFeeBps);
+    const reserveSupplyApy = reserve.totalSupplyAPY(currentLedgerInstant);
     // Reserve-rewards distribution: extra supply-side yield from the reserve's on-chain rewards budget
     // (raises the cToken exchange rate, like interest). This is the rate earned right now — zero once the
     // budget runs dry; see calculateTheoreticalReserveRewardsSupplyAPR for the configured rate.
-    const reserveRewardsApr = reserve.calculateEffectiveReserveRewardsSupplyAPR(currentSlot, 0);
+    const reserveRewardsApr = reserve.calculateEffectiveReserveRewardsSupplyAPR(currentLedgerInstant, 0);
     const reserveRewardsApy = calculateAPYFromAPR(reserveRewardsApr);
     console.log(
       `RESERVE ${reserve.symbol} SUPPLY APY: ${(reserveSupplyApy * 100).toFixed(2)}% APR: ${(
@@ -91,8 +96,8 @@ import { address } from '@solana/kit';
         reserve!.symbol
       } value: $${borrow.marketValueRefreshed.toFixed(2)}`
     );
-    const reserveBorrowApr = reserve.calculateBorrowAPR(currentSlot, market.state.referralFeeBps);
-    const reserveBorrowApy = reserve.totalBorrowAPY(currentSlot);
+    const reserveBorrowApr = reserve.calculateBorrowAPR(currentLedgerInstant, market.state.referralFeeBps);
+    const reserveBorrowApy = reserve.totalBorrowAPY(currentLedgerInstant);
     console.log(
       `RESERVE ${reserve.symbol} BORROW APY: ${(reserveBorrowApy * 100).toFixed(2)}% APR: ${(
         reserveBorrowApr * 100

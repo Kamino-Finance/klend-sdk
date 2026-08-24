@@ -86,7 +86,6 @@ import { executeBestSimulatingRoute } from '../utils/swap_examples';
   const obligationAddress = await obligationType.toPda(market.getAddress(), wallet.address);
 
   const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc, 'processed');
-  const currentSlot = currentLedgerInstant.slot;
 
   const collTokenReserve = market.getExistingReserveByAddress(collReserveAddress);
   const debtTokenReserve = market.getExistingReserveByAddress(debtReserveAddress);
@@ -123,7 +122,6 @@ import { executeBestSimulatingRoute } from '../utils/swap_examples';
     slippagePct: new Decimal(slippageBps / 100),
     obligation: null, // obligation does not exist as we are creating it with this deposit
     referrer: none(),
-    currentSlot,
     currentLedgerInstant,
     targetLeverage: new Decimal(leverage),
     selectedTokenMint: debtTokenMint, // the token we are using to deposit

@@ -5,6 +5,7 @@ import {
   listenToOraclePriceChanges,
   listenToReserveChanges,
   listenToSlotChanges,
+  getCurrentLedgerInstant,
 } from '@kamino-finance/klend-sdk';
 import { SCOPE_MAINNET_KLEND_FEED } from '@kamino-finance/scope-sdk';
 import { address } from '@solana/kit';
@@ -84,6 +85,9 @@ import { getConnectionPool } from '../utils/connection';
   const stopObligation = listenToObligationChanges({
     manager,
     markets: new Map([[market.getAddress(), market]]),
+    // A fixed snapshot for this example; a long-lived subscriber should refresh it periodically
+    // (obligations on TrueApr reserves accrue per second, and the WS notification only carries a slot).
+    currentLedgerInstant: await getCurrentLedgerInstant(c.rpc),
     owner,
     onChange: ({ address: addr, slot }) => {
       console.log(`[immediate] obligation ${addr.toString().slice(0, 8)}... slot ${slot.toString()}`);

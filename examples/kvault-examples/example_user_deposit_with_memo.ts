@@ -12,7 +12,7 @@ const USDC_VAULT = address('HDsayqAsDWy3QvANGqh2yNraqcD8Fnjgh73Mhb3WRS5E');
   const user = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
-  const vault = new KaminoVault(c.rpc, USDC_VAULT);
+  const vault = new KaminoVault(c.rpc, USDC_VAULT, slotDuration);
 
   // read the vault state so we can use the LUT in the tx
   const vaultState = await vault.getState();

@@ -1,3 +1,4 @@
+import type { LedgerInstant } from '../utils/ledger';
 import {
   decodeUserState,
   Farms,
@@ -12,6 +13,8 @@ import {
   RewardInfo,
   RewardType,
   collToLamportsDecimal,
+  getCurrentTimeUnit,
+  TimeUnit,
 } from '@kamino-finance/farms-sdk';
 import {
   address,
@@ -216,8 +219,12 @@ export type UnstakeAndWithdrawFromFarmIxs = {
   withdrawIx: Instruction;
 };
 
-export function getRewardPerTimeUnitSecond(reward: RewardInfo, farmTotalStakeLamports: Decimal) {
-  const now = new Decimal(new Date().getTime()).div(1000);
+export function getRewardPerTimeUnitSecond(
+  reward: RewardInfo,
+  farmTotalStakeLamports: Decimal,
+  currentTimestampSec: number
+) {
+  const now = new Decimal(currentTimestampSec);
   let rewardPerTimeUnitSecond = new Decimal(0);
   for (let i = 0; i < reward.rewardScheduleCurve.points.length - 1; i++) {
     const { tsStart: tsStartThisPoint, rewardPerTimeUnit } = reward.rewardScheduleCurve.points[i];
@@ -260,6 +267,7 @@ export async function getUserPendingRewardsInFarm(
   rpc: Rpc<SolanaRpcApi>,
   userStateAddress: Address,
   farm: Address,
+  currentLedgerInstant: LedgerInstant,
   farmsProgramId?: Address
 ): Promise<Map<Address, Decimal>> {
   const pendingRewardsPerToken: Map<Address, Decimal> = new Map();
@@ -277,8 +285,8 @@ export async function getUserPendingRewardsInFarm(
     throw new Error(`Farm state not found for ${farm}`);
   }
 
-  const currentTimestamp = new Decimal(new Date().getTime() / 1000);
-  const rawRewards = farmClient.getUserPendingRewards(userState, farmState, currentTimestamp, null);
+  const currentTimeUnit = await getValidatedFarmRewardTimeUnit(farm, farmState, currentLedgerInstant);
+  const rawRewards = farmClient.getUserPendingRewards(userState, farmState, currentTimeUnit, null);
 
   if (!rawRewards.hasReward) {
     return pendingRewardsPerToken;
@@ -296,6 +304,44 @@ export async function getUserPendingRewardsInFarm(
   }
 
   return pendingRewardsPerToken;
+}
+
+export async function getValidatedFarmRewardTimeUnit(
+  farm: Address,
+  farmState: FarmState,
+  currentLedgerInstant: LedgerInstant
+): Promise<Decimal> {
+  let timeUnitName: 'block time' | 'slot';
+  switch (farmState.timeUnit) {
+    case TimeUnit.Seconds:
+      timeUnitName = 'block time';
+      break;
+    case TimeUnit.Slots:
+      timeUnitName = 'slot';
+      break;
+    default:
+      throw new Error(`Farm ${farm} has unsupported time unit ${farmState.timeUnit}`);
+  }
+
+  const currentTimeUnit = await getCurrentTimeUnit(
+    farmState,
+    currentLedgerInstant.slot,
+    currentLedgerInstant.blockTime
+  );
+  let latestRewardIssuanceTimeUnit = 0n;
+  for (const rewardInfo of farmState.rewardInfos) {
+    if (rewardInfo.lastIssuanceTs > latestRewardIssuanceTimeUnit) {
+      latestRewardIssuanceTimeUnit = rewardInfo.lastIssuanceTs;
+    }
+  }
+
+  if (currentTimeUnit.lt(latestRewardIssuanceTimeUnit.toString())) {
+    throw new Error(
+      `Ledger instant ${timeUnitName} ${currentTimeUnit.toString()} predates farm ${farm} reward state ${timeUnitName} ${latestRewardIssuanceTimeUnit.toString()}. Fetch a newer ledger instant and retry.`
+    );
+  }
+
+  return currentTimeUnit;
 }
 
 /**

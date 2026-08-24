@@ -1,4 +1,5 @@
-import { Address, Base58EncodedBytes, Commitment, getBase58Decoder, Rpc, Slot } from '@solana/kit';
+import { Address, Base58EncodedBytes, Commitment, getBase58Decoder, Rpc } from '@solana/kit';
+import type { LedgerInstant } from './ledger';
 import { KaminoMarket, KaminoMarketRpcApi, KaminoObligation } from '../classes';
 import { PROGRAM_ID } from '../@codegen/klend/programId';
 import { Obligation } from '../@codegen/klend/accounts';
@@ -8,7 +9,7 @@ export async function getUserObligationsInMarkets(
   rpc: Rpc<KaminoMarketRpcApi>,
   user: Address,
   markets: Map<Address, KaminoMarket>,
-  slot: Slot,
+  currentLedgerInstant: LedgerInstant,
   commitment: Commitment = 'processed',
   programId: Address = PROGRAM_ID
 ): Promise<KaminoObligation[]> {
@@ -63,7 +64,7 @@ export async function getUserObligationsInMarkets(
       obligationAccount.borrows,
       collateralExchangeRates,
       cumulativeBorrowRates,
-      slot
+      currentLedgerInstant
     );
     kaminoObligations.push(
       new KaminoObligation(market, obligation.pubkey, obligationAccount, collateralExchangeRates, cumulativeBorrowRates)

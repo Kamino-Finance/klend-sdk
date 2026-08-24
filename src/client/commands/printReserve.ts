@@ -1,4 +1,5 @@
 import { getMarket } from '../services/market';
+import { getMedianSlotDurationInMsFromLastEpochs } from '../../classes/utils';
 import { address, Address, Rpc, SolanaRpcApi } from '@solana/kit';
 
 export async function printReserve(
@@ -7,7 +8,7 @@ export async function printReserve(
   programId: Address,
   reserve: string
 ): Promise<void> {
-  const kaminoMarket = await getMarket(rpc, marketAddress, programId);
+  const kaminoMarket = await getMarket(rpc, marketAddress, programId, await getMedianSlotDurationInMsFromLastEpochs());
   const result = kaminoMarket.getReserveByAddress(address(reserve));
   console.log(result);
   console.log(result?.stats?.reserveDepositLimit.toString());

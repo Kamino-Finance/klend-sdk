@@ -34,7 +34,6 @@ import {
   CdnResources,
   CdnResourcesResponse,
   DEFAULT_PUBLIC_KEY,
-  DEFAULT_RECENT_SLOT_DURATION_MS,
   getAssociatedTokenAddress,
   getEventAuthorityPda,
   getUnconfiguredOracleReserveMessage,
@@ -176,6 +175,7 @@ import {
   ShareExitLiquidityPlan,
 } from './vault_types';
 import type { LedgerInstant } from '../utils/ledger';
+import { getCurrentLedgerInstant } from '../utils/rpc';
 import { batchFetch } from '@kamino-finance/kliquidity-sdk/dist/utils/batch';
 import { ZERO } from '@kamino-finance/kliquidity-sdk/dist/utils/math';
 import { collToLamportsDecimal } from '@kamino-finance/kliquidity-sdk/dist/utils/utils';
@@ -452,11 +452,11 @@ export class KaminoVaultClient {
   /**
    * Prints a vault in a human readable form
    * @param vaultPubkey - the address of the vault
-   * @param slot - slot to use for vault calculations
+   * @param ledgerInstant - current ledger instant (slot + block time) to use for vault calculations
    * @param [vaultState] - optional parameter to pass the vault state directly; this will save a network call
    * @returns - void; prints the vault to the console
    */
-  async printVault(vaultPubkey: Address, slot: Slot, vaultState?: VaultState) {
+  async printVault(vaultPubkey: Address, ledgerInstant: LedgerInstant, vaultState?: VaultState) {
     const vault = vaultState
       ? vaultState
       : await VaultState.fetch(this.getConnection(), vaultPubkey, this._kaminoVaultProgramId);
@@ -469,8 +469,13 @@ export class KaminoVaultClient {
     const kaminoVault = KaminoVault.loadWithClientAndState(this, vaultPubkey, vault);
     const vaultName = this.decodeVaultName(vault.name);
     const vaultReservesMap = await this.loadVaultReserves(vault);
-    const tokensPerShare = await this.getTokensPerShareSingleVault(kaminoVault, slot, vaultReservesMap, slot);
-    const holdings = await this.getVaultHoldings(vault, slot, vaultReservesMap, slot);
+    const tokensPerShare = await this.getTokensPerShareSingleVault(
+      kaminoVault,
+      ledgerInstant,
+      vaultReservesMap,
+      ledgerInstant
+    );
+    const holdings = await this.getVaultHoldings(vault, ledgerInstant, vaultReservesMap, ledgerInstant);
 
     const sharesIssued = new Decimal(vault.sharesIssued.toString()!).div(
       new Decimal(vault.sharesMintDecimals.toString())
@@ -1124,7 +1129,7 @@ export class KaminoVaultClient {
     payer,
     vault,
     vaultState,
-    slot,
+    ledgerInstant,
     reserves,
     vaultReservesMap,
     createAtaIfNeeded = true,
@@ -1132,19 +1137,19 @@ export class KaminoVaultClient {
     payer: TransactionSigner;
     vault: KaminoVault;
     vaultState: VaultState;
-    slot: Slot;
+    ledgerInstant: LedgerInstant;
     reserves: Address[];
     vaultReservesMap: Map<Address, KaminoReserve>;
     createAtaIfNeeded?: boolean;
   }): Promise<Instruction[]> {
     const reserveAllocationAvailableLiquidityToWithdraw = await this.getReserveAllocationAvailableLiquidityToWithdraw(
       vaultState,
-      slot,
+      ledgerInstant,
       vaultReservesMap
     );
     const minInvestAmountLamports = new Decimal(vaultState.minInvestAmount?.toString() ?? '0');
     const reserveAllocationLiquidity = minInvestAmountLamports.gt(0)
-      ? await this.getReserveAllocationLiquidity(vaultState, slot, vaultReservesMap)
+      ? await this.getReserveAllocationLiquidity(vaultState, ledgerInstant, vaultReservesMap)
       : new Map<Address, Decimal>();
     const reserveAmounts = reserves
       .map((reserve) => ({
@@ -1225,13 +1230,13 @@ export class KaminoVaultClient {
     // update allocation to have 0 weight and 0 cap
     const updateAllocIxs = await this.updateReserveAllocationIxs(vault, reserveAllocationConfig, admin);
 
-    const slot = await this.getConnection().getSlot().send();
+    const ledgerInstant = await getCurrentLedgerInstant(this.getConnection());
     const vaultReservesMap = await this.loadVaultReserves(vaultState);
     const investIx = await this.buildCappedInvestIxsForReserves({
       payer: admin,
       vault,
       vaultState,
-      slot,
+      ledgerInstant,
       reserves: [reserve],
       vaultReservesMap,
     });
@@ -1244,14 +1249,14 @@ export class KaminoVaultClient {
   /**
    * This method withdraws all the funds from all the reserves and blocks them from being invested by setting their weight and ctoken allocation to 0
    * @param vault - the vault to withdraw the invested funds from
-   * @param slot - current slot used for reserve and vault calculations
+   * @param ledgerInstant - current ledger instant (slot + block time), used for reserve and vault calculations
    * @param [vaultReservesMap] - optional parameter to pass a map of the vault reserves. If not provided, the reserves will be loaded from the vault
    * @param [payer] - optional parameter to pass a different payer for the transaction. If not provided, the admin of the vault will be used; this is the payer for the invest ixs and it should have an ATA and some lamports (2x no_of_reserves) of the token vault
    * @returns - a struct with an instruction to update the reserve allocations (set weight and ctoken allocation to 0) and an a list of instructions to disinvest the funds in the reserves
    */
   async withdrawEverythingFromAllReservesAndBlockInvest(
     vault: KaminoVault,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     payer?: TransactionSigner
   ): Promise<WithdrawAndBlockReserveIxs> {
@@ -1280,7 +1285,7 @@ export class KaminoVaultClient {
       payer: investPayer,
       vault,
       vaultState,
-      slot,
+      ledgerInstant,
       reserves,
       vaultReservesMap,
     });
@@ -1291,14 +1296,14 @@ export class KaminoVaultClient {
   /**
    * This method disinvests all the funds from all the reserves and set their weight to 0; for vaults that are managed by external bot/crank, the bot can change the weight and invest in the reserves again
    * @param vault - the vault to disinvest the invested funds from
-   * @param slot - current slot used for reserve and vault calculations
+   * @param ledgerInstant - current ledger instant (slot + block time), used for reserve and vault calculations
    * @param [vaultReservesMap] - optional parameter to pass a map of the vault reserves. If not provided, the reserves will be loaded from the vault
    * @param [payer] - optional parameter to pass a different payer for the transaction. If not provided, the admin of the vault will be used; this is the payer for the invest ixs and it should have an ATA and some lamports (2x no_of_reserves) of the token vault
    * @returns - a struct with an instruction to update the reserve allocations to 0 weight and a list of instructions to disinvest the funds in the reserves
    */
   async disinvestAllReservesIxs(
     vault: KaminoVault,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     payer?: TransactionSigner
   ): Promise<DisinvestAllReservesIxs> {
@@ -1340,7 +1345,7 @@ export class KaminoVaultClient {
       payer: investPayer,
       vault,
       vaultState,
-      slot,
+      ledgerInstant,
       reserves,
       vaultReservesMap,
     });
@@ -2220,18 +2225,17 @@ export class KaminoVaultClient {
   /**
    * This method withdraws all the pending fees from the vault to the owner's token ATA
    * @param vault - vault for which the admin withdraws the pending fees
-   * @param currentSlot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
+   * @param currentLedgerInstant - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
    * @param [vaultReservesMap] - a hashmap from each reserve pubkey to the reserve state. Optional. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [vaultAdminAuthority] - vault admin - a noop vaultAdminAuthority is provided when absent for multisigs
    * @returns - list of instructions to withdraw all pending fees, including the ATA creation instructions if needed
    */
   async withdrawPendingFeesIxs(
     vault: KaminoVault,
-    currentSlot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     vaultAdminAuthority?: TransactionSigner
   ): Promise<Instruction[]> {
-    const slot = currentSlot;
     const vaultState: VaultState = await vault.getState();
     const vaultAdmin = parseVaultAdmin(vaultState, vaultAdminAuthority);
     const vaultReservesState = vaultReservesMap;
@@ -2254,7 +2258,7 @@ export class KaminoVaultClient {
       // Get decreasing order sorted available liquidity to withdraw from each reserve allocated to
       const reserveAllocationAvailableLiquidityToWithdraw = await this.getReserveAllocationAvailableLiquidityToWithdraw(
         vaultState,
-        slot,
+        ledgerInstant,
         vaultReservesState
       );
       // sort
@@ -2803,7 +2807,7 @@ export class KaminoVaultClient {
    * @param user - user to withdraw
    * @param vault - vault to withdraw from
    * @param shareAmountToWithdraw - share amount to withdraw (in tokens, not lamports), in order to withdraw everything, any value > user share amount
-   * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
+   * @param ledgerInstant - current ledger instant (slot + block time), used to estimate the interest earned in the different reserves with allocation from the vault
    * @param vaultReservesMap - preloaded reserve states for every reserve in the vault allocation
    * @param farmState - preloaded vault farm state; provide this to unstake from the vault farm
    * @param flcFarmState - preloaded first loss capital farm state; provide this to unstake from the first loss capital farm
@@ -2815,7 +2819,7 @@ export class KaminoVaultClient {
     user: TransactionSigner,
     vault: KaminoVault,
     shareAmountToWithdraw: Decimal,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     farmState: FarmState | null,
     flcFarmState: FarmState | null,
@@ -2827,7 +2831,7 @@ export class KaminoVaultClient {
       user,
       vault,
       shareAmountToWithdraw,
-      slot,
+      ledgerInstant,
       vaultReservesMap,
       farmState,
       flcFarmState,
@@ -2844,7 +2848,7 @@ export class KaminoVaultClient {
    * @param user - user to redeem shares
    * @param vault - vault to redeem from
    * @param shareAmountToRedeem - share amount to redeem (in tokens, not lamports)
-   * @param slot - current slot
+   * @param ledgerInstant - current ledger instant (slot + block time)
    * @param vaultReservesMap - preloaded reserve states for every reserve in the vault allocation
    * @param vaultState - preloaded vault state; call `vault.getState()` / `vault.reloadState()` before building instructions
    * @param globalConfigState - preloaded KVault global config; call `client.loadKVaultGlobalConfig()` / `manager.loadKVaultGlobalConfig()` before building instructions
@@ -2858,7 +2862,7 @@ export class KaminoVaultClient {
     user: TransactionSigner,
     vault: KaminoVault,
     shareAmountToRedeem: Decimal,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     vaultState: VaultState,
     globalConfigState: KVaultGlobalConfig,
@@ -2925,7 +2929,7 @@ export class KaminoVaultClient {
     const redeemPlan =
       precomputedRedeemPlan ??
       (await this.planRedeemInKindExecution(
-        slot,
+        ledgerInstant,
         vaultState,
         globalConfigState,
         vaultReservesState,
@@ -3017,7 +3021,7 @@ export class KaminoVaultClient {
    * @param user - user to withdraw/redeem
    * @param vault - vault to withdraw/redeem from
    * @param shareAmountToExit - total share amount to exit (in tokens, not lamports)
-   * @param slot - current slot
+   * @param ledgerInstant - current ledger instant (slot + block time)
    * @param vaultReservesMap - preloaded reserve states for every reserve in the vault allocation
    * @param vaultState - preloaded vault state; call `vault.getState()` / `vault.reloadState()` before building instructions
    * @param globalConfigState - preloaded KVault global config; call `client.loadKVaultGlobalConfig()` / `manager.loadKVaultGlobalConfig()` before building instructions
@@ -3031,7 +3035,7 @@ export class KaminoVaultClient {
     user: TransactionSigner,
     vault: KaminoVault,
     shareAmountToExit: Decimal,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     vaultState: VaultState,
     globalConfigState: KVaultGlobalConfig,
@@ -3044,7 +3048,12 @@ export class KaminoVaultClient {
     const withdrawalPenalties = KaminoVaultClient.getEffectiveWithdrawalPenaltyParams(vaultState, globalConfigState);
 
     // Calculate how much can be withdrawn instantly
-    const tokensPerShare = await this.getTokensPerShareSingleVault(vaultState, slot, vaultReservesState, slot);
+    const tokensPerShare = await this.getTokensPerShareSingleVault(
+      vaultState,
+      ledgerInstant,
+      vaultReservesState,
+      ledgerInstant
+    );
 
     // Get user total shares
     const userSharesState = await this.getUserSharesState(user.address, vaultState, selectedFarm?.farmAddress);
@@ -3056,7 +3065,7 @@ export class KaminoVaultClient {
     // Calculate available liquidity for instant withdraw across all reserves
     const reserveAllocationAvailableLiquidity = await this.getReserveAllocationAvailableLiquidityToWithdraw(
       vaultState,
-      slot,
+      ledgerInstant,
       vaultReservesState
     );
     const reserveAllocationExecutableLiquidity = KaminoVaultClient.getExecutableReserveWithdrawLiquidityMap(
@@ -3104,7 +3113,7 @@ export class KaminoVaultClient {
 
     const reserveAllocations =
       sharesToRedeem.gt(0) || canAttemptRedeemFallback
-        ? await this.getReserveAllocationLiquidity(vaultState, slot, vaultReservesState)
+        ? await this.getReserveAllocationLiquidity(vaultState, ledgerInstant, vaultReservesState)
         : new Map<Address, Decimal>();
     let precomputedRedeemPlan: RedeemInKindExecutionPlan | undefined;
     let withdrawSuppressed = !instantWithdrawPlan.allowed && rawSharesToWithdraw.gt(0) && sharesToRedeem.gt(0);
@@ -3122,7 +3131,7 @@ export class KaminoVaultClient {
       reserveAllocations.size > 0
     ) {
       const redeemFallbackPlan = await this.planRedeemInKindExecution(
-        slot,
+        ledgerInstant,
         vaultState,
         globalConfigState,
         vaultReservesState,
@@ -3151,7 +3160,7 @@ export class KaminoVaultClient {
         user,
         vault,
         sharesToWithdraw,
-        slot,
+        ledgerInstant,
         vaultReservesState,
         farmState,
         flcFarmState,
@@ -3194,7 +3203,7 @@ export class KaminoVaultClient {
       const redeemPlan =
         precomputedRedeemPlan ??
         (await this.planRedeemInKindExecution(
-          slot,
+          ledgerInstant,
           vaultState,
           globalConfigState,
           vaultReservesState,
@@ -3216,7 +3225,7 @@ export class KaminoVaultClient {
         user,
         vault,
         sharesRequestedToRedeem,
-        slot,
+        ledgerInstant,
         vaultReservesState,
         vaultState,
         globalConfigState,
@@ -3243,7 +3252,7 @@ export class KaminoVaultClient {
    * @param user - user to withdraw/redeem/enqueue
    * @param vault - vault to withdraw/redeem from
    * @param shareAmountToExit - total share amount to exit (in tokens, not lamports)
-   * @param slot - current slot
+   * @param ledgerInstant - current ledger instant (slot + block time)
    * @param vaultReservesMap - preloaded reserve states for every reserve in the vault allocation
    * @param vaultState - preloaded vault state; call `vault.getState()` / `vault.reloadState()` before building instructions
    * @param globalConfigState - preloaded KVault global config; call `client.loadKVaultGlobalConfig()` / `manager.loadKVaultGlobalConfig()` before building instructions
@@ -3255,7 +3264,7 @@ export class KaminoVaultClient {
    *
    * @example
    * ```ts
-   * const slot = await rpc.getSlot({ commitment: 'confirmed' }).send();
+   * const ledgerInstant = await getCurrentLedgerInstant(rpc, 'confirmed');
    * const vaultState = await vault.reloadState();
    * const vaultReservesMap = await vaultClient.loadVaultReserves(vaultState);
    * const globalConfigState = await vaultClient.loadKVaultGlobalConfig();
@@ -3263,7 +3272,7 @@ export class KaminoVaultClient {
    *   user,
    *   vault,
    *   sharesToExit,
-   *   slot,
+   *   ledgerInstant,
    *   vaultReservesMap,
    *   vaultState,
    *   globalConfigState,
@@ -3303,7 +3312,7 @@ export class KaminoVaultClient {
     user: TransactionSigner,
     vault: KaminoVault,
     shareAmountToExit: Decimal,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     vaultState: VaultState,
     globalConfigState: KVaultGlobalConfig,
@@ -3317,7 +3326,7 @@ export class KaminoVaultClient {
       user,
       vault,
       shareAmountToExit,
-      slot,
+      ledgerInstant,
       vaultReservesState,
       vaultState,
       globalConfigState,
@@ -3420,7 +3429,7 @@ export class KaminoVaultClient {
    * @param user - user to sell shares for vault tokens
    * @param vault - vault to sell shares from
    * @param shareAmountToWithdraw - share amount to sell (in tokens, not lamports), in order to withdraw everything, any value > user share amount
-   * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
+   * @param ledgerInstant - current ledger instant (slot + block time), used to estimate the interest earned in the different reserves with allocation from the vault
    * @param [vaultReservesMap] - optional parameter; a hashmap from each reserve pubkey to the reserve state. If provided the function will be significantly faster as it will not have to fetch the reserves
    * @param [farmState] - the state of the vault farm, if the vault has a farm. Optional. If not provided, it will be fetched
    * @param [withdrawalPenalties] - effective vault/global withdrawal penalties; provide preloaded values to avoid fetching the KVault global config
@@ -3430,7 +3439,7 @@ export class KaminoVaultClient {
     user: TransactionSigner,
     vault: KaminoVault,
     shareAmountToWithdraw: Decimal,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     farmState: FarmState | null,
     flcFarmState: FarmState | null,
@@ -3442,7 +3451,7 @@ export class KaminoVaultClient {
       user,
       vault,
       shareAmountToWithdraw,
-      slot,
+      ledgerInstant,
       vaultReservesMap,
       farmState,
       flcFarmState,
@@ -3458,7 +3467,7 @@ export class KaminoVaultClient {
     user: TransactionSigner,
     vault: KaminoVault,
     shareAmountToWithdraw: Decimal,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     farmState: FarmState | null,
     flcFarmState: FarmState | null,
@@ -3513,10 +3522,15 @@ export class KaminoVaultClient {
       (allocation) => allocation.reserve !== DEFAULT_PUBLIC_KEY
     );
     const actualSharesToWithdraw = sharesToWithdraw.lte(totalUserShares) ? sharesToWithdraw : totalUserShares;
-    const tokensPerShare = await this.getTokensPerShareSingleVault(vaultState, slot, vaultReservesMap, slot);
+    const tokensPerShare = await this.getTokensPerShareSingleVault(
+      vaultState,
+      ledgerInstant,
+      vaultReservesMap,
+      ledgerInstant
+    );
     const shareExitLiquidityPlan = await this.getShareExitLiquidityPlan(
       vaultState,
-      slot,
+      ledgerInstant,
       vaultReservesMap,
       shareAmountToWithdraw,
       totalUserShares,
@@ -3762,14 +3776,14 @@ export class KaminoVaultClient {
    * This will trigger invest by balancing, based on weights, the reserve allocations of the vault. It can either withdraw or deposit into reserves to balance them. This is a function that should be cranked
    * @param payer wallet that pays the tx
    * @param vault - vault to invest from
-   * @param slot - current slot used for invest calculations
+   * @param ledgerInstant - current ledger instant (slot + block time), used for invest calculations
    * @param skipComputationChecks - if true, bypasses preliminary allocation-diff gating during atomic allocation updates. Emitted moves are still filtered by min-invest thresholds unless they fully evacuate a reserve allocation, and amounts remain capped by computed allocation deltas, vault available liquidity, reserve freely withdrawable liquidity, and allocation caps
    * @returns - an array of invest instructions for each invest action required for the vault reserves
    */
   async investAllReservesIxs(
     payer: TransactionSigner,
     vault: KaminoVault,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     skipComputationChecks: boolean = false
   ): Promise<Instruction[]> {
     const vaultState = await vault.reloadState();
@@ -3781,16 +3795,16 @@ export class KaminoVaultClient {
     const allReservesStateMap = await this.loadVaultReserves(vaultState);
     const computedReservesAllocationTokens = await this.getVaultComputedReservesAllocation(
       vaultState,
-      slot,
+      ledgerInstant,
       allReservesStateMap,
-      slot
+      ledgerInstant
     );
 
     // compute total vault holdings and expected distribution based on weights
     const curentVaultAllocations = this.getVaultAllocations(vaultState);
     const reserveAllocationAvailableLiquidityToWithdraw = await this.getReserveAllocationAvailableLiquidityToWithdraw(
       vaultState,
-      slot,
+      ledgerInstant,
       allReservesStateMap
     );
     const reservesToDisinvestFrom: Array<{ reserve: Address; maxAmountLamports: Decimal }> = [];
@@ -3810,7 +3824,7 @@ export class KaminoVaultClient {
       const currentAllocation = curentVaultAllocations.get(reservePubkey)!;
       const currentCTokenAllocationLamports = currentAllocation.ctokenAllocationLamports;
 
-      const reserveCollExchangeRate = reserveState.getEstimatedCollateralExchangeRate(slot, 0);
+      const reserveCollExchangeRate = reserveState.getEstimatedCollateralExchangeRate(ledgerInstant, 0);
       const currentLiquidityAllocationCapLamports = getEffectiveLiquidityAllocationCap(
         currentAllocation.tokenAllocationCapLamports,
         ctokenAllocationCapLamportsToLiquidityLamports(
@@ -3920,13 +3934,13 @@ export class KaminoVaultClient {
 
   private async getSingleReserveExpectedMoveLamports({
     vaultState,
-    slot,
+    ledgerInstant,
     reserve,
     vaultReservesMap,
     maxAmountLamports,
   }: {
     vaultState: VaultState;
-    slot: Slot;
+    ledgerInstant: LedgerInstant;
     reserve: ReserveWithAddress;
     vaultReservesMap: Map<Address, KaminoReserve>;
     maxAmountLamports?: BN | string;
@@ -3938,9 +3952,9 @@ export class KaminoVaultClient {
 
     const computedReservesAllocationTokens = await this.getVaultComputedReservesAllocation(
       vaultState,
-      slot,
+      ledgerInstant,
       vaultReservesMap,
-      slot
+      ledgerInstant
     );
     const computedAllocationTokens = computedReservesAllocationTokens.targetReservesAllocation.get(reserve.address);
     const currentAllocation = this.getVaultAllocations(vaultState).get(reserve.address);
@@ -3948,7 +3962,7 @@ export class KaminoVaultClient {
       return { amountLamports: new Decimal(0), fullyEvacuatesReserve: false };
     }
 
-    const reserveCollExchangeRate = reserveState.getEstimatedCollateralExchangeRate(slot, 0);
+    const reserveCollExchangeRate = reserveState.getEstimatedCollateralExchangeRate(ledgerInstant, 0);
     const reserveAllocationLiquidityAmount = lamportsToDecimal(
       KaminoReserve.cTokensToLiquidity(currentAllocation.ctokenAllocationLamports, reserveCollExchangeRate),
       vaultState.tokenMintDecimals.toNumber()
@@ -3970,7 +3984,7 @@ export class KaminoVaultClient {
     if (actualDiffInLamports.gt(0)) {
       if (computedAllocationTokens.lt(reserveAllocationLiquidityAmount)) {
         const reserveAllocationAvailableLiquidityToWithdraw =
-          await this.getReserveAllocationAvailableLiquidityToWithdraw(vaultState, slot, vaultReservesMap);
+          await this.getReserveAllocationAvailableLiquidityToWithdraw(vaultState, ledgerInstant, vaultReservesMap);
         amountLamports = Decimal.min(
           actualDiffInLamports,
           reserveAllocationAvailableLiquidityToWithdraw.get(reserve.address) ?? new Decimal(0)
@@ -4093,10 +4107,10 @@ export class KaminoVaultClient {
   }): Promise<Instruction[]> {
     const vaultState = await vault.getState();
     const minInvestAmountLamports = new Decimal(vaultState.minInvestAmount?.toString() ?? '0');
-    const slot = await this.getConnection().getSlot().send();
+    const ledgerInstant = await getCurrentLedgerInstant(this.getConnection());
     const { amountLamports, fullyEvacuatesReserve } = await this.getSingleReserveExpectedMoveLamports({
       vaultState,
-      slot,
+      ledgerInstant,
       reserve,
       vaultReservesMap,
       maxAmountLamports,
@@ -4506,7 +4520,7 @@ export class KaminoVaultClient {
   async syncVaultLookupTableIxs(
     authority: TransactionSigner,
     vault: KaminoVault,
-    slot: Slot,
+    recentSlot: Slot,
     vaultReservesMap: Map<Address, KaminoReserve>
   ): Promise<SyncVaultLUTIxs> {
     const vaultState = await vault.getState();
@@ -4543,7 +4557,7 @@ export class KaminoVaultClient {
     const setupLUTIfNeededIxs: Instruction[] = [];
     let lut = vaultState.vaultLookupTable;
     if (lut === DEFAULT_PUBLIC_KEY) {
-      const [ix, address] = await initLookupTableIx(authority, slot);
+      const [ix, address] = await initLookupTableIx(authority, recentSlot);
       setupLUTIfNeededIxs.push(ix);
       lut = address;
 
@@ -4596,10 +4610,14 @@ export class KaminoVaultClient {
    * capped by both the vault allocation cap and the reserve deposit cap.
    * @param vault - the vault to compute the investment for
    * @param reserve - the reserve to compute the investment for
-   * @param slot - needed to compute the exchange rate at this slot
+   * @param ledgerInstant - the ledger instant (slot + block time) to compute the exchange rate at
    * @returns the maximum vault-token lamports that can be invested into the reserve
    */
-  async getMaxInvestableFromVaultInReserve(vault: KaminoVault, reserve: KaminoReserve, slot: Slot): Promise<Decimal> {
+  async getMaxInvestableFromVaultInReserve(
+    vault: KaminoVault,
+    reserve: KaminoReserve,
+    ledgerInstant: LedgerInstant
+  ): Promise<Decimal> {
     const vaultState = await vault.getState();
     const reserveState = reserve.state;
     const targetReserveAllocation = vaultState.vaultAllocationStrategy.find(
@@ -4610,7 +4628,7 @@ export class KaminoVaultClient {
     }
 
     const tokenAllocationCapLamportsStr = targetReserveAllocation.tokenAllocationCap.toString();
-    const targetReserveExchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, 0);
+    const targetReserveExchangeRate = reserve.getEstimatedCollateralExchangeRate(ledgerInstant, 0);
     const targetCtokenAllocationCapLamports =
       targetReserveAllocation.ctokenAllocationCap === undefined
         ? undefined
@@ -4631,7 +4649,7 @@ export class KaminoVaultClient {
       ? targetLiquidityAllocationCapLamports.sub(investedLiquidityLamports)
       : new Decimal(0);
 
-    const reserveTotalSupply = reserve.getEstimatedTotalSupply(slot, 0);
+    const reserveTotalSupply = reserve.getEstimatedTotalSupply(ledgerInstant, 0);
     const depositLimitStr = reserveState.config.depositLimit.toString();
     const reserveTotalCap = new Decimal(depositLimitStr);
     // U64_MAX means unlimited, so don't constrain by reserve cap
@@ -4648,20 +4666,20 @@ export class KaminoVaultClient {
 
   /** Read total vault holdings and reserve weights, then compute target liquidity token units per reserve.
    * @param vaultState - the vault state to calculate the allocation for
-   * @param slot - the slot for which to calculate the allocation
+   * @param ledgerInstant - the ledger instant (slot + block time) for which to calculate the allocation
    * @param vaultReserves - a hashmap from each reserve pubkey to the reserve state
-   * @param currentSlot - latest confirmed slot
+   * @param currentLedgerInstant - latest confirmed ledger instant (slot + block time)
    * @returns target unallocated and per-reserve amounts in token units, not lamports
    */
   async getVaultComputedReservesAllocation(
     vaultState: VaultState,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReserves: Map<Address, KaminoReserve>,
-    currentSlot: Slot
+    currentLedgerInstant: LedgerInstant
   ): Promise<VaultComputedAllocation> {
     const vaultReservesState = vaultReserves;
     // 1. Read the states
-    const holdings = await this.getVaultHoldings(vaultState, slot, vaultReservesState, currentSlot);
+    const holdings = await this.getVaultHoldings(vaultState, ledgerInstant, vaultReservesState, currentLedgerInstant);
     const tokenMintDecimals = vaultState.tokenMintDecimals.toNumber();
 
     // if there are no vault reserves or all have weight 0 everything has to be in Available
@@ -4691,7 +4709,7 @@ export class KaminoVaultClient {
           throw new Error(`Reserve ${reserve} not found in vault reserves map`);
         }
 
-        collateralExchangeRate = reserveState.getEstimatedCollateralExchangeRate(slot, 0);
+        collateralExchangeRate = reserveState.getEstimatedCollateralExchangeRate(ledgerInstant, 0);
       }
 
       initialVaultAllocations.set(
@@ -4703,9 +4721,9 @@ export class KaminoVaultClient {
     // 2. Compute the allocation
     const totalInvestableInStandardReserves = await this.getTotalInvestableInStandardReserves(
       vaultState,
-      slot,
+      ledgerInstant,
       vaultReservesState,
-      currentSlot,
+      currentLedgerInstant,
       holdings
     );
 
@@ -4875,28 +4893,28 @@ export class KaminoVaultClient {
   /**
    * This method calculates the token per share value. This will always change based on interest earned from the vault, but calculating it requires a bunch of rpc requests. Caching this for a short duration would be optimal
    * @param vaultState - vault state to calculate tokensPerShare for
-   * @param slot - the slot at which we retrieve the tokens per share
+   * @param ledgerInstant - the ledger instant (slot + block time) at which we retrieve the tokens per share
    * @param vaultReservesMap - hashmap from each reserve pubkey to the reserve state
-   * @param currentSlot - latest confirmed slot
+   * @param currentLedgerInstant - latest confirmed ledger instant (slot + block time)
    * @returns - token per share value
    */
   async getTokensPerShareSingleVault(
     vaultOrState: KaminoVault | VaultState,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
-    currentSlot: Slot
+    currentLedgerInstant: LedgerInstant
   ): Promise<Decimal> {
     // Determine if we have a KaminoVault or VaultState
     const vaultState = 'getState' in vaultOrState ? await vaultOrState.getState() : vaultOrState;
-    return this.computeTokensPerShare(vaultState, slot, vaultReservesMap, currentSlot);
+    return this.computeTokensPerShare(vaultState, ledgerInstant, vaultReservesMap, currentLedgerInstant);
   }
 
   /** Synchronous version of {@link getTokensPerShareSingleVault}; computes the token per share value from the provided states without any RPC call */
   computeTokensPerShare(
     vaultState: VaultState,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
-    currentSlot: Slot
+    currentLedgerInstant: LedgerInstant
   ): Decimal {
     if (vaultState.sharesIssued.isZero()) {
       return new Decimal(0);
@@ -4907,7 +4925,7 @@ export class KaminoVaultClient {
       vaultState.sharesMintDecimals.toString()
     );
 
-    const holdings = this.computeVaultHoldings(vaultState, slot, vaultReservesMap, currentSlot);
+    const holdings = this.computeVaultHoldings(vaultState, ledgerInstant, vaultReservesMap, currentLedgerInstant);
     const netAUM = holdings.totalAUMIncludingFees.sub(holdings.pendingFees);
 
     return netAUM.div(sharesDecimal);
@@ -4923,7 +4941,7 @@ export class KaminoVaultClient {
    * vesting grow the AUM and lower the shares out), so discount a slippage when using it as `minSharesOut`.
    * @param vaultState - the vault state to estimate the shares for
    * @param tokenAmount - token amount to be deposited, in decimals
-   * @param slot - current slot, used to estimate the interest earned in the reserves the vault is invested in
+   * @param ledgerInstant - current ledger instant (slot + block time), used to estimate the interest earned in the reserves the vault is invested in
    * @param vaultReservesMap - hashmap from each reserve pubkey to the reserve state
    * @param [slippageBps] - optional slippage to discount from the estimated shares, in bps. Defaults to 0 (no discount)
    * @returns - the estimated amount of shares received for the deposit, in decimals
@@ -4931,7 +4949,7 @@ export class KaminoVaultClient {
   estimateSharesFromTokens(
     vaultState: VaultState,
     tokenAmount: Decimal,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     slippageBps: number = 0
   ): Decimal {
@@ -4965,7 +4983,7 @@ export class KaminoVaultClient {
         : Decimal.min(tokensForSharesLamports, depositCapLamports);
       sharesOut = lamportsToDecimal(cappedTokensForSharesLamports, sharesDecimals);
     } else {
-      const holdings = this.computeVaultHoldings(vaultState, slot, vaultReservesMap, slot);
+      const holdings = this.computeVaultHoldings(vaultState, ledgerInstant, vaultReservesMap, ledgerInstant);
       // mirror the on-chain rewards refresh that runs before the deposit share pricing: pending vault
       // rewards vest into tokenAvailable, raising the AUM. The fees charged at execution are not
       // simulated on purpose: they lower the AUM, so leaving them out keeps the estimate a lower bound
@@ -4973,7 +4991,7 @@ export class KaminoVaultClient {
       let vestedRewardsLamports = new Decimal(0);
       if (rewardPerSecond.gtn(0) && rewardsAvailable.gtn(0) && !lastIssuanceTs.isZero()) {
         const secondsSinceLastIssuance = Decimal.max(
-          new Decimal(Date.now()).div(1000).floor().sub(new Decimal(lastIssuanceTs.toString())),
+          new Decimal(Number(ledgerInstant.blockTime)).sub(new Decimal(lastIssuanceTs.toString())),
           new Decimal(0)
         );
         vestedRewardsLamports = Decimal.min(
@@ -5009,13 +5027,13 @@ export class KaminoVaultClient {
 
   /**
    * This method calculates the token per share value. This will always change based on interest earned from the vault, but calculating it requires a bunch of rpc requests. Caching this for a short duration would be optimal
-   * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
+   * @param ledgerInstant - current ledger instant (slot + block time), used to estimate the interest earned in the different reserves with allocation from the vault
    * @param [vaultsOverride] - a list of vaults to get the tokens per share for; if provided with state it will not fetch the state again. Optional
    * @param vaultReservesMap - hashmap from each reserve pubkey to the reserve state
    * @returns - token per share value
    */
   async getTokensPerShareAllVaults(
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultsOverride: Array<KaminoVault>,
     vaultReservesMap: Map<Address, KaminoReserve>
   ): Promise<Map<Address, Decimal>> {
@@ -5023,7 +5041,12 @@ export class KaminoVaultClient {
     const resolvedReservesMap = vaultReservesMap;
     const vaultTokensPerShare = new Map<Address, Decimal>();
     for (const vault of vaults) {
-      const tokensPerShare = await this.getTokensPerShareSingleVault(vault, slot, resolvedReservesMap, slot);
+      const tokensPerShare = await this.getTokensPerShareSingleVault(
+        vault,
+        ledgerInstant,
+        resolvedReservesMap,
+        ledgerInstant
+      );
       vaultTokensPerShare.set(vault.address, tokensPerShare);
     }
 
@@ -5450,9 +5473,9 @@ export class KaminoVaultClient {
       .toNumber();
   }
 
-  getSuppliedInReserve(vaultState: VaultState, slot: Slot, reserve: KaminoReserve): Decimal {
+  getSuppliedInReserve(vaultState: VaultState, ledgerInstant: LedgerInstant, reserve: KaminoReserve): Decimal {
     const referralFeeBps = this.getReserveReferralFeeBps(reserve);
-    const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, referralFeeBps);
+    const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(ledgerInstant, referralFeeBps);
 
     const reserveAllocation = vaultState.vaultAllocationStrategy.find(
       (allocation) => allocation.reserve === reserve.address
@@ -5537,13 +5560,13 @@ export class KaminoVaultClient {
    * Returns an unsorted hash map of all reserves that the given vault has allocations for, together with the amount
    * that can be withdrawn from each of the reserves (capped by reserve available liquidity).
    * @param vaultState - the preloaded vault state
-   * @param slot - current slot
+   * @param ledgerInstant - current ledger instant (slot + block time)
    * @param vaultReservesMap - a hashmap from each reserve pubkey to the reserve state
    * @returns a Map of reserves (key) with the amount available to withdraw for each (value), in lamports
    */
   async getReserveAllocationAvailableLiquidityToWithdraw(
     vaultState: VaultState,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>
   ): Promise<Map<Address, Decimal>> {
     const reserveAllocationAvailableLiquidityToWithdraw = new Map<Address, Decimal>();
@@ -5556,12 +5579,12 @@ export class KaminoVaultClient {
         throw new Error(`Reserve ${allocationStrategy.reserve} not found`);
       }
       const referralFeeBps = this.getReserveReferralFeeBps(reserve);
-      const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, referralFeeBps);
+      const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(ledgerInstant, referralFeeBps);
       const reserveAllocationLiquidityAmount = KaminoReserve.cTokensToLiquidity(
         new Decimal(allocationStrategy.ctokenAllocation.toString()),
         reserveCollExchangeRate
       );
-      const reserveAvailableLiquidityAmount = reserve.getFreelyAvailableLiquidityAmount(slot, referralFeeBps);
+      const reserveAvailableLiquidityAmount = reserve.getFreelyAvailableLiquidityAmount(ledgerInstant, referralFeeBps);
       reserveAllocationAvailableLiquidityToWithdraw.set(
         allocationStrategy.reserve,
         Decimal.min(reserveAllocationLiquidityAmount, reserveAvailableLiquidityAmount)
@@ -5581,7 +5604,7 @@ export class KaminoVaultClient {
    */
   async getShareExitLiquidityPlan(
     vaultState: VaultState,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     requestedShareTokens: Decimal,
     totalUserShareTokens: Decimal,
@@ -5615,7 +5638,7 @@ export class KaminoVaultClient {
     if (remainingNetTokenLamportsToWithdraw.gt(0)) {
       const reserveWithdrawable = await this.getReserveAllocationAvailableLiquidityToWithdraw(
         vaultState,
-        slot,
+        ledgerInstant,
         vaultReservesMap
       );
       const executableReserveWithdrawable =
@@ -5660,7 +5683,7 @@ export class KaminoVaultClient {
    */
   private async getReserveAllocationLiquidity(
     vaultState: VaultState,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>
   ): Promise<Map<Address, Decimal>> {
     const result = new Map<Address, Decimal>();
@@ -5673,7 +5696,7 @@ export class KaminoVaultClient {
         throw new Error(`Reserve ${allocationStrategy.reserve} not found`);
       }
       const referralFeeBps = this.getReserveReferralFeeBps(reserve);
-      const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, referralFeeBps);
+      const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(ledgerInstant, referralFeeBps);
       const reserveAllocationLiquidityAmount = KaminoReserve.cTokensToLiquidity(
         new Decimal(allocationStrategy.ctokenAllocation.toString()),
         reserveCollExchangeRate
@@ -6074,7 +6097,7 @@ export class KaminoVaultClient {
   }
 
   private async planRedeemInKindExecution(
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultState: VaultState,
     globalConfigState: KVaultGlobalConfig,
     vaultReservesState: Map<Address, KaminoReserve>,
@@ -6091,7 +6114,12 @@ export class KaminoVaultClient {
     }
 
     const shareLamportsToRedeem = collToLamportsDecimal(sharesToRedeem, vaultState.sharesMintDecimals.toNumber());
-    const tokensPerShare = await this.getTokensPerShareSingleVault(vaultState, slot, vaultReservesState, slot);
+    const tokensPerShare = await this.getTokensPerShareSingleVault(
+      vaultState,
+      ledgerInstant,
+      vaultReservesState,
+      ledgerInstant
+    );
     if (tokensPerShare.lte(0)) {
       return {
         reservePlans: [],
@@ -6103,7 +6131,7 @@ export class KaminoVaultClient {
     const tokensToRedeem = shareLamportsToRedeem.mul(tokensPerShare);
     const reserveWithSharesToRedeem = await this.getReserveSharesForRedeemInKind(
       vaultState,
-      slot,
+      ledgerInstant,
       vaultReservesState,
       tokensToRedeem,
       sharesPerToken,
@@ -6132,7 +6160,7 @@ export class KaminoVaultClient {
         reserveWithShares.reserve,
         reserveState,
         sharesAmountForEstimation,
-        slot,
+        ledgerInstant,
         vaultReservesState,
         postWithdrawLiquidity
       );
@@ -6140,7 +6168,7 @@ export class KaminoVaultClient {
       // Mirror the on-chain min_withdraw_amount guard: redeem_in_kind rejects when
       // the liquidity value of the redeemed cTokens is <= min_withdraw_amount.
       const reserveExchangeRate = reserveState.getEstimatedCollateralExchangeRate(
-        slot,
+        ledgerInstant,
         this.getReserveReferralFeeBps(reserveState)
       );
       const redeemLiquidityValue = KaminoReserve.cTokensToLiquidity(
@@ -6211,11 +6239,11 @@ export class KaminoVaultClient {
     reserveAddress: Address,
     reserveState: KaminoReserve,
     sharesAmountLamports: BN,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesState: Map<Address, KaminoReserve>,
     postWithdrawLiquidity?: Map<Address, Decimal>
   ): Promise<BN> {
-    const holdings = await this.getVaultHoldings(vaultState, slot, vaultReservesState, slot);
+    const holdings = await this.getVaultHoldings(vaultState, ledgerInstant, vaultReservesState, ledgerInstant);
     const currentVaultAum = collToLamportsDecimal(
       holdings.totalAUMIncludingFees.sub(holdings.pendingFees),
       vaultState.tokenMintDecimals.toNumber()
@@ -6241,7 +6269,7 @@ export class KaminoVaultClient {
     const totalLiquidityForUser = totalLiquidityForUserWithPenalty.sub(withdrawalPenalty);
 
     const reserveExchangeRate = reserveState.getEstimatedCollateralExchangeRate(
-      slot,
+      ledgerInstant,
       this.getReserveReferralFeeBps(reserveState)
     );
     const reserveCtokensOwned = postWithdrawLiquidity
@@ -6270,7 +6298,7 @@ export class KaminoVaultClient {
    */
   private async getReserveSharesForRedeemInKind(
     vaultState: VaultState,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesState: Map<Address, KaminoReserve>,
     tokensToRedeem: Decimal,
     sharesPerToken: Decimal,
@@ -6280,7 +6308,7 @@ export class KaminoVaultClient {
   ): Promise<{ reserve: Address; sharesAmount: BN }[]> {
     const reserveAllocationLiquidity =
       reserveAllocationLiquidityOverride ??
-      (await this.getReserveAllocationLiquidity(vaultState, slot, vaultReservesState));
+      (await this.getReserveAllocationLiquidity(vaultState, ledgerInstant, vaultReservesState));
     const reserveRedeemCapacity = new Map<Address, Decimal>();
     reserveAllocationLiquidity.forEach((allocationLiquidity, reserve) => {
       reserveRedeemCapacity.set(
@@ -6504,7 +6532,7 @@ export class KaminoVaultClient {
       this.getConnection(),
       [...marketReservesMap.keys()],
       marketReservesMap,
-      DEFAULT_RECENT_SLOT_DURATION_MS,
+      this.recentSlotDurationMs,
       this._kaminoLendProgramId,
       this._farmsProgramId
     );
@@ -6535,7 +6563,7 @@ export class KaminoVaultClient {
    */
   async getVaultCollaterals(
     vaultState: VaultState,
-    _slot: Slot,
+    _ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     kaminoMarkets: Map<Address, KaminoMarket>
   ): Promise<Map<Address, MarketOverview>> {
@@ -6602,26 +6630,26 @@ export class KaminoVaultClient {
   /**
    * This will return an VaultHoldings object which contains the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
    * @param vault - the kamino vault to get available liquidity to withdraw for
-   * @param slot - the slot for which to calculate the holdings
+   * @param ledgerInstant - the ledger instant (slot + block time) for which to calculate the holdings
    * @param vaultReserves - a hashmap from each reserve pubkey to the reserve state
-   * @param currentSlot - latest confirmed slot
+   * @param currentLedgerInstant - latest confirmed ledger instant (slot + block time)
    * @returns an VaultHoldings object representing the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
    */
   async getVaultHoldings(
     vault: VaultState,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReserves: Map<Address, KaminoReserve>,
-    currentSlot: Slot
+    currentLedgerInstant: LedgerInstant
   ): Promise<VaultHoldings> {
-    return this.computeVaultHoldings(vault, slot, vaultReserves, currentSlot);
+    return this.computeVaultHoldings(vault, ledgerInstant, vaultReserves, currentLedgerInstant);
   }
 
   /** Synchronous version of {@link getVaultHoldings}; computes the holdings from the provided states without any RPC call */
   computeVaultHoldings(
     vault: VaultState,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReserves: Map<Address, KaminoReserve>,
-    currentSlot: Slot
+    currentLedgerInstant: LedgerInstant
   ): VaultHoldings {
     const vaultHoldings: VaultHoldings = new VaultHoldings({
       available: new Decimal(vault.tokenAvailable.toString()),
@@ -6632,7 +6660,6 @@ export class KaminoVaultClient {
       pendingFees: new Decimal(0),
     });
 
-    const currentSlotToUse = currentSlot;
     const vaultReservesState = vaultReserves;
     const decimals = new Decimal(vault.tokenMintDecimals.toString());
 
@@ -6646,7 +6673,7 @@ export class KaminoVaultClient {
         throw new Error(`Reserve ${allocationStrategy.reserve} not found`);
       }
 
-      const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, 0);
+      const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(ledgerInstant, 0);
       const reserveAllocationLiquidityAmount = KaminoReserve.cTokensToLiquidity(
         new Decimal(allocationStrategy.ctokenAllocation.toString()),
         reserveCollExchangeRate
@@ -6660,37 +6687,35 @@ export class KaminoVaultClient {
       vaultHoldings.queuedForWithdrawalForReserves.set(allocationStrategy.reserve, new Decimal(0));
     });
 
-    const currentPendingFees = new Fraction(vault.pendingFeesSf).toDecimal();
-    let totalPendingFees = currentPendingFees;
+    const currentPendingFeesLamports = new Fraction(vault.pendingFeesSf).toDecimal();
+    let totalPendingFeesLamports = currentPendingFeesLamports;
 
-    // if there is a slot passed and it is in the future we need to estimate the fees from current time until that moment
-    if (slot > currentSlotToUse) {
-      const currentTimestampSec = new Date().getTime() / 1000;
-      const timeAtPassedSlot =
-        currentTimestampSec + Number.parseInt((slot - currentSlotToUse).toString()) * this.recentSlotDurationMs;
-      const timeUntilPassedSlot = timeAtPassedSlot - currentTimestampSec;
+    // if the passed instant is in the future, estimate the fees accruing between now and that moment
+    if (ledgerInstant.blockTime > currentLedgerInstant.blockTime) {
+      const secondsUntilPassedInstant = Number(ledgerInstant.blockTime) - Number(currentLedgerInstant.blockTime);
 
-      const managementFeeFactor = new Decimal(timeUntilPassedSlot)
+      const managementFeeFactor = new Decimal(secondsUntilPassedInstant)
         .mul(new Decimal(vault.managementFeeBps.toString()))
         .div(new Decimal(SECONDS_PER_YEAR))
         .div(FullBPSDecimal);
-      const prevAUM = lamportsToDecimal(new Fraction(vault.prevAumSf).toDecimal(), vault.tokenMintDecimals.toNumber());
-      const simulatedMgmtFee = prevAUM.mul(managementFeeFactor);
-      totalPendingFees = totalPendingFees.add(simulatedMgmtFee);
+      const previousAumLamports = new Fraction(vault.prevAumSf).toDecimal();
+      const simulatedManagementFeeLamports = previousAumLamports.mul(managementFeeFactor);
+      totalPendingFeesLamports = totalPendingFeesLamports.add(simulatedManagementFeeLamports);
 
-      const simulatedEarnedInterest = vaultHoldings.invested
-        .add(vaultHoldings.available)
-        .sub(prevAUM)
-        .sub(simulatedMgmtFee);
-      const simulatedPerformanceFee = simulatedEarnedInterest
+      // Mirror the program's net AUM and saturating subtraction. A loss does not produce a negative performance fee.
+      const simulatedEarnedInterestLamports = Decimal.max(
+        vaultHoldings.invested.add(vaultHoldings.available).sub(currentPendingFeesLamports).sub(previousAumLamports),
+        0
+      );
+      const simulatedPerformanceFeeLamports = simulatedEarnedInterestLamports
         .mul(new Decimal(vault.performanceFeeBps.toString()))
         .div(FullBPSDecimal);
-      totalPendingFees = totalPendingFees.add(simulatedPerformanceFee);
+      totalPendingFeesLamports = totalPendingFeesLamports.add(simulatedPerformanceFeeLamports);
     }
 
     const totalAvailableDecimal = lamportsToDecimal(vaultHoldings.available, decimals);
     const totalInvestedDecimal = lamportsToDecimal(vaultHoldings.invested, decimals);
-    const pendingFees = lamportsToDecimal(totalPendingFees, decimals);
+    const pendingFees = lamportsToDecimal(totalPendingFeesLamports, decimals);
     return new VaultHoldings({
       available: totalAvailableDecimal,
       invested: totalInvestedDecimal,
@@ -6704,23 +6729,23 @@ export class KaminoVaultClient {
   /**
    * This will return the total amount of liquidity that can be invested in reserves.
    * @param vault - the kamino vault to get available liquidity to withdraw for
-   * @param slot - the slot for which to calculate the holdings
+   * @param ledgerInstant - the ledger instant (slot + block time) for which to calculate the holdings
    * @param vaultReserves - a hashmap from each reserve pubkey to the reserve state
-   * @param currentSlot - latest confirmed slot
+   * @param currentLedgerInstant - latest confirmed ledger instant (slot + block time)
    * @param [vaultHoldings] - the holdings of the vault. Optional. If provided the function will be  faster as it will not have to fetch the holdings
    * @returns the total amount of liquidity that can be invested in standard reserves
    */
   async getTotalInvestableInStandardReserves(
     vault: VaultState,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReserves: Map<Address, KaminoReserve>,
-    currentSlot: Slot,
+    currentLedgerInstant: LedgerInstant,
     vaultHoldings?: VaultHoldings
   ): Promise<Decimal> {
     const vaultReservesState = vaultReserves;
     const totalHoldings = vaultHoldings
       ? vaultHoldings
-      : await this.getVaultHoldings(vault, slot, vaultReservesState, currentSlot);
+      : await this.getVaultHoldings(vault, ledgerInstant, vaultReservesState, currentLedgerInstant);
     return totalHoldings.totalAUMIncludingFees.sub(totalHoldings.pendingFees);
   }
 
@@ -6728,19 +6753,19 @@ export class KaminoVaultClient {
    * This will return a VaultHoldingsWithUSDValue object with the token and USD-denominated holdings for the vault
    * @param vault - the kamino vault to get available liquidity to withdraw for
    * @param price - the price of the token in the vault (e.g. USDC)
-   * @param slot - the slot for which to calculate the holdings
+   * @param ledgerInstant - the ledger instant (slot + block time) for which to calculate the holdings
    * @param vaultReservesMap - hashmap from each reserve pubkey to the reserve state
-   * @param currentSlot - latest confirmed slot
+   * @param currentLedgerInstant - latest confirmed ledger instant (slot + block time)
    * @returns a VaultHoldingsWithUSDValue object with details about the tokens available and invested in the vault, denominated in tokens and USD
    */
   async getVaultHoldingsWithPrice(
     vault: VaultState,
     price: Decimal,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
-    currentSlot: Slot
+    currentLedgerInstant: LedgerInstant
   ): Promise<VaultHoldingsWithUSDValue> {
-    const holdings = await this.getVaultHoldings(vault, slot, vaultReservesMap, currentSlot);
+    const holdings = await this.getVaultHoldings(vault, ledgerInstant, vaultReservesMap, currentLedgerInstant);
 
     const investedInReservesUSD = new Map<Address, Decimal>();
     holdings.investedInReserves.forEach((amount, reserve) => {
@@ -6760,16 +6785,20 @@ export class KaminoVaultClient {
    * This includes the vault's uninvested `tokenAvailable` balance plus the per-reserve available liquidity
    * (capped by each reserve's actual available liquidity), returned in lamports.
    * @param vaultState - the kamino vault state to get the maximum instant withdrawable amount for
-   * @param slot - current slot
+   * @param ledgerInstant - current ledger instant (slot + block time)
    * @param vaultReservesMap - a hashmap from each reserve pubkey to the reserve state
    * @returns the maximum instant withdrawable amount for the vault, in lamports
    */
   async getMaxInstantWithdrawableAmount(
     vaultState: VaultState,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>
   ): Promise<Decimal> {
-    const perReserve = await this.getReserveAllocationAvailableLiquidityToWithdraw(vaultState, slot, vaultReservesMap);
+    const perReserve = await this.getReserveAllocationAvailableLiquidityToWithdraw(
+      vaultState,
+      ledgerInstant,
+      vaultReservesMap
+    );
     let total = new Decimal(vaultState.tokenAvailable.toString());
     for (const amount of perReserve.values()) {
       total = total.add(amount);
@@ -6781,23 +6810,23 @@ export class KaminoVaultClient {
    * This will return an VaultOverview object that encapsulates all the information about the vault, including the holdings, reserves details, theoretical APY, utilization ratio and total borrowed amount
    * @param vault - the kamino vault to get available liquidity to withdraw for
    * @param vaultTokenPrice - the price of the token in the vault (e.g. USDC)
-   * @param slot - the slot for which to retrieve the vault overview
+   * @param ledgerInstant - the ledger instant (slot + block time) for which to retrieve the vault overview
    * @param vaultReservesMap - hashmap from each reserve pubkey to the reserve state
    * @param kaminoMarkets - a map of all kamino markets needed by the vault reserves
-   * @param currentSlot - latest confirmed slot
+   * @param currentLedgerInstant - latest confirmed ledger instant (slot + block time)
    * @param [tokensPrices] - a hashmap from a token pubkey to the price of the token in USD. Optional. If some tokens are not in the map, the function will fetch the price
    * @returns an VaultOverview object with details about the tokens available and invested in the vault, denominated in tokens and USD, along sie APYs
    */
   async getVaultOverview(
     vault: KaminoVault,
     vaultTokenPrice: Decimal,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     kaminoMarkets: Map<Address, KaminoMarket>,
     farmsMap: Map<Address, FarmState>,
     farmsClient: FarmsClient,
     globalConfig: KVaultGlobalConfig,
-    currentSlot: Slot,
+    currentLedgerInstant: LedgerInstant,
     tokensPrices?: Map<Address, Decimal>
   ): Promise<VaultOverview> {
     const vaultState = await vault.getState();
@@ -6806,12 +6835,12 @@ export class KaminoVaultClient {
     const vaultHoldingsWithUSDValuePromise = this.getVaultHoldingsWithPrice(
       vaultState,
       vaultTokenPrice,
-      slot,
+      ledgerInstant,
       vaultReservesState,
-      currentSlot
+      currentLedgerInstant
     );
 
-    const slotForOverview = currentSlot;
+    const slotForOverview = currentLedgerInstant;
 
     // Resolve farm states from cache if available
     const vaultFarmState = farmsMap.get(vaultState.vaultFarm) ?? null;
@@ -6838,7 +6867,7 @@ export class KaminoVaultClient {
       vaultReservesState,
       farmsClient,
       vaultFarmState,
-      currentSlot,
+      currentLedgerInstant,
       tokensPrices
     );
     const vaultReservesFarmIncentivesPromise = this.getVaultReservesFarmsIncentives(
@@ -6859,7 +6888,7 @@ export class KaminoVaultClient {
       vaultReservesState,
       farmsClient,
       delegatedFarmState,
-      currentSlot,
+      currentLedgerInstant,
       tokensPrices
     );
     const vaultFlcFarmStatsPromise = this.getVaultFlcFarmStats(vault, farmsClient, flcFarmState);
@@ -6941,13 +6970,13 @@ export class KaminoVaultClient {
   /**
    * This will return an aggregation of the current state of the vault with all the invested amounts and the utilization ratio of the vault
    * @param vault - the kamino vault to get available liquidity to withdraw for
-   * @param slot - current slot
+   * @param ledgerInstant - current ledger instant (slot + block time)
    * @param vaultReservesMap - hashmap from each reserve pubkey to the reserve state
    * @returns an VaultReserveTotalBorrowedAndInvested object with the total invested amount, total borrowed amount and the utilization ratio of the vault
    */
   async getTotalBorrowedAndInvested(
     vault: VaultState,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>
   ): Promise<VaultReserveTotalBorrowedAndInvested> {
     const vaultReservesState = vaultReservesMap;
@@ -6969,7 +6998,7 @@ export class KaminoVaultClient {
         throw new Error(`Reserve ${allocationStrategy.reserve} not found`);
       }
 
-      const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, 0);
+      const reserveCollExchangeRate = reserve.getEstimatedCollateralExchangeRate(ledgerInstant, 0);
       const reserveAllocationLiquidityAmountLamports = KaminoReserve.cTokensToLiquidity(
         new Decimal(allocationStrategy.ctokenAllocation.toString()),
         reserveCollExchangeRate
@@ -6979,7 +7008,7 @@ export class KaminoVaultClient {
         vault.tokenMintDecimals.toString()
       );
 
-      const utilizationRatio = reserve.getEstimatedUtilizationRatio(slot, 0);
+      const utilizationRatio = reserve.getEstimatedUtilizationRatio(ledgerInstant, 0);
       totalInvested = totalInvested.add(reserveAllocationLiquidityAmount);
       totalBorrowed = totalBorrowed.add(reserveAllocationLiquidityAmount.mul(utilizationRatio));
     });
@@ -7048,13 +7077,13 @@ export class KaminoVaultClient {
   /**
    * This will return an overview of each reserve that is part of the vault allocation
    * @param vault - the kamino vault to get available liquidity to withdraw for
-   * @param slot - current slot
+   * @param ledgerInstant - current ledger instant (slot + block time)
    * @param vaultReservesMap - hashmap from each reserve pubkey to the reserve state
    * @returns a hashmap from vault reserve pubkey to ReserveOverview object
    */
   async getVaultReservesDetails(
     vault: VaultState,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReserves: Map<Address, KaminoReserve>
   ): Promise<Map<Address, ReserveOverview>> {
     const vaultReservesState = vaultReserves;
@@ -7070,12 +7099,12 @@ export class KaminoVaultClient {
         throw new Error(`Reserve ${allocationStrategy.reserve} not found`);
       }
 
-      const suppliedInReserve = this.getSuppliedInReserve(vault, slot, reserve);
-      const utilizationRatio = new Decimal(reserve.getEstimatedUtilizationRatio(slot, 0));
+      const suppliedInReserve = this.getSuppliedInReserve(vault, ledgerInstant, reserve);
+      const utilizationRatio = new Decimal(reserve.getEstimatedUtilizationRatio(ledgerInstant, 0));
       // current-state overview: report the rewards rate actually earned now (0 while the budget is depleted)
-      const rewardsSupplyAPR = new Decimal(reserve.calculateEffectiveReserveRewardsSupplyAPR(slot, 0));
+      const rewardsSupplyAPR = new Decimal(reserve.calculateEffectiveReserveRewardsSupplyAPR(ledgerInstant, 0));
       const reserveOverview: ReserveOverview = {
-        supplyAPY: new Decimal(reserve.totalSupplyAPY(slot)),
+        supplyAPY: new Decimal(reserve.totalSupplyAPY(ledgerInstant)),
         rewardsSupplyAPR,
         utilizationRatio: utilizationRatio,
         liquidationThresholdPct: new Decimal(reserve.state.config.liquidationThresholdPct),
@@ -7093,13 +7122,13 @@ export class KaminoVaultClient {
   /**
    * This will return the APY of the vault under the assumption that all the available tokens in the vault are all the time invested in the reserves as requested by the weights; for percentage it needs multiplication by 100
    * @param vault - the kamino vault to get APY for
-   * @param slot - current slot
+   * @param ledgerInstant - current ledger instant (slot + block time)
    * @param vaultReservesMap - hashmap from each reserve pubkey to the reserve state
    * @returns a struct containing estimated gross APY and net APY (gross - vault fees) for the vault
    */
   async getVaultTheoreticalAPY(
     vault: VaultState,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>
   ): Promise<APYs> {
     const vaultReservesState = vaultReservesMap;
@@ -7115,8 +7144,8 @@ export class KaminoVaultClient {
       if (reserve === undefined) {
         throw new Error(`Reserve ${allocationStrategy.reserve} not found`);
       }
-      const reserveAPR = new Decimal(reserve.calculateSupplyAPR(slot, 0)).add(
-        reserve.calculateTheoreticalReserveRewardsSupplyAPR(slot, 0)
+      const reserveAPR = new Decimal(reserve.calculateSupplyAPR(ledgerInstant, 0)).add(
+        reserve.calculateTheoreticalReserveRewardsSupplyAPR(ledgerInstant, 0)
       );
       const weight = new Decimal(allocationStrategy.targetAllocationWeight.toString());
       const weightedAPR = reserveAPR.mul(weight);
@@ -7143,11 +7172,15 @@ export class KaminoVaultClient {
   /**
    * This will return the APY of the vault based on the current invested amounts; for percentage it needs multiplication by 100
    * @param vault - the kamino vault to get APY for
-   * @param slot - current slot
+   * @param ledgerInstant - current ledger instant (slot + block time)
    * @param vaultReservesMap - hashmap from each reserve pubkey to the reserve state
    * @returns a struct containing estimated gross APY and net APY (gross - vault fees) for the vault
    */
-  async getVaultActualAPY(vault: VaultState, slot: Slot, vaultReservesMap: Map<Address, KaminoReserve>): Promise<APYs> {
+  async getVaultActualAPY(
+    vault: VaultState,
+    ledgerInstant: LedgerInstant,
+    vaultReservesMap: Map<Address, KaminoReserve>
+  ): Promise<APYs> {
     const vaultReservesState = vaultReservesMap;
 
     let totalAUM = new Decimal(vault.tokenAvailable.toString());
@@ -7162,10 +7195,10 @@ export class KaminoVaultClient {
         throw new Error(`Reserve ${allocationStrategy.reserve} not found`);
       }
       // actual APY: only count the rewards rate the reserve is earning now (0 while the budget is depleted)
-      const reserveAPR = new Decimal(reserve.calculateSupplyAPR(slot, 0)).add(
-        reserve.calculateEffectiveReserveRewardsSupplyAPR(slot, 0)
+      const reserveAPR = new Decimal(reserve.calculateSupplyAPR(ledgerInstant, 0)).add(
+        reserve.calculateEffectiveReserveRewardsSupplyAPR(ledgerInstant, 0)
       );
-      const exchangeRate = reserve.getEstimatedCollateralExchangeRate(slot, 0);
+      const exchangeRate = reserve.getEstimatedCollateralExchangeRate(ledgerInstant, 0);
       const investedInReserve = KaminoReserve.cTokensToLiquidity(
         new Decimal(allocationStrategy.ctokenAllocation.toString()),
         exchangeRate
@@ -7196,13 +7229,13 @@ export class KaminoVaultClient {
    * Read the vault rewards state and rates; the rewards are paid in the vault token and increase the share value, so no prices are needed.
    * When the rate is 0 or the rewards are depleted the stream is paused: nothing is distributed and the paused period is never distributed retroactively (streaming resumes from the next topup). The returned APR/APY are 0 while paused or when the vault has no net AUM
    * @param vault - the kamino vault state to get the rewards overview for
-   * @param slot - current slot
+   * @param ledgerInstant - current ledger instant (slot + block time)
    * @param vaultReservesMap - hashmap from each reserve pubkey to the reserve state
    * @returns a struct containing the reward rate in token lamports and tokens per second, the rewards left to distribute and already distributed (in tokens), and the reward APR and APY relative to the vault AUM
    */
   async getVaultRewardsOverview(
     vault: VaultState,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>
   ): Promise<VaultRewardsOverview> {
     const decimals = vault.tokenMintDecimals.toNumber();
@@ -7221,7 +7254,7 @@ export class KaminoVaultClient {
     let apy = new Decimal(0);
     const hasActiveRewards = rewardPerSecondLamports.gt(0) && rewardsAvailableTokens.gt(0);
     if (hasActiveRewards) {
-      const holdings = await this.getVaultHoldings(vault, slot, vaultReservesMap, slot);
+      const holdings = await this.getVaultHoldings(vault, ledgerInstant, vaultReservesMap, ledgerInstant);
       const netAUMTokens = holdings.totalAUMIncludingFees.sub(holdings.pendingFees);
       if (netAUMTokens.gt(0)) {
         ({ apr, apy } = calculateVaultRewardsAprApy(rewardPerSecondLamports, decimals, netAUMTokens));
@@ -7257,14 +7290,14 @@ export class KaminoVaultClient {
    * Simulate the current holdings of the vault and the earned interest
    * @param vaultState the kamino vault state to get simulated holdings and earnings for
    * @param vaultReservesMap - hashmap from each reserve pubkey to the reserve state
-   * @param slot - the current slot
+   * @param ledgerInstant - the current ledger instant (slot + block time)
    * @param [previousNetAUM] - the previous AUM of the vault to compute the earned interest relative to this value. Optional. If not provided the function will estimate the total AUM at the slot of the last state update on chain
-   * @param currentLedgerInstant - latest confirmed ledger slot and block time
+   * @param currentLedgerInstant - latest confirmed ledger instant (slot + block time)
    * @returns a struct of simulated vault holdings and earned interest
    */
   async calculateSimulatedHoldingsWithInterest(
     vaultState: VaultState,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     previousNetAUM: Decimal | undefined,
     currentLedgerInstant: LedgerInstant
@@ -7280,13 +7313,11 @@ export class KaminoVaultClient {
       pendingFees = lamportsToDecimal(new Fraction(vaultState.pendingFeesSf).toDecimal(), tokenDecimals);
     }
 
-    const latestSlot = slot;
-
     const currentHoldings = await this.getVaultHoldings(
       vaultState,
-      latestSlot,
+      ledgerInstant,
       vaultReservesMap,
-      currentLedgerInstant.slot
+      currentLedgerInstant
     );
     const earnedInterest = currentHoldings.totalAUMIncludingFees.sub(prevAUM).sub(pendingFees);
 
@@ -7300,15 +7331,15 @@ export class KaminoVaultClient {
    * Simulate the current holdings and compute the fees that would be charged
    * @param vaultState the kamino vault state to get simulated fees for
    * @param [simulatedCurrentHoldingsWithInterest] the simulated holdings and interest earned by the vault. Optional
-   * @param currentLedgerInstant - latest confirmed ledger slot and block time
+   * @param currentLedgerInstant - latest confirmed ledger instant (slot + block time)
    * @param vaultReservesMap - hashmap from each reserve pubkey to the reserve state
-   * @param slot - the slot at which to compute the fees
+   * @param ledgerInstant - the ledger instant (slot + block time) at which to compute the fees
    * @param [previousNetAUM] - the previous AUM of the vault to compute the fees relative to this value. Optional. If not provided the function will estimate the total AUM at the slot of the last state update on chain
    * @returns a VaultFees struct of simulated management and interest fees
    */
   async calculateSimulatedFees(
     vaultState: VaultState,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     simulatedCurrentHoldingsWithInterest: SimulatedVaultHoldingsWithEarnedInterest | undefined,
     currentLedgerInstant: LedgerInstant,
@@ -7322,7 +7353,7 @@ export class KaminoVaultClient {
       ? simulatedCurrentHoldingsWithInterest
       : await this.calculateSimulatedHoldingsWithInterest(
           vaultState,
-          slot,
+          ledgerInstant,
           vaultReservesMap,
           previousNetAUM,
           currentLedgerInstant
@@ -7421,18 +7452,18 @@ export class KaminoVaultClient {
    * @param vaultOrState - the vault or state to read the farm APY for
    * @param vaultTokenPrice - the price of the vault token in USD (e.g. 1.0 for USDC)
    * @param [farmsClient] - the farms client to use. Optional. If not provided, the function will create a new one
-   * @param slot - the slot to read the farm APY for
+   * @param ledgerInstant - the ledger instant (slot + block time) to read the farm APY at
    * @param tokensPrices cached token prices
    * @returns the APY of the farm built on top of the vault
    */
   async getVaultRewardsAPY(
     vaultOrState: KaminoVault | VaultState,
     vaultTokenPrice: Decimal,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     farmsClient: FarmsClient,
     farmState: FarmState | null,
-    currentSlot: Slot,
+    currentLedgerInstant: LedgerInstant,
     tokensPrices?: Map<Address, Decimal>
   ): Promise<FarmIncentives> {
     // Determine if we have a KaminoVault or VaultState
@@ -7453,7 +7484,12 @@ export class KaminoVaultClient {
       };
     }
 
-    const tokensPerShare = await this.getTokensPerShareSingleVault(vaultState, slot, vaultReservesMap, currentSlot);
+    const tokensPerShare = await this.getTokensPerShareSingleVault(
+      vaultState,
+      ledgerInstant,
+      vaultReservesMap,
+      currentLedgerInstant
+    );
     const sharePrice = tokensPerShare.mul(vaultTokenPrice);
     const stakedTokenMintDecimals = vaultState.sharesMintDecimals.toNumber();
 
@@ -7472,18 +7508,18 @@ export class KaminoVaultClient {
    * @param vault - the vault to read the farm APY for
    * @param vaultTokenPrice - the price of the vault token in USD (e.g. 1.0 for USDC)
    * @param [farmsClient] - the farms client to use. Optional. If not provided, the function will create a new one
-   * @param slot - the slot to read the farm APY for
+   * @param ledgerInstant - the ledger instant (slot + block time) to read the farm APY at
    * @param [tokensPrices] - the prices of the tokens in USD. Optional. If not provided, the function will fetch the prices
    * @returns the APY of the delegated farm providing incentives for vault depositors
    */
   async getVaultDelegatedFarmRewardsAPY(
     vault: KaminoVault,
     vaultTokenPrice: Decimal,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     farmsClient: FarmsClient,
     farmState: FarmState | null,
-    currentSlot: Slot,
+    currentLedgerInstant: LedgerInstant,
     tokensPrices?: Map<Address, Decimal>
   ): Promise<FarmIncentives> {
     const delegatedFarm = await this.getDelegatedFarmForVault(vault.address);
@@ -7495,7 +7531,12 @@ export class KaminoVaultClient {
     }
 
     const vaultState = await vault.getState();
-    const tokensPerShare = await this.getTokensPerShareSingleVault(vaultState, slot, vaultReservesMap, currentSlot);
+    const tokensPerShare = await this.getTokensPerShareSingleVault(
+      vaultState,
+      ledgerInstant,
+      vaultReservesMap,
+      currentLedgerInstant
+    );
     const sharePrice = tokensPerShare.mul(vaultTokenPrice);
     const stakedTokenMintDecimals = vaultState.sharesMintDecimals.toNumber();
 
@@ -7578,7 +7619,7 @@ export class KaminoVaultClient {
   async getVaultReservesFarmsIncentives(
     vaultOrState: KaminoVault | VaultState,
     vaultTokenPrice: Decimal,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     farmsClient: FarmsClient,
     vaultReservesMap: Map<Address, KaminoReserve>,
     tokensPrices?: Map<Address, Decimal>
@@ -7586,9 +7627,8 @@ export class KaminoVaultClient {
     const vaultState = 'getState' in vaultOrState ? await vaultOrState.getState() : vaultOrState;
 
     const vaultReservesState = vaultReservesMap;
-    const currentSlot = slot;
 
-    const holdings = await this.getVaultHoldings(vaultState, currentSlot, vaultReservesState, currentSlot);
+    const holdings = await this.getVaultHoldings(vaultState, ledgerInstant, vaultReservesState, ledgerInstant);
 
     const vaultReservesAddresses = vaultState.vaultAllocationStrategy.map(
       (allocationStrategy) => allocationStrategy.reserve
@@ -7619,7 +7659,7 @@ export class KaminoVaultClient {
         reserveAddress,
         vaultTokenPrice,
         kFarmsClient,
-        currentSlot,
+        ledgerInstant,
         reserveState.state,
         tokensPrices,
         reserveState.reserveRewardsMaxAprBps,
@@ -7711,7 +7751,11 @@ export class KaminoVaultClient {
   /// @param user - the user address
   /// @param vault - the vault
   /// @returns a map of the pending rewards token mint and amount in lamports
-  async getUserPendingRewardsInVaultFarm(user: Address, vault: KaminoVault): Promise<Map<Address, Decimal>> {
+  async getUserPendingRewardsInVaultFarm(
+    user: Address,
+    vault: KaminoVault,
+    currentLedgerInstant: LedgerInstant
+  ): Promise<Map<Address, Decimal>> {
     const vaultState = await vault.getState();
     const hasFarm = await vault.hasFarm();
     if (!hasFarm) {
@@ -7720,7 +7764,13 @@ export class KaminoVaultClient {
 
     const farmClient = new Farms(this.getConnection(), this._farmsProgramId);
     const userState = await getUserStatePDA(farmClient.getProgramID(), vaultState.vaultFarm, user);
-    return getUserPendingRewardsInFarm(this.getConnection(), userState, vaultState.vaultFarm, this._farmsProgramId);
+    return getUserPendingRewardsInFarm(
+      this.getConnection(),
+      userState,
+      vaultState.vaultFarm,
+      currentLedgerInstant,
+      this._farmsProgramId
+    );
   }
 
   /// reads the pending rewards for a user in a delegated vault farm
@@ -7729,7 +7779,8 @@ export class KaminoVaultClient {
   /// @returns a map of the pending rewards token mint and amount in lamports
   async getUserPendingRewardsInVaultDelegatedFarm(
     user: Address,
-    vaultAddress: Address
+    vaultAddress: Address,
+    currentLedgerInstant: LedgerInstant
   ): Promise<Map<Address, Decimal>> {
     const delegatedFarm = await this.getDelegatedFarmForVault(vaultAddress);
     if (!delegatedFarm) {
@@ -7744,7 +7795,13 @@ export class KaminoVaultClient {
       user
     );
 
-    return getUserPendingRewardsInFarm(this.getConnection(), userState, delegatedFarm, this._farmsProgramId);
+    return getUserPendingRewardsInFarm(
+      this.getConnection(),
+      userState,
+      delegatedFarm,
+      currentLedgerInstant,
+      this._farmsProgramId
+    );
   }
 
   /// gets the delegated farm for a vault
@@ -7794,7 +7851,8 @@ export class KaminoVaultClient {
   async getUserPendingRewardsInVaultReservesFarms(
     user: Address,
     vault: KaminoVault,
-    vaultReservesMap: Map<Address, KaminoReserve>
+    vaultReservesMap: Map<Address, KaminoReserve>,
+    currentLedgerInstant: LedgerInstant
   ): Promise<Map<Address, Decimal>> {
     const vaultState = await vault.getState();
 
@@ -7832,6 +7890,7 @@ export class KaminoVaultClient {
         this.getConnection(),
         userState,
         reserveState.state.farmCollateral,
+        currentLedgerInstant,
         this._farmsProgramId
       );
       pendingRewards.forEach((reward, token) => {
@@ -7855,17 +7914,20 @@ export class KaminoVaultClient {
   async getAllPendingRewardsForUserInVault(
     user: Address,
     vault: KaminoVault,
-    vaultReservesMap: Map<Address, KaminoReserve>
+    vaultReservesMap: Map<Address, KaminoReserve>,
+    currentLedgerInstant: LedgerInstant
   ): Promise<PendingRewardsForUserInVault> {
-    const pendingRewardsInVaultFarm = await this.getUserPendingRewardsInVaultFarm(user, vault);
+    const pendingRewardsInVaultFarm = await this.getUserPendingRewardsInVaultFarm(user, vault, currentLedgerInstant);
     const pendingRewardsInVaultReservesFarms = await this.getUserPendingRewardsInVaultReservesFarms(
       user,
       vault,
-      vaultReservesMap
+      vaultReservesMap,
+      currentLedgerInstant
     );
     const pendingRewardsInVaultDelegatedFarm = await this.getUserPendingRewardsInVaultDelegatedFarm(
       user,
-      vault.address
+      vault.address,
+      currentLedgerInstant
     );
 
     const totalPendingRewards = new Map<Address, Decimal>();
@@ -7912,12 +7974,13 @@ export class KaminoVaultClient {
   async getClaimAllRewardsForVaultIxs(
     user: TransactionSigner,
     vault: KaminoVault,
-    vaultReservesMap: Map<Address, KaminoReserve>
+    vaultReservesMap: Map<Address, KaminoReserve>,
+    currentLedgerInstant: LedgerInstant
   ): Promise<Instruction[]> {
     const [vaultFarmIxs, delegatedFarmIxs, reservesFarmsIxs] = await Promise.all([
-      this.getClaimVaultFarmRewardsIxs(user, vault),
+      this.getClaimVaultFarmRewardsIxs(user, vault, currentLedgerInstant),
       this.getClaimVaultDelegatedFarmRewardsIxs(user, vault),
-      this.getClaimVaultReservesFarmsRewardsIxs(user, vault, vaultReservesMap),
+      this.getClaimVaultReservesFarmsRewardsIxs(user, vault, vaultReservesMap, currentLedgerInstant),
     ]);
 
     return [...new Set([...vaultFarmIxs, ...delegatedFarmIxs, ...reservesFarmsIxs])];
@@ -7929,7 +7992,11 @@ export class KaminoVaultClient {
    * @param vault - the vault
    * @returns the instructions to claim the rewards for the farm of the vault
    */
-  async getClaimVaultFarmRewardsIxs(user: TransactionSigner, vault: KaminoVault): Promise<Instruction[]> {
+  async getClaimVaultFarmRewardsIxs(
+    user: TransactionSigner,
+    vault: KaminoVault,
+    currentLedgerInstant: LedgerInstant
+  ): Promise<Instruction[]> {
     const vaultState = await vault.getState();
     const hasFarm = await vault.hasFarm();
     if (!hasFarm) {
@@ -7937,7 +8004,11 @@ export class KaminoVaultClient {
     }
 
     const farmClient = new Farms(this.getConnection(), this._farmsProgramId);
-    const pendingRewardsInVaultFarm = await this.getUserPendingRewardsInVaultFarm(user.address, vault);
+    const pendingRewardsInVaultFarm = await this.getUserPendingRewardsInVaultFarm(
+      user.address,
+      vault,
+      currentLedgerInstant
+    );
     // if there are no pending rewards of their total is 0 no ix is needed
     const totalPendingRewards = Array.from(pendingRewardsInVaultFarm.values()).reduce(
       (acc, reward) => acc.add(reward),
@@ -7989,7 +8060,8 @@ export class KaminoVaultClient {
   async getClaimVaultReservesFarmsRewardsIxs(
     user: TransactionSigner,
     vault: KaminoVault,
-    vaultReservesMap: Map<Address, KaminoReserve>
+    vaultReservesMap: Map<Address, KaminoReserve>,
+    currentLedgerInstant: LedgerInstant
   ): Promise<Instruction[]> {
     const vaultState = await vault.getState();
 
@@ -8028,6 +8100,7 @@ export class KaminoVaultClient {
         this.getConnection(),
         userState,
         reserveState.state.farmCollateral,
+        currentLedgerInstant,
         this._farmsProgramId
       );
       const totalPendingRewards = Array.from(pendingRewards.values()).reduce(
@@ -8099,9 +8172,9 @@ export class KaminoVault {
   constructor(
     rpc: Rpc<SolanaRpcApi>,
     vaultAddress: Address,
+    recentSlotDurationMs: number,
     state?: VaultState,
-    programId: Address = kaminoVaultId,
-    recentSlotDurationMs: number = DEFAULT_RECENT_SLOT_DURATION_MS
+    programId: Address = kaminoVaultId
   ) {
     this.address = vaultAddress;
     this.state = state;
@@ -8110,9 +8183,13 @@ export class KaminoVault {
   }
 
   static loadWithClientAndState(client: KaminoVaultClient, vaultAddress: Address, state: VaultState): KaminoVault {
-    const vault = new KaminoVault(client.getConnection(), vaultAddress);
-    vault.state = state;
-    vault.programId = client.getProgramID();
+    const vault = new KaminoVault(
+      client.getConnection(),
+      vaultAddress,
+      client.recentSlotDurationMs,
+      state,
+      client.getProgramID()
+    );
     vault.client = client;
     return vault;
   }
@@ -8154,16 +8231,16 @@ export class KaminoVault {
 
   /**
    * This will return an VaultHoldings object which contains the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
-   * @param slot - current slot used for holdings calculations
+   * @param ledgerInstant - current ledger instant (slot + block time), used for holdings calculations
    * @returns an VaultHoldings object representing the amount available (uninvested) in vault, total amount invested in reseves and a breakdown of the amount invested in each reserve
    */
-  async getVaultHoldings(slot: Slot): Promise<VaultHoldings> {
+  async getVaultHoldings(ledgerInstant: LedgerInstant): Promise<VaultHoldings> {
     if (!this.state || !this.vaultReservesStateCache) {
       await this.reloadState();
       await this.reloadVaultReserves();
     }
 
-    return await this.client.getVaultHoldings(this.state!, slot, this.vaultReservesStateCache!, slot);
+    return await this.client.getVaultHoldings(this.state!, ledgerInstant, this.vaultReservesStateCache!, ledgerInstant);
   }
 
   /**
@@ -8180,17 +8257,21 @@ export class KaminoVault {
 
   /**
    * This will return the APY of the vault based on the current invested amounts and the theoretical APY if all the available tokens were invested.
-   * @param slot - current slot used for APY calculations
+   * @param ledgerInstant - current ledger instant (slot + block time), used for APY calculations
    * @returns a struct containing actualAPY and theoreticalAPY for the vault
    */
-  async getAPYs(slot: Slot): Promise<VaultAPYs> {
+  async getAPYs(ledgerInstant: LedgerInstant): Promise<VaultAPYs> {
     if (!this.state || !this.vaultReservesStateCache) {
       await this.reloadState();
       await this.reloadVaultReserves();
     }
 
-    const actualApy = await this.client.getVaultActualAPY(this.state!, slot, this.vaultReservesStateCache!);
-    const theoreticalApy = await this.client.getVaultTheoreticalAPY(this.state!, slot, this.vaultReservesStateCache!);
+    const actualApy = await this.client.getVaultActualAPY(this.state!, ledgerInstant, this.vaultReservesStateCache!);
+    const theoreticalApy = await this.client.getVaultTheoreticalAPY(
+      this.state!,
+      ledgerInstant,
+      this.vaultReservesStateCache!
+    );
 
     return {
       actualAPY: actualApy,
@@ -8200,10 +8281,10 @@ export class KaminoVault {
 
   /**
    * This method returns the exchange rate of the vault (tokens per share)
-   * @param slot - current slot used for exchange-rate calculations
+   * @param ledgerInstant - current ledger instant (slot + block time), used for exchange-rate calculations
    * @returns - Decimal representing the exchange rate (tokens per share)
    */
-  async getExchangeRate(slot: Slot): Promise<Decimal> {
+  async getExchangeRate(ledgerInstant: LedgerInstant): Promise<Decimal> {
     if (!this.state || !this.vaultReservesStateCache) {
       await this.reloadState();
       await this.reloadVaultReserves();
@@ -8211,9 +8292,9 @@ export class KaminoVault {
 
     const tokensPerShare = await this.client.getTokensPerShareSingleVault(
       this.state!,
-      slot,
+      ledgerInstant,
       this.vaultReservesStateCache!,
-      slot
+      ledgerInstant
     );
     return tokensPerShare;
   }
@@ -8268,7 +8349,7 @@ export class KaminoVault {
    * This function will return the missing ATA creation instructions, as well as one or multiple withdraw instructions, based on how many reserves it's needed to withdraw from. This might have to be split in multiple transactions
    * @param user - user to withdraw
    * @param shareAmount - share amount to withdraw (in tokens, not lamports), in order to withdraw everything, any value > user share amount
-   * @param slot - current slot, used to estimate the interest earned in the different reserves with allocation from the vault
+   * @param ledgerInstant - current ledger instant (slot + block time), used to estimate the interest earned in the different reserves with allocation from the vault
    * @param vaultReservesMap - preloaded reserve states for every reserve in the vault allocation
    * @param farmState - preloaded vault farm state; provide this to unstake from the vault farm
    * @param flcFarmState - preloaded first loss capital farm state; provide this to unstake from the first loss capital farm
@@ -8280,7 +8361,7 @@ export class KaminoVault {
   async withdrawIxs(
     user: TransactionSigner,
     shareAmount: Decimal,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     farmState: FarmState | null,
     flcFarmState: FarmState | null,
@@ -8292,7 +8373,7 @@ export class KaminoVault {
       user,
       this,
       shareAmount,
-      slot,
+      ledgerInstant,
       vaultReservesMap,
       farmState,
       flcFarmState,
@@ -8306,7 +8387,7 @@ export class KaminoVault {
    * Reserves are selected by highest available liquidity (same order as withdraw).
    * @param user - user to redeem shares
    * @param shareAmount - share amount to redeem (in tokens, not lamports)
-   * @param slot - current slot
+   * @param ledgerInstant - current ledger instant (slot + block time)
    * @param vaultReservesMap - preloaded reserve states for every reserve in the vault allocation
    * @param vaultState - preloaded vault state; call `vault.getState()` / `vault.reloadState()` before building instructions
    * @param globalConfigState - preloaded KVault global config; call `client.loadKVaultGlobalConfig()` / `manager.loadKVaultGlobalConfig()` before building instructions
@@ -8319,7 +8400,7 @@ export class KaminoVault {
   async redeemInKindIxs(
     user: TransactionSigner,
     shareAmount: Decimal,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     vaultState: VaultState,
     globalConfigState: KVaultGlobalConfig,
@@ -8332,7 +8413,7 @@ export class KaminoVault {
       user,
       this,
       shareAmount,
-      slot,
+      ledgerInstant,
       vaultReservesMap,
       vaultState,
       globalConfigState,
@@ -8347,7 +8428,7 @@ export class KaminoVault {
    * The withdraw handles farm unstaking for the full exit amount so redeemInKind does not duplicate the unstake.
    * @param user - user to withdraw/redeem
    * @param shareAmount - total share amount to exit (in tokens, not lamports)
-   * @param slot - current slot
+   * @param ledgerInstant - current ledger instant (slot + block time)
    * @param vaultReservesMap - preloaded reserve states for every reserve in the vault allocation
    * @param vaultState - preloaded vault state; call `vault.getState()` / `vault.reloadState()` before building instructions
    * @param globalConfigState - preloaded KVault global config; call `client.loadKVaultGlobalConfig()` / `manager.loadKVaultGlobalConfig()` before building instructions
@@ -8360,7 +8441,7 @@ export class KaminoVault {
   async withdrawAndRedeemInKindIfNeededIxs(
     user: TransactionSigner,
     shareAmount: Decimal,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     vaultState: VaultState,
     globalConfigState: KVaultGlobalConfig,
@@ -8373,7 +8454,7 @@ export class KaminoVault {
       user,
       this,
       shareAmount,
-      slot,
+      ledgerInstant,
       vaultReservesMap,
       vaultState,
       globalConfigState,
@@ -8389,7 +8470,7 @@ export class KaminoVault {
    * liquidity, redeemInKind for the remainder, and enqueue to eventually receive underlying tokens.
    * @param user - user to withdraw/redeem/enqueue
    * @param shareAmount - total share amount to exit (in tokens, not lamports)
-   * @param slot - current slot
+   * @param ledgerInstant - current ledger instant (slot + block time)
    * @param vaultReservesMap - preloaded reserve states for every reserve in the vault allocation
    * @param vaultState - preloaded vault state; call `vault.getState()` / `vault.reloadState()` before building instructions
    * @param globalConfigState - preloaded KVault global config; call `client.loadKVaultGlobalConfig()` / `manager.loadKVaultGlobalConfig()` before building instructions
@@ -8402,7 +8483,7 @@ export class KaminoVault {
   async withdrawRedeemAndEnqueueIxs(
     user: TransactionSigner,
     shareAmount: Decimal,
-    slot: Slot,
+    ledgerInstant: LedgerInstant,
     vaultReservesMap: Map<Address, KaminoReserve>,
     vaultState: VaultState,
     globalConfigState: KVaultGlobalConfig,
@@ -8415,7 +8496,7 @@ export class KaminoVault {
       user,
       this,
       shareAmount,
-      slot,
+      ledgerInstant,
       vaultReservesMap,
       vaultState,
       globalConfigState,

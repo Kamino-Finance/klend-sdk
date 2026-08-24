@@ -91,7 +91,6 @@ import { getFlashBorrowTypeFromEnv } from '../utils/env';
   const borrowedLamports = obligation!.getBorrowByReserve(debtReserveAddress)!.amount;
 
   const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc, 'processed');
-  const currentSlot = currentLedgerInstant.slot;
   const scopeConfiguration = { scope, scopeConfigurations: await scope.getAllConfigurations() };
   const scopeRefreshIx = await getScopeRefreshIxForObligationAndReserves(
     market,
@@ -130,7 +129,6 @@ import { getFlashBorrowTypeFromEnv } from '../utils/env';
       depositedLamports,
       borrowedLamports,
       referrer: none(),
-      currentSlot,
       currentLedgerInstant,
       targetLeverage: targetLeverage,
       priceCollToDebt,
@@ -249,7 +247,6 @@ import { getFlashBorrowTypeFromEnv } from '../utils/env';
       depositedLamports,
       borrowedLamports,
       referrer: none(),
-      currentSlot,
       currentLedgerInstant,
       targetLeverage: ogLeverage,
       priceCollToDebt,

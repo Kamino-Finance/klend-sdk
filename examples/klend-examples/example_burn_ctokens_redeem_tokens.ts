@@ -1,4 +1,10 @@
-import { KaminoAction, PROGRAM_ID, VanillaObligation, getAssociatedTokenAddress } from '@kamino-finance/klend-sdk';
+import {
+  KaminoAction,
+  PROGRAM_ID,
+  VanillaObligation,
+  getAssociatedTokenAddress,
+  getCurrentLedgerInstant,
+} from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { MAIN_MARKET, USDC_MINT, USDC_RESERVE_MAIN_MARKET } from '../utils/constants';
@@ -11,14 +17,14 @@ import { sendAndConfirmTx } from '../utils/tx';
   const c = getConnectionPool();
   const wallet = await getKeypair();
 
-  const slot = await c.rpc.getSlot().send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc);
   const { market, reserve: usdcReserve } = await loadReserveData(
     {
       rpc: c.rpc,
       marketPubkey: MAIN_MARKET,
       reserveAddress: USDC_RESERVE_MAIN_MARKET,
     },
-    slot
+    currentLedgerInstant
   );
   const cUsdcMint = usdcReserve.getCTokenMint();
 
@@ -29,7 +35,7 @@ import { sendAndConfirmTx } from '../utils/tx';
   // Redeem the whole cUSDC balance
   const redeemAction = await KaminoAction.buildRedeemReserveCollateralTxns({
     kaminoMarket: market,
-    currentSlot: await market.getRpc().getSlot().send(),
+    currentLedgerInstant: await getCurrentLedgerInstant(market.getRpc()),
     amount: new BN(cUsdcBalance),
     reserveAddress: usdcReserve.address,
     owner: wallet,

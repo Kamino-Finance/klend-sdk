@@ -30,7 +30,6 @@ import { Scope } from '@kamino-finance/scope-sdk';
   const obligation = (await market.getObligationByAddress(address('HjYDundFuuUjc5KF3X5bu4pFVMhqRAnJubNBxo9KnnCr')))!;
 
   const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc, 'processed');
-  const currentSlot = currentLedgerInstant.slot;
 
   const scopeConfiguration = { scope, scopeConfigurations: await scope.getAllConfigurations() };
   const scopeRefreshIx = await getScopeRefreshIxForObligationAndReserves(
@@ -52,7 +51,6 @@ import { Scope } from '@kamino-finance/scope-sdk';
       targetCollReserveAddress,
       newElevationGroup: 0,
       referrer: none(),
-      currentSlot,
       currentLedgerInstant,
       quoter: getJupiterQuoter(slippagePct * 100, sourceCollTokenReserve, targetCollTokenReserve),
       swapper: getJupiterSwapper(c.rpc, wallet.address),

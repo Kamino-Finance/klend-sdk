@@ -1,4 +1,5 @@
 import { loadReserveData } from '../utils/helpers';
+import { getCurrentLedgerInstant } from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from '../utils/connection';
 import { MAIN_MARKET, PYUSD_MINT, PYUSD_RESERVE_MAIN_MARKET } from '../utils/constants';
 import { Scope } from '@kamino-finance/scope-sdk/dist/Scope';
@@ -8,14 +9,14 @@ import { OraclePrices } from '@kamino-finance/scope-sdk/dist/@codegen/scope/acco
 (async () => {
   const c = getConnectionPool();
   console.log(`fetching data for market ${MAIN_MARKET.toString()} reserve for ${PYUSD_MINT.toString()}`);
-  const slot = await c.rpc.getSlot().send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc);
   const { market, reserve } = await loadReserveData(
     {
       rpc: c.rpc,
       marketPubkey: MAIN_MARKET,
       reserveAddress: PYUSD_RESERVE_MAIN_MARKET,
     },
-    slot
+    currentLedgerInstant
   );
   const scope = new Scope('mainnet-beta', c.rpc);
   const oraclePrices = await scope.getMultipleOraclePrices(Array.from(market.scopeFeeds));
@@ -24,7 +25,7 @@ import { OraclePrices } from '@kamino-finance/scope-sdk/dist/@codegen/scope/acco
     oraclePricesMap.set(pubkey, oracle);
   }
   const prices = await market.getAllScopePrices(scope, oraclePricesMap);
-  const rewardApys = await reserve.getRewardYields(prices);
+  const rewardApys = await reserve.getRewardYields(prices, currentLedgerInstant);
   for (const rewardApy of rewardApys) {
     console.log(
       `reward token ${rewardApy.rewardInfo.token.mint.toString()} APY`,

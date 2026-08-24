@@ -1,9 +1,9 @@
-import { Account, Address, Instruction, Option, Slot, TransactionSigner } from '@solana/kit';
+import { Account, Address, Instruction, Option, TransactionSigner } from '@solana/kit';
 import Decimal from 'decimal.js';
 import { FixedTermReorigination, KaminoMarket, KaminoObligation } from '../classes';
 import { ObligationType, ObligationTypeTag } from '../utils';
 import { AddressLookupTable } from '@solana-program/address-lookup-table';
-import type { LedgerInstant, LedgerInstantCompatible } from '../utils/ledger';
+import type { LedgerInstant } from '../utils/ledger';
 
 export type SwapQuoteProvider<QuoteResponse> = (
   inputs: SwapInputs,
@@ -73,10 +73,8 @@ export type BaseLeverageIxsResponse<QuoteResponse> = {
 export type LeverageInitialInputs<LeverageCalcsResult, QuoteResponse> = {
   calcs: LeverageCalcsResult;
   swapQuote: SwapQuote<QuoteResponse>;
-  /** Current slot retained for source compatibility. */
-  currentSlot: Slot;
-  /** Matching ledger slot + block time used consistently for interest, term, and maturity calculations. */
-  currentLedgerInstant?: LedgerInstant;
+  /** The ledger instant (slot + block time) used consistently for interest, term, and maturity calculations. */
+  currentLedgerInstant: LedgerInstant;
   klendAccounts: Array<Address>;
   obligation: KaminoObligation | ObligationType | undefined;
 };
@@ -87,8 +85,8 @@ export interface BaseLeverageSwapInputsProps<QuoteResponse> {
   debtReserveAddress: Address;
   collReserveAddress: Address;
   referrer: Option<Address>;
-  currentSlot: Slot;
-  currentLedgerInstant?: LedgerInstant;
+  /** The ledger instant (slot + block time) the position estimates are evaluated at. */
+  currentLedgerInstant: LedgerInstant;
   slippagePct: Decimal;
   budgetAndPriorityFeeIxs?: Instruction[];
   scopeRefreshIx: Instruction[]; // no longer optional as we always pass an array (can be empty)
@@ -99,9 +97,7 @@ export interface BaseLeverageSwapInputsProps<QuoteResponse> {
   logger?: (msg: string, ...extra: unknown[]) => void;
 }
 
-export type BaseLeverageSwapInputsParams<QuoteResponse> = LedgerInstantCompatible<
-  BaseLeverageSwapInputsProps<QuoteResponse>
->;
+export type BaseLeverageSwapInputsParams<QuoteResponse> = BaseLeverageSwapInputsProps<QuoteResponse>;
 
 export type DepositLeverageIxsResponse<QuoteResponse> = BaseLeverageIxsResponse<QuoteResponse> & {
   initialInputs: LeverageInitialInputs<DepositLeverageCalcsResult | DepositLeverageDebtFlashCalcsResult, QuoteResponse>;
@@ -110,8 +106,7 @@ export type DepositLeverageIxsResponse<QuoteResponse> = BaseLeverageIxsResponse<
 export type DepositLeverageInitialInputs<QuoteResponse> = {
   calcs: DepositLeverageCalcsResult | DepositLeverageDebtFlashCalcsResult;
   swapQuote: SwapQuote<QuoteResponse>;
-  currentSlot: Slot;
-  currentLedgerInstant?: LedgerInstant;
+  currentLedgerInstant: LedgerInstant;
   klendAccounts: Array<Address>;
   obligation: KaminoObligation | ObligationType | undefined;
 };
@@ -133,11 +128,9 @@ export interface DepositWithLeverageProps<QuoteResponse> extends DepositWithLeve
   rollOver?: boolean;
 }
 
-export type DepositWithLeverageSwapInputsParams<QuoteResponse> = LedgerInstantCompatible<
-  DepositWithLeverageSwapInputsProps<QuoteResponse>
->;
+export type DepositWithLeverageSwapInputsParams<QuoteResponse> = DepositWithLeverageSwapInputsProps<QuoteResponse>;
 
-export type DepositWithLeverageParams<QuoteResponse> = LedgerInstantCompatible<DepositWithLeverageProps<QuoteResponse>>;
+export type DepositWithLeverageParams<QuoteResponse> = DepositWithLeverageProps<QuoteResponse>;
 
 type BaseDepositLeverageCalcsResult = {
   initDepositInSol: Decimal;
@@ -165,8 +158,7 @@ export type WithdrawLeverageIxsResponse<QuoteResponse> = BaseLeverageIxsResponse
 export type WithdrawLeverageInitialInputs<QuoteResponse> = {
   calcs: WithdrawLeverageCalcsResult | WithdrawLeverageCollFlashCalcsResult;
   swapQuote: SwapQuote<QuoteResponse>;
-  currentSlot: Slot;
-  currentLedgerInstant?: LedgerInstant;
+  currentLedgerInstant: LedgerInstant;
   klendAccounts: Array<Address>;
   obligation: KaminoObligation | ObligationType | undefined;
 };
@@ -186,13 +178,9 @@ export interface WithdrawWithLeverageProps<QuoteResponse> extends WithdrawWithLe
   swapper: SwapIxsProvider<QuoteResponse>;
 }
 
-export type WithdrawWithLeverageSwapInputsParams<QuoteResponse> = LedgerInstantCompatible<
-  WithdrawWithLeverageSwapInputsProps<QuoteResponse>
->;
+export type WithdrawWithLeverageSwapInputsParams<QuoteResponse> = WithdrawWithLeverageSwapInputsProps<QuoteResponse>;
 
-export type WithdrawWithLeverageParams<QuoteResponse> = LedgerInstantCompatible<
-  WithdrawWithLeverageProps<QuoteResponse>
->;
+export type WithdrawWithLeverageParams<QuoteResponse> = WithdrawWithLeverageProps<QuoteResponse>;
 
 export type WithdrawLeverageCalcsResult = {
   withdrawAmount: Decimal;
@@ -226,8 +214,7 @@ export type AdjustLeverageIxsResponse<QuoteResponse> = BaseLeverageIxsResponse<Q
 export type AdjustLeverageInitialInputs<QuoteResponse> = {
   calcs: AdjustLeverageCalcsResult | AdjustDepositDebtFlashCalcsResult | AdjustWithdrawCollFlashCalcsResult;
   swapQuote: SwapQuote<QuoteResponse>;
-  currentSlot: Slot;
-  currentLedgerInstant?: LedgerInstant;
+  currentLedgerInstant: LedgerInstant;
   klendAccounts: Array<Address>;
   isDeposit: boolean;
   obligation: KaminoObligation | ObligationType | undefined;
@@ -248,11 +235,9 @@ export interface AdjustLeverageProps<QuoteResponse> extends AdjustLeverageSwapIn
   swapper: SwapIxsProvider<QuoteResponse>;
 }
 
-export type AdjustLeverageSwapInputsParams<QuoteResponse> = LedgerInstantCompatible<
-  AdjustLeverageSwapInputsProps<QuoteResponse>
->;
+export type AdjustLeverageSwapInputsParams<QuoteResponse> = AdjustLeverageSwapInputsProps<QuoteResponse>;
 
-export type AdjustLeverageIxsParams<QuoteResponse> = LedgerInstantCompatible<AdjustLeverageProps<QuoteResponse>>;
+export type AdjustLeverageIxsParams<QuoteResponse> = AdjustLeverageProps<QuoteResponse>;
 
 export type AdjustLeverageCalcsResult = {
   adjustDepositPosition: Decimal;

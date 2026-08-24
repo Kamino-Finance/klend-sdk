@@ -3,6 +3,7 @@
  * Decodes + hydrates via {@link KaminoObligation.fromAccountData}.
  */
 import { type Address, type Base58EncodedBytes, type Commitment, type Slot } from '@solana/kit';
+import type { LedgerInstant } from '../utils/ledger';
 
 import { Obligation } from '../@codegen/klend/accounts';
 import { PROGRAM_ID } from '../@codegen/klend/programId';
@@ -35,6 +36,13 @@ export interface ObligationListenerParams {
    *  state inside the getter; high-throughput obligation streams would
    *  pay that cost on every event. */
   markets: Map<Address, KaminoMarket> | (() => Map<Address, KaminoMarket>);
+  /**
+   * The ledger instant (slot + block time) the obligation's positions are hydrated at - value (fixed) or getter
+   * (lazy, e.g. a periodically refreshed `getCurrentLedgerInstant`). The WebSocket notification only carries a slot,
+   * and the positions of an obligation on `TrueApr` reserves accrue per second, so the block time must come from the
+   * caller; the same perf contract as `markets` applies to the getter form (invoked once per notification).
+   */
+  currentLedgerInstant: LedgerInstant | (() => LedgerInstant);
   owner: Address;
   onChange: ObligationChangeCallback;
   onError?: (error: unknown) => void;
@@ -56,6 +64,10 @@ export function buildObligationFilters(owner: Address): ProgramFilter[] {
 export function listenToObligationChanges(params: ObligationListenerParams): SubscriptionHandle {
   const getMarkets =
     typeof params.markets === 'function' ? params.markets : () => params.markets as Map<Address, KaminoMarket>;
+  const getLedgerInstant =
+    typeof params.currentLedgerInstant === 'function'
+      ? params.currentLedgerInstant
+      : () => params.currentLedgerInstant as LedgerInstant;
 
   return createManagerSubscription<ObligationChangeEvent>({
     manager: params.manager,
@@ -66,7 +78,7 @@ export function listenToObligationChanges(params: ObligationListenerParams): Sub
     throttleMs: params.throttleMs,
     scheduler: params.scheduler,
     decode: (address, buffer, slot) => {
-      const obligation = KaminoObligation.fromAccountData(getMarkets(), address, buffer, slot);
+      const obligation = KaminoObligation.fromAccountData(getMarkets(), address, buffer, getLedgerInstant());
       // `undefined` is honored by createManagerSubscription — no event fires, no error.
       if (!obligation) return undefined;
       return { obligation, address, slot };

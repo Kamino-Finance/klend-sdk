@@ -1,5 +1,5 @@
 /* eslint-disable max-classes-per-file */
-import { AccountMeta, AccountRole, Address, Instruction, none, Option, Slot, some } from '@solana/kit';
+import { AccountMeta, AccountRole, Address, Instruction, none, Option, some } from '@solana/kit';
 import Decimal from 'decimal.js';
 import { KaminoReserve } from './reserve';
 import { Obligation } from '../@codegen/klend/accounts';
@@ -23,7 +23,6 @@ import {
   ObligationType,
   referrerTokenStatePda,
   SECONDS_PER_DAY,
-  SLOTS_PER_SECOND,
   TOTAL_NUMBER_OF_IDS_TO_CHECK,
   U64_MAX,
 } from '../utils';
@@ -33,7 +32,7 @@ import { KaminoObligationOrder } from './obligationOrder';
 import { FeeCalculation } from './shared';
 import { refreshObligation } from '../@codegen/klend/instructions';
 import { RolloverImpossibleReason, RolloverMode, RolloverPossibility } from './rolloverTypes';
-import type { LedgerInstant } from '../utils/ledger';
+import { type LedgerInstant, resolveLedgerInstantForSlot } from '../utils/ledger';
 
 export type Position = {
   reserveAddress: Address;
@@ -231,7 +230,17 @@ export class KaminoObligation {
     return obligationId;
   }
 
-  static async load(kaminoMarket: KaminoMarket, obligationAddress: Address): Promise<KaminoObligation | null> {
+  /**
+   * Loads the obligation and hydrates its positions at `currentLedgerInstant` (see {@link getRatesForObligation}).
+   *
+   * When no instant is given, the block time of the slot the account was fetched at is resolved from the RPC
+   * (`getBlockTime`), so that the positions are estimated at a coherent ledger snapshot.
+   */
+  static async load(
+    kaminoMarket: KaminoMarket,
+    obligationAddress: Address,
+    currentLedgerInstant?: LedgerInstant
+  ): Promise<KaminoObligation | null> {
     const res = await kaminoMarket.getRpc().getAccountInfo(obligationAddress, { encoding: 'base64' }).send();
     if (!res.value) {
       return null;
@@ -245,11 +254,14 @@ export class KaminoObligation {
     if (obligation === null) {
       return null;
     }
+    const instant =
+      currentLedgerInstant ??
+      (await resolveLedgerInstantForSlot(kaminoMarket.getRpc(), res.context.slot, 'KaminoObligation.load'));
     const { collateralExchangeRates, cumulativeBorrowRates } = KaminoObligation.getRatesForObligation(
       kaminoMarket,
       obligation.deposits,
       obligation.borrows,
-      res.context.slot
+      instant
     );
     return new KaminoObligation(
       kaminoMarket,
@@ -263,9 +275,8 @@ export class KaminoObligation {
   static async loadAll(
     kaminoMarket: KaminoMarket,
     obligationAddresses: Address[],
-    slot: Slot
+    currentLedgerInstant: LedgerInstant
   ): Promise<(KaminoObligation | null)[]> {
-    const currentSlot = slot;
     const obligations = await Obligation.fetchMultiple(
       kaminoMarket.getRpc(),
       obligationAddresses,
@@ -281,7 +292,7 @@ export class KaminoObligation {
           obligation.borrows,
           collateralExchangeRates,
           cumulativeBorrowRates,
-          currentSlot
+          currentLedgerInstant
         );
       }
     }
@@ -315,7 +326,7 @@ export class KaminoObligation {
     markets: Map<Address, KaminoMarket>,
     obligationAddress: Address,
     data: Buffer | Uint8Array,
-    slot: Slot
+    currentLedgerInstant: LedgerInstant
   ): KaminoObligation | null {
     const decoded = Obligation.decode(toBuffer(data));
     const market = markets.get(decoded.lendingMarket);
@@ -325,7 +336,7 @@ export class KaminoObligation {
       market,
       decoded.deposits,
       decoded.borrows,
-      slot
+      currentLedgerInstant
     );
     return new KaminoObligation(market, obligationAddress, decoded, collateralExchangeRates, cumulativeBorrowRates);
   }
@@ -763,7 +774,7 @@ export class KaminoObligation {
     debtReserveAddress?: Address;
     market: KaminoMarket;
     reserves: Map<Address, KaminoReserve>;
-    slot: Slot;
+    currentLedgerInstant: LedgerInstant;
     elevationGroupOverride?: number;
   }): {
     stats: ObligationStats;
@@ -792,7 +803,7 @@ export class KaminoObligation {
     collateralReserveAddress?: Address;
     debtReserveAddress?: Address;
     market: KaminoMarket;
-    slot: Slot;
+    currentLedgerInstant: LedgerInstant;
   }): {
     stats: ObligationStats;
     deposits: Map<Address, Position>;
@@ -808,7 +819,7 @@ export class KaminoObligation {
       collateralReserveAddress,
       debtReserveAddress,
       market,
-      slot,
+      currentLedgerInstant,
     } = params;
 
     const additionalReserves: Address[] = [];
@@ -823,7 +834,7 @@ export class KaminoObligation {
       market,
       baseDeposits,
       baseBorrows,
-      slot,
+      currentLedgerInstant,
       additionalReserves
     );
 
@@ -997,8 +1008,7 @@ export class KaminoObligation {
   static getSimulatedObligationStatsForDepositAndBorrowOrderFill(params: {
     borrowOrder: KaminoBorrowOrder;
     market: KaminoMarket;
-    slot: Slot;
-    currentTimestamp: number;
+    currentLedgerInstant: LedgerInstant;
     depositReserveAddress: Address;
     depositAmountLamports: Decimal;
     elevationGroupOverride?: number;
@@ -1007,7 +1017,7 @@ export class KaminoObligation {
     deposits: Map<Address, Position>;
     borrows: Map<Address, Position>;
   } {
-    const { market, slot, depositReserveAddress, depositAmountLamports } = params;
+    const { market, currentLedgerInstant, depositReserveAddress, depositAmountLamports } = params;
     const elevationGroup = params.elevationGroupOverride ?? 0;
 
     // Start from empty state, apply the deposit
@@ -1018,7 +1028,7 @@ export class KaminoObligation {
       market,
       emptyDeposits,
       emptyBorrows,
-      slot,
+      currentLedgerInstant,
       [depositReserveAddress]
     );
 
@@ -1034,8 +1044,7 @@ export class KaminoObligation {
       elevationGroup,
       borrowOrder: params.borrowOrder,
       market,
-      slot,
-      currentTimestamp: params.currentTimestamp,
+      currentLedgerInstant,
     });
   }
 
@@ -1049,8 +1058,7 @@ export class KaminoObligation {
   getSimulatedObligationStatsForBorrowOrderFill(params: {
     borrowOrder: KaminoBorrowOrder;
     market: KaminoMarket;
-    slot: Slot;
-    currentTimestamp: number;
+    currentLedgerInstant: LedgerInstant;
     elevationGroupOverride?: number;
   }): {
     stats: ObligationStats;
@@ -1156,14 +1164,14 @@ export class KaminoObligation {
     elevationGroup: number;
     borrowOrder: KaminoBorrowOrder;
     market: KaminoMarket;
-    slot: Slot;
-    currentTimestamp: number;
+    currentLedgerInstant: LedgerInstant;
   }): {
     stats: ObligationStats;
     deposits: Map<Address, Position>;
     borrows: Map<Address, Position>;
   } {
-    const { baseDeposits, baseBorrows, elevationGroup, borrowOrder, market, slot, currentTimestamp } = params;
+    const { baseDeposits, baseBorrows, elevationGroup, borrowOrder, market, currentLedgerInstant } = params;
+    const currentTimestamp = Number(currentLedgerInstant.blockTime);
 
     const compatibleReserves = KaminoObligation.getCompatibleBorrowOrderFillReserves(
       market,
@@ -1195,7 +1203,7 @@ export class KaminoObligation {
         action: 'borrow',
         debtReserveAddress: reserve.address,
         market,
-        slot,
+        currentLedgerInstant,
       });
 
       if (worstCase === undefined || result.stats.loanToValue.gt(worstCase.stats.loanToValue)) {
@@ -1230,7 +1238,7 @@ export class KaminoObligation {
     borrowReserveAddress?: Address;
     newElevationGroup: number;
     market: KaminoMarket;
-    slot: Slot;
+    currentLedgerInstant: LedgerInstant;
   }): ObligationStats {
     const {
       withdrawAmountLamports,
@@ -1241,7 +1249,7 @@ export class KaminoObligation {
       borrowReserveAddress,
       newElevationGroup,
       market,
-      slot,
+      currentLedgerInstant,
     } = params;
 
     const additionalReserves = [withdrawReserveAddress, depositReserveAddress, borrowReserveAddress]
@@ -1252,7 +1260,7 @@ export class KaminoObligation {
       market,
       this.state.deposits,
       this.state.borrows,
-      slot,
+      currentLedgerInstant,
       additionalReserves
     );
 
@@ -1312,7 +1320,7 @@ export class KaminoObligation {
     borrowReserveAddress: Address;
     newElevationGroup: number;
     market: KaminoMarket;
-    slot: Slot;
+    currentLedgerInstant: LedgerInstant;
   }): ObligationStats {
     const {
       repayAmountLamports,
@@ -1321,7 +1329,7 @@ export class KaminoObligation {
       borrowReserveAddress,
       newElevationGroup,
       market,
-      slot,
+      currentLedgerInstant,
     } = params;
 
     const additionalReserves = [repayReserveAddress, borrowReserveAddress].filter(
@@ -1332,7 +1340,7 @@ export class KaminoObligation {
       market,
       this.state.deposits,
       this.state.borrows,
-      slot,
+      currentLedgerInstant,
       additionalReserves
     );
 
@@ -1379,9 +1387,12 @@ export class KaminoObligation {
     market: KaminoMarket,
     reserve: KaminoReserve,
     borrow: ObligationLiquidity,
-    currentSlot: Slot
+    currentLedgerInstant: LedgerInstant
   ): Decimal => {
-    const newCumulativeBorrowRate = reserve.getEstimatedCumulativeBorrowRate(currentSlot, market.state.referralFeeBps);
+    const newCumulativeBorrowRate = reserve.getEstimatedCumulativeBorrowRate(
+      currentLedgerInstant,
+      market.state.referralFeeBps
+    );
 
     const formerCumulativeBorrowRate = KaminoObligation.getCumulativeBorrowRate(borrow);
 
@@ -1602,14 +1613,14 @@ export class KaminoObligation {
   getMaxLoanLtvAndLiquidationLtvGivenElevationGroup(
     market: KaminoMarket,
     elevationGroup: number,
-    slot: Slot
+    currentLedgerInstant: LedgerInstant
   ): { maxLtv: Decimal; liquidationLtv: Decimal } {
     const getOraclePx = (reserve: KaminoReserve) => reserve.getOracleMarketPrice();
     const { collateralExchangeRates } = KaminoObligation.getRatesForObligation(
       market,
       this.state.deposits,
       this.state.borrows,
-      slot
+      currentLedgerInstant
     );
 
     const { borrowLimit, userTotalCollateralDeposit, borrowLiquidationLimit } =
@@ -1637,14 +1648,14 @@ export class KaminoObligation {
    * without actually executing those transactions.
    *
    * @param market - The KaminoMarket instance
-   * @param slot - The slot number for rate calculations
+   * @param currentLedgerInstant - The ledger instant (slot + block time) for rate calculations
    * @param depositChanges - Optional array of deposit changes to apply
    * @param borrowChanges - Optional array of borrow changes to apply
    * @returns A new KaminoObligation instance with the changes applied
    */
   withPositionChanges(
     market: KaminoMarket,
-    slot: Slot,
+    currentLedgerInstant: LedgerInstant,
     depositChanges?: PositionChange[],
     borrowChanges?: PositionChange[]
   ): KaminoObligation {
@@ -1661,7 +1672,7 @@ export class KaminoObligation {
       market,
       this.state.deposits,
       this.state.borrows,
-      slot,
+      currentLedgerInstant,
       reservesToRefresh
     );
 
@@ -1709,7 +1720,7 @@ export class KaminoObligation {
 
     * @param market - The KaminoMarket instance.
     * @param liquidityReserveAddress - The liquidity reserve Address.
-    * @param slot - The slot number.
+    * @param currentLedgerInstant - The ledger instant (slot + block time) for rate calculations.
     * @param elevationGroup - The elevation group number (default: this.state.elevationGroup).
     * @returns The borrow power as a Decimal.
     * @throws Error if the reserve is not found.
@@ -1717,7 +1728,7 @@ export class KaminoObligation {
   getBorrowPower(
     market: KaminoMarket,
     liquidityReserveAddress: Address,
-    slot: Slot,
+    currentLedgerInstant: LedgerInstant,
     elevationGroup: number = this.state.elevationGroup
   ): Decimal {
     const reserve = market.getReserveByAddress(liquidityReserveAddress);
@@ -1735,7 +1746,7 @@ export class KaminoObligation {
       market,
       this.state.deposits,
       this.state.borrows,
-      slot
+      currentLedgerInstant
     );
 
     const { borrowLimit } = KaminoObligation.calculateObligationDeposits(
@@ -1789,7 +1800,7 @@ export class KaminoObligation {
 
     * @param market - The KaminoMarket instance.
     * @param liquidityReserveAddress - The liquidity reserve Address.
-    * @param slot - The slot number.
+    * @param currentLedgerInstant - The ledger instant (slot + block time) for rate calculations.
     * @param elevationGroup - The elevation group number (default: this.state.elevationGroup).
     * @returns The maximum borrow amount as a Decimal.
     * @throws Error if the reserve is not found.
@@ -1797,7 +1808,7 @@ export class KaminoObligation {
   getMaxBorrowAmountV2(
     market: KaminoMarket,
     liquidityReserveAddress: Address,
-    slot: Slot,
+    currentLedgerInstant: LedgerInstant,
     elevationGroup: number = this.state.elevationGroup
   ): Decimal {
     const reserve = market.getReserveByAddress(liquidityReserveAddress);
@@ -1810,7 +1821,7 @@ export class KaminoObligation {
       [elevationGroup],
       Array.from(this.deposits.keys())
     )[0];
-    const maxBorrowAmount = this.getBorrowPower(market, liquidityReserveAddress, slot, elevationGroup);
+    const maxBorrowAmount = this.getBorrowPower(market, liquidityReserveAddress, currentLedgerInstant, elevationGroup);
 
     if (elevationGroup === this.state.elevationGroup) {
       return Decimal.min(maxBorrowAmount, liquidityAvailable);
@@ -1828,7 +1839,7 @@ export class KaminoObligation {
 
     * @param market - The KaminoMarket instance.
     * @param liquidityReserveAddress - The liquidity reserve Address.
-    * @param slot - The slot number.
+    * @param currentLedgerInstant - The ledger instant (slot + block time) for rate calculations.
     * @param elevationGroup - The elevation group number (default: this.state.elevationGroup).
     * @returns The maximum borrow amount as a Decimal.
     * @throws Error if the reserve is not found.
@@ -1836,7 +1847,7 @@ export class KaminoObligation {
   getMaxBorrowAmountV2WithDeposit(
     market: KaminoMarket,
     liquidityReserveAddress: Address,
-    slot: Slot,
+    currentLedgerInstant: LedgerInstant,
     elevationGroup: number = this.state.elevationGroup,
     depositAmountLamports: Decimal,
     depositReserveAddress: Address
@@ -1847,19 +1858,28 @@ export class KaminoObligation {
         amountChangeLamports: depositAmountLamports,
       },
     ];
-    const obligationWithDeposit = this.withPositionChanges(market, slot, depositChanges);
+    const obligationWithDeposit = this.withPositionChanges(market, currentLedgerInstant, depositChanges);
 
-    return obligationWithDeposit.getMaxBorrowAmountV2(market, liquidityReserveAddress, slot, elevationGroup);
+    return obligationWithDeposit.getMaxBorrowAmountV2(
+      market,
+      liquidityReserveAddress,
+      currentLedgerInstant,
+      elevationGroup
+    );
   }
 
   /*
     Returns true if the loan is eligible for the elevation group, including for the default one.
     * @param market - The KaminoMarket object representing the market.
-    * @param slot - The slot number of the loan.
+    * @param currentLedgerInstant - The ledger instant (slot + block time) for rate calculations.
     * @param elevationGroup - The elevation group number.
     * @returns A boolean indicating whether the loan is eligible for elevation.
   */
-  isLoanEligibleForElevationGroup(market: KaminoMarket, slot: Slot, elevationGroup: number): boolean {
+  isLoanEligibleForElevationGroup(
+    market: KaminoMarket,
+    currentLedgerInstant: LedgerInstant,
+    elevationGroup: number
+  ): boolean {
     // - isLoanEligibleForEmode(obligation, emode: 0 | number): <boolean, ErrorMessage>
     //    - essentially checks if a loan can be migrated or not
     //    - [x] due to collateral / debt reserves combination
@@ -1896,7 +1916,7 @@ export class KaminoObligation {
       market,
       this.state.deposits,
       this.state.borrows,
-      slot
+      currentLedgerInstant
     );
 
     const { borrowLimit } = KaminoObligation.calculateObligationDeposits(
@@ -1935,7 +1955,7 @@ export class KaminoObligation {
   getMaxBorrowAmount(
     market: KaminoMarket,
     liquidityReserveAddress: Address,
-    slot: Slot,
+    currentLedgerInstant: LedgerInstant,
     requestElevationGroup: boolean
   ): Decimal {
     const reserve = market.getReserveByAddress(liquidityReserveAddress);
@@ -1996,7 +2016,7 @@ export class KaminoObligation {
 
     let maxBorrowAmount = Decimal.min(maxObligationBorrowPower, reserveAvailableAmount, reserveBorrowCapRemained);
 
-    const currentUnixTimestamp = Math.floor(Date.now() / 1000);
+    const currentUnixTimestamp = Number(currentLedgerInstant.blockTime);
     const debtWithdrawalCap = reserve
       .getDebtWithdrawalCapCapacity()
       .sub(reserve.getDebtWithdrawalCapCurrent(currentUnixTimestamp));
@@ -2056,7 +2076,11 @@ export class KaminoObligation {
     return Decimal.max(new Decimal(0), maxBorrowAmount);
   }
 
-  getMaxWithdrawAmount(market: KaminoMarket, depositReserveAddress: Address, _slot: Slot): MaxWithdrawAmountResult {
+  getMaxWithdrawAmount(
+    market: KaminoMarket,
+    depositReserveAddress: Address,
+    currentLedgerInstant: LedgerInstant
+  ): MaxWithdrawAmountResult {
     const depositReserve = market.getReserveByAddress(depositReserveAddress);
 
     if (!depositReserve) {
@@ -2064,7 +2088,7 @@ export class KaminoObligation {
     }
 
     const reserveAvailableLiquidity = depositReserve.getLiquidityAvailableAmount();
-    const currentUnixTimestamp = Math.floor(Date.now() / 1000);
+    const currentUnixTimestamp = Number(currentLedgerInstant.blockTime);
     const depositWithdrawalCap = depositReserve
       .getDepositWithdrawalCapCapacity()
       .sub(depositReserve.getDepositWithdrawalCapCurrent(currentUnixTimestamp));
@@ -2127,7 +2151,7 @@ export class KaminoObligation {
    *
    * @param market - The KaminoMarket instance.
    * @param depositReserveAddress - The liquidity (deposit) reserve Address.
-   * @param slot - The slot number.
+   * @param currentLedgerInstant - The ledger instant (slot + block time) for rate calculations.
    * @param repayAmountLamports - The amount to repay in lamports (use U64_MAX for full repay).
    * @param repayReserveAddress - The reserve address of the borrow being repaid.
    * @returns The maximum withdraw amounts (both with and without withdrawal queues).
@@ -2136,7 +2160,7 @@ export class KaminoObligation {
   getMaxWithdrawAmountWithRepay(
     market: KaminoMarket,
     depositReserveAddress: Address,
-    slot: Slot,
+    currentLedgerInstant: LedgerInstant,
     repayAmountLamports: Decimal,
     repayReserveAddress: Address
   ): MaxWithdrawAmountResult {
@@ -2154,9 +2178,9 @@ export class KaminoObligation {
         amountChangeLamports: repayAmount.neg(), // as it's a repay
       },
     ];
-    const obligationWithRepay = this.withPositionChanges(market, slot, undefined, borrowChanges);
+    const obligationWithRepay = this.withPositionChanges(market, currentLedgerInstant, undefined, borrowChanges);
 
-    return obligationWithRepay.getMaxWithdrawAmount(market, depositReserveAddress, slot);
+    return obligationWithRepay.getMaxWithdrawAmount(market, depositReserveAddress, currentLedgerInstant);
   }
 
   getObligationLiquidityByReserve(reserveAddress: Address): ObligationLiquidity {
@@ -2188,23 +2212,38 @@ export class KaminoObligation {
   /**
    * Mirrors on-chain `ObligationLiquidity::calculate_interest_for_period`.
    * Calculates the interest that would accrue on `amount` over `timePeriodSecs` seconds.
+   *
+   * The on-chain charge projects from the reserve's last refresh (the reserve is always refreshed in the same tx); this
+   * helper additionally catches up the reserve's accrual from its last refresh to `currentLedgerInstant` (in the
+   * reserve's accrual units - slots for a `Legacy` reserve, seconds for a `TrueApr` one), so that a stale reserve can
+   * only make it over-estimate. An instant older than the reserve's state would under-estimate instead, so it is
+   * rejected.
    */
   static calculateInterestForPeriod(
     borrow: ObligationLiquidity,
     reserve: KaminoReserve,
     amount: Decimal,
     timePeriodSecs: number,
-    currentSlot: Slot
+    currentLedgerInstant: LedgerInstant
   ): Decimal {
-    const reserveLastUpdateSlot = BigInt(reserve.state.lastUpdate.slot.toString()) as Slot;
-    if (currentSlot < reserveLastUpdateSlot) {
+    const reserveLastUpdateSlot = BigInt(reserve.state.lastUpdate.slot.toString());
+    if (currentLedgerInstant.slot < reserveLastUpdateSlot) {
       throw new Error(
-        `LedgerInstant slot ${currentSlot} is older than reserve ${reserve.address} last-update slot ${reserveLastUpdateSlot}; ` +
+        `LedgerInstant slot ${currentLedgerInstant.slot} is older than reserve ${reserve.address} last-update slot ${reserveLastUpdateSlot}; ` +
           'fetch the ledger instant at the same commitment after loading the reserve'
       );
     }
-    const futureSlot = currentSlot + BigInt(timePeriodSecs) * BigInt(SLOTS_PER_SECOND);
-    const futureCumulativeBorrowRate = reserve.calculateFutureCumulativeBorrowRate(futureSlot);
+    const reserveLastUpdateTimestamp = reserve.getLastUpdateTimestamp();
+    if (Number(currentLedgerInstant.blockTime) < reserveLastUpdateTimestamp) {
+      throw new Error(
+        `LedgerInstant block time ${currentLedgerInstant.blockTime} is older than reserve ${reserve.address} last-update timestamp ${reserveLastUpdateTimestamp}; ` +
+          'fetch the ledger instant at the same commitment after loading the reserve'
+      );
+    }
+    const futureCumulativeBorrowRate = reserve.calculateFutureCumulativeBorrowRate(
+      timePeriodSecs,
+      currentLedgerInstant
+    );
     const obligationCumulativeBorrowRate = KaminoObligation.getCumulativeBorrowRate(borrow);
 
     const amountWithInterest = amount.mul(futureCumulativeBorrowRate).div(obligationCumulativeBorrowRate);
@@ -2225,9 +2264,9 @@ export class KaminoObligation {
   calculateEarlyRepayPenalty(
     reserveAddress: Address,
     repayAmountLamports: Decimal,
-    currentTimestamp: number,
-    currentSlot: Slot
+    currentLedgerInstant: LedgerInstant
   ): Decimal {
+    const currentTimestamp = Number(currentLedgerInstant.blockTime);
     const reserve = this.market.getExistingReserveByAddress(reserveAddress);
     const borrow = this.state.borrows.find((b) => b.borrowReserve === reserveAddress);
     // The following are all normal, non-exceptional "no penalty" cases (mirroring the on-chain
@@ -2264,7 +2303,7 @@ export class KaminoObligation {
       reserve,
       repayAmountLamports,
       remainingSecs,
-      currentSlot
+      currentLedgerInstant
     );
 
     const penaltyPct = new Decimal(reserve.state.config.earlyRepayRemainingInterestPct).div(100);
@@ -2295,9 +2334,8 @@ export class KaminoObligation {
     repayPrincipalLamports: Decimal,
     currentLedgerInstant: LedgerInstant
   ): { penaltyLamports: Decimal; fundingLamports: Decimal } {
-    const { slot, blockTime } = currentLedgerInstant;
     const penaltyLamports = reserve.getKind().isFixedRate()
-      ? this.calculateEarlyRepayPenalty(reserve.address, repayPrincipalLamports, Number(blockTime), slot)
+      ? this.calculateEarlyRepayPenalty(reserve.address, repayPrincipalLamports, currentLedgerInstant)
       : new Decimal(0);
     return { penaltyLamports, fundingLamports: repayPrincipalLamports.add(penaltyLamports) };
   }
@@ -2306,7 +2344,7 @@ export class KaminoObligation {
     kaminoMarket: KaminoMarket,
     deposits: ObligationCollateral[],
     borrows: ObligationLiquidity[],
-    slot: Slot,
+    currentLedgerInstant: LedgerInstant,
     additionalReserves: Address[] = []
   ): {
     collateralExchangeRates: Map<Address, Decimal>;
@@ -2315,13 +2353,13 @@ export class KaminoObligation {
     const collateralExchangeRates = KaminoObligation.getCollateralExchangeRatesForObligation(
       kaminoMarket,
       deposits,
-      slot,
+      currentLedgerInstant,
       additionalReserves
     );
     const cumulativeBorrowRates = KaminoObligation.getCumulativeBorrowRatesForObligation(
       kaminoMarket,
       borrows,
-      slot,
+      currentLedgerInstant,
       additionalReserves
     );
 
@@ -2337,16 +2375,26 @@ export class KaminoObligation {
     borrows: ObligationLiquidity[],
     collateralExchangeRates: Map<Address, Decimal>,
     cumulativeBorrowRates: Map<Address, Decimal>,
-    slot: Slot
+    currentLedgerInstant: LedgerInstant
   ): void {
-    KaminoObligation.addCollateralExchangeRatesForObligation(kaminoMarket, collateralExchangeRates, deposits, slot);
-    KaminoObligation.addCumulativeBorrowRatesForObligation(kaminoMarket, cumulativeBorrowRates, borrows, slot);
+    KaminoObligation.addCollateralExchangeRatesForObligation(
+      kaminoMarket,
+      collateralExchangeRates,
+      deposits,
+      currentLedgerInstant
+    );
+    KaminoObligation.addCumulativeBorrowRatesForObligation(
+      kaminoMarket,
+      cumulativeBorrowRates,
+      borrows,
+      currentLedgerInstant
+    );
   }
 
   static getCollateralExchangeRatesForObligation(
     kaminoMarket: KaminoMarket,
     deposits: ObligationCollateral[],
-    slot: Slot,
+    currentLedgerInstant: LedgerInstant,
     additionalReserves: Address[]
   ): Map<Address, Decimal> {
     const collateralExchangeRates = new Map<Address, Decimal>();
@@ -2369,7 +2417,7 @@ export class KaminoObligation {
     for (const reserve of allReserves) {
       const reserveInstance = kaminoMarket.getExistingReserveByAddress(reserve, 'Obligation');
       const collateralExchangeRate = reserveInstance.getEstimatedCollateralExchangeRate(
-        slot,
+        currentLedgerInstant,
         kaminoMarket.state.referralFeeBps
       );
       collateralExchangeRates.set(reserve, collateralExchangeRate);
@@ -2382,14 +2430,14 @@ export class KaminoObligation {
     kaminoMarket: KaminoMarket,
     collateralExchangeRates: Map<Address, Decimal>,
     deposits: ObligationCollateral[],
-    slot: Slot
+    currentLedgerInstant: LedgerInstant
   ) {
     for (let i = 0; i < deposits.length; i++) {
       const deposit = deposits[i];
       if (isNotNullPubkey(deposit.depositReserve) && !collateralExchangeRates.has(deposit.depositReserve)) {
         const reserve = kaminoMarket.getExistingReserveByAddress(deposit.depositReserve, 'Obligation deposit');
         const collateralExchangeRate = reserve.getEstimatedCollateralExchangeRate(
-          slot,
+          currentLedgerInstant,
           kaminoMarket.state.referralFeeBps
         );
         collateralExchangeRates.set(reserve.address, collateralExchangeRate);
@@ -2400,7 +2448,7 @@ export class KaminoObligation {
   static getCumulativeBorrowRatesForObligation(
     kaminoMarket: KaminoMarket,
     borrows: ObligationLiquidity[],
-    slot: Slot,
+    currentLedgerInstant: LedgerInstant,
     additionalReserves: Address[] = []
   ): Map<Address, Decimal> {
     const allReserves = new Set<Address>();
@@ -2424,7 +2472,7 @@ export class KaminoObligation {
     for (const reserve of allReserves) {
       const reserveInstance = kaminoMarket.getExistingReserveByAddress(reserve, 'Obligation');
       const cumulativeBorrowRate = reserveInstance.getEstimatedCumulativeBorrowRate(
-        slot,
+        currentLedgerInstant,
         kaminoMarket.state.referralFeeBps
       );
       cumulativeBorrowRates.set(reserve, cumulativeBorrowRate);
@@ -2437,13 +2485,16 @@ export class KaminoObligation {
     kaminoMarket: KaminoMarket,
     cumulativeBorrowRates: Map<Address, Decimal>,
     borrows: ObligationLiquidity[],
-    slot: Slot
+    currentLedgerInstant: LedgerInstant
   ) {
     for (let i = 0; i < borrows.length; i++) {
       const borrow = borrows[i];
       if (isNotNullPubkey(borrow.borrowReserve) && !cumulativeBorrowRates.has(borrow.borrowReserve)) {
         const reserve = kaminoMarket.getExistingReserveByAddress(borrow.borrowReserve, 'Obligation borrow');
-        const cumulativeBorrowRate = reserve.getEstimatedCumulativeBorrowRate(slot, kaminoMarket.state.referralFeeBps);
+        const cumulativeBorrowRate = reserve.getEstimatedCumulativeBorrowRate(
+          currentLedgerInstant,
+          kaminoMarket.state.referralFeeBps
+        );
         cumulativeBorrowRates.set(reserve.address, cumulativeBorrowRate);
       }
     }
@@ -2503,6 +2554,27 @@ export class KaminoObligation {
     return [...this.getDepositReserves(), ...this.getBorrowReserves()];
   }
 
+  /**
+   * Orders the given borrow reserves the way `refresh_obligation` / `request_elevation_group` consume a referred
+   * obligation's referrer token states (one per borrow): the program takes the next token state only for a borrow
+   * accruing referral fees - i.e. whose reserve takes protocol fees - in borrow order, from the front of the group; the
+   * token states of the remaining borrows (zero-take-rate reserves) only pad the expected account count, so they must
+   * come last. A borrow reserve not found in `market` is assumed to take protocol fees.
+   */
+  static orderBorrowReservesForReferrerTokenStates(market: KaminoMarket, borrowReserves: Address[]): Address[] {
+    const takingFees: Address[] = [];
+    const padding: Address[] = [];
+    for (const borrowReserve of borrowReserves) {
+      const reserve = market.getReserveByAddress(borrowReserve);
+      if (reserve === undefined || reserve.state.config.protocolTakeRatePct > 0) {
+        takingFees.push(borrowReserve);
+      } else {
+        padding.push(borrowReserve);
+      }
+    }
+    return [...takingFees, ...padding];
+  }
+
   public async getRefreshObligationIx(opts?: {
     extraDepositReserves?: Address[];
     extraBorrowReserves?: Address[];
@@ -2538,17 +2610,20 @@ export class KaminoObligation {
 
     // When the obligation has a referrer, refresh_obligation requires one referrer-token-state account per
     // borrow reserve (it accrues referrer fees per borrow during the refresh); their absence fails the
-    // remaining-accounts check on-chain.
+    // remaining-accounts check on-chain. The token states of the borrows accruing referral fees must come first
+    // (see `orderBorrowReservesForReferrerTokenStates`).
     const referrerTokenStateAccountMetas: AccountMeta[] =
       this.state.referrer === DEFAULT_PUBLIC_KEY
         ? []
         : await Promise.all(
-            borrowReservesList.map(async (borrowReserve): Promise<AccountMeta> => {
-              return {
-                address: await referrerTokenStatePda(this.state.referrer, borrowReserve, this.market.programId),
-                role: AccountRole.WRITABLE,
-              };
-            })
+            KaminoObligation.orderBorrowReservesForReferrerTokenStates(this.market, borrowReservesList).map(
+              async (borrowReserve): Promise<AccountMeta> => {
+                return {
+                  address: await referrerTokenStatePda(this.state.referrer, borrowReserve, this.market.programId),
+                  role: AccountRole.WRITABLE,
+                };
+              }
+            )
           );
 
     refreshObligationIx = {

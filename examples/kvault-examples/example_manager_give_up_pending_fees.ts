@@ -10,7 +10,7 @@ import { sendAndConfirmTx } from '../utils/tx';
   const user = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
-  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
+  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT, slotDuration);
 
   const feesToGiveUp = new Decimal(0.01);
   const giveUpFeesIx = await kaminoManager.giveUpPendingFeesIx(vault, feesToGiveUp);

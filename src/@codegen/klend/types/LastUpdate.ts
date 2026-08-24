@@ -8,27 +8,31 @@ export interface LastUpdateFields {
   slot: BN
   stale: number
   priceStatus: number
-  placeholder: Array<number>
+  alignmentPadding: Array<number>
+  timestamp: number
 }
 
 export interface LastUpdateJSON {
   slot: string
   stale: number
   priceStatus: number
-  placeholder: Array<number>
+  alignmentPadding: Array<number>
+  timestamp: number
 }
 
 export class LastUpdate {
   readonly slot: BN
   readonly stale: number
   readonly priceStatus: number
-  readonly placeholder: Array<number>
+  readonly alignmentPadding: Array<number>
+  readonly timestamp: number
 
   constructor(fields: LastUpdateFields) {
     this.slot = fields.slot
     this.stale = fields.stale
     this.priceStatus = fields.priceStatus
-    this.placeholder = fields.placeholder
+    this.alignmentPadding = fields.alignmentPadding
+    this.timestamp = fields.timestamp
   }
 
   static layout(property?: string) {
@@ -37,7 +41,8 @@ export class LastUpdate {
         borsh.u64("slot"),
         borsh.u8("stale"),
         borsh.u8("priceStatus"),
-        borsh.array(borsh.u8(), 6, "placeholder"),
+        borsh.array(borsh.u8(), 2, "alignmentPadding"),
+        borsh.u32("timestamp"),
       ],
       property
     )
@@ -49,7 +54,8 @@ export class LastUpdate {
       slot: obj.slot,
       stale: obj.stale,
       priceStatus: obj.priceStatus,
-      placeholder: obj.placeholder,
+      alignmentPadding: obj.alignmentPadding,
+      timestamp: obj.timestamp,
     })
   }
 
@@ -58,7 +64,8 @@ export class LastUpdate {
       slot: fields.slot,
       stale: fields.stale,
       priceStatus: fields.priceStatus,
-      placeholder: fields.placeholder,
+      alignmentPadding: fields.alignmentPadding,
+      timestamp: fields.timestamp,
     }
   }
 
@@ -67,7 +74,8 @@ export class LastUpdate {
       slot: this.slot.toString(),
       stale: this.stale,
       priceStatus: this.priceStatus,
-      placeholder: this.placeholder,
+      alignmentPadding: this.alignmentPadding,
+      timestamp: this.timestamp,
     }
   }
 
@@ -76,7 +84,8 @@ export class LastUpdate {
       slot: new BN(obj.slot),
       stale: obj.stale,
       priceStatus: obj.priceStatus,
-      placeholder: obj.placeholder,
+      alignmentPadding: obj.alignmentPadding,
+      timestamp: obj.timestamp,
     })
   }
 

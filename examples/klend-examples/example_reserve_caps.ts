@@ -1,4 +1,5 @@
 import { ReserveArgs } from '../utils/models';
+import { getCurrentLedgerInstant, LedgerInstant } from '@kamino-finance/klend-sdk';
 import { MAIN_MARKET, PYUSD_MINT, PYUSD_RESERVE_MAIN_MARKET } from '../utils/constants';
 import { getConnectionPool } from '../utils/connection';
 import { loadReserveData } from '../utils/helpers';
@@ -7,8 +8,8 @@ import { Slot } from '@solana/kit';
 /**
  * Get reserve supply/borrow caps
  */
-export async function getReserveCaps(args: ReserveArgs, slot: Slot) {
-  const { reserve } = await loadReserveData(args, slot);
+export async function getReserveCaps(args: ReserveArgs, currentLedgerInstant: LedgerInstant) {
+  const { reserve } = await loadReserveData(args, currentLedgerInstant);
   const currentTimestamp = Math.floor(Date.now() / 1000);
 
   return {
@@ -20,7 +21,7 @@ export async function getReserveCaps(args: ReserveArgs, slot: Slot) {
 }
 (async () => {
   const c = getConnectionPool();
-  const slot = await c.rpc.getSlot().send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc);
   console.log(`fetching data for market ${MAIN_MARKET.toString()} token ${PYUSD_MINT.toString()}`);
   const { currentSupplyCapacity, currentBorrowCapacity, supplyCapacity, borrowCapacity } = await getReserveCaps(
     {
@@ -28,7 +29,7 @@ export async function getReserveCaps(args: ReserveArgs, slot: Slot) {
       marketPubkey: MAIN_MARKET,
       reserveAddress: PYUSD_RESERVE_MAIN_MARKET,
     },
-    slot
+    currentLedgerInstant
   );
   console.log('current supply capacity:', currentSupplyCapacity.toNumber());
   console.log('current borrow capacity:', currentBorrowCapacity.toNumber());

@@ -1,4 +1,4 @@
-import { Address, Slot } from '@solana/kit';
+import { Address } from '@solana/kit';
 import Decimal from 'decimal.js';
 import { KaminoMarket, KaminoObligation, KaminoReserve, toJson } from '../classes';
 import {
@@ -12,7 +12,7 @@ import {
 } from './types';
 import { fuzzyEqual } from '../utils';
 import { assertPositiveFiniteDecimal } from '../lending_operations/swap_calcs';
-import { LedgerInstant, normalizeLedgerInstantArgument, requireMatchingLedgerInstant } from '../utils/ledger';
+import { LedgerInstant } from '../utils/ledger';
 import { calcFlashLoanFees } from '../lending_operations/repay_with_collateral_calcs';
 
 const closingPositionDiffTolerance = 0.0001;
@@ -493,20 +493,14 @@ export function withdrawLeverageCalcs(
   withdrawAmount: Decimal,
   deposited: Decimal,
   borrowed: Decimal,
-  currentSlotOrLedgerInstant: Slot | LedgerInstant,
+  currentLedgerInstant: LedgerInstant,
   isClosingPosition: boolean,
   selectedTokenIsCollToken: boolean,
   selectedTokenMint: Address,
   obligation: KaminoObligation,
   flashLoanFee: Decimal,
-  slippagePct: Decimal,
-  currentLedgerInstant?: LedgerInstant
+  slippagePct: Decimal
 ): WithdrawLeverageCalcsResult {
-  const { currentSlot, currentLedgerInstant: normalizedLedgerInstant } = normalizeLedgerInstantArgument(
-    currentSlotOrLedgerInstant,
-    currentLedgerInstant,
-    'withdrawLeverageCalcs'
-  );
   // Closing-position branch below divides by `priceCollToDebt` directly (bypassing `calcWithdrawAmounts`), so guard
   // here as well as in the leaf calc.
   assertPositiveFiniteDecimal('withdrawLeverageCalcs: priceCollToDebt', priceCollToDebt);
@@ -528,7 +522,7 @@ export function withdrawLeverageCalcs(
 
   // Add slippage for the accrued interest rate amount
   const irSlippageBpsForDebt = obligation!
-    .estimateObligationInterestRate(market, debtReserve!, obligation?.state.borrows[0]!, currentSlot)
+    .estimateObligationInterestRate(market, debtReserve!, obligation?.state.borrows[0]!, currentLedgerInstant)
     .toDecimalPlaces(debtReserve?.getMintDecimals()!, Decimal.ROUND_CEIL);
   // add 0.1 to irSlippageBpsForDebt because we don't want to estimate slightly less than SC and end up not repaying enough
   const repayAmount = initialRepayAmount
@@ -542,8 +536,7 @@ export function withdrawLeverageCalcs(
     obligation,
     debtReserve,
     repayAmount,
-    currentSlot,
-    normalizedLedgerInstant
+    currentLedgerInstant
   );
 
   // 6. Get swap ixs
@@ -631,19 +624,17 @@ function leverageEarlyRepayPenalty(
   obligation: KaminoObligation,
   debtReserve: KaminoReserve,
   repayAmountTokens: Decimal,
-  currentSlot: Slot,
-  currentLedgerInstant?: LedgerInstant
+  currentLedgerInstant: LedgerInstant
 ): { earlyRepayPenaltyAmount: Decimal; repayFundingAmount: Decimal } {
   // Variable-rate / open-term short-circuit (keeps the common path off the mint-factor + lamport round-trip).
   if (!debtReserve.getKind().isFixedRate()) {
     return { earlyRepayPenaltyAmount: new Decimal(0), repayFundingAmount: repayAmountTokens };
   }
-  const ledgerInstant = requireMatchingLedgerInstant(currentSlot, currentLedgerInstant, 'leverageEarlyRepayPenalty');
   // Fixed-rate: thin token-unit wrapper over the single lamport-domain funding-invariant helper on KaminoObligation.
   // The leverage calcs work in token units, so convert principal to lamports, delegate, then convert the penalty back.
   const mintFactor = debtReserve.getMintFactor();
   const repayLamports = repayAmountTokens.mul(mintFactor).ceil();
-  const { penaltyLamports } = obligation.calculateEarlyRepayFunding(debtReserve, repayLamports, ledgerInstant);
+  const { penaltyLamports } = obligation.calculateEarlyRepayFunding(debtReserve, repayLamports, currentLedgerInstant);
   const earlyRepayPenaltyAmount = penaltyLamports.div(mintFactor);
   return { earlyRepayPenaltyAmount, repayFundingAmount: repayAmountTokens.add(earlyRepayPenaltyAmount) };
 }
@@ -688,26 +679,15 @@ export function adjustWithdrawLeverageCalcs(
   // reserve, and ledger instant so the fixed-term early-repay penalty is folded into the sizing.
   obligation?: KaminoObligation,
   debtReserve?: KaminoReserve,
-  currentSlotOrLedgerInstant?: Slot | LedgerInstant,
   currentLedgerInstant?: LedgerInstant
 ): AdjustLeverageCalcsResult {
   // Fixed-term debt charges an early-repay penalty on top of the repay. We flash-borrow the funding amount
   // (principal + penalty) and repay only the principal; the extra penalty cost is paid by withdrawing proportionally
   // more collateral (scaled by funding/principal). Open-term debt → penalty 0 → unchanged behaviour.
   const absRepay = Decimal.abs(adjustBorrowPosition);
-  const normalizedLedger =
-    currentSlotOrLedgerInstant === undefined
-      ? undefined
-      : normalizeLedgerInstantArgument(currentSlotOrLedgerInstant, currentLedgerInstant, 'adjustWithdrawLeverageCalcs');
   const { earlyRepayPenaltyAmount, repayFundingAmount } =
-    obligation && debtReserve && normalizedLedger !== undefined
-      ? leverageEarlyRepayPenalty(
-          obligation,
-          debtReserve,
-          absRepay,
-          normalizedLedger.currentSlot,
-          normalizedLedger.currentLedgerInstant
-        )
+    obligation && debtReserve && currentLedgerInstant !== undefined
+      ? leverageEarlyRepayPenalty(obligation, debtReserve, absRepay, currentLedgerInstant)
       : { earlyRepayPenaltyAmount: new Decimal(0), repayFundingAmount: absRepay };
   const fundingScale = absRepay.gt(0) ? repayFundingAmount.div(absRepay) : new Decimal(1);
 
@@ -843,20 +823,14 @@ export function withdrawLeverageCalcsCollFlash(
   withdrawAmount: Decimal,
   deposited: Decimal,
   borrowed: Decimal,
-  currentSlotOrLedgerInstant: Slot | LedgerInstant,
+  currentLedgerInstant: LedgerInstant,
   isClosingPosition: boolean,
   selectedTokenIsCollToken: boolean,
   selectedTokenMint: Address,
   obligation: KaminoObligation,
   flashLoanFee: Decimal,
-  slippagePct: Decimal,
-  currentLedgerInstant?: LedgerInstant
+  slippagePct: Decimal
 ): WithdrawLeverageCollFlashCalcsResult {
-  const { currentSlot, currentLedgerInstant: normalizedLedgerInstant } = normalizeLedgerInstantArgument(
-    currentSlotOrLedgerInstant,
-    currentLedgerInstant,
-    'withdrawLeverageCalcsCollFlash'
-  );
   // 1. Calculate proportional withdraw/repay amounts (same as existing)
   const { adjustDepositPosition: withdrawAmountCalculated, adjustBorrowPosition: initialRepayAmount } =
     isClosingPosition
@@ -872,7 +846,7 @@ export function withdrawLeverageCalcsCollFlash(
 
   // 2. Add IR slippage to repay amount
   const irSlippageBpsForDebt = obligation!
-    .estimateObligationInterestRate(market, debtReserve!, obligation?.state.borrows[0]!, currentSlot)
+    .estimateObligationInterestRate(market, debtReserve!, obligation?.state.borrows[0]!, currentLedgerInstant)
     .toDecimalPlaces(debtReserve?.getMintDecimals()!, Decimal.ROUND_CEIL);
   const repayAmount = initialRepayAmount
     .mul(irSlippageBpsForDebt.add('0.1').div('10_000').add('1'))
@@ -884,8 +858,7 @@ export function withdrawLeverageCalcsCollFlash(
     obligation,
     debtReserve,
     repayAmount,
-    currentSlot,
-    normalizedLedgerInstant
+    currentLedgerInstant
   );
 
   // 3. Calculate how much coll to flash borrow for the swap
@@ -974,31 +947,16 @@ export function adjustWithdrawLeverageCalcsCollFlash(
   // reserve, and ledger instant so the fixed-term early-repay penalty is folded into the sizing.
   obligation?: KaminoObligation,
   debtReserve?: KaminoReserve,
-  currentSlotOrLedgerInstant?: Slot | LedgerInstant,
   currentLedgerInstant?: LedgerInstant
 ): AdjustWithdrawCollFlashCalcsResult {
   const absDebtRepay = Decimal.abs(adjustBorrowPosition);
-  const normalizedLedger =
-    currentSlotOrLedgerInstant === undefined
-      ? undefined
-      : normalizeLedgerInstantArgument(
-          currentSlotOrLedgerInstant,
-          currentLedgerInstant,
-          'adjustWithdrawLeverageCalcsCollFlash'
-        );
 
   // Fixed-term debt charges an early-repay penalty on top of the repay; the coll→debt swap must produce
   // principal + penalty so the repay debit succeeds. The repay instruction amount stays the principal, and the extra
   // collateral needed is scaled proportionally (funding/principal). Open-term debt → penalty 0 → unchanged behaviour.
   const { earlyRepayPenaltyAmount, repayFundingAmount } =
-    obligation && debtReserve && normalizedLedger !== undefined
-      ? leverageEarlyRepayPenalty(
-          obligation,
-          debtReserve,
-          absDebtRepay,
-          normalizedLedger.currentSlot,
-          normalizedLedger.currentLedgerInstant
-        )
+    obligation && debtReserve && currentLedgerInstant !== undefined
+      ? leverageEarlyRepayPenalty(obligation, debtReserve, absDebtRepay, currentLedgerInstant)
       : { earlyRepayPenaltyAmount: new Decimal(0), repayFundingAmount: absDebtRepay };
 
   // Flash borrow coll to swap for debt repayment (incl. penalty)

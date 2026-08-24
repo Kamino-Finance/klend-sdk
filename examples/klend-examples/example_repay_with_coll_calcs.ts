@@ -33,7 +33,6 @@ import { getJupiterQuoter } from '../utils/jup_utils';
   const obligation = await market.getObligationByAddress(address('5LvkLen8kPwJvaUBaHbfmNNxFCdxYxVsPPjY6VQQQoMK'));
 
   const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc, 'processed');
-  const currentSlot = currentLedgerInstant.slot;
 
   const repayAmount = obligation?.borrows.get(debtTokenReserve!.address!)?.amount || new Decimal(0);
 
@@ -48,7 +47,6 @@ import { getJupiterQuoter } from '../utils/jup_utils';
     kaminoMarket: market,
     debtReserveAddress: debtTokenReserveAddress,
     obligation: obligation!,
-    currentSlot,
     currentLedgerInstant,
     collReserveAddress: collTokenReserveAddress,
     quoter: getJupiterQuoter(slippagePct * 100, collTokenReserve!, debtTokenReserve!),

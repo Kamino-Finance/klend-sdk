@@ -5,6 +5,7 @@ import {
   KaminoManager,
   KaminoVault,
   WRAPPED_SOL_MINT,
+  getCurrentLedgerInstant,
 } from '@kamino-finance/klend-sdk';
 import { Address, address } from '@solana/kit';
 import { Farms } from '@kamino-finance/farms-sdk';
@@ -20,20 +21,30 @@ export const getKaminoAllPricesAPI = 'https://api.hubbleprotocol.io/prices?env=m
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
-  const slot = await c.rpc.getSlot().send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc);
 
-  const vault = new KaminoVault(c.rpc, vaultAddress);
+  const vault = new KaminoVault(c.rpc, vaultAddress, slotDuration);
   const vaultState = await vault.getState(); // this reads the vault state from the chain and set is, if not set it will fetch it from the chain any time we use it
 
   // get how many shares the user has
   const userShares = await kaminoManager.getUserSharesBalanceSingleVault(vaultHolder, vault);
 
   const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
-  const tokensPerShare = await kaminoManager.getTokensPerShareSingleVault(vault, slot, vaultReservesMap, slot);
+  const tokensPerShare = await kaminoManager.getTokensPerShareSingleVault(
+    vault,
+    currentLedgerInstant,
+    vaultReservesMap,
+    currentLedgerInstant
+  );
   const userHoldings = userShares.totalShares.mul(tokensPerShare);
   console.log('User token holdings:', userHoldings.toString());
 
-  const pendingRewards = await kaminoManager.getAllPendingRewardsForUserInVault(vaultHolder, vault, vaultReservesMap);
+  const pendingRewards = await kaminoManager.getAllPendingRewardsForUserInVault(
+    vaultHolder,
+    vault,
+    vaultReservesMap,
+    currentLedgerInstant
+  );
 
   // read the prices from Kamino price API
   const prices = await fetch(getKaminoAllPricesAPI);

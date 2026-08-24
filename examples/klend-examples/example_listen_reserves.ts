@@ -9,7 +9,7 @@ import { getConnectionPool } from '../utils/connection';
  *  - `AccountSubscriptionManager` multiplexes one programNotifications stream
  *    per (programId, filters, commitment) key. Multiple listeners that share
  *    a key share the WS — last unsubscribe tears it down.
- *  - `throttleMs: 5_000` because reserves update every slot (~400 ms);
+ *  - `throttleMs: 5_000` because reserves update every slot (i.e. multiple times per second);
  *    coalescing them into 5 s windows is plenty for typical UIs.
  *  - `onError` receives all decode/listener throws — they NEVER tear down
  *    the WS. Reconnects only happen on transport-level errors.

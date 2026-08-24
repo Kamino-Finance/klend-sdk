@@ -83,8 +83,9 @@ export type UpdateConfigModeKind =
   | UpdateConfigMode.UpdateDebtTermSeconds
   | UpdateConfigMode.UpdateEarlyRepayRemainingInterestPct
   | UpdateConfigMode.UpdateReserveEmergencyMode
-  | UpdateConfigMode.UpdateRewardsAmountPerSlot
+  | UpdateConfigMode.UpdateRewardsAmountPerAccrualUnit
   | UpdateConfigMode.UpdateReservePermissionedOps
+  | UpdateConfigMode.UpdateInterestRateBasis
 export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateLoanToValuePctJSON
   | UpdateConfigMode.UpdateMaxLiquidationBonusBpsJSON
@@ -143,8 +144,9 @@ export type UpdateConfigModeJSON =
   | UpdateConfigMode.UpdateDebtTermSecondsJSON
   | UpdateConfigMode.UpdateEarlyRepayRemainingInterestPctJSON
   | UpdateConfigMode.UpdateReserveEmergencyModeJSON
-  | UpdateConfigMode.UpdateRewardsAmountPerSlotJSON
+  | UpdateConfigMode.UpdateRewardsAmountPerAccrualUnitJSON
   | UpdateConfigMode.UpdateReservePermissionedOpsJSON
+  | UpdateConfigMode.UpdateInterestRateBasisJSON
 
 export { UpdateLendingMarketConfigValue }
 

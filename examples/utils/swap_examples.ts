@@ -34,7 +34,6 @@ export type SwapExampleContext = {
   wallet: TransactionSigner;
   market: KaminoMarket;
   obligation: KaminoObligation;
-  currentSlot: bigint;
   currentLedgerInstant: LedgerInstant;
 };
 
@@ -60,7 +59,7 @@ export async function loadSwapExampleContext(args: {
   }
 
   const currentLedgerInstant = await getCurrentLedgerInstant(connection.rpc, 'processed');
-  return { connection, wallet, market, obligation, currentSlot: currentLedgerInstant.slot, currentLedgerInstant };
+  return { connection, wallet, market, obligation, currentLedgerInstant };
 }
 
 export function buildConnectionPool(rpcUrl: string): ConnectionPool {

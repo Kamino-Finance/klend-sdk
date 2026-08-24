@@ -140,7 +140,6 @@ Defaults:
       slippagePct: new Decimal(slippageBps).div(100),
       // Required as of the fixed-rate penalty-sizing change: the selector sizes the fixed-term early-repay penalty,
       // which needs the current slot (breaking API change).
-      currentSlot: ctx.currentSlot,
       currentLedgerInstant: ctx.currentLedgerInstant,
     });
 
@@ -164,7 +163,6 @@ Defaults:
     newElevationGroup: getNumberArg(args, 'new-elevation-group', ctx.obligation.state.elevationGroup),
     slippagePct: new Decimal(slippageBps).div(100),
     referrer: none(),
-    currentSlot: ctx.currentSlot,
     currentLedgerInstant: ctx.currentLedgerInstant,
     quoter: getKswapQuoter(kswapSdk, ctx.wallet.address, slippageBps, targetDebtReserve, sourceDebtReserve),
     swapper: getKswapSwapper(kswapSdk, ctx.wallet.address, slippageBps),

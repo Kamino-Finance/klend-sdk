@@ -1,4 +1,5 @@
 import { getMarket } from '../utils/helpers';
+import { getCurrentLedgerInstant } from '@kamino-finance/klend-sdk';
 import { address } from '@solana/kit';
 import { getConnectionPool } from '../utils/connection';
 import { MAIN_MARKET } from '../utils/constants';
@@ -6,13 +7,13 @@ import Decimal from 'decimal.js';
 
 (async () => {
   const c = getConnectionPool();
-  const slot = await c.rpc.getSlot().send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc);
   const reserveAddress = address('BHUi32TrEsfN2U821G4FprKrR4hTeK4LCWtA3BFetuqA');
   console.log(`fetching all loans for reserve ${reserveAddress.toString()}`);
   const market = await getMarket({ rpc: c.rpc, marketPubkey: MAIN_MARKET });
   const reserve = market.getReserveByAddress(reserveAddress);
   const mintFactor = reserve?.getMintFactor()!;
-  const loans = await market.getAllObligationsByDepositedReserve(reserveAddress, slot);
+  const loans = await market.getAllObligationsByDepositedReserve(reserveAddress, currentLedgerInstant);
   let totalDepositAmount = new Decimal(0);
   let totalNumberOfLoans = 0;
   for (const loan of loans) {

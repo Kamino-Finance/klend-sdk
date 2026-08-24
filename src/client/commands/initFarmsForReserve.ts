@@ -29,7 +29,7 @@ export async function initFarmsForReserve(
   const market = await KaminoMarket.load(
     env.c.rpc,
     lendingMarket,
-    DEFAULT_RECENT_SLOT_DURATION_MS,
+    DEFAULT_RECENT_SLOT_DURATION_MS, // no reserves loaded (withReserves=false below) - the slot duration plays no role
     env.klendProgramId,
     false
   );

@@ -9,10 +9,10 @@ import {
   isSome,
   none,
   Option,
-  Slot,
   some,
   TransactionSigner,
 } from '@solana/kit';
+import type { LedgerInstant } from '../utils/ledger';
 import BN from 'bn.js';
 import Decimal from 'decimal.js';
 import {
@@ -228,7 +228,7 @@ export class KaminoAction {
 
   preLoadedDepositReservesSameTx: Array<Address>;
 
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
 
   permissionAuthority?: TransactionSigner;
 
@@ -242,7 +242,7 @@ export class KaminoAction {
     depositReserves: Array<Address>,
     borrowReserves: Array<Address>,
     reserveState: KaminoReserve,
-    currentSlot: Slot,
+    currentLedgerInstant: LedgerInstant,
     secondaryMint?: Address,
     outflowReserveState?: KaminoReserve,
     outflowAmount?: string | BN,
@@ -280,7 +280,7 @@ export class KaminoAction {
     this.outflowAmount = outflowAmount ? new BN(outflowAmount) : undefined;
     this.preLoadedDepositReservesSameTx = [];
     this.referrer = referrer;
-    this.currentSlot = currentSlot;
+    this.currentLedgerInstant = currentLedgerInstant;
     this.permissionAuthority = permissionAuthority;
   }
 
@@ -309,7 +309,7 @@ export class KaminoAction {
       owner,
       obligation,
       referrer = none(),
-      currentSlot,
+      currentLedgerInstant,
       payer = owner,
       permissionAuthority = undefined,
     } = props;
@@ -320,7 +320,15 @@ export class KaminoAction {
     }
 
     const { kaminoObligation, depositReserves, borrowReserves, distinctReserveCount } =
-      await KaminoAction.loadObligation(action, kaminoMarket, owner.address, reserve.address, obligation);
+      await KaminoAction.loadObligation(
+        action,
+        kaminoMarket,
+        owner.address,
+        reserve.address,
+        obligation,
+        undefined,
+        currentLedgerInstant
+      );
 
     const referrerKey = await this.getReferrerKey(kaminoMarket, owner.address, kaminoObligation, referrer);
 
@@ -334,7 +342,7 @@ export class KaminoAction {
       depositReserves,
       borrowReserves,
       reserve,
-      currentSlot,
+      currentLedgerInstant,
       undefined,
       undefined,
       undefined,
@@ -369,7 +377,8 @@ export class KaminoAction {
     owner: Address,
     reserve: Address,
     obligation: KaminoObligation | ObligationType,
-    outflowReserve?: Address
+    outflowReserve?: Address,
+    currentLedgerInstant?: LedgerInstant
   ) {
     let kaminoObligation: KaminoObligation | null;
     const depositReserves: Array<Address> = [];
@@ -378,7 +387,7 @@ export class KaminoAction {
       kaminoObligation = obligation;
     } else {
       const obligationAddress = await obligation.toPda(kaminoMarket.getAddress(), owner);
-      kaminoObligation = await KaminoObligation.load(kaminoMarket, obligationAddress);
+      kaminoObligation = await KaminoObligation.load(kaminoMarket, obligationAddress, currentLedgerInstant);
     }
     if (kaminoObligation !== null) {
       depositReserves.push(...[...kaminoObligation.deposits.keys()]);
@@ -411,7 +420,7 @@ export class KaminoAction {
   }
 
   static async buildRefreshObligationTxns(props: BuildRefreshObligationTxnsProps) {
-    const { kaminoMarket, payer, obligation, extraComputeBudget = 1_000_000, currentSlot } = props;
+    const { kaminoMarket, payer, obligation, extraComputeBudget = 1_000_000, currentLedgerInstant } = props;
     //  placeholder for action initialization
     const firstReserve = obligation.getDeposits()[0].reserveAddress;
     const firstKaminoReserve = kaminoMarket.getReserveByAddress(firstReserve);
@@ -425,7 +434,7 @@ export class KaminoAction {
       reserveAddress: firstKaminoReserve.address,
       owner: noopSigner(obligation.state.owner), // owner does not need to sign for refresh
       obligation,
-      currentSlot,
+      currentLedgerInstant,
     });
 
     if (extraComputeBudget > 0) {
@@ -438,7 +447,14 @@ export class KaminoAction {
   }
 
   static async buildRequestElevationGroupTxns(props: BuildRequestElevationGroupTxnsProps) {
-    const { kaminoMarket, owner, obligation, elevationGroup, extraComputeBudget = 1_000_000, currentSlot } = props;
+    const {
+      kaminoMarket,
+      owner,
+      obligation,
+      elevationGroup,
+      extraComputeBudget = 1_000_000,
+      currentLedgerInstant,
+    } = props;
     const firstReserve = obligation.state.deposits.find((x) => x.depositReserve !== DEFAULT_PUBLIC_KEY)!.depositReserve;
     const firstKaminoReserve = kaminoMarket.getReserveByAddress(firstReserve);
     if (!firstKaminoReserve) {
@@ -451,7 +467,7 @@ export class KaminoAction {
       reserveAddress: firstKaminoReserve.address,
       owner,
       obligation,
-      currentSlot,
+      currentLedgerInstant,
     });
 
     if (extraComputeBudget > 0) {
@@ -485,7 +501,7 @@ export class KaminoAction {
       requestElevationGroup = false,
       initUserMetadata = { skipInitialization: false, skipLutCreation: false },
       referrer = none(),
-      currentSlot,
+      currentLedgerInstant,
       overrideElevationGroupRequest,
       permissionAuthority = undefined,
       obligationCustomizations,
@@ -499,7 +515,7 @@ export class KaminoAction {
       owner,
       obligation,
       referrer,
-      currentSlot,
+      currentLedgerInstant,
       permissionAuthority,
     });
     applyObligationCustomizations(axn, obligationCustomizations);
@@ -572,7 +588,7 @@ export class KaminoAction {
       payer,
       scopeRefreshConfig,
       extraComputeBudget = 1_000_000,
-      currentSlot,
+      currentLedgerInstant,
     } = props;
 
     const sourceReserve = kaminoMarket.getReserveByAddress(sourceReserveAddress);
@@ -601,7 +617,7 @@ export class KaminoAction {
       // PDA/account derivation and never signs (the caller passes the owner as `payer` if they sign).
       owner: noopSigner(obligation.state.owner),
       obligation,
-      currentSlot,
+      currentLedgerInstant,
       payer,
     });
 
@@ -765,7 +781,7 @@ export class KaminoAction {
       requestElevationGroup = false,
       initUserMetadata = { skipInitialization: false, skipLutCreation: false },
       referrer = none(),
-      currentSlot,
+      currentLedgerInstant,
       overrideElevationGroupRequest,
       rollOver = false,
       permissionAuthority = undefined,
@@ -780,7 +796,7 @@ export class KaminoAction {
       owner,
       obligation,
       referrer,
-      currentSlot,
+      currentLedgerInstant,
       permissionAuthority,
     });
     applyObligationCustomizations(axn, obligationCustomizations);
@@ -836,7 +852,7 @@ export class KaminoAction {
       includeAtaIxs = true,
       requestElevationGroup = false,
       referrer = none(),
-      currentSlot,
+      currentLedgerInstant,
       permissionAuthority = undefined,
     } = props;
 
@@ -848,7 +864,7 @@ export class KaminoAction {
       owner,
       obligation,
       referrer,
-      currentSlot,
+      currentLedgerInstant,
       permissionAuthority,
     });
     if (extraComputeBudget > 0) {
@@ -881,7 +897,7 @@ export class KaminoAction {
       includeAtaIxs = true,
       requestElevationGroup = false,
       referrer = none(),
-      currentSlot,
+      currentLedgerInstant,
     } = props;
 
     const axn = await KaminoAction.initialize({
@@ -892,7 +908,7 @@ export class KaminoAction {
       owner,
       obligation,
       referrer,
-      currentSlot,
+      currentLedgerInstant,
     });
     if (extraComputeBudget > 0) {
       axn.addComputeBudgetIx(extraComputeBudget);
@@ -926,7 +942,7 @@ export class KaminoAction {
       requestElevationGroup = false,
       initUserMetadata = { skipInitialization: false, skipLutCreation: false },
       referrer = none(),
-      currentSlot,
+      currentLedgerInstant,
       permissionAuthority = undefined,
     } = props;
     const axn = await KaminoAction.initialize({
@@ -937,7 +953,7 @@ export class KaminoAction {
       owner,
       obligation,
       referrer,
-      currentSlot,
+      currentLedgerInstant,
       permissionAuthority,
     });
     const addInitObligationForFarm = true;
@@ -981,7 +997,7 @@ export class KaminoAction {
       overrideElevationGroupRequest,
       initUserMetadata = { skipInitialization: false, skipLutCreation: false },
       referrer = none(),
-      currentSlot,
+      currentLedgerInstant,
       rollOver = false,
       permissionAuthority = undefined,
     } = props;
@@ -996,7 +1012,7 @@ export class KaminoAction {
       obligation,
       borrowAmount,
       referrer,
-      currentSlot,
+      currentLedgerInstant,
       permissionAuthority
     );
     const addInitObligationForFarmForDeposit = true;
@@ -1089,7 +1105,7 @@ export class KaminoAction {
       withdrawAmount,
       withdrawReserveAddress,
       owner,
-      currentSlot,
+      currentLedgerInstant,
       obligation,
       scopeRefreshConfig,
       extraComputeBudget = 1_000_000,
@@ -1110,7 +1126,7 @@ export class KaminoAction {
       obligation,
       withdrawAmount,
       referrer,
-      currentSlot,
+      currentLedgerInstant,
       permissionAuthority
     );
     const addInitObligationForFarm = true;
@@ -1143,7 +1159,7 @@ export class KaminoAction {
       withdrawAmount,
       withdrawReserveAddress,
       payer,
-      currentSlot,
+      currentLedgerInstant,
       obligation,
       scopeRefreshConfig,
       extraComputeBudget = 1_000_000,
@@ -1163,7 +1179,7 @@ export class KaminoAction {
       obligation,
       withdrawAmount,
       referrer,
-      currentSlot
+      currentLedgerInstant
     );
     const addInitObligationForFarm = true;
     const twoTokenAction = true;
@@ -1195,7 +1211,7 @@ export class KaminoAction {
       withdrawAmount,
       withdrawReserveAddress,
       payer,
-      currentSlot,
+      currentLedgerInstant,
       obligation,
       useV2Ixs,
       scopeRefreshConfig,
@@ -1216,7 +1232,7 @@ export class KaminoAction {
       obligation,
       withdrawAmount,
       referrer,
-      currentSlot
+      currentLedgerInstant
     );
     const addInitObligationForFarmForRepay = true;
     const addInitObligationForFarmForWithdraw = false;
@@ -1288,7 +1304,7 @@ export class KaminoAction {
       requestElevationGroup = false,
       initUserMetadata = { skipInitialization: false, skipLutCreation: false },
       referrer = none(),
-      currentSlot,
+      currentLedgerInstant,
       overrideElevationGroupRequest,
       obligationCustomizations,
     } = props;
@@ -1301,7 +1317,7 @@ export class KaminoAction {
       owner,
       obligation,
       referrer,
-      currentSlot,
+      currentLedgerInstant,
     });
     const addInitObligationForFarm = true;
 
@@ -1347,7 +1363,7 @@ export class KaminoAction {
       requestElevationGroup = false,
       initUserMetadata = { skipInitialization: false, skipLutCreation: false },
       referrer = none(),
-      currentSlot,
+      currentLedgerInstant,
       userDestinationLiquidityAta,
       progressCallbackType = new ProgressCallbackType.None(),
       progressCallbackCustomAccount0 = none(),
@@ -1362,7 +1378,7 @@ export class KaminoAction {
       owner,
       obligation,
       referrer,
-      currentSlot,
+      currentLedgerInstant,
     });
 
     if (extraComputeBudget > 0) {
@@ -1414,7 +1430,7 @@ export class KaminoAction {
       obligation,
       useV2Ixs,
       scopeRefreshConfig,
-      currentSlot,
+      currentLedgerInstant,
       payer = owner,
       extraComputeBudget = 1_000_000,
       includeAtaIxs = true,
@@ -1431,7 +1447,7 @@ export class KaminoAction {
       owner,
       obligation,
       referrer,
-      currentSlot,
+      currentLedgerInstant,
       payer,
     });
     const addInitObligationForFarm = true;
@@ -1477,7 +1493,7 @@ export class KaminoAction {
       initUserMetadata = { skipInitialization: false, skipLutCreation: false },
       referrer = none(),
       maxAllowedLtvOverridePercent = 0,
-      currentSlot,
+      currentLedgerInstant,
       permissionAuthority = undefined,
     } = props;
     const axn = await KaminoAction.initializeMultiTokenAction(
@@ -1491,7 +1507,7 @@ export class KaminoAction {
       obligation,
       minCollateralReceiveAmount,
       referrer,
-      currentSlot,
+      currentLedgerInstant,
       permissionAuthority
     );
     const addInitObligationForFarm = true;
@@ -1520,12 +1536,12 @@ export class KaminoAction {
   }
 
   static async buildWithdrawReferrerFeeTxns(props: BuildWithdrawReferrerFeeTxnsProps) {
-    const { owner, reserveAddress, kaminoMarket, currentSlot } = props;
+    const { owner, reserveAddress, kaminoMarket, currentLedgerInstant } = props;
     const { axn, createAtaIxs } = await KaminoAction.initializeWithdrawReferrerFees(
       reserveAddress,
       owner,
       kaminoMarket,
-      currentSlot
+      currentLedgerInstant
     );
 
     axn.setupIxs.push(...createAtaIxs);
@@ -1978,10 +1994,10 @@ export class KaminoAction {
       extraComputeBudget = 1_000_000,
       includeAtaIxs = true,
       referrer = none(),
-      currentSlot,
-      currentTimestamp,
+      currentLedgerInstant,
     } = props;
 
+    const currentTimestamp = Number(currentLedgerInstant.blockTime);
     const filledOrderIdx = orderIdx ?? borrowerObligation.requireSoleActiveBorrowOrderIdx(currentTimestamp);
     const borrowOrder = borrowerObligation.getBorrowOrder(filledOrderIdx);
     if (!borrowOrder.isActive()) {
@@ -1992,11 +2008,7 @@ export class KaminoAction {
 
     // Select the fill reserve of the order's debt mint with the lender-favorable policy (highest peak borrow
     // rate, tie-broken by shortest remaining term; a fixed-term order never uses an open-term float reserve).
-    const fillReserve = KaminoObligation.selectBorrowOrderFillReserve(
-      kaminoMarket,
-      borrowOrder,
-      Math.floor(Date.now() / 1000)
-    );
+    const fillReserve = KaminoObligation.selectBorrowOrderFillReserve(kaminoMarket, borrowOrder, currentTimestamp);
     if (fillReserve === undefined) {
       throw new Error(
         `No reserve of mint ${borrowOrder.debtLiquidityMint} can fill the borrow order on obligation ` +
@@ -2053,7 +2065,7 @@ export class KaminoAction {
           includeAtaIxs,
           initUserMetadata: { skipInitialization: true, skipLutCreation: true },
           referrer,
-          currentSlot,
+          currentLedgerInstant,
         },
         {
           addUserAndObligationInitIxs: false,
@@ -3944,13 +3956,17 @@ export class KaminoAction {
       return { address: reserve, role: AccountRole.WRITABLE };
     });
 
+    // The token states of the borrows accruing referral fees must come first (see
+    // `KaminoObligation.orderBorrowReservesForReferrerTokenStates`).
     const borrowReservesReferrerTokenStates: AccountMeta[] = [];
     if (isSome(this.referrer)) {
       borrowReservesReferrerTokenStates.push(
         ...(await Promise.all(
-          borrowReservesList.map((reserve) => {
-            return this.getReferrerTokenStateAccountMeta(reserve, true);
-          })
+          KaminoObligation.orderBorrowReservesForReferrerTokenStates(this.kaminoMarket, borrowReservesList).map(
+            (reserve) => {
+              return this.getReferrerTokenStateAccountMeta(reserve, true);
+            }
+          )
         ))
       );
     }
@@ -4007,13 +4023,17 @@ export class KaminoAction {
       return { address: reserve, role: AccountRole.WRITABLE };
     });
 
+    // The token states of the borrows accruing referral fees must come first (see
+    // `KaminoObligation.orderBorrowReservesForReferrerTokenStates`).
     const borrowReservesReferrerTokenStates: AccountMeta[] = [];
     if (isSome(this.referrer)) {
       borrowReservesReferrerTokenStates.push(
         ...(await Promise.all(
-          borrowReservesList.map((reserve) => {
-            return this.getReferrerTokenStateAccountMeta(reserve, false);
-          })
+          KaminoObligation.orderBorrowReservesForReferrerTokenStates(this.kaminoMarket, borrowReservesList).map(
+            (reserve) => {
+              return this.getReferrerTokenStateAccountMeta(reserve, false);
+            }
+          )
         ))
       );
     }
@@ -4623,7 +4643,7 @@ export class KaminoAction {
 
       const cumulativeBorrowRateObligation = KaminoObligation.getCumulativeBorrowRate(borrow);
       const cumulativeBorrowRateReserve = this.reserve.getEstimatedCumulativeBorrowRate(
-        this.currentSlot,
+        this.currentLedgerInstant,
         this.kaminoMarket.state.referralFeeBps
       );
 
@@ -4719,7 +4739,7 @@ export class KaminoAction {
     obligation: KaminoObligation | ObligationType,
     outflowAmount: string | BN | undefined,
     referrer: Option<Address>,
-    currentSlot: Slot,
+    currentLedgerInstant: LedgerInstant,
     permissionAuthority?: TransactionSigner
   ) {
     const inflowReserve = kaminoMarket.getExistingReserveByAddress(inflowReserveAddress);
@@ -4732,7 +4752,8 @@ export class KaminoAction {
         obligationOwner,
         inflowReserve.address,
         obligation,
-        outflowReserve.address
+        outflowReserve.address,
+        currentLedgerInstant
       );
     const referrerKey = await this.getReferrerKey(kaminoMarket, signer.address, kaminoObligation, referrer);
 
@@ -4761,7 +4782,7 @@ export class KaminoAction {
       depositReserves,
       borrowReserves,
       inflowReserve,
-      currentSlot,
+      currentLedgerInstant,
       secondaryMint,
       outflowReserve,
       outflowAmount,
@@ -4775,7 +4796,7 @@ export class KaminoAction {
     reserveAddress: Address,
     owner: TransactionSigner,
     kaminoMarket: KaminoMarket,
-    currentSlot: Slot
+    currentLedgerInstant: LedgerInstant
   ) {
     const reserve = kaminoMarket.getReserveByAddress(reserveAddress);
     if (reserve === undefined) {
@@ -4800,7 +4821,7 @@ export class KaminoAction {
         [],
         [],
         reserve,
-        currentSlot,
+        currentLedgerInstant,
         undefined,
         undefined,
         undefined,
@@ -4811,9 +4832,13 @@ export class KaminoAction {
     };
   }
 
+  /**
+   * Converts a liquidity `amount` to withdraw from `reserve` into the cToken amount the withdraw instruction takes,
+   * at the reserve's exchange rate estimated at this action's {@link currentLedgerInstant}.
+   */
   getWithdrawCollateralAmount(reserve: KaminoReserve, amount: BN): BN {
     const collateralExchangeRate = reserve.getEstimatedCollateralExchangeRate(
-      this.currentSlot,
+      this.currentLedgerInstant,
       this.kaminoMarket.state.referralFeeBps
     );
 

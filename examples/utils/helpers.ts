@@ -11,6 +11,7 @@ import {
   ReserveAllocationOverview,
   VaultHoldingsWithUSDValue,
   VaultOverview,
+  LedgerInstant,
 } from '@kamino-finance/klend-sdk';
 import Decimal from 'decimal.js';
 import { DEFAULT_PUBLIC_KEY, fetchAllMaybeFarmState, RewardInfo } from '@kamino-finance/farms-sdk';
@@ -45,21 +46,24 @@ export async function getLoan(args: LoanArgs): Promise<KaminoObligation | null> 
   return market.getObligationByAddress(args.obligationPubkey);
 }
 
-export async function loadReserveData({ rpc, marketPubkey, reserveAddress }: ReserveArgs, currentSlot: Slot) {
+export async function loadReserveData(
+  { rpc, marketPubkey, reserveAddress }: ReserveArgs,
+  currentLedgerInstant: LedgerInstant
+) {
   const market = await getMarket({ rpc: rpc, marketPubkey });
   const reserve = market.getReserveByAddress(reserveAddress);
   if (!reserve) {
     throw Error(`Could not load reserve ${reserveAddress.toString()}`);
   }
 
-  return { market, reserve, currentSlot };
+  return { market, reserve, currentLedgerInstant };
 }
 
 /**
  * Get reserve rewards APY
  */
-export async function getReserveFarmRewardsApy(args: ReserveArgs, slot: Slot) {
-  const { market, reserve } = await loadReserveData(args, slot);
+export async function getReserveFarmRewardsApy(args: ReserveArgs, currentLedgerInstant: LedgerInstant) {
+  const { market, reserve } = await loadReserveData(args, currentLedgerInstant);
   const rewardApys: { rewardApy: Decimal; rewardInfo: RewardInfo }[] = [];
 
   const scope = new Scope('mainnet-beta', args.rpc);

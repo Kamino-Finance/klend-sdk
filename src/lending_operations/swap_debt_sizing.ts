@@ -1,7 +1,6 @@
 import Decimal from 'decimal.js';
-import { Slot } from '@solana/kit';
 import { KaminoMarket, KaminoObligation, KaminoReserve } from '../classes';
-import { LedgerInstant, requireMatchingLedgerInstant } from '../utils/ledger';
+import { LedgerInstant } from '../utils/ledger';
 
 // Leaf module (imports only classes/kit/decimal) so both `swap_debt_operations` and
 // `swap_flash_borrow_selection` can share the repay sizing without a runtime import cycle
@@ -26,13 +25,14 @@ export function resolveSourceDebtRepayLamports(params: {
   isClosingSourceDebt: boolean;
   /** Partial-close size in source-debt **token units** (not lamports). Ignored when `isClosingSourceDebt`. */
   sourceDebtSwapAmount: Decimal;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
 }): Decimal {
-  const { market, obligation, sourceDebtReserve, isClosingSourceDebt, sourceDebtSwapAmount, currentSlot } = params;
+  const { market, obligation, sourceDebtReserve, isClosingSourceDebt, sourceDebtSwapAmount, currentLedgerInstant } =
+    params;
   if (isClosingSourceDebt) {
     const debtLiquidity = obligation.state.borrows.find((b) => b.borrowReserve === sourceDebtReserve.address)!;
     const irRatio = obligation
-      .estimateObligationInterestRate(market, sourceDebtReserve, debtLiquidity, currentSlot)
+      .estimateObligationInterestRate(market, sourceDebtReserve, debtLiquidity, currentLedgerInstant)
       .toDecimalPlaces(sourceDebtReserve.state.liquidity.mintDecimals.toNumber(), Decimal.ROUND_CEIL);
     const irMultiplier = irRatio.lte(0) ? new Decimal('1.001') : irRatio.mul(new Decimal('1.001'));
     return obligation
@@ -62,16 +62,12 @@ export function resolveSourceDebtEarlyRepayPenaltyLamports(params: {
   obligation: KaminoObligation;
   sourceDebtReserve: KaminoReserve;
   repayPrincipalLamports: Decimal;
-  currentSlot: Slot;
-  currentLedgerInstant?: LedgerInstant;
+  currentLedgerInstant: LedgerInstant;
 }): Decimal {
-  const { obligation, sourceDebtReserve, repayPrincipalLamports, currentSlot, currentLedgerInstant } = params;
+  const { obligation, sourceDebtReserve, repayPrincipalLamports, currentLedgerInstant } = params;
   // Delegates to the single funding-invariant helper on KaminoObligation (open-term / matured / variable → 0).
   return sourceDebtReserve.getKind().isFixedRate()
-    ? obligation.calculateEarlyRepayFunding(
-        sourceDebtReserve,
-        repayPrincipalLamports,
-        requireMatchingLedgerInstant(currentSlot, currentLedgerInstant, 'resolveSourceDebtEarlyRepayPenaltyLamports')
-      ).penaltyLamports
+    ? obligation.calculateEarlyRepayFunding(sourceDebtReserve, repayPrincipalLamports, currentLedgerInstant)
+        .penaltyLamports
     : new Decimal(0);
 }

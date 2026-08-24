@@ -3,6 +3,7 @@ import {
   MultiplyObligation,
   PROGRAM_ID,
   getComputeBudgetAndPriorityFeeIxs,
+  getCurrentLedgerInstant,
 } from '@kamino-finance/klend-sdk';
 import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
@@ -30,7 +31,7 @@ import { sendAndConfirmTx } from '../utils/tx';
   const obligationType = new MultiplyObligation(collTokenMint, debtTokenMint, PROGRAM_ID); // new LeverageObligation(collTokenMint, debtTokenMint, PROGRAM_ID); for leverage
   const obligationAddress = await obligationType.toPda(market.getAddress(), wallet.address);
   const obligation = await market.getObligationByAddress(obligationAddress);
-  const currentSlot = await c.rpc.getSlot().send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc);
 
   const collTokenMintFactor = collTokenReserve.getMintFactor() || 0;
   const debtTokenMintFactor = debtTokenReserve.getMintFactor() || 0;
@@ -44,7 +45,7 @@ import { sendAndConfirmTx } from '../utils/tx';
     obligation: obligation!,
     useV2Ixs: true,
     scopeRefreshConfig: undefined,
-    currentSlot,
+    currentLedgerInstant,
   });
 
   const computeIxs = getComputeBudgetAndPriorityFeeIxs(1_400_000, new Decimal(500000));
@@ -68,7 +69,7 @@ import { sendAndConfirmTx } from '../utils/tx';
     obligation: obligation!,
     useV2Ixs: true,
     scopeRefreshConfig: undefined,
-    currentSlot,
+    currentLedgerInstant,
   });
 
   const borrowIxs = [...computeIxs, ...borrowAction.setupIxs, ...borrowAction.lendingIxs, ...borrowAction.cleanupIxs];
@@ -86,7 +87,7 @@ import { sendAndConfirmTx } from '../utils/tx';
     obligation: obligation!,
     useV2Ixs: true,
     scopeRefreshConfig: undefined,
-    currentSlot,
+    currentLedgerInstant,
   });
 
   const repayIxs = [...computeIxs, ...repayAction.setupIxs, ...repayAction.lendingIxs, ...repayAction.cleanupIxs];
@@ -104,7 +105,7 @@ import { sendAndConfirmTx } from '../utils/tx';
     obligation: obligation!,
     useV2Ixs: true,
     scopeRefreshConfig: undefined,
-    currentSlot,
+    currentLedgerInstant,
   });
 
   const withdrawIxs = [

@@ -16,7 +16,7 @@ import { generateKeyPairSigner } from '@solana/kit';
   const user = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
-  const kaminoVault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
+  const kaminoVault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT, slotDuration);
   const vaultState = await kaminoVault.getState();
   const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
 

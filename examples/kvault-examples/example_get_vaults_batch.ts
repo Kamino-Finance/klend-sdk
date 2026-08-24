@@ -10,7 +10,7 @@ import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } f
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
 
-  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
+  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT, slotDuration);
   const vaultState = await vault.getState();
 
   // read all vaults

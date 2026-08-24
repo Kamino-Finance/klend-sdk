@@ -7,6 +7,7 @@ import {
   Reserve,
   getMedianSlotDurationInMsFromLastEpochs,
   DEFAULT_PUBLIC_KEY,
+  getCurrentLedgerInstant,
 } from '@kamino-finance/klend-sdk';
 import { sendAndConfirmTx } from '../utils/tx';
 import { Address } from '@solana/kit';
@@ -17,9 +18,9 @@ import { Address } from '@solana/kit';
   const wallet = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
-  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
+  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT, slotDuration);
 
-  const slot = await c.rpc.getSlot().send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc);
   const reserveState = await Reserve.fetch(c.rpc, USDC_RESERVE_JLP_MARKET);
   if (!reserveState) {
     throw new Error('Reserve not found');
@@ -28,7 +29,7 @@ import { Address } from '@solana/kit';
     wallet,
     vault,
     USDC_RESERVE_JLP_MARKET,
-    slot,
+    currentLedgerInstant,
     reserveState
   );
 

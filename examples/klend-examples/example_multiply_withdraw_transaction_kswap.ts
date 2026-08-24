@@ -98,7 +98,6 @@ import { getFlashBorrowTypeFromEnv } from '../utils/env';
   );
 
   const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc, 'processed');
-  const currentSlot = currentLedgerInstant.slot;
 
   const scopeConfiguration = { scope, scopeConfigurations: await scope.getAllConfigurations() };
   const scopeRefreshIx = await getScopeRefreshIxForObligationAndReserves(
@@ -133,7 +132,6 @@ import { getFlashBorrowTypeFromEnv } from '../utils/env';
     deposited: deposited,
     borrowed: borrowed,
     referrer: none(),
-    currentSlot,
     currentLedgerInstant,
     withdrawAmount,
     priceCollToDebt,

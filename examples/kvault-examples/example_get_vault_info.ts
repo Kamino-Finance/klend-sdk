@@ -26,7 +26,7 @@ import {
   const { slot } = currentLedgerInstant;
 
   // print vault state as it is on chain
-  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
+  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT, slotDuration);
   const vaultState = await vault.getState();
 
   // pre-load vault reserves once and pass to all methods (avoids redundant RPC calls)
@@ -37,12 +37,23 @@ import {
   const globalConfig = await kaminoManager.loadKVaultGlobalConfig();
 
   // read how many tokens represents 1 share
-  const tokensPerShare = await kaminoManager.getTokensPerShareSingleVault(vault, slot, vaultReservesMap, slot);
+  const tokensPerShare = await kaminoManager.getTokensPerShareSingleVault(
+    vault,
+    currentLedgerInstant,
+    vaultReservesMap,
+    currentLedgerInstant
+  );
   console.log('Tokens per share:', tokensPerShare.toString());
 
   // read share price in USD
   const price = new Decimal(1.0); // hardcoded, this has to be read
-  const sharePrice = await kaminoManager.getSharePriceInUSD(vault, price, slot, vaultReservesMap, slot);
+  const sharePrice = await kaminoManager.getSharePriceInUSD(
+    vault,
+    price,
+    currentLedgerInstant,
+    vaultReservesMap,
+    currentLedgerInstant
+  );
   console.log('Share price:', sharePrice.toString());
 
   // read vault fees (management and performance)
@@ -50,7 +61,12 @@ import {
   console.log('Vault fees:', fees);
 
   // read vault holdings (total balance, available, invested)
-  const holdings = await kaminoManager.getVaultHoldings(vaultState, slot, vaultReservesMap, slot);
+  const holdings = await kaminoManager.getVaultHoldings(
+    vaultState,
+    currentLedgerInstant,
+    vaultReservesMap,
+    currentLedgerInstant
+  );
   holdings.print();
 
   // read vault holdings (total balance, available, invested) in dollars
@@ -58,9 +74,9 @@ import {
   const holdingsInUSD = await kaminoManager.getVaultHoldingsWithPrice(
     vaultState,
     tokenPrice,
-    slot,
+    currentLedgerInstant,
     vaultReservesMap,
-    slot
+    currentLedgerInstant
   );
   printHoldingsWithUSDValue(holdingsInUSD);
 
@@ -68,37 +84,50 @@ import {
   const vaultOverview = await kaminoManager.getVaultOverview(
     vault,
     tokenPrice,
-    slot,
+    currentLedgerInstant,
     vaultReservesMap,
     kaminoMarkets,
     farmsMap,
     farmsClient,
     globalConfig,
-    slot
+    currentLedgerInstant
   );
   printVaultOverview(vaultOverview);
 
   // read the total supplied tokens from the vault into reserves, the total borrowed against these tokens and the utilization ratio
-  const totalBorrowedAndInvested = await kaminoManager.getTotalBorrowedAndInvested(vaultState, slot, vaultReservesMap);
+  const totalBorrowedAndInvested = await kaminoManager.getTotalBorrowedAndInvested(
+    vaultState,
+    currentLedgerInstant,
+    vaultReservesMap
+  );
   console.log('Total borrowed and invested:', totalBorrowedAndInvested);
 
   // read the overview of the reserves in the vault allocation
-  const reservesOverview = await kaminoManager.getVaultReservesDetails(vaultState, slot, vaultReservesMap);
+  const reservesOverview = await kaminoManager.getVaultReservesDetails(
+    vaultState,
+    currentLedgerInstant,
+    vaultReservesMap
+  );
   printReservesOverviewMap(reservesOverview);
 
   // get the vault APY assuming all tokens are all the time invested
-  const apy = await kaminoManager.getVaultTheoreticalAPY(vaultState, slot, vaultReservesMap);
+  const apy = await kaminoManager.getVaultTheoreticalAPY(vaultState, currentLedgerInstant, vaultReservesMap);
   console.log('Vault APY:', apy.toString());
 
   // read the total interest earned by the vault since its inception, including the perf fees
   const totalInterestEarned = await kaminoManager.getVaultCumulativeInterest(vaultState);
   console.log('Total interest earned:', totalInterestEarned.toString());
 
-  // simulate holdings and earned interest at a given slot in the future
-  const futureSlot = slot + 100n;
+  // simulate holdings and earned interest at a given instant in the future (100 slots ahead, converted to seconds
+  // at the live median slot duration fetched above)
+  const futureInstant = {
+    slot: slot + 100n,
+    blockTime: (currentLedgerInstant.blockTime +
+      BigInt(Math.round((100 * slotDuration) / 1000))) as typeof currentLedgerInstant.blockTime,
+  };
   const holdingsWithInterest = await kaminoManager.calculateSimulatedHoldingsWithInterest(
     vaultState,
-    futureSlot,
+    futureInstant,
     vaultReservesMap,
     undefined,
     currentLedgerInstant
@@ -113,7 +142,12 @@ import {
   });
 
   // retrieve all the tokens that can be use as collateral by the users who borrow the token in the vault alongside details about the min and max loan to value ratio
-  const vaultCollaterals = await kaminoManager.getVaultCollaterals(vaultState, slot, vaultReservesMap, kaminoMarkets);
+  const vaultCollaterals = await kaminoManager.getVaultCollaterals(
+    vaultState,
+    currentLedgerInstant,
+    vaultReservesMap,
+    kaminoMarkets
+  );
   printMarketsOverviewMap(vaultCollaterals);
 
   // read the reserve allocation weights in percentage
@@ -127,7 +161,7 @@ import {
   // // read how many tokens from the vault were invested in a specific reserve
   const reservePubkey = reserves[0]; // hardcoded, this has to be the reserve we want to check
   const kaminoReserve = vaultReservesMap.get(reservePubkey);
-  const suppliedInReserve = kaminoManager.getSuppliedInReserve(vaultState, slot, kaminoReserve!);
+  const suppliedInReserve = kaminoManager.getSuppliedInReserve(vaultState, currentLedgerInstant, kaminoReserve!);
   console.log('Vault tokens supplied in reserve:', suppliedInReserve.toString());
 })().catch(async (e) => {
   console.error(e);

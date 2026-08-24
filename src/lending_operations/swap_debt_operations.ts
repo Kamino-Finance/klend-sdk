@@ -42,14 +42,7 @@ import { AddressLookupTable } from '@solana-program/address-lookup-table';
 import { getCloseAccountInstruction } from '@solana-program/token-2022';
 import { bufferWithdrawForRedeemDrift, haircutPullForRedeemDrift, redeemWithdrawAmount } from './redeem_drift';
 import { resolveSourceDebtEarlyRepayPenaltyLamports, resolveSourceDebtRepayLamports } from './swap_debt_sizing';
-import {
-  DistributiveOmit,
-  LedgerInstant,
-  LedgerInstantCompatible,
-  requireMatchingLedgerInstant,
-  resolveLedgerInput,
-} from '../utils/ledger';
-import { Slot } from '@solana/kit';
+import type { LedgerInstant } from '../utils/ledger';
 
 export { resolveSourceDebtEarlyRepayPenaltyLamports, resolveSourceDebtRepayLamports } from './swap_debt_sizing';
 
@@ -104,8 +97,8 @@ export interface SwapDebtIxsInputs<QuoteResponse> {
   owner: TransactionSigner;
   obligation: KaminoObligation;
   referrer: Option<Address>;
-  currentSlot: Slot;
-  currentLedgerInstant?: LedgerInstant;
+  /** The ledger instant (slot + block time) the position estimates are evaluated at. */
+  currentLedgerInstant: LedgerInstant;
   /**
    * Slippage percentage for the external swap (e.g. 0.5 for 0.5%). Used to size the flash loan above the strict
    * minimum so that the swap does not fail.
@@ -119,7 +112,7 @@ export interface SwapDebtIxsInputs<QuoteResponse> {
   logger?: (msg: string, ...extra: unknown[]) => void;
 }
 
-export type SwapDebtIxsParams<QuoteResponse> = LedgerInstantCompatible<SwapDebtIxsInputs<QuoteResponse>>;
+export type SwapDebtIxsParams<QuoteResponse> = SwapDebtIxsInputs<QuoteResponse>;
 
 /**
  * One built route returned by {@link getSwapDebtIxs}. `getSwapDebtIxs` returns an array of these — one per route the
@@ -192,16 +185,7 @@ export async function getSwapDebtIxs<QuoteResponse>(
 ): Promise<Array<SwapDebtIxsOutputs<QuoteResponse>>> {
   // Validate before the compatibility path performs any RPC lookup.
   getSlippageFactor(rawInputs.slippagePct);
-  const sourceDebtReserve = rawInputs.market.getExistingReserveByAddress(rawInputs.sourceDebtReserveAddress);
-  const targetDebtReserve = rawInputs.market.getExistingReserveByAddress(rawInputs.targetDebtReserveAddress);
-  const ledger = await resolveLedgerInput(
-    rawInputs.market.getRpc(),
-    rawInputs.currentSlot,
-    rawInputs.currentLedgerInstant,
-    sourceDebtReserve.getKind().isFixedRate() || !targetDebtReserve.state.config.debtMaturityTimestamp.eqn(0),
-    'getSwapDebtIxs'
-  );
-  const normalizedInputs = { ...rawInputs, ...ledger };
+  const normalizedInputs = { ...rawInputs };
   const tag = normalizedInputs.obligation.obligationTag;
 
   // Liquidity-aware default for the flash-borrow side when the caller omits it: prefer the side
@@ -240,7 +224,7 @@ export async function getSwapDebtIxs<QuoteResponse>(
  * Inputs for {@link getSwapDebtKlendAccounts}: the routing/sizing inputs of {@link getSwapDebtIxs} minus the
  * quoter/swapper (and logger), since the klend account footprint is discovered without an external swap.
  */
-export type SwapDebtKlendAccountsInputs = DistributiveOmit<SwapDebtIxsParams<unknown>, 'quoter' | 'swapper' | 'logger'>;
+export type SwapDebtKlendAccountsInputs = Omit<SwapDebtIxsParams<unknown>, 'quoter' | 'swapper' | 'logger'>;
 
 /**
  * Light helper: returns the exact, final set of klend accounts (and program ids) a {@link getSwapDebtIxs} call with
@@ -252,18 +236,8 @@ export async function getSwapDebtKlendAccounts(inputs: SwapDebtKlendAccountsInpu
   // Validate slippagePct early (throws on out-of-range) to match `getSwapDebtIxs`, so the light helper and the real
   // operation reject the same inputs even though the account set itself does not depend on slippage. Factor discarded.
   getSlippageFactor(inputs.slippagePct);
-  const sourceDebtReserve = inputs.market.getExistingReserveByAddress(inputs.sourceDebtReserveAddress);
-  const targetDebtReserve = inputs.market.getExistingReserveByAddress(inputs.targetDebtReserveAddress);
-  const ledger = await resolveLedgerInput(
-    inputs.market.getRpc(),
-    inputs.currentSlot,
-    inputs.currentLedgerInstant,
-    sourceDebtReserve.getKind().isFixedRate() || !targetDebtReserve.state.config.debtMaturityTimestamp.eqn(0),
-    'getSwapDebtKlendAccounts'
-  );
-  const baseInputs: SwapDebtIxsInputs<unknown> & { currentSlot: Slot } = {
+  const baseInputs: SwapDebtIxsInputs<unknown> = {
     ...inputs,
-    ...ledger,
     quoter: ACCOUNT_DISCOVERY_QUOTER,
     swapper: ACCOUNT_DISCOVERY_SWAPPER,
   };
@@ -327,7 +301,7 @@ function requireResolvedFlashBorrowToken<QuoteResponse>(
  * price needed to size the flash loan.
  */
 function resolveDefaultSwapDebtFlashBorrowToken<QuoteResponse>(
-  inputs: SwapDebtIxsInputs<QuoteResponse> & { currentSlot: Slot }
+  inputs: SwapDebtIxsInputs<QuoteResponse>
 ): SwapDebtFlashBorrowToken {
   const sourceReserve = inputs.market.getExistingReserveByAddress(inputs.sourceDebtReserveAddress);
   const targetReserve = inputs.market.getExistingReserveByAddress(inputs.targetDebtReserveAddress);
@@ -347,7 +321,6 @@ function resolveDefaultSwapDebtFlashBorrowToken<QuoteResponse>(
     isClosingSourceDebt: inputs.isClosingSourceDebt,
     priceSourceToTarget: sourcePrice.div(targetPrice),
     slippagePct: inputs.slippagePct,
-    currentSlot: inputs.currentSlot,
     currentLedgerInstant: inputs.currentLedgerInstant,
   });
 }
@@ -390,8 +363,7 @@ type SwapDebtContext<QuoteResponse> = {
   quoter: SwapQuoteProvider<QuoteResponse>;
   swapper: SwapIxsProvider<QuoteResponse>;
   referrer: Option<Address>;
-  currentSlot: Slot;
-  currentLedgerInstant?: LedgerInstant;
+  currentLedgerInstant: LedgerInstant;
   budgetAndPriorityFeeIxs: Instruction[];
   scopeRefreshIx: Instruction[];
   useV2Ixs: boolean;
@@ -406,19 +378,11 @@ function extractArgsAndContext<QuoteResponse>(
   }
   const sourceDebtReserve = inputs.market.getExistingReserveByAddress(inputs.sourceDebtReserveAddress, 'Source debt');
   const targetDebtReserve = inputs.market.getExistingReserveByAddress(inputs.targetDebtReserveAddress, 'Target debt');
+  const currentLedgerInstant = inputs.currentLedgerInstant;
   // Swap-debt borrows the target debt; reject up front if the target is a fixed-term reserve past its debt maturity
   // (the on-chain borrow would revert with ReserveDebtMaturityReached).
-  const currentSlot = inputs.currentSlot ?? inputs.currentLedgerInstant?.slot;
-  if (currentSlot === undefined) {
-    throw new Error('swap-debt inputs were not normalized with a current slot');
-  }
   if (!targetDebtReserve.state.config.debtMaturityTimestamp.eqn(0)) {
-    targetDebtReserve.assertCanOriginateDebt(
-      Number(
-        requireMatchingLedgerInstant(currentSlot, inputs.currentLedgerInstant, 'extractSwapDebtArgsAndContext')
-          .blockTime
-      )
-    );
+    targetDebtReserve.assertCanOriginateDebt(Number(currentLedgerInstant.blockTime));
   }
   if (!inputs.obligation.getBorrowByReserve(sourceDebtReserve.address)) {
     throw new Error(
@@ -462,8 +426,7 @@ function extractArgsAndContext<QuoteResponse>(
       quoter: inputs.quoter,
       swapper: inputs.swapper,
       referrer: inputs.referrer,
-      currentSlot,
-      currentLedgerInstant: inputs.currentLedgerInstant,
+      currentLedgerInstant,
       budgetAndPriorityFeeIxs:
         inputs.budgetAndPriorityFeeIxs || getComputeBudgetAndPriorityFeeIxs(DEFAULT_MAX_COMPUTE_UNITS),
       scopeRefreshIx: inputs.scopeRefreshIx,
@@ -499,7 +462,7 @@ async function computeTargetDebtKlendAccounts<QuoteResponse>(
     sourceDebtReserve: context.sourceDebtReserve,
     isClosingSourceDebt: args.isClosingSourceDebt,
     sourceDebtSwapAmount: args.sourceDebtSwapAmount,
-    currentSlot: context.currentSlot,
+    currentLedgerInstant: context.currentLedgerInstant,
   });
   // Caller contract: `priceAInB` from the quoter is the SIMULATED (mid) price, not the slippage-baked guaranteed
   // price. The SDK applies its own sizing buffer (currently tied to `slippagePct`, conceptually a separate knob from
@@ -511,7 +474,6 @@ async function computeTargetDebtKlendAccounts<QuoteResponse>(
     obligation: context.obligation,
     sourceDebtReserve: context.sourceDebtReserve,
     repayPrincipalLamports: sourceRepayLamports,
-    currentSlot: context.currentSlot,
     currentLedgerInstant: context.currentLedgerInstant,
   });
   const sourceFundingLamports = sourceRepayLamports.add(sourceEarlyRepayPenaltyLamports);
@@ -701,7 +663,7 @@ async function getTargetDebtKlendIxs(
     obligation: context.obligation,
     useV2Ixs: context.useV2Ixs,
     scopeRefreshConfig: undefined,
-    currentSlot: context.currentSlot,
+    currentLedgerInstant: context.currentLedgerInstant,
     payer: context.owner,
     extraComputeBudget: 0,
     includeAtaIxs: false,
@@ -732,7 +694,7 @@ async function getTargetDebtKlendIxs(
     requestElevationGroup: requestsElevationGroupChange,
     initUserMetadata: { skipInitialization: true, skipLutCreation: true },
     referrer: context.referrer,
-    currentSlot: context.currentSlot,
+    currentLedgerInstant: context.currentLedgerInstant,
     overrideElevationGroupRequest: requestsElevationGroupChange ? finalElevationGroupId : undefined,
     obligationCustomizations: {
       // If we fully closed the source debt in the prior repay, the obligation no longer holds it and the refresh
@@ -798,7 +760,7 @@ async function computeSourceDebtKlendAccounts<QuoteResponse>(
     sourceDebtReserve: context.sourceDebtReserve,
     isClosingSourceDebt: args.isClosingSourceDebt,
     sourceDebtSwapAmount: args.sourceDebtSwapAmount,
-    currentSlot: context.currentSlot,
+    currentLedgerInstant: context.currentLedgerInstant,
   });
   // See target-debt flow for the SDK sizing-buffer contract (currently == slippagePct, future cappable).
   const swapSizingBufferDivisor = getSlippageFactor(args.slippagePct);
@@ -809,7 +771,6 @@ async function computeSourceDebtKlendAccounts<QuoteResponse>(
     obligation: context.obligation,
     sourceDebtReserve: context.sourceDebtReserve,
     repayPrincipalLamports: sourceRepayLamports,
-    currentSlot: context.currentSlot,
     currentLedgerInstant: context.currentLedgerInstant,
   });
   const sourceFundingLamports = sourceRepayLamports.add(sourceEarlyRepayPenaltyLamports);
@@ -985,7 +946,7 @@ async function getSourceDebtKlendIxs(
     obligation: context.obligation,
     useV2Ixs: context.useV2Ixs,
     scopeRefreshConfig: undefined,
-    currentSlot: context.currentSlot,
+    currentLedgerInstant: context.currentLedgerInstant,
     payer: context.owner,
     extraComputeBudget: 0,
     includeAtaIxs: false,
@@ -1016,7 +977,7 @@ async function getSourceDebtKlendIxs(
     requestElevationGroup: requestsElevationGroupChange,
     initUserMetadata: { skipInitialization: true, skipLutCreation: true },
     referrer: context.referrer,
-    currentSlot: context.currentSlot,
+    currentLedgerInstant: context.currentLedgerInstant,
     overrideElevationGroupRequest: requestsElevationGroupChange ? finalElevationGroupId : undefined,
     obligationCustomizations: {
       // If we fully closed the source debt in the prior repay, the obligation no longer holds it and the refresh
@@ -1256,7 +1217,7 @@ function checkResultingObligationValid(
     borrowReserveAddress: context.targetDebtReserve.address,
     newElevationGroup: resolvedElevationGroupId,
     market: context.market,
-    slot: context.currentSlot,
+    currentLedgerInstant: context.currentLedgerInstant,
   });
   const maxLtv = resultingStats.borrowLimit.div(resultingStats.userTotalCollateralDeposit);
   if (resultingStats.loanToValue > maxLtv) {
@@ -1457,7 +1418,6 @@ async function prepareMultiplySwap(args: SwapDebtArgs, context: SwapDebtContext<
       args.newElevationGroup === undefined ? undefined : args.newElevationGroup?.elevationGroup ?? 0,
     isClosingSourceDebt: args.isClosingSourceDebt,
     sourceDebtSwapAmount: args.sourceDebtSwapAmount,
-    currentSlot: context.currentSlot,
     currentLedgerInstant: context.currentLedgerInstant,
   });
 }
@@ -1482,8 +1442,7 @@ async function planMultiplyMigration(params: {
   requestedElevationGroupId: number | undefined;
   isClosingSourceDebt: boolean;
   sourceDebtSwapAmount: Decimal;
-  currentSlot: Slot;
-  currentLedgerInstant?: LedgerInstant;
+  currentLedgerInstant: LedgerInstant;
 }): Promise<MultiplySwapPrep> {
   const {
     market,
@@ -1493,7 +1452,6 @@ async function planMultiplyMigration(params: {
     requestedElevationGroupId,
     isClosingSourceDebt,
     sourceDebtSwapAmount,
-    currentSlot,
     currentLedgerInstant,
   } = params;
 
@@ -1637,7 +1595,7 @@ async function planMultiplyMigration(params: {
     sourceDebtReserve,
     isClosingSourceDebt,
     sourceDebtSwapAmount,
-    currentSlot,
+    currentLedgerInstant,
   });
   const sizing = computeMultiplyMigrationSizing({
     oldDebtRepayLamports,
@@ -1658,7 +1616,6 @@ async function planMultiplyMigration(params: {
     obligation,
     sourceDebtReserve,
     repayPrincipalLamports: sizing.oldDebtRepayLamports,
-    currentSlot,
     currentLedgerInstant,
   });
 
@@ -1814,7 +1771,7 @@ async function buildSwapDebtForMultiplyKlendIxs(
   flashBorrowLamports: Decimal,
   newDebtBorrowLamports: Decimal
 ): Promise<SwapDebtForMultiplyKlendIxs> {
-  const { market, sourceDebtReserve, targetDebtReserve, owner, obligation, currentSlot, referrer } = context;
+  const { market, sourceDebtReserve, targetDebtReserve, owner, obligation, currentLedgerInstant, referrer } = context;
   const {
     collReserve,
     targetObligation,
@@ -1876,7 +1833,7 @@ async function buildSwapDebtForMultiplyKlendIxs(
     withdrawAmount,
     withdrawReserveAddress: collReserve.address,
     payer: owner,
-    currentSlot,
+    currentLedgerInstant,
     obligation,
     useV2Ixs: context.useV2Ixs,
     scopeRefreshConfig: undefined,
@@ -1914,7 +1871,7 @@ async function buildSwapDebtForMultiplyKlendIxs(
     overrideElevationGroupRequest: targetElevationGroupOverride,
     initUserMetadata: { skipInitialization: true, skipLutCreation: true },
     referrer,
-    currentSlot,
+    currentLedgerInstant,
   });
   const depositBorrowNewIxs = removeBudgetIxs(KaminoAction.actionToIxs(depositBorrowAction));
 
@@ -2001,7 +1958,7 @@ function checkResultingMultiplyObligationsValid(
   prep: MultiplySwapPrep,
   newDebtBorrowLamports: Decimal
 ): void {
-  const { market, sourceDebtReserve, targetDebtReserve, obligation, currentSlot } = context;
+  const { market, sourceDebtReserve, targetDebtReserve, obligation, currentLedgerInstant } = context;
   const {
     collReserve,
     collToRedepositLamports,
@@ -2074,7 +2031,7 @@ function checkResultingMultiplyObligationsValid(
       debtReserveAddress: targetDebtReserve.address,
       market,
       reserves: market.reserves,
-      slot: currentSlot,
+      currentLedgerInstant,
       elevationGroupOverride: newTargetElevationGroup,
     });
     const activeMaxLtv = stats.borrowLimit.div(stats.userTotalCollateralDeposit);
@@ -2104,7 +2061,7 @@ function checkResultingMultiplyObligationsValid(
       collateralReserveAddress: collReserve.address,
       market,
       reserves: market.reserves,
-      slot: currentSlot,
+      currentLedgerInstant,
     });
     // The old obligation keeps its CURRENT elevation group across a partial swap (the simulation uses its own group
     // by default). Validate against its own borrow limit at that group — not the best common pair group, which could
@@ -2146,8 +2103,8 @@ export interface SwapDebtObligationsPreviewInputs {
    * emode target than the transaction produces.
    */
   newElevationGroup?: number;
-  slot: Slot;
-  currentLedgerInstant?: LedgerInstant;
+  /** The ledger instant (slot + block time) the preview estimates are evaluated at. */
+  currentLedgerInstant: LedgerInstant;
   referrer: Option<Address>;
   /**
    * Slippage percentage for the external swap (e.g. 0.5 for 0.5%). Kept for parity with the execution inputs; the
@@ -2157,12 +2114,7 @@ export interface SwapDebtObligationsPreviewInputs {
   slippagePct: Decimal;
 }
 
-export type SwapDebtObligationsPreviewParams =
-  | SwapDebtObligationsPreviewInputs
-  | (Omit<SwapDebtObligationsPreviewInputs, 'slot'> & {
-      slot?: Slot;
-      currentLedgerInstant: LedgerInstant;
-    });
+export type SwapDebtObligationsPreviewParams = SwapDebtObligationsPreviewInputs;
 
 export interface SwapDebtObligationPreviewSide {
   stats: ObligationStats;
@@ -2220,18 +2172,9 @@ export async function getSwapDebtObligationsPreview(
   }
   const sourceDebtReserve = market.getExistingReserveByAddress(inputs.sourceDebtReserveAddress, 'Source debt');
   const targetDebtReserve = market.getExistingReserveByAddress(inputs.targetDebtReserveAddress, 'Target debt');
-  const ledger = await resolveLedgerInput(
-    market.getRpc(),
-    inputs.slot,
-    inputs.currentLedgerInstant,
-    sourceDebtReserve.getKind().isFixedRate() || !targetDebtReserve.state.config.debtMaturityTimestamp.eqn(0),
-    'getSwapDebtObligationsPreview'
-  );
-  const slot = ledger.currentSlot;
+  const currentLedgerInstant = inputs.currentLedgerInstant;
   if (!targetDebtReserve.state.config.debtMaturityTimestamp.eqn(0)) {
-    targetDebtReserve.assertCanOriginateDebt(
-      Number(requireMatchingLedgerInstant(slot, ledger.currentLedgerInstant, 'getSwapDebtObligationsPreview').blockTime)
-    );
+    targetDebtReserve.assertCanOriginateDebt(Number(currentLedgerInstant.blockTime));
   }
 
   // Share the builder's planning core: single-coll/debt + mint validation, the `>= outstanding` non-closing guard,
@@ -2245,8 +2188,7 @@ export async function getSwapDebtObligationsPreview(
     requestedElevationGroupId: inputs.newElevationGroup,
     isClosingSourceDebt,
     sourceDebtSwapAmount,
-    currentSlot: slot,
-    currentLedgerInstant: ledger.currentLedgerInstant,
+    currentLedgerInstant,
   });
   const {
     collReserve,
@@ -2322,7 +2264,7 @@ export async function getSwapDebtObligationsPreview(
     collateralReserveAddress: collReserve.address,
     market,
     reserves: market.reserves,
-    slot,
+    currentLedgerInstant,
   });
 
   // TARGET obligation after the deposit+borrow — grown (existing) or initialised from empty (new), both at the
@@ -2337,7 +2279,7 @@ export async function getSwapDebtObligationsPreview(
       debtReserveAddress: targetDebtReserve.address,
       market,
       reserves: market.reserves,
-      slot,
+      currentLedgerInstant,
       elevationGroupOverride: targetResultingElevationGroup,
     });
     newSide = { isNew: false, address: newObligationAddress, ...sim };
@@ -2358,7 +2300,7 @@ export async function getSwapDebtObligationsPreview(
       amountDebt: newDebtWithFeesLamports,
       debtReserveAddress: targetDebtReserve.address,
       market,
-      slot,
+      currentLedgerInstant,
     });
     newSide = { isNew: true, address: newObligationAddress, ...sim };
   }

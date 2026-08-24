@@ -1,4 +1,5 @@
-import { Address, Rpc, Slot, SolanaRpcApi } from '@solana/kit';
+import { Address, Rpc, SolanaRpcApi } from '@solana/kit';
+import type { LedgerInstant } from './ledger';
 import { Decimal } from 'decimal.js';
 import {
   DEFAULT_PUBLIC_KEY,
@@ -68,7 +69,7 @@ export async function getReserveFarmRewardsAPY(
   reserve: Address,
   reserveLiquidityTokenPrice: Decimal,
   farmsClient: FarmsClient,
-  slot: Slot,
+  ledgerInstant: LedgerInstant,
   reserveState: Reserve,
   tokensPrices?: Map<Address, Decimal>,
   reserveRewardsMaxAprBps?: number,
@@ -100,7 +101,9 @@ export async function getReserveFarmRewardsAPY(
   const farmDebt = kaminoReserve.state.farmDebt;
 
   const stakedTokenMintDecimals = kaminoReserve.getMintDecimals();
-  const reserveCtokenPrice = reserveLiquidityTokenPrice.div(kaminoReserve.getEstimatedCollateralExchangeRate(slot, 0));
+  const reserveCtokenPrice = reserveLiquidityTokenPrice.div(
+    kaminoReserve.getEstimatedCollateralExchangeRate(ledgerInstant, 0)
+  );
 
   if (farmCollateral !== DEFAULT_PUBLIC_KEY) {
     const farmIncentivesCollateral = await getFarmIncentivesForClient(

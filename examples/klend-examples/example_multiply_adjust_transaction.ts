@@ -98,7 +98,6 @@ import { getFlashBorrowTypeFromEnv } from '../utils/env';
   );
 
   const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc, 'processed');
-  const currentSlot = currentLedgerInstant.slot;
 
   // Price A in B callback can be defined in different ways. Here we use jupiter price API
   const getPriceAinB = async (tokenAMint: Address, tokenBMint: Address): Promise<Decimal> => {
@@ -128,7 +127,6 @@ import { getFlashBorrowTypeFromEnv } from '../utils/env';
       depositedLamports,
       borrowedLamports,
       referrer: none(),
-      currentSlot,
       currentLedgerInstant,
       targetLeverage: targetLeverage,
       priceCollToDebt,
@@ -172,7 +170,6 @@ import { getFlashBorrowTypeFromEnv } from '../utils/env';
         depositedLamports,
         borrowedLamports,
         referrer: none(),
-        currentSlot,
         currentLedgerInstant,
         targetLeverage: ogLeverage,
         priceCollToDebt,

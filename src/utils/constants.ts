@@ -13,6 +13,15 @@ export const SECONDS_PER_YEAR = 365.242_199 * 24.0 * 60.0 * 60.0;
 
 export const SECONDS_PER_DAY = 24 * 60 * 60;
 
+/**
+ * Number of seconds per year as defined by the klend program (`SECONDS_PER_YEAR = 60 * 60 * 24 * 365 = 31536000`),
+ * i.e. the denominator of a `TrueApr` reserve's rates: its interest and rewards accrue per second over this many
+ * seconds (mirroring how a `Legacy` reserve accrues per slot over {@link SLOTS_PER_YEAR}).
+ *
+ * Not to be confused with {@link SECONDS_PER_YEAR} (a mean tropical year), which the kvault APY math uses.
+ */
+export const TRUE_APR_SECONDS_PER_YEAR = SECONDS_PER_DAY * 365;
+
 export const TOTAL_NUMBER_OF_IDS_TO_CHECK = 25;
 
 export type ENV = 'mainnet-beta' | 'devnet' | 'localnet';

@@ -36,7 +36,7 @@ import { sendAndConfirmTx } from '../utils/tx';
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
   const vaultClient = new KaminoVaultClient(c.rpc, slotDuration);
-  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
+  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT, slotDuration);
   const vaultState = await vault.getState();
 
   // ============================================================

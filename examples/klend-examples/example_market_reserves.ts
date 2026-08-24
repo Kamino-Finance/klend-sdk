@@ -1,7 +1,7 @@
 import { getConnectionPool } from '../utils/connection';
 import { MAIN_MARKET } from '../utils/constants';
 import { getMarket } from '../utils/helpers';
-import { calculateAPYFromAPR } from '@kamino-finance/klend-sdk';
+import { calculateAPYFromAPR, getCurrentLedgerInstant } from '@kamino-finance/klend-sdk';
 
 (async () => {
   const c = getConnectionPool();
@@ -13,22 +13,22 @@ import { calculateAPYFromAPR } from '@kamino-finance/klend-sdk';
 
   console.log('Reserve supply and borrow APYs:\n');
 
-  const currentSlot = await c.rpc.getSlot().send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc);
   for (const reserve of reserves) {
     if (reserve.state.config.status === 1 || reserve.state.config.status === 2) {
       continue;
     }
     console.log(`RESERVE ${reserve.symbol}`);
     console.log(`  Status: ${reserve.stats.status} | UI Deprecated: ${reserve.stats.isUIDeprecated ?? 'unknown'}`);
-    const reserveSupplyApr = reserve.calculateSupplyAPR(currentSlot, market.state.referralFeeBps);
-    const reserveSupplyApy = reserve.totalSupplyAPY(currentSlot);
+    const reserveSupplyApr = reserve.calculateSupplyAPR(currentLedgerInstant, market.state.referralFeeBps);
+    const reserveSupplyApy = reserve.totalSupplyAPY(currentLedgerInstant);
     // Reserve-rewards distribution: extra supply-side yield from the reserve's on-chain rewards budget
     // (raises the cToken exchange rate, like interest). This is the rate earned right now — zero once the
     // budget runs dry; see calculateTheoreticalReserveRewardsSupplyAPR for the configured rate.
-    const reserveRewardsApr = reserve.calculateEffectiveReserveRewardsSupplyAPR(currentSlot, 0);
+    const reserveRewardsApr = reserve.calculateEffectiveReserveRewardsSupplyAPR(currentLedgerInstant, 0);
     const reserveRewardsApy = calculateAPYFromAPR(reserveRewardsApr);
-    const reserveBorrowApr = reserve.calculateBorrowAPR(currentSlot, market.state.referralFeeBps);
-    const reserveBorrowApy = reserve.totalBorrowAPY(currentSlot);
+    const reserveBorrowApr = reserve.calculateBorrowAPR(currentLedgerInstant, market.state.referralFeeBps);
+    const reserveBorrowApy = reserve.totalBorrowAPY(currentLedgerInstant);
     console.log(`SUPPLY APY: ${(reserveSupplyApy * 100).toFixed(2)}% APR: ${(reserveSupplyApr * 100).toFixed(2)}%`);
     console.log(
       `RESERVE REWARDS DISTRIBUTION APY: ${(reserveRewardsApy * 100).toFixed(2)}% APR: ${(

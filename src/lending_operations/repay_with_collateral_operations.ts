@@ -24,10 +24,10 @@ import {
   uniqueAccountsWithProgramIds,
 } from '../utils';
 import { AddressLookupTable } from '@solana-program/address-lookup-table';
-import { Account, Address, Instruction, none, Option, Slot, TransactionSigner } from '@solana/kit';
+import { Account, Address, Instruction, none, Option, TransactionSigner } from '@solana/kit';
 import Decimal from 'decimal.js';
 import { bufferWithdrawForRedeemDrift } from './redeem_drift';
-import { DistributiveOmit, LedgerInstant, LedgerInstantCompatible, resolveLedgerInput } from '../utils/ledger';
+import type { LedgerInstant } from '../utils/ledger';
 import {
   calcMaxWithdrawCollateral,
   calcRepayAmountWithSlippage,
@@ -73,10 +73,8 @@ interface RepayWithCollInitialInputsCommon<QuoteResponse> {
    * The quote from the provided quoter
    */
   swapQuote: SwapQuote<QuoteResponse>;
-  /** Current slot retained for source compatibility. */
-  currentSlot: Slot;
-  /** Matching slot + block time used consistently for interest and term calculations. */
-  currentLedgerInstant?: LedgerInstant;
+  /** The ledger instant (slot + block time) used consistently for interest and term calculations. */
+  currentLedgerInstant: LedgerInstant;
   klendAccounts: Array<Address>;
 }
 
@@ -101,8 +99,8 @@ export interface RepayWithCollSwapInputsProps<QuoteResponse> {
   owner: TransactionSigner;
   obligation: KaminoObligation;
   referrer: Option<Address>;
-  currentSlot: Slot;
-  currentLedgerInstant?: LedgerInstant;
+  /** The ledger instant (slot + block time) the position estimates are evaluated at. */
+  currentLedgerInstant: LedgerInstant;
   repayAmount: Decimal;
   isClosingPosition: boolean;
   budgetAndPriorityFeeIxs?: Instruction[];
@@ -128,9 +126,7 @@ export interface RepayWithCollSwapInputsProps<QuoteResponse> {
   flashBorrowType?: FlashBorrowType;
 }
 
-export type RepayWithCollSwapInputsParams<QuoteResponse> = LedgerInstantCompatible<
-  RepayWithCollSwapInputsProps<QuoteResponse>
->;
+export type RepayWithCollSwapInputsParams<QuoteResponse> = RepayWithCollSwapInputsProps<QuoteResponse>;
 
 /**
  * Inputs for {@link getRepayWithCollKlendAccounts}: the subset of {@link getRepayWithCollSwapInputs}'s props that
@@ -139,10 +135,7 @@ export type RepayWithCollSwapInputsParams<QuoteResponse> = LedgerInstantCompatib
  * swap-debt families, `flashBorrowType` is KEPT, because the two repay routes flash-borrow different reserves
  * (debt vs coll) and so reference a different reserve fee-vault — the account set is NOT invariant to the side.
  */
-export type RepayWithCollKlendAccountsInputs = DistributiveOmit<
-  RepayWithCollSwapInputsParams<unknown>,
-  'quoter' | 'slippagePct'
->;
+export type RepayWithCollKlendAccountsInputs = Omit<RepayWithCollSwapInputsParams<unknown>, 'quoter' | 'slippagePct'>;
 
 /**
  * Account-discovery prefix shared by {@link getRepayWithCollSwapInputs} and the light
@@ -158,7 +151,6 @@ async function computeRepayWithCollKlendAccounts({
   owner,
   obligation,
   referrer,
-  currentSlot,
   currentLedgerInstant,
   repayAmount,
   isClosingPosition,
@@ -166,7 +158,7 @@ async function computeRepayWithCollKlendAccounts({
   scopeRefreshIx,
   useV2Ixs,
   flashBorrowType,
-}: RepayWithCollKlendAccountsInputs & { currentSlot: Slot }): Promise<{
+}: RepayWithCollKlendAccountsInputs): Promise<{
   collReserve: KaminoReserve;
   debtReserve: KaminoReserve;
   collTokenMint: Address;
@@ -191,15 +183,7 @@ async function computeRepayWithCollKlendAccounts({
     repayFundingLamports,
     flashRepayAmountLamports,
     repayAmount: finalRepayAmount,
-  } = calcRepayAmountWithSlippage(
-    kaminoMarket,
-    debtReserve,
-    currentSlot,
-    obligation,
-    repayAmount,
-    referrer,
-    currentLedgerInstant
-  );
+  } = calcRepayAmountWithSlippage(kaminoMarket, debtReserve, currentLedgerInstant, obligation, repayAmount, referrer);
 
   const debtPosition = obligation.getBorrowByReserve(debtReserve.address);
   const collPosition = obligation.getDepositByReserve(collReserve.address);
@@ -245,7 +229,7 @@ async function computeRepayWithCollKlendAccounts({
           owner,
           obligation,
           referrer,
-          currentSlot,
+          currentLedgerInstant,
           budgetAndPriorityFeeIxs,
           scopeRefreshIx,
           placeholderSwapIxs,
@@ -262,7 +246,7 @@ async function computeRepayWithCollKlendAccounts({
           owner,
           obligation,
           referrer,
-          currentSlot,
+          currentLedgerInstant,
           budgetAndPriorityFeeIxs,
           scopeRefreshIx,
           placeholderSwapIxs,
@@ -301,24 +285,14 @@ async function computeRepayWithCollKlendAccounts({
 export async function getRepayWithCollKlendAccounts(
   inputs: RepayWithCollKlendAccountsInputs
 ): Promise<KlendAccountsResult> {
-  const debtReserve = inputs.kaminoMarket.getExistingReserveByAddress(inputs.debtReserveAddress);
-  const ledger = await resolveLedgerInput(
-    inputs.kaminoMarket.getRpc(),
-    inputs.currentSlot,
-    inputs.currentLedgerInstant,
-    debtReserve.getKind().isFixedRate(),
-    'getRepayWithCollKlendAccounts'
-  );
   const { uniqueKlendAccounts } = await computeRepayWithCollKlendAccounts({
     ...inputs,
-    ...ledger,
   });
   return toKlendAccountsResult(uniqueKlendAccounts);
 }
 
 export async function getRepayWithCollSwapInputs<QuoteResponse>({
   collReserveAddress,
-  currentSlot: suppliedCurrentSlot,
   currentLedgerInstant,
   debtReserveAddress,
   kaminoMarket,
@@ -341,14 +315,6 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
   // Preserve fail-fast validation before the compatibility path performs any RPC lookup.
   getSlippageFactor(slippagePct);
   const debtReserveForSizing = kaminoMarket.getExistingReserveByAddress(debtReserveAddress);
-  const ledger = await resolveLedgerInput(
-    kaminoMarket.getRpc(),
-    suppliedCurrentSlot,
-    currentLedgerInstant,
-    debtReserveForSizing.getKind().isFixedRate(),
-    'getRepayWithCollSwapInputs'
-  );
-  const { currentSlot, currentLedgerInstant: resolvedLedgerInstant } = ledger;
   // Flash-borrow side default when the caller omits `flashBorrowType`. The established default is DEBT-flash (simpler:
   // no in-tx collateral redeem) — callers and `cross_validates...` rely on that. We only fall back to COLL-flash when
   // the debt reserve cannot actually serve the flash borrow (e.g. a thin fixed-rate debt reserve), which would
@@ -363,11 +329,10 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
     const { repayFundingLamports: debtFlashRequiredLamports } = calcRepayAmountWithSlippage(
       kaminoMarket,
       debtReserveForDefault,
-      currentSlot,
+      currentLedgerInstant,
       obligation,
       repayAmount,
-      referrer,
-      resolvedLedgerInstant
+      referrer
     );
     const debtFlashViable =
       isFlashLoanEnabled(debtReserveForDefault) &&
@@ -395,8 +360,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
     owner,
     obligation,
     referrer,
-    currentSlot,
-    currentLedgerInstant: resolvedLedgerInstant,
+    currentLedgerInstant,
     repayAmount,
     isClosingPosition,
     budgetAndPriorityFeeIxs,
@@ -454,8 +418,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
         flashRepayAmountLamports: collWithdrawForFlashRepayLamports,
         maxCollateralWithdrawLamports: maxWithdrawableCollLamports,
         swapQuote,
-        currentSlot,
-        currentLedgerInstant: resolvedLedgerInstant,
+        currentLedgerInstant,
         klendAccounts: uniqueKlendAccounts,
       },
     };
@@ -488,8 +451,7 @@ export async function getRepayWithCollSwapInputs<QuoteResponse>({
       flashRepayAmountLamports,
       maxCollateralWithdrawLamports: maxWithdrawableCollLamports,
       swapQuote,
-      currentSlot,
-      currentLedgerInstant: resolvedLedgerInstant,
+      currentLedgerInstant,
       klendAccounts: uniqueKlendAccounts,
     },
   };
@@ -505,7 +467,6 @@ export async function getRepayWithCollIxs<QuoteResponse>({
   isClosingPosition,
   budgetAndPriorityFeeIxs,
   collReserveAddress,
-  currentSlot: suppliedCurrentSlot,
   currentLedgerInstant,
   debtReserveAddress,
   kaminoMarket,
@@ -522,18 +483,9 @@ export async function getRepayWithCollIxs<QuoteResponse>({
 }: RepayWithCollIxsProps<QuoteResponse>): Promise<Array<RepayWithCollIxsResponse<QuoteResponse>>> {
   getSlippageFactor(slippagePct);
   const debtReserve = kaminoMarket.getExistingReserveByAddress(debtReserveAddress);
-  const ledger = await resolveLedgerInput(
-    kaminoMarket.getRpc(),
-    suppliedCurrentSlot,
-    currentLedgerInstant,
-    debtReserve.getKind().isFixedRate(),
-    'getRepayWithCollIxs'
-  );
-  const { currentSlot, currentLedgerInstant: resolvedLedgerInstant } = ledger;
   const { swapInputs, initialInputs } = await getRepayWithCollSwapInputs({
     collReserveAddress,
-    currentSlot,
-    currentLedgerInstant: resolvedLedgerInstant,
+    currentLedgerInstant,
     debtReserveAddress,
     kaminoMarket,
     owner,
@@ -619,7 +571,7 @@ export async function getRepayWithCollIxs<QuoteResponse>({
         owner,
         obligation,
         referrer,
-        currentSlot,
+        currentLedgerInstant,
         budgetAndPriorityFeeIxs,
         scopeRefreshIx,
         swapResponses,
@@ -636,7 +588,7 @@ export async function getRepayWithCollIxs<QuoteResponse>({
         owner,
         obligation,
         referrer,
-        currentSlot,
+        currentLedgerInstant,
         budgetAndPriorityFeeIxs,
         scopeRefreshIx,
         swapResponses,
@@ -675,7 +627,7 @@ async function buildRepayWithCollateralIxsDebtFlash<QuoteResponse>(
   owner: TransactionSigner,
   obligation: KaminoObligation,
   referrer: Option<Address>,
-  currentSlot: Slot,
+  currentLedgerInstant: LedgerInstant,
   budgetAndPriorityFeeIxs: Instruction[] | undefined,
   scopeRefreshIx: Instruction[],
   swapQuoteIxsArray: SwapIxs<QuoteResponse>[],
@@ -733,7 +685,7 @@ async function buildRepayWithCollateralIxsDebtFlash<QuoteResponse>(
       withdrawAmount: isClosingPosition ? U64_MAX : collWithdrawLamports.toString(),
       withdrawReserveAddress: collReserve.address,
       payer: owner,
-      currentSlot,
+      currentLedgerInstant,
       obligation,
       useV2Ixs,
       scopeRefreshConfig: undefined,
@@ -751,7 +703,7 @@ async function buildRepayWithCollateralIxsDebtFlash<QuoteResponse>(
       withdrawAmount: isClosingPosition ? U64_MAX : collWithdrawLamports.toString(),
       withdrawReserveAddress: collReserve.address,
       payer: owner,
-      currentSlot,
+      currentLedgerInstant,
       obligation,
       scopeRefreshConfig: undefined,
       extraComputeBudget: 0,
@@ -807,7 +759,7 @@ async function buildRepayWithCollateralIxsCollFlash<QuoteResponse>(
   owner: TransactionSigner,
   obligation: KaminoObligation,
   referrer: Option<Address>,
-  currentSlot: Slot,
+  currentLedgerInstant: LedgerInstant,
   budgetAndPriorityFeeIxs: Instruction[] | undefined,
   scopeRefreshIx: Instruction[],
   swapQuoteIxsArray: SwapIxs<QuoteResponse>[],
@@ -864,7 +816,7 @@ async function buildRepayWithCollateralIxsCollFlash<QuoteResponse>(
       withdrawAmount: isClosingPosition ? U64_MAX : collWithdrawForFlashRepayLamports.toString(),
       withdrawReserveAddress: collReserve.address,
       payer: owner,
-      currentSlot,
+      currentLedgerInstant,
       obligation,
       useV2Ixs,
       scopeRefreshConfig: undefined,
@@ -882,7 +834,7 @@ async function buildRepayWithCollateralIxsCollFlash<QuoteResponse>(
       withdrawAmount: isClosingPosition ? U64_MAX : collWithdrawForFlashRepayLamports.toString(),
       withdrawReserveAddress: collReserve.address,
       payer: owner,
-      currentSlot,
+      currentLedgerInstant,
       obligation,
       scopeRefreshConfig: undefined,
       extraComputeBudget: 0,

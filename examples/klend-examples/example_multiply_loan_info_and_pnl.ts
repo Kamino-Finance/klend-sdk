@@ -1,5 +1,10 @@
 import { getConnectionPool } from '../utils/connection';
-import { KaminoObligation, ObligationStats, calculateAPYFromAPR } from '@kamino-finance/klend-sdk';
+import {
+  KaminoObligation,
+  ObligationStats,
+  calculateAPYFromAPR,
+  getCurrentLedgerInstant,
+} from '@kamino-finance/klend-sdk';
 import { JLP_MARKET } from '../utils/constants';
 import { getLoan, getMarket } from '../utils/helpers';
 import axios from 'axios';
@@ -77,7 +82,7 @@ export async function getObligationPnl(
   // console.log(`\Loan type: ${loan.deposits.length}`);")
 
   console.log('\nBreakdown:');
-  const currentSlot = await c.rpc.getSlot().send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc);
   // Get the deposit
   const deposit = loan.deposits.values().next().value!;
   const collReserve = market.getReserveByAddress(deposit.reserveAddress);
@@ -91,12 +96,12 @@ export async function getObligationPnl(
       collReserve!.symbol
     } value: $${deposit.marketValueRefreshed.toFixed(2)}`
   );
-  const reserveSupplyApr = collReserve.calculateSupplyAPR(currentSlot, market.state.referralFeeBps);
-  const reserveSupplyApy = collReserve.totalSupplyAPY(currentSlot);
+  const reserveSupplyApr = collReserve.calculateSupplyAPR(currentLedgerInstant, market.state.referralFeeBps);
+  const reserveSupplyApy = collReserve.totalSupplyAPY(currentLedgerInstant);
   // Reserve-rewards distribution: extra supply-side yield from the reserve's on-chain rewards budget
   // (raises the cToken exchange rate, like interest). This is the rate earned right now — zero once the
   // budget runs dry; see calculateTheoreticalReserveRewardsSupplyAPR for the configured rate.
-  const reserveRewardsApr = collReserve.calculateEffectiveReserveRewardsSupplyAPR(currentSlot, 0);
+  const reserveRewardsApr = collReserve.calculateEffectiveReserveRewardsSupplyAPR(currentLedgerInstant, 0);
   const reserveRewardsApy = calculateAPYFromAPR(reserveRewardsApr);
   console.log(
     `RESERVE ${collReserve.symbol} SUPPLY APY: ${(reserveSupplyApy * 100).toFixed(2)}% APR: ${(
@@ -122,8 +127,8 @@ export async function getObligationPnl(
       debtReserve!.symbol
     } value: $${borrow.marketValueRefreshed.toFixed(2)}`
   );
-  const reserveBorrowApr = debtReserve.calculateBorrowAPR(currentSlot, market.state.referralFeeBps);
-  const reserveBorrowApy = debtReserve.totalBorrowAPY(currentSlot);
+  const reserveBorrowApr = debtReserve.calculateBorrowAPR(currentLedgerInstant, market.state.referralFeeBps);
+  const reserveBorrowApy = debtReserve.totalBorrowAPY(currentLedgerInstant);
   console.log(
     `RESERVE ${debtReserve.symbol} BORROW APY: ${(reserveBorrowApy * 100).toFixed(2)}% APR: ${(
       reserveBorrowApr * 100

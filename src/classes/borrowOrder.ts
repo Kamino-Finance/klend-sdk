@@ -1,4 +1,5 @@
 import { Address } from '@solana/kit';
+import type { LedgerInstant } from '../utils/ledger';
 import BN from 'bn.js';
 import { Obligation } from '../@codegen/klend/accounts';
 import { BorrowOrder, BorrowOrderConfigArgs } from '../@codegen/klend/types';
@@ -81,8 +82,9 @@ export class KaminoBorrowOrder {
     expirySeconds: BN;
     maxRateBps: number;
     enableAutoRolloverOnFilledBorrows?: boolean;
+    currentLedgerInstant: LedgerInstant;
   }): KaminoBorrowOrder {
-    const now = Math.floor(Date.now() / 1000);
+    const now = Number(params.currentLedgerInstant.blockTime);
     const expiryTimestamp = new BN(now).add(params.expirySeconds);
 
     return new KaminoBorrowOrder(
@@ -104,8 +106,9 @@ export class KaminoBorrowOrder {
     amount: BN;
     destination: Address;
     expirySeconds: BN;
+    currentLedgerInstant: LedgerInstant;
   }): KaminoBorrowOrder {
-    const now = Math.floor(Date.now() / 1000);
+    const now = Number(params.currentLedgerInstant.blockTime);
     const expiryTimestamp = new BN(now).add(params.expirySeconds);
 
     return new KaminoBorrowOrder(

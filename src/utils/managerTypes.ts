@@ -14,6 +14,7 @@ import {
 } from '../@codegen/klend/types';
 import Decimal from 'decimal.js';
 import { Fraction, ZERO_FRACTION } from '../classes';
+import { InterestRateBasis } from '../classes/shared';
 import BN from 'bn.js';
 import { numberToLamportsDecimal } from '../classes';
 import { NULL_PUBKEY } from './pubkey';
@@ -371,7 +372,9 @@ function buildReserveConfig(fields: {
     ),
     borrowLimitAgainstThisCollateralInElevationGroup: Array(32).fill(new BN(0)),
     deleveragingBonusIncreaseBpsPerDay: new BN(100),
-    reserved1: Array(1).fill(0),
+    // New reserves accrue on a wall-clock basis (mirrors the on-chain `init_reserve` default).
+    interestRateBasis: InterestRateBasis.TrueApr,
+    reserved1: Array(3).fill(0),
     minDeleveragingBonusBps: 0,
     proposerAuthorityLocked: 0,
     blockCtokenUsage: 0,
@@ -379,7 +382,7 @@ function buildReserveConfig(fields: {
     debtTermSeconds: new BN(0),
     earlyRepayRemainingInterestPct: 0,
     emergencyMode: 0,
-    rewardsAmountPerSlot: new BN(0),
+    rewardsAmountPerAccrualUnit: new BN(0),
     permissionedOps: new BN(0),
   };
 

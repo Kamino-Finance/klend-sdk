@@ -14,8 +14,8 @@ import {
   GetSlotApi,
   GetTokenAccountBalanceApi,
   Rpc,
-  Slot,
 } from '@solana/kit';
+import type { LedgerInstant } from '../utils/ledger';
 import { KaminoObligation } from './obligation';
 import { KaminoReserve, KaminoReserveRpcApi, ReserveWithAddress } from './reserve';
 import { LendingMarket, Obligation, ReferrerTokenState, Reserve, UserMetadata } from '../@codegen/klend/accounts';
@@ -546,9 +546,9 @@ export class KaminoMarket {
 
   async getTotalProductTvl(
     productType: ObligationType,
-    slot: Slot
+    currentLedgerInstant: LedgerInstant
   ): Promise<{ tvl: Decimal; borrows: Decimal; deposits: Decimal; avgLeverage: Decimal }> {
-    let obligations = (await this.getAllObligationsForMarket(slot, productType.toArgs().tag)).filter(
+    let obligations = (await this.getAllObligationsForMarket(currentLedgerInstant, productType.toArgs().tag)).filter(
       (obligation) =>
         obligation.refreshedStats.userTotalBorrow.gt(0) || obligation.refreshedStats.userTotalDeposit.gt(0)
     );
@@ -611,8 +611,8 @@ export class KaminoMarket {
    *
    * @returns Number of active obligations in the market
    */
-  async getNumberOfObligations(slot: Slot) {
-    return (await this.getAllObligationsForMarket(slot))
+  async getNumberOfObligations(currentLedgerInstant: LedgerInstant) {
+    return (await this.getAllObligationsForMarket(currentLedgerInstant))
       .filter(
         (obligation) =>
           obligation.refreshedStats.userTotalBorrow.gt(0) || obligation.refreshedStats.userTotalDeposit.gt(0)
@@ -635,13 +635,13 @@ export class KaminoMarket {
   getMaxLeverageBorrowableAmount(
     collReserve: KaminoReserve,
     debtReserve: KaminoReserve,
-    slot: Slot,
+    currentLedgerInstant: LedgerInstant,
     requestElevationGroup: boolean,
     obligation?: KaminoObligation
   ): Decimal {
     return obligation
-      ? obligation.getMaxBorrowAmount(this, debtReserve.address, slot, requestElevationGroup)
-      : debtReserve.getMaxBorrowAmountWithCollReserve(this, collReserve);
+      ? obligation.getMaxBorrowAmount(this, debtReserve.address, currentLedgerInstant, requestElevationGroup)
+      : debtReserve.getMaxBorrowAmountWithCollReserve(this, collReserve, currentLedgerInstant);
   }
 
   async loadReserves(oracleAccounts?: AllOracleAccounts) {
@@ -1093,7 +1093,7 @@ export class KaminoMarket {
    *
    * @param tag
    */
-  async getAllObligationsForMarket(slot: Slot, tag?: number): Promise<KaminoObligation[]> {
+  async getAllObligationsForMarket(currentLedgerInstant: LedgerInstant, tag?: number): Promise<KaminoObligation[]> {
     const filters: (GetProgramAccountsDatasizeFilter | GetProgramAccountsMemcmpFilter)[] = [
       {
         dataSize: BigInt(Obligation.layout.span + 8),
@@ -1144,7 +1144,7 @@ export class KaminoMarket {
         obligationAccount.borrows,
         collateralExchangeRates,
         cumulativeBorrowRates,
-        slot
+        currentLedgerInstant
       );
       return new KaminoObligation(
         this,
@@ -1165,7 +1165,10 @@ export class KaminoMarket {
    *   console.log('got a batch of # obligations:', obligations.length);
    * }
    */
-  async *batchGetAllObligationsForMarket(slot: Slot, tag?: number): AsyncGenerator<KaminoObligation[], void, unknown> {
+  async *batchGetAllObligationsForMarket(
+    currentLedgerInstant: LedgerInstant,
+    tag?: number
+  ): AsyncGenerator<KaminoObligation[], void, unknown> {
     const filters: (GetProgramAccountsDatasizeFilter | GetProgramAccountsMemcmpFilter)[] = [
       {
         dataSize: BigInt(Obligation.layout.span + 8),
@@ -1225,7 +1228,7 @@ export class KaminoMarket {
           obligationAccount.borrows,
           collateralExchangeRates,
           cumulativeBorrowRates,
-          slot
+          currentLedgerInstant
         );
         obligationsBatch.push(
           new KaminoObligation(this, pubkey, obligationAccount, collateralExchangeRates, cumulativeBorrowRates)
@@ -1235,7 +1238,7 @@ export class KaminoMarket {
     }
   }
 
-  async getAllObligationsByTag(tag: number, market: Address, slot: Slot) {
+  async getAllObligationsByTag(tag: number, market: Address, currentLedgerInstant: LedgerInstant) {
     const obligations = await this.rpc
       .getProgramAccounts(this.programId, {
         filters: [
@@ -1283,7 +1286,7 @@ export class KaminoMarket {
         obligationAccount.borrows,
         collateralExchangeRates,
         cumulativeBorrowRates,
-        slot
+        currentLedgerInstant
       );
 
       return new KaminoObligation(
@@ -1308,7 +1311,7 @@ export class KaminoMarket {
    * @returns {Promise<KaminoObligation[]>} A promise that resolves to an array of KaminoObligation objects representing all obligations that have deposited into the specified reserve.
    * @throws {Error} If an account is invalid or does not belong to this program, or if obligation parsing fails.
    */
-  async getAllObligationsByDepositedReserve(reserve: Address, slot: Slot) {
+  async getAllObligationsByDepositedReserve(reserve: Address, currentLedgerInstant: LedgerInstant) {
     const finalObligations: KaminoObligation[] = [];
     for (let i = 0; i < DEPOSITS_LIMIT; i++) {
       const obligations = await this.rpc
@@ -1359,7 +1362,7 @@ export class KaminoMarket {
           obligationAccount.borrows,
           collateralExchangeRates,
           cumulativeBorrowRates,
-          slot
+          currentLedgerInstant
         );
 
         return new KaminoObligation(
@@ -1388,7 +1391,7 @@ export class KaminoMarket {
    *   representing all obligations that have borrowed from the specified reserve.
    * @throws {Error} If an account is invalid or does not belong to this program, or if obligation parsing fails.
    */
-  async getAllObligationsByBorrowedReserve(reserve: Address, slot: Slot) {
+  async getAllObligationsByBorrowedReserve(reserve: Address, currentLedgerInstant: LedgerInstant) {
     const finalObligations: KaminoObligation[] = [];
     for (let i = 0; i < BORROWS_LIMIT; i++) {
       const obligations = await this.rpc
@@ -1439,7 +1442,7 @@ export class KaminoMarket {
           obligationAccount.borrows,
           collateralExchangeRates,
           cumulativeBorrowRates,
-          slot
+          currentLedgerInstant
         );
 
         return new KaminoObligation(
@@ -1457,11 +1460,11 @@ export class KaminoMarket {
 
   async getAllUserObligations(
     user: Address,
-    slot: bigint,
+    currentLedgerInstant: LedgerInstant,
     commitment: Commitment = 'processed'
   ): Promise<KaminoObligation[]> {
-    const [currentSlot, obligations] = await Promise.all([
-      Promise.resolve(slot),
+    const [currentInstant, obligations] = await Promise.all([
+      Promise.resolve(currentLedgerInstant),
       this.rpc
         .getProgramAccounts(this.programId, {
           filters: [
@@ -1515,7 +1518,7 @@ export class KaminoMarket {
         obligationAccount.borrows,
         collateralExchangeRates,
         cumulativeBorrowRates,
-        currentSlot
+        currentInstant
       );
       return new KaminoObligation(
         this,
@@ -1527,7 +1530,11 @@ export class KaminoMarket {
     });
   }
 
-  async getAllUserObligationsForReserve(user: Address, reserve: Address, slot: Slot): Promise<KaminoObligation[]> {
+  async getAllUserObligationsForReserve(
+    user: Address,
+    reserve: Address,
+    currentLedgerInstant: LedgerInstant
+  ): Promise<KaminoObligation[]> {
     const obligationAddresses: Address[] = [];
     obligationAddresses.push(await new VanillaObligation(this.programId).toPda(this.getAddress(), user));
     const targetReserve = new Map<Address, KaminoReserve>(Array.from(this.reserves.entries())).get(reserve);
@@ -1573,7 +1580,7 @@ export class KaminoMarket {
     for (let batchStart = 0; batchStart < obligationAddresses.length; batchStart += batchSize) {
       const obligations = await this.getMultipleObligationsByAddress(
         obligationAddresses.slice(batchStart, batchStart + batchSize),
-        slot
+        currentLedgerInstant
       );
       obligations.forEach((obligation) => {
         if (obligation !== null) {
@@ -1621,7 +1628,11 @@ export class KaminoMarket {
     return false;
   }
 
-  async getUserObligationsByTag(tag: number, user: Address, currentSlot: Slot): Promise<KaminoObligation[]> {
+  async getUserObligationsByTag(
+    tag: number,
+    user: Address,
+    currentLedgerInstant: LedgerInstant
+  ): Promise<KaminoObligation[]> {
     const obligations = await this.rpc
       .getProgramAccounts(this.programId, {
         filters: [
@@ -1671,7 +1682,7 @@ export class KaminoMarket {
         obligationAccount.borrows,
         collateralExchangeRates,
         cumulativeBorrowRates,
-        currentSlot
+        currentLedgerInstant
       );
       return new KaminoObligation(
         this,
@@ -1690,8 +1701,8 @@ export class KaminoMarket {
     return KaminoObligation.load(this, address);
   }
 
-  async getMultipleObligationsByAddress(addresses: Address[], slot: Slot) {
-    return KaminoObligation.loadAll(this, addresses, slot);
+  async getMultipleObligationsByAddress(addresses: Address[], currentLedgerInstant: LedgerInstant) {
+    return KaminoObligation.loadAll(this, addresses, currentLedgerInstant);
   }
 
   /**
@@ -1847,7 +1858,8 @@ export class KaminoMarket {
       const tokenName = reserve.getTokenSymbol();
       const oracle = reserve.state.config.tokenInfo.scopeConfiguration.priceFeed;
       const chain = reserve.state.config.tokenInfo.scopeConfiguration.priceChain;
-      const twapChain = reserve.state.config.tokenInfo.scopeConfiguration.twapChain.filter((x) => x > 0);
+      // The raw chain is evaluated as configured - 0 is a valid price ID; only all-`U16_MAX`/all-0 means "no twap".
+      const twapChain = reserve.state.config.tokenInfo.scopeConfiguration.twapChain;
       const oraclePrices = allOraclePrices.get(oracle);
       if (oraclePrices && oracle && isNotNullPubkey(oracle) && chain && Scope.isScopeChainValid(chain)) {
         const spotPrice = await scope.getPriceFromChain(chain, oraclePrices);
@@ -1885,7 +1897,8 @@ export class KaminoMarket {
       const tokenName = reserve.getTokenSymbol();
       const scopeOracle = reserve.state.config.tokenInfo.scopeConfiguration.priceFeed;
       const spotChain = reserve.state.config.tokenInfo.scopeConfiguration.priceChain;
-      const twapChain = reserve.state.config.tokenInfo.scopeConfiguration.twapChain.filter((x) => x > 0);
+      // The raw chain is evaluated as configured - 0 is a valid price ID; only all-`U16_MAX`/all-0 means "no twap".
+      const twapChain = reserve.state.config.tokenInfo.scopeConfiguration.twapChain;
       const pythOracle = reserve.state.config.tokenInfo.pythConfiguration.price;
       const switchboardSpotOracle = reserve.state.config.tokenInfo.switchboardConfiguration.priceAggregator;
       const switchboardTwapOracle = reserve.state.config.tokenInfo.switchboardConfiguration.twapAggregator;
@@ -1920,23 +1933,23 @@ export class KaminoMarket {
     return klendPrices;
   }
 
-  getCumulativeBorrowRatesByReserve(slot: Slot): Map<Address, Decimal> {
+  getCumulativeBorrowRatesByReserve(currentLedgerInstant: LedgerInstant): Map<Address, Decimal> {
     const cumulativeBorrowRates = new Map<Address, Decimal>();
     for (const reserve of this.reserves.values()) {
       cumulativeBorrowRates.set(
         reserve.address,
-        reserve.getEstimatedCumulativeBorrowRate(slot, this.state.referralFeeBps)
+        reserve.getEstimatedCumulativeBorrowRate(currentLedgerInstant, this.state.referralFeeBps)
       );
     }
     return cumulativeBorrowRates;
   }
 
-  getCollateralExchangeRatesByReserve(slot: Slot): Map<Address, Decimal> {
+  getCollateralExchangeRatesByReserve(currentLedgerInstant: LedgerInstant): Map<Address, Decimal> {
     const collateralExchangeRates = new Map<Address, Decimal>();
     for (const reserve of this.reserves.values()) {
       collateralExchangeRates.set(
         reserve.address,
-        reserve.getEstimatedCollateralExchangeRate(slot, this.state.referralFeeBps)
+        reserve.getEstimatedCollateralExchangeRate(currentLedgerInstant, this.state.referralFeeBps)
       );
     }
     return collateralExchangeRates;

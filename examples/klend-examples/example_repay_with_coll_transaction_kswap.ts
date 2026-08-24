@@ -206,7 +206,6 @@ async function simulateAndSelectBestRoute(
   const priceCollToDebt = await getTokenPriceFromBirdeye(kswapSdk, collTokenMint, debtTokenMint);
   console.log(`Price ${collTokenReserve.symbol}->${debtTokenReserve.symbol}: ${priceCollToDebt}`);
   const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc, 'processed');
-  const currentSlot = currentLedgerInstant.slot;
 
   // ---- Pick the flash-borrow side ----
   // The client expresses intent only: which obligation, which reserves, repay amount, price.
@@ -226,7 +225,6 @@ async function simulateAndSelectBestRoute(
       repayAmount,
       priceCollToDebt: new Decimal(priceCollToDebt),
       slippagePct: new Decimal(slippageBps / 100),
-      currentSlot,
       currentLedgerInstant,
       referrer: none(),
     });
@@ -248,7 +246,6 @@ async function simulateAndSelectBestRoute(
     owner: wallet,
     obligation,
     referrer: none(),
-    currentSlot,
     currentLedgerInstant,
     repayAmount,
     isClosingPosition,

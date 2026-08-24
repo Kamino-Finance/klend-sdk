@@ -182,7 +182,6 @@ Defaults:
     flashBorrowToken,
     debtReserveAddress,
     referrer: none(),
-    currentSlot: ctx.currentSlot,
     currentLedgerInstant: ctx.currentLedgerInstant,
     quoter: getKswapQuoter(kswapSdk, ctx.wallet.address, slippageBps, sourceCollReserve, targetCollReserve),
     swapper: getKswapSwapper(kswapSdk, ctx.wallet.address, slippageBps),

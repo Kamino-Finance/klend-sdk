@@ -3,7 +3,6 @@ import BN from 'bn.js';
 import {
   Address,
   Instruction,
-  Slot,
   TransactionSigner,
   Rpc,
   GetMinimumBalanceForRentExemptionApi,
@@ -37,9 +36,19 @@ import {
   SLOTS_PER_SECOND,
   SLOTS_PER_YEAR,
   TokenOracleData,
+  TRUE_APR_SECONDS_PER_YEAR,
   U64_MAX,
 } from '../utils';
-import { FeeCalculation, Fees, ReserveDataType, ReserveFarmInfo, ReserveRewardYield, ReserveStatus } from './shared';
+import {
+  FeeCalculation,
+  Fees,
+  InterestRateBasis,
+  ReserveDataType,
+  ReserveFarmInfo,
+  ReserveRewardYield,
+  ReserveStatus,
+} from './shared';
+import type { LedgerInstant } from '../utils/ledger';
 import { Reserve, ReserveFields, WithdrawTicket } from '../@codegen/klend/accounts';
 import { PROGRAM_ID } from '../@codegen/klend/programId';
 import {
@@ -82,7 +91,31 @@ import { kaminoCdn, KaminoCdnData } from './cdnClient';
 
 export type KaminoReserveRpcApi = GetProgramAccountsApi & GetAccountInfoApi & GetMultipleAccountsApi;
 
-export const DEFAULT_RECENT_SLOT_DURATION_MS = 400;
+export const DEFAULT_RECENT_SLOT_DURATION_MS = 350;
+
+/**
+ * An elapsed accrual duration, expressed in the accrual units of a reserve's {@link InterestRateBasis} (slots for
+ * `Legacy`, seconds for `TrueApr`), together with the number of such units in a year (the denominator of the
+ * reserve's rates). Mirrors the on-chain `AccrualDuration`.
+ *
+ * Obtain one from {@link KaminoReserve.accrualDurationSince} (the time elapsed since the reserve's last refresh) or
+ * {@link KaminoReserve.projectedAccrualDuration} (a wall-clock period converted to the reserve's units); combine two
+ * of the same reserve with {@link addAccrualDurations}.
+ */
+export type AccrualDuration = {
+  elapsedUnits: bigint;
+  unitsPerYear: bigint;
+};
+
+/** Sums two {@link AccrualDuration}s of the same unit (i.e. coming from the same reserve). */
+function addAccrualDurations(left: AccrualDuration, right: AccrualDuration): AccrualDuration {
+  if (left.unitsPerYear !== right.unitsPerYear) {
+    throw new Error(
+      `Cannot add accrual durations of different units (${left.unitsPerYear} vs ${right.unitsPerYear} units per year)`
+    );
+  }
+  return { elapsedUnits: left.elapsedUnits + right.elapsedUnits, unitsPerYear: left.unitsPerYear };
+}
 
 /**
  * The terms a fresh fixed-term borrow into a fixed-rate reserve is (re-)originated with. Surfaced by SDK flows that
@@ -304,6 +337,80 @@ export class KaminoReserve {
   }
 
   /**
+   * The reserve's {@link InterestRateBasis}: how its rate config (borrow rate curve, host fixed interest rate, rewards
+   * amount per accrual unit) is interpreted when accruing interest/rewards - per slot (`Legacy`) or per second
+   * (`TrueApr`). Throws on an unknown on-chain value (like the program does).
+   */
+  getInterestRateBasis(): InterestRateBasis {
+    const basis = this.state.config.interestRateBasis;
+    if (basis !== InterestRateBasis.Legacy && basis !== InterestRateBasis.TrueApr) {
+      throw new Error(`Reserve ${this.address} has an invalid interest rate basis: ${basis}`);
+    }
+    return basis;
+  }
+
+  /** Whether this reserve accrues on a wall-clock (`TrueApr`) basis; see {@link getInterestRateBasis}. */
+  isTrueApr(): boolean {
+    return this.getInterestRateBasis() === InterestRateBasis.TrueApr;
+  }
+
+  /**
+   * The number of accrual units in a year for this reserve's {@link InterestRateBasis}: {@link SLOTS_PER_YEAR} for
+   * `Legacy` or {@link TRUE_APR_SECONDS_PER_YEAR} for `TrueApr`. This is the denominator of the reserve's rates.
+   */
+  accrualUnitsPerYear(): bigint {
+    return this.isTrueApr() ? BigInt(TRUE_APR_SECONDS_PER_YEAR) : BigInt(SLOTS_PER_YEAR);
+  }
+
+  /**
+   * The wall-clock timestamp (unix seconds) of the reserve's last refresh, as recorded on-chain alongside
+   * `lastUpdate.slot`. This is the anchor of a `TrueApr` reserve's interest/rewards accrual (see
+   * {@link accrualDurationSince}). `0` for an account last written by a program version which predates the field.
+   */
+  getLastUpdateTimestamp(): number {
+    return this.state.lastUpdate.timestamp;
+  }
+
+  /**
+   * Mirrors the on-chain `AccrualDuration::since`: the time elapsed between the reserve's last refresh and the given
+   * ledger instant, in the reserve's accrual units - i.e. the duration over which a refresh at `instant` would accrue
+   * interest and distribute rewards:
+   * - `Legacy`: the slots elapsed since `lastUpdate.slot`;
+   * - `TrueApr`: the seconds elapsed since {@link getLastUpdateTimestamp} (or `0` when that timestamp is `0`, i.e. the
+   *   reserve was last written by a program version predating the field - like the program, we then skip the accrual
+   *   instead of counting from the unix epoch).
+   *
+   * Negative differences (an instant older than the reserve's state) clamp to zero. The instant must be a coherent
+   * ledger snapshot ({@link LedgerInstant}: slot and block time fetched together), so that a `TrueApr` reserve's
+   * accrual is never derived from an assumed slot duration.
+   */
+  accrualDurationSince(instant: LedgerInstant): AccrualDuration {
+    const unitsPerYear = this.accrualUnitsPerYear();
+    if (this.isTrueApr()) {
+      const lastUpdateTimestamp = BigInt(this.getLastUpdateTimestamp());
+      const elapsedSeconds =
+        lastUpdateTimestamp === 0n ? 0n : maxBigInt(BigInt(instant.blockTime) - lastUpdateTimestamp, 0n);
+      return { elapsedUnits: elapsedSeconds, unitsPerYear };
+    }
+    const elapsedSlots = maxBigInt(BigInt(instant.slot) - BigInt(this.state.lastUpdate.slot.toString()), 0n);
+    return { elapsedUnits: elapsedSlots, unitsPerYear };
+  }
+
+  /**
+   * Mirrors the on-chain `Reserve::projected_accrual_duration`: expresses a wall-clock period (in seconds) as an
+   * {@link AccrualDuration} in this reserve's accrual units - rounded up to whole slots (assuming the nominal
+   * {@link SLOTS_PER_SECOND}, like the program) for `Legacy`, or to whole seconds for `TrueApr`. Used when projecting
+   * interest over a future period (e.g. the remaining term of a fixed-term borrow).
+   */
+  projectedAccrualDuration(timePeriodSecs: number): AccrualDuration {
+    if (timePeriodSecs < 0) {
+      throw new Error(`Cannot project an accrual duration over a negative period: ${timePeriodSecs}s`);
+    }
+    const elapsedUnits = BigInt(Math.ceil(this.isTrueApr() ? timePeriodSecs : timePeriodSecs * SLOTS_PER_SECOND));
+    return { elapsedUnits, unitsPerYear: this.accrualUnitsPerYear() };
+  }
+
+  /**
    * @returns the total borrowed amount of the reserve in lamports
    */
   getBorrowedAmount(): Decimal {
@@ -315,23 +422,23 @@ export class KaminoReserve {
    *
    * This is what the reserve holds right now, so it is the amount to use when mirroring the program at
    * the reserve's current state (see {@link getQueuedLiquidityAmountAtCurrentRate}). Use
-   * {@link getEstimatedLiquidityAvailableAmount} when projecting to a later slot instead.
+   * {@link getEstimatedLiquidityAvailableAmount} when projecting to a later instant instead.
    */
   getLiquidityAvailableAmount(): Decimal {
     return new Decimal(this.state.liquidity.totalAvailableAmount.toString());
   }
 
   /**
-   * @returns the available liquidity amount of the reserve in lamports, estimated at `slot`: the amount
-   * credited at the last refresh plus whatever a refresh at `slot` would distribute into it
+   * @returns the available liquidity amount of the reserve in lamports, estimated at `instant`: the amount
+   * credited at the last refresh plus whatever a refresh at `instant` would distribute into it
    *
    * The on-chain `distribute_rewards` credits `total_available_amount`, so — unlike interest accrual —
-   * the reserve rewards make this amount a function of the slot being asked about. This is the value to
+   * the reserve rewards make this amount a function of the instant being asked about. This is the value to
    * pair with anything derived from {@link getEstimatedCollateralExchangeRate}, so that both sides come
    * from one simulated refresh.
    */
-  getEstimatedLiquidityAvailableAmount(slot: Slot, referralFeeBps: number): Decimal {
-    return this.getLiquidityAvailableAmount().add(this.getEstimatedDistributedRewards(slot, referralFeeBps));
+  getEstimatedLiquidityAvailableAmount(instant: LedgerInstant, referralFeeBps: number): Decimal {
+    return this.getLiquidityAvailableAmount().add(this.getEstimatedDistributedRewards(instant, referralFeeBps));
   }
 
   /** @returns the total amount of ctokens queued for withdrawal */
@@ -341,26 +448,26 @@ export class KaminoReserve {
 
   /**
    * @returns the total amount of liquidity queued for withdrawal, valued at the exchange rate estimated
-   * for `slot`. Floored, like the on-chain `Reserve::queued_liquidity_amount`.
+   * for `instant`. Floored, like the on-chain `Reserve::queued_liquidity_amount`.
    */
-  getQueuedLiquidityAmount(slot: Slot, referralFeeBps: number): Decimal {
+  getQueuedLiquidityAmount(instant: LedgerInstant, referralFeeBps: number): Decimal {
     const queuedCTokens = this.getQueuedCTokens();
-    const exchangeRate = this.getEstimatedCollateralExchangeRate(slot, referralFeeBps);
+    const exchangeRate = this.getEstimatedCollateralExchangeRate(instant, referralFeeBps);
     return KaminoReserve.cTokensToLiquidity(queuedCTokens, exchangeRate).floor();
   }
 
   /**
    * @returns the the part of reserve liquidity available for *non-priority* purposes (e.g. borrowing,
-   * regular withdrawals), estimated at `slot`
+   * regular withdrawals), estimated at `instant`
    *
    * Mirrors the on-chain `Reserve::freely_available_liquidity_amount`, which takes the available
    * liquidity and the value of the withdraw queue from the same refreshed state — so both sides here
    * come from one simulated refresh.
    */
-  getFreelyAvailableLiquidityAmount(slot: Slot, referralFeeBps: number): Decimal {
-    const liquidityForQueuedCollateral = this.getQueuedLiquidityAmount(slot, referralFeeBps);
+  getFreelyAvailableLiquidityAmount(instant: LedgerInstant, referralFeeBps: number): Decimal {
+    const liquidityForQueuedCollateral = this.getQueuedLiquidityAmount(instant, referralFeeBps);
     return Decimal.max(
-      this.getEstimatedLiquidityAvailableAmount(slot, referralFeeBps).sub(liquidityForQueuedCollateral),
+      this.getEstimatedLiquidityAvailableAmount(instant, referralFeeBps).sub(liquidityForQueuedCollateral),
       new Decimal(0)
     );
   }
@@ -374,10 +481,24 @@ export class KaminoReserve {
   }
 
   /**
-   * @returns the current market price of the reserve in USD
+   * The reserve token's current market price in USD, as loaded from the reserve's oracle (or, on an all-zeroed-feeds
+   * refresh miss, from the reserve's own cached on-chain price - see `getTokenOracleDataSync()`).
+   *
+   * Like the program's `load_non_zero()`, this refuses to hand a zero price to any financial math: a zero here means
+   * the reserve was never refreshed with a live price (e.g. a Scope-computed feed before its first crank). Such a
+   * reserve can still be loaded and administered (including building the very transaction which cranks its price),
+   * just not priced.
    */
   getOracleMarketPrice(): Decimal {
-    return this.tokenOraclePrice.price;
+    const { price, valid } = this.tokenOraclePrice;
+    if (!valid && price.isZero()) {
+      throw new Error(
+        `Reserve ${
+          this.address
+        } (${this.getTokenSymbol()}) has no valid oracle price: all its price feeds and its cached price are zeroed (was it ever refreshed?)`
+      );
+    }
+    return price;
   }
 
   /**
@@ -479,10 +600,10 @@ export class KaminoReserve {
   }
 
   /**
-   * Calculates the total liquidity supply of the reserve
+   * Calculates the total liquidity supply of the reserve, as it would be after a refresh at `instant`.
    */
-  getEstimatedTotalSupply(slot: Slot, referralFeeBps: number): Decimal {
-    const { totalSupply } = this.getEstimatedDebtAndSupply(slot, referralFeeBps);
+  getEstimatedTotalSupply(instant: LedgerInstant, referralFeeBps: number): Decimal {
+    const { totalSupply } = this.getEstimatedDebtAndSupply(instant, referralFeeBps);
     return totalSupply;
   }
 
@@ -495,17 +616,15 @@ export class KaminoReserve {
   }
 
   /**
-   * @Returns estimated cumulative borrow rate of the reserve.
+   * @Returns estimated cumulative borrow rate of the reserve, as it would be after a refresh at `instant`.
    *
    * This is a running scale factor, not a rate: an obligation's debt is recovered by scaling it by the
    * ratio between two readings (see the on-chain `ObligationLiquidity::accrue_interest`). It must
    * therefore grow by the same factor {@link getEstimatedDebtAndSupply} grows the reserve's borrowed
    * amount by, which is why both take it from {@link compoundInterest}.
    */
-  getEstimatedCumulativeBorrowRate(currentSlot: Slot, referralFeeBps: number): Decimal {
-    const slotsElapsed = maxBigInt(currentSlot - BigInt(this.state.lastUpdate.slot.toString()), 0n);
-
-    const { compoundedInterestRate } = this.compoundInterest(slotsElapsed, referralFeeBps);
+  getEstimatedCumulativeBorrowRate(instant: LedgerInstant, referralFeeBps: number): Decimal {
+    const { compoundedInterestRate } = this.compoundInterest(this.accrualDurationSince(instant), referralFeeBps);
 
     const previousCumulativeBorrowRate = this.getCumulativeBorrowRate();
 
@@ -513,18 +632,23 @@ export class KaminoReserve {
   }
 
   /**
-   * Mirrors on-chain `Reserve::calculate_future_cumulative_borrow_rate`.
-   * Projects the cumulative borrow rate to a future slot.
+   * Mirrors on-chain `Reserve::calculate_future_cumulative_borrow_rate`: projects the cumulative borrow rate
+   * `timePeriodSecs` seconds past the given `instant`, at the reserve's current (configured) borrow rate.
+   *
+   * The on-chain projection runs from a freshly-refreshed reserve; this helper additionally catches up the reserve's
+   * accrual from its last refresh to `instant` (see {@link accrualDurationSince}), so a stale reserve state can only
+   * over-estimate.
+   *
+   * Note: this is intended to be used with fixed-term borrows, which have a fixed borrow rate, so this computation
+   * over the projected period is accurate.
    */
-  calculateFutureCumulativeBorrowRate(futureSlot: Slot): Decimal {
-    const currentSlot = BigInt(this.state.lastUpdate.slot.toString()) as Slot;
-    const slotsElapsed = maxBigInt(futureSlot - currentSlot, 0n);
-    const hostFixedInterestRate = this.getFixedHostInterestRate();
-    const currentUtilization = this.calculateUtilizationRatio();
-    const curve = truncateBorrowCurve(this.state.config.borrowRateCurve.points);
-    const baseBorrowRate = new Decimal(getBorrowRate(currentUtilization, curve));
-    const currentBorrowRate = baseBorrowRate.add(hostFixedInterestRate);
-    const compoundedInterestRate = this.approximateCompoundedInterest(currentBorrowRate, slotsElapsed);
+  calculateFutureCumulativeBorrowRate(timePeriodSecs: number, instant: LedgerInstant): Decimal {
+    const duration = addAccrualDurations(
+      this.accrualDurationSince(instant),
+      this.projectedAccrualDuration(timePeriodSecs)
+    );
+    const currentBorrowRate = new Decimal(this.configuredBorrowRate()).add(this.getFixedHostInterestRate());
+    const compoundedInterestRate = this.approximateCompoundedInterest(currentBorrowRate, duration);
     const previousCumulativeBorrowRate = this.getCumulativeBorrowRate();
 
     return previousCumulativeBorrowRate.mul(compoundedInterestRate);
@@ -546,10 +670,11 @@ export class KaminoReserve {
 
   /**
    *
-   * @returns the estimated exchange rate between the collateral tokens and the liquidity - this is a decimal number scaled by 1e18
+   * @returns the estimated exchange rate between the collateral tokens and the liquidity (as it would be after a
+   * refresh at `instant`) - this is a decimal number scaled by 1e18
    */
-  getEstimatedCollateralExchangeRate(slot: Slot, referralFeeBps: number): Decimal {
-    const totalSupply = this.getEstimatedTotalSupply(slot, referralFeeBps);
+  getEstimatedCollateralExchangeRate(instant: LedgerInstant, referralFeeBps: number): Decimal {
+    const totalSupply = this.getEstimatedTotalSupply(instant, referralFeeBps);
     const mintTotalSupply = this.state.collateral.mintTotalSupply;
     if (mintTotalSupply.isZero() || totalSupply.isZero()) {
       return INITIAL_COLLATERAL_RATE;
@@ -562,13 +687,18 @@ export class KaminoReserve {
    * Computes the amount of liquidity tokens that corresponds to a given amount of cTokens
    * @param cTokens - the amount of cTokens to convert to liquidity tokens
    * @param exchangeRate - the exchange rate to use. If not provided, the estimated exchange rate will be used
-   * @param slot - the slot to use to estimate exchange rate. If exchangeRate is provided, this parameter is ignored, if exchangeRate is not provided this parameter is required
+   * @param instant - the ledger instant to use to estimate exchange rate. If exchangeRate is provided, this parameter is ignored, if exchangeRate is not provided this parameter is required
    * @param referralFeeBps - the referral fee percentage to use for the estimated exchange rate. Defaults to 0. If exchangeRate is provided, this parameter is ignored.
    * @returns the amount of liquidity tokens that corresponds to the given amount of cTokens
    */
-  cTokensToLiquidity(cTokens: Decimal, slot: Slot, exchangeRate?: Decimal, referralFeeBps: number = 0): Decimal {
+  cTokensToLiquidity(
+    cTokens: Decimal,
+    instant: LedgerInstant,
+    exchangeRate?: Decimal,
+    referralFeeBps: number = 0
+  ): Decimal {
     if (exchangeRate === undefined) {
-      exchangeRate = this.getEstimatedCollateralExchangeRate(slot, referralFeeBps);
+      exchangeRate = this.getEstimatedCollateralExchangeRate(instant, referralFeeBps);
     }
     return KaminoReserve.cTokensToLiquidity(cTokens, exchangeRate);
   }
@@ -587,13 +717,18 @@ export class KaminoReserve {
    * Computes the amount of cTokens that corresponds to a given amount of liquidity
    * @param liquidity - the amount of liquidity to convert to cTokens
    * @param exchangeRate - the exchange rate to use. If not provided, the estimated exchange rate will be used
-   * @param slot - the slot to use to estimate exchange rate. If exchangeRate is provided, this parameter is ignored, if exchangeRate is not provided this parameter is required
+   * @param instant - the ledger instant to use to estimate exchange rate. If exchangeRate is provided, this parameter is ignored, if exchangeRate is not provided this parameter is required
    * @param referralFeeBps - the referral fee percentage to use for the estimated exchange rate. Defaults to 0. If exchangeRate is provided, this parameter is ignored.
    * @returns the amount of cTokens that corresponds to the given amount of liquidity
    */
-  liquidityToCTokens(liquidity: Decimal, slot: Slot, exchangeRate?: Decimal, referralFeeBps: number = 0): Decimal {
+  liquidityToCTokens(
+    liquidity: Decimal,
+    instant: LedgerInstant,
+    exchangeRate?: Decimal,
+    referralFeeBps: number = 0
+  ): Decimal {
     if (exchangeRate === undefined) {
-      exchangeRate = this.getEstimatedCollateralExchangeRate(slot, referralFeeBps);
+      exchangeRate = this.getEstimatedCollateralExchangeRate(instant, referralFeeBps);
     }
     return KaminoReserve.liquidityToCTokens(liquidity, exchangeRate);
   }
@@ -907,9 +1042,9 @@ export class KaminoReserve {
    * exchange-rate yield); see {@link calculateTheoreticalReserveRewardsSupplyAPR} for that component. Callers
    * that want the combined depositor yield should add the two.
    */
-  calculateSupplyAPR(slot: Slot, referralFeeBps: number) {
-    const currentUtilization = this.getEstimatedUtilizationRatio(slot, referralFeeBps);
-    const borrowRate = this.calculateEstimatedBorrowRate(slot, referralFeeBps);
+  calculateSupplyAPR(instant: LedgerInstant, referralFeeBps: number) {
+    const currentUtilization = this.getEstimatedUtilizationRatio(instant, referralFeeBps);
+    const borrowRate = this.calculateEstimatedBorrowRate(instant, referralFeeBps);
     const protocolTakeRatePct = 1 - this.state.config.protocolTakeRatePct / 100;
     return currentUtilization * borrowRate * protocolTakeRatePct;
   }
@@ -922,8 +1057,15 @@ export class KaminoReserve {
    * only) so that callers can render or use the two components independently.
    *
    * Returns the lesser of:
-   *   - `rewardsAmountPerSlot * SLOTS_PER_YEAR / total_supply` — the configured per-slot drip rate,
+   *   - `rewardsAmountPerAccrualUnit * accrualUnitsPerYear / total_supply` — the configured drip rate (per slot
+   *     for a `Legacy` reserve, per second for a `TrueApr` one; see {@link getInterestRateBasis}),
    *   - `reserveRewardsMaxAprBps / FULL_BPS` — the market-level cap.
+   *
+   * ...adjusted by {@link rateAdjustmentFactor} to the annual rate actually realized over a wall-clock year (a no-op
+   * for a `TrueApr` reserve; the slot-rate correction for a `Legacy` one, whose per-slot drip realizes faster than
+   * the nominal slot year when slots are shorter). This keeps the value addable to {@link calculateSupplyAPR}, which
+   * is wall-clock-adjusted the same way. Note that the on-chain cap is defined in nominal slot-year terms, so the
+   * capped result reads adjusted too: e.g. a binding 10% cap realizes ~12.5% at 400ms slots.
    *
    * Returns `0` only when rewards are configured off (market cap is `0` or RPS is `0`), or
    * when `total_supply` is zero (no depositors to earn the rate).
@@ -933,11 +1075,11 @@ export class KaminoReserve {
    * cadence, so this function returns the **steady-state rate** — what depositors earn while
    * the budget is non-zero.
    */
-  calculateTheoreticalReserveRewardsSupplyAPR(slot: Slot, referralFeeBps: number): number {
+  calculateTheoreticalReserveRewardsSupplyAPR(instant: LedgerInstant, referralFeeBps: number): number {
     if (this.reserveRewardsMaxAprBps === 0) {
       return 0;
     }
-    const rps = new Decimal(this.state.config.rewardsAmountPerSlot.toString());
+    const rps = new Decimal(this.state.config.rewardsAmountPerAccrualUnit.toString());
     if (rps.isZero()) {
       return 0;
     }
@@ -946,13 +1088,18 @@ export class KaminoReserve {
     // `total_available_amount` is incremented by the distribution). Use the pre-rewards supply
     // here too, otherwise we'd be feeding the distribution back into its own denominator and
     // under-stating the rate.
-    const { totalSupply } = this.getEstimatedDebtAndSupplyPreRewards(slot, referralFeeBps);
+    const { totalSupply } = this.getEstimatedDebtAndSupplyPreRewards(
+      this.accrualDurationSince(instant),
+      referralFeeBps
+    );
     if (totalSupply.isZero()) {
       return 0;
     }
-    const rpsRate = rps.mul(SLOTS_PER_YEAR).div(totalSupply).toNumber();
+    const rpsRate = rps.mul(this.accrualUnitsPerYear().toString()).div(totalSupply).toNumber();
     const aprCap = this.reserveRewardsMaxAprBps / ONE_HUNDRED_PCT_IN_BPS;
-    return Math.min(rpsRate, aprCap);
+    // Both terms above annualize over the basis' nominal units-per-year; scale the result (the factor distributes
+    // over `min`) to the realized wall-clock rate, like the rest of the APR family:
+    return Math.min(rpsRate, aprCap) * this.rateAdjustmentFactor();
   }
 
   /**
@@ -964,33 +1111,36 @@ export class KaminoReserve {
    * Use this for reporting current/actual yield; use {@link calculateTheoreticalReserveRewardsSupplyAPR} for
    * the steady-state rate (eg. theoretical APY projections).
    */
-  calculateEffectiveReserveRewardsSupplyAPR(slot: Slot, referralFeeBps: number): number {
+  calculateEffectiveReserveRewardsSupplyAPR(instant: LedgerInstant, referralFeeBps: number): number {
     if (this.state.liquidity.rewardsAmountAvailable.isZero()) {
       return 0;
     }
-    return this.calculateTheoreticalReserveRewardsSupplyAPR(slot, referralFeeBps);
+    return this.calculateTheoreticalReserveRewardsSupplyAPR(instant, referralFeeBps);
   }
 
   /**
-   * Mirrors the on-chain `refresh_reserve` (`accrue_interest` → `distribute_rewards`) and returns
+   * Mirrors the on-chain `refresh_reserve` (`accrue_interest` → `distribute_rewards`) at `instant` and returns
    * the post-refresh debt and supply. The rewards-distribution step is driven by
    * {@link reserveRewardsMaxAprBps} (`0`, i.e. rewards disabled on the market, makes it a no-op).
    */
-  getEstimatedDebtAndSupply(slot: Slot, referralFeeBps: number): { totalBorrow: Decimal; totalSupply: Decimal } {
-    const slotsElapsed = maxBigInt(slot - BigInt(this.state.lastUpdate.slot.toNumber()), 0n);
-    const { totalBorrow, totalSupply } = this.getEstimatedDebtAndSupplyPreRewards(slot, referralFeeBps);
-    const distributedRewards = this.simulateDistributeRewards(slotsElapsed, totalSupply);
+  getEstimatedDebtAndSupply(
+    instant: LedgerInstant,
+    referralFeeBps: number
+  ): { totalBorrow: Decimal; totalSupply: Decimal } {
+    const duration = this.accrualDurationSince(instant);
+    const { totalBorrow, totalSupply } = this.getEstimatedDebtAndSupplyPreRewards(duration, referralFeeBps);
+    const distributedRewards = this.simulateDistributeRewards(duration, totalSupply);
     return { totalBorrow, totalSupply: totalSupply.add(distributedRewards) };
   }
 
   /**
-   * The amount the `distribute_rewards` step of a refresh at `slot` would move out of
+   * The amount the `distribute_rewards` step of a refresh at `instant` would move out of
    * `rewardsAmountAvailable` and into the reserve's available liquidity.
    */
-  private getEstimatedDistributedRewards(slot: Slot, referralFeeBps: number): Decimal {
-    const slotsElapsed = maxBigInt(slot - BigInt(this.state.lastUpdate.slot.toNumber()), 0n);
-    const { totalSupply } = this.getEstimatedDebtAndSupplyPreRewards(slot, referralFeeBps);
-    return this.simulateDistributeRewards(slotsElapsed, totalSupply);
+  private getEstimatedDistributedRewards(instant: LedgerInstant, referralFeeBps: number): Decimal {
+    const duration = this.accrualDurationSince(instant);
+    const { totalSupply } = this.getEstimatedDebtAndSupplyPreRewards(duration, referralFeeBps);
+    return this.simulateDistributeRewards(duration, totalSupply);
   }
 
   /**
@@ -1002,17 +1152,16 @@ export class KaminoReserve {
    * evaluated against this state, never against the post-distribution one.
    */
   private getEstimatedDebtAndSupplyPreRewards(
-    slot: Slot,
+    duration: AccrualDuration,
     referralFeeBps: number
   ): { totalBorrow: Decimal; totalSupply: Decimal } {
-    const slotsElapsed = maxBigInt(slot - BigInt(this.state.lastUpdate.slot.toNumber()), 0n);
     let totalBorrow: Decimal;
     let totalSupply: Decimal;
-    if (slotsElapsed === 0n) {
+    if (duration.elapsedUnits === 0n) {
       totalBorrow = this.getBorrowedAmount();
       totalSupply = this.getTotalSupply();
     } else {
-      const { newDebt, newAccProtocolFees, pendingReferralFees } = this.compoundInterest(slotsElapsed, referralFeeBps);
+      const { newDebt, newAccProtocolFees, pendingReferralFees } = this.compoundInterest(duration, referralFeeBps);
       const postAccrueTotalSupply = this.getLiquidityAvailableAmount()
         .add(newDebt)
         .sub(newAccProtocolFees)
@@ -1028,56 +1177,54 @@ export class KaminoReserve {
    * Mirrors on-chain `Reserve::distribute_rewards` (programs/klend/src/state/reserve.rs).
    *
    * Computes how much of `rewards_amount_available` would be moved into `total_available_amount`
-   * during a refresh at the given slot, capped by the per-slot RPS budget and the market-level
-   * APR ({@link reserveRewardsMaxAprBps}).
+   * during a refresh after the given accrual `duration` (slots for a `Legacy` reserve, seconds for a
+   * `TrueApr` one), capped by the per-unit RPS budget and the market-level APR
+   * ({@link reserveRewardsMaxAprBps}).
    *
    * `postAccrueTotalSupply` must be the supply *after* `accrue_interest` has run for the same
-   * `slotsElapsed` (this is what the on-chain code uses for the APR cap).
+   * `duration` (this is what the on-chain code uses for the APR cap).
    *
    * Every quantity the on-chain formula operates on is an integer, so this is computed in `bigint`
-   * to match it exactly: the `total_supply * apr_bps * slots_elapsed` product exceeds the 20
+   * to match it exactly: the `total_supply * apr_bps * elapsed_units` product exceeds the 20
    * significant digits {@link Decimal} keeps by default long before it exceeds the program's `u128`,
    * and rounding it would shift the final floor by a lamport.
    */
-  private simulateDistributeRewards(slotsElapsed: bigint, postAccrueTotalSupply: Decimal): Decimal {
+  private simulateDistributeRewards(duration: AccrualDuration, postAccrueTotalSupply: Decimal): Decimal {
+    const { elapsedUnits, unitsPerYear } = duration;
     const maxAprBps = BigInt(this.reserveRewardsMaxAprBps);
-    const rps = BigInt(this.state.config.rewardsAmountPerSlot.toString());
+    const rps = BigInt(this.state.config.rewardsAmountPerAccrualUnit.toString());
     const rewardsAvailable = BigInt(this.state.liquidity.rewardsAmountAvailable.toString());
     const mintTotalSupply = BigInt(this.state.collateral.mintTotalSupply.toString());
 
-    if (slotsElapsed === 0n || maxAprBps === 0n || rps === 0n || rewardsAvailable === 0n || mintTotalSupply === 0n) {
+    if (elapsedUnits === 0n || maxAprBps === 0n || rps === 0n || rewardsAvailable === 0n || mintTotalSupply === 0n) {
       return new Decimal(0);
     }
 
-    const rawDistribution = rps * slotsElapsed;
-    // APR cap: floor(floor(total_supply) * apr_bps * slots_elapsed / (FULL_BPS * SLOTS_PER_YEAR))
+    const rawDistribution = rps * elapsedUnits;
+    // APR cap: floor(floor(total_supply) * apr_bps * elapsed_units / (FULL_BPS * units_per_year))
     // On-chain calls `total_supply().to_floor()` *before* the multiplication
     // (programs/klend/src/state/reserve.rs::distribute_rewards), so we floor first too; the
     // program's integer division then truncates the quotient, like `bigint` division does here.
     const flooredTotalSupply = BigInt(postAccrueTotalSupply.floor().toFixed(0));
-    const aprCap =
-      (flooredTotalSupply * maxAprBps * slotsElapsed) / (BigInt(ONE_HUNDRED_PCT_IN_BPS) * BigInt(SLOTS_PER_YEAR));
+    const aprCap = (flooredTotalSupply * maxAprBps * elapsedUnits) / (BigInt(ONE_HUNDRED_PCT_IN_BPS) * unitsPerYear);
 
     return new Decimal(minBigInt(rawDistribution, aprCap, rewardsAvailable).toString());
   }
 
   getEstimatedAccumulatedProtocolFees(
-    slot: Slot,
+    instant: LedgerInstant,
     referralFeeBps: number
   ): { accumulatedProtocolFees: Decimal; compoundedVariableProtocolFee: Decimal; compoundedFixedHostFee: Decimal } {
-    const slotsElapsed = maxBigInt(slot - BigInt(this.state.lastUpdate.slot.toString()), 0n);
+    const duration = this.accrualDurationSince(instant);
     let accumulatedProtocolFees: Decimal;
     let compoundedVariableProtocolFee: Decimal;
     let compoundedFixedHostFee: Decimal;
-    if (slotsElapsed === 0n) {
+    if (duration.elapsedUnits === 0n) {
       accumulatedProtocolFees = this.getAccumulatedProtocolFees();
       compoundedVariableProtocolFee = new Decimal(0);
       compoundedFixedHostFee = new Decimal(0);
     } else {
-      const { newAccProtocolFees, variableProtocolFee, fixedHostFee } = this.compoundInterest(
-        slotsElapsed,
-        referralFeeBps
-      );
+      const { newAccProtocolFees, variableProtocolFee, fixedHostFee } = this.compoundInterest(duration, referralFeeBps);
       accumulatedProtocolFees = newAccProtocolFees;
       compoundedVariableProtocolFee = variableProtocolFee;
       compoundedFixedHostFee = fixedHostFee;
@@ -1094,9 +1241,9 @@ export class KaminoReserve {
     return totalBorrows.dividedBy(totalSupply).toNumber();
   }
 
-  getEstimatedUtilizationRatio(slot: Slot, referralFeeBps: number): number {
+  getEstimatedUtilizationRatio(instant: LedgerInstant, referralFeeBps: number): number {
     const { totalBorrow: estimatedTotalBorrowed, totalSupply: estimatedTotalSupply } = this.getEstimatedDebtAndSupply(
-      slot,
+      instant,
       referralFeeBps
     );
     if (estimatedTotalSupply.eq(0)) {
@@ -1109,12 +1256,12 @@ export class KaminoReserve {
   calcSimulatedUtilizationRatio(
     amount: Decimal,
     action: ActionType,
-    slot: Slot,
+    instant: LedgerInstant,
     referralFeeBps: number,
     outflowAmount?: Decimal
   ): number {
     const { totalBorrow: previousTotalBorrowed, totalSupply: previousTotalSupply } = this.getEstimatedDebtAndSupply(
-      slot,
+      instant,
       referralFeeBps
     );
 
@@ -1165,7 +1312,11 @@ export class KaminoReserve {
     }
   }
 
-  getMaxBorrowAmountWithCollReserve(market: KaminoMarket, collReserve: KaminoReserve): Decimal {
+  getMaxBorrowAmountWithCollReserve(
+    market: KaminoMarket,
+    collReserve: KaminoReserve,
+    currentLedgerInstant: LedgerInstant
+  ): Decimal {
     const groups = market.state.elevationGroups;
     const commonElevationGroups = market.getCommonElevationGroupsForPair(collReserve, this);
 
@@ -1188,7 +1339,7 @@ export class KaminoReserve {
 
     let maxBorrowAmount = Decimal.min(reserveAvailableAmount, reserveBorrowCapRemained);
 
-    const currentUnixTimestamp = Math.floor(Date.now() / 1000);
+    const currentUnixTimestamp = Number(currentLedgerInstant.blockTime);
     const debtWithdrawalCap = this.getDebtWithdrawalCapCapacity().sub(
       this.getDebtWithdrawalCapCurrent(currentUnixTimestamp)
     );
@@ -1247,14 +1398,14 @@ export class KaminoReserve {
   calcSimulatedBorrowRate(
     amount: Decimal,
     action: ActionType,
-    slot: Slot,
+    instant: LedgerInstant,
     referralFeeBps: number,
     outflowAmount?: Decimal
   ) {
-    const slotAdjustmentFactor = this.slotAdjustmentFactor();
-    const newUtilization = this.calcSimulatedUtilizationRatio(amount, action, slot, referralFeeBps, outflowAmount);
+    const rateAdjustmentFactor = this.rateAdjustmentFactor();
+    const newUtilization = this.calcSimulatedUtilizationRatio(amount, action, instant, referralFeeBps, outflowAmount);
     const curve = truncateBorrowCurve(this.state.config.borrowRateCurve.points);
-    return getBorrowRate(newUtilization, curve) * slotAdjustmentFactor;
+    return getBorrowRate(newUtilization, curve) * rateAdjustmentFactor;
   }
 
   /**
@@ -1264,13 +1415,13 @@ export class KaminoReserve {
   calcSimulatedBorrowAPR(
     amount: Decimal,
     action: ActionType,
-    slot: Slot,
+    instant: LedgerInstant,
     referralFeeBps: number,
     outflowAmount?: Decimal
   ) {
     return (
-      this.calcSimulatedBorrowRate(amount, action, slot, referralFeeBps, outflowAmount) +
-      this.getFixedHostInterestRate().toNumber() * this.slotAdjustmentFactor()
+      this.calcSimulatedBorrowRate(amount, action, instant, referralFeeBps, outflowAmount) +
+      this.getFixedHostInterestRate().toNumber() * this.rateAdjustmentFactor()
     );
   }
 
@@ -1283,27 +1434,52 @@ export class KaminoReserve {
   calcSimulatedSupplyAPR(
     amount: Decimal,
     action: ActionType,
-    slot: Slot,
+    instant: LedgerInstant,
     referralFeeBps: number,
     outflowAmount?: Decimal
   ) {
-    const newUtilization = this.calcSimulatedUtilizationRatio(amount, action, slot, referralFeeBps, outflowAmount);
-    const simulatedBorrowAPR = this.calcSimulatedBorrowRate(amount, action, slot, referralFeeBps, outflowAmount);
+    const newUtilization = this.calcSimulatedUtilizationRatio(amount, action, instant, referralFeeBps, outflowAmount);
+    const simulatedBorrowAPR = this.calcSimulatedBorrowRate(amount, action, instant, referralFeeBps, outflowAmount);
     const protocolTakeRatePct = 1 - this.state.config.protocolTakeRatePct / 100;
 
     return newUtilization * simulatedBorrowAPR * protocolTakeRatePct;
   }
 
+  /**
+   * The ratio between the nominal slot rate the program assumes ({@link SLOTS_PER_SECOND}) and the recently observed
+   * one: `500ms / recentSlotDurationMs`.
+   */
   slotAdjustmentFactor(): number {
     return 1000 / SLOTS_PER_SECOND / this.recentSlotDurationMs;
   }
 
+  /**
+   * The multiplier turning this reserve's configured rates into the annual rates they actually realize:
+   * {@link slotAdjustmentFactor} for a `Legacy` reserve (whose per-slot accrual tracks the real slot rate), `1` for a
+   * `TrueApr` one (whose per-second accrual is already wall-clock). Applied by the display-oriented rate getters;
+   * interest accrual compounds {@link configuredBorrowRate} instead.
+   */
+  rateAdjustmentFactor(): number {
+    return this.isTrueApr() ? 1 : this.slotAdjustmentFactor();
+  }
+
+  /**
+   * The reserve's borrow rate as the annual rate it actually realizes, i.e. adjusted by
+   * {@link rateAdjustmentFactor}.
+   */
   calculateBorrowRate() {
-    const slotAdjustmentFactor = this.slotAdjustmentFactor();
+    return this.configuredBorrowRate() * this.rateAdjustmentFactor();
+  }
+
+  /**
+   * The borrow rate exactly as configured on the reserve's curve (at the current utilization), which is what accrual
+   * compounds: the program reads this value straight off the curve, annualized by the accrual units of the reserve's
+   * {@link InterestRateBasis} rather than by a slot-rate-corrected wall-clock year.
+   */
+  private configuredBorrowRate(): number {
     const currentUtilization = this.calculateUtilizationRatio();
     const curve = truncateBorrowCurve(this.state.config.borrowRateCurve.points);
-
-    return getBorrowRate(currentUtilization, curve) * slotAdjustmentFactor;
+    return getBorrowRate(currentUtilization, curve);
   }
 
   /**
@@ -1343,11 +1519,11 @@ export class KaminoReserve {
    * Estimated borrow rate, evaluated at the rewards-aware utilization implied by
    * {@link reserveRewardsMaxAprBps}.
    */
-  calculateEstimatedBorrowRate(slot: Slot, referralFeeBps: number) {
-    const slotAdjustmentFactor = this.slotAdjustmentFactor();
-    const estimatedCurrentUtilization = this.getEstimatedUtilizationRatio(slot, referralFeeBps);
+  calculateEstimatedBorrowRate(instant: LedgerInstant, referralFeeBps: number) {
+    const rateAdjustmentFactor = this.rateAdjustmentFactor();
+    const estimatedCurrentUtilization = this.getEstimatedUtilizationRatio(instant, referralFeeBps);
     const curve = truncateBorrowCurve(this.state.config.borrowRateCurve.points);
-    return getBorrowRate(estimatedCurrentUtilization, curve) * slotAdjustmentFactor;
+    return getBorrowRate(estimatedCurrentUtilization, curve) * rateAdjustmentFactor;
   }
 
   /**
@@ -1355,10 +1531,10 @@ export class KaminoReserve {
    * the curve is computed with the rewards-distribution simulation of
    * {@link reserveRewardsMaxAprBps} applied.
    */
-  calculateBorrowAPR(slot: Slot, referralFeeBps: number) {
-    const slotAdjustmentFactor = this.slotAdjustmentFactor();
-    const borrowRate = this.calculateEstimatedBorrowRate(slot, referralFeeBps);
-    return borrowRate + this.getFixedHostInterestRate().toNumber() * slotAdjustmentFactor;
+  calculateBorrowAPR(instant: LedgerInstant, referralFeeBps: number) {
+    const rateAdjustmentFactor = this.rateAdjustmentFactor();
+    const borrowRate = this.calculateEstimatedBorrowRate(instant, referralFeeBps);
+    return borrowRate + this.getFixedHostInterestRate().toNumber() * rateAdjustmentFactor;
   }
 
   calculateBorrowAPRFixedRate() {
@@ -1367,11 +1543,11 @@ export class KaminoReserve {
         'calculateBorrowAPRFixedRate should only be called for fixed rate reserves; for float rate reserves, see calculateBorrowAPR'
       );
     }
-    const slotAdjustmentFactor = this.slotAdjustmentFactor();
+    const rateAdjustmentFactor = this.rateAdjustmentFactor();
     const borrowRate =
       (this.reserveKind as FixedRateReserveKind).borrowRateBps / ONE_HUNDRED_PCT_IN_BPS +
       this.getFixedHostInterestRate().toNumber();
-    return borrowRate * slotAdjustmentFactor;
+    return borrowRate * rateAdjustmentFactor;
   }
 
   /**
@@ -1403,15 +1579,12 @@ export class KaminoReserve {
    * Use this to preflight the (re-)origination of debt before building a swap-debt / swap-collateral / leverage tx so
    * callers get a clear error instead of an opaque on-chain revert.
    *
-   * This low-level helper retains a wall-clock default, but transaction builders pass the block time from a
-   * `LedgerInstant` fetched at the same commitment as their loaded state. Other callers that need a deterministic
-   * clock should likewise pass a cluster-derived `currentTimestamp` (e.g. from `getBlockTime`). The on-chain check
-   * runs against cluster time at execution, so a borrow that crosses maturity after this preflight still fails
-   * cleanly at simulation with the on-chain error.
+   * The on-chain check runs against cluster time at execution, so a borrow that crosses maturity after this
+   * preflight still fails cleanly at simulation with the on-chain error.
    *
-   * @param currentTimestamp unix seconds (defaults to the current wall clock)
+   * @param currentTimestamp unix seconds from the cluster clock (e.g. a `LedgerInstant.blockTime`)
    */
-  assertCanOriginateDebt(currentTimestamp: number = Math.floor(Date.now() / 1000)): void {
+  assertCanOriginateDebt(currentTimestamp: number): void {
     const debtMaturityTimestamp = this.state.config.debtMaturityTimestamp;
     if (!debtMaturityTimestamp.eqn(0) && debtMaturityTimestamp.lten(currentTimestamp)) {
       throw new Error(
@@ -1525,26 +1698,26 @@ export class KaminoReserve {
    * {@link calculateTheoreticalReserveRewardsSupplyAPR} for that). The borrow rate that feeds this is
    * evaluated at the rewards-aware utilization (see {@link reserveRewardsMaxAprBps}).
    */
-  totalSupplyAPY(currentSlot: Slot) {
+  totalSupplyAPY(currentInstant: LedgerInstant) {
     const { stats } = this;
     if (!stats) {
       throw Error('KaminoMarket must call loadRewards.');
     }
 
-    return calculateAPYFromAPR(this.calculateSupplyAPR(currentSlot, 0));
+    return calculateAPYFromAPR(this.calculateSupplyAPR(currentInstant, 0));
   }
 
   /**
    * Borrow APY. The curve-driven borrow rate is evaluated at the rewards-aware utilization
    * (see {@link reserveRewardsMaxAprBps}).
    */
-  totalBorrowAPY(currentSlot: Slot) {
+  totalBorrowAPY(currentInstant: LedgerInstant) {
     const { stats } = this;
     if (!stats) {
       throw Error('KaminoMarket must call loadRewards.');
     }
 
-    return calculateAPYFromAPR(this.calculateBorrowAPR(currentSlot, 0));
+    return calculateAPYFromAPR(this.calculateBorrowAPR(currentInstant, 0));
   }
 
   totalBorrowAPYFixedRate() {
@@ -1578,7 +1751,11 @@ export class KaminoReserve {
     }
   }
 
-  async getRewardYields(prices: KaminoPrices, farmsProgramId?: Address): Promise<ReserveRewardYield[]> {
+  async getRewardYields(
+    prices: KaminoPrices,
+    currentLedgerInstant: LedgerInstant,
+    farmsProgramId?: Address
+  ): Promise<ReserveRewardYield[]> {
     const { stats } = this;
     if (!stats) {
       throw Error('KaminoMarket must call loadReserves.');
@@ -1591,16 +1768,17 @@ export class KaminoReserve {
       for (const rewardInfo of farmAndKey.farmState.rewardInfos.filter(
         (x) => x.token.mint !== DEFAULT_PUBLIC_KEY && x.rewardsAvailable !== 0n
       )) {
-        const { apy, apr } = this.calculateRewardYield(
+        const { apy, apr, rewardsPerSecond } = this.calculateRewardYield(
           prices,
           rewardInfo,
           isDebtReward,
-          new Decimal(farmAndKey.farmState.totalActiveStakeScaled.toString())
+          new Decimal(farmAndKey.farmState.totalActiveStakeScaled.toString()),
+          currentLedgerInstant
         );
         if (apy.isZero() && apr.isZero()) {
           continue;
         }
-        yields.push({ apy, apr, rewardInfo });
+        yields.push({ apy, apr, rewardInfo, rewardsPerSecond });
       }
     }
     return yields;
@@ -1610,15 +1788,20 @@ export class KaminoReserve {
     prices: KaminoPrices,
     rewardInfo: RewardInfo,
     isDebtReward: boolean,
-    farmTotalStakeLamports: Decimal
+    farmTotalStakeLamports: Decimal,
+    currentLedgerInstant: LedgerInstant
   ) {
     const mintAddress = this.getLiquidityMint();
-    const rewardPerTimeUnitSecond = getRewardPerTimeUnitSecond(rewardInfo, farmTotalStakeLamports);
+    const rewardPerTimeUnitSecond = getRewardPerTimeUnitSecond(
+      rewardInfo,
+      farmTotalStakeLamports,
+      Number(currentLedgerInstant.blockTime)
+    );
     const reserveToken = prices.spot[mintAddress.toString()];
     const rewardToken = prices.spot[rewardInfo.token.mint.toString()];
 
     if (rewardPerTimeUnitSecond.isZero() || reserveToken === undefined || rewardToken === undefined) {
-      return { apy: new Decimal(0), apr: new Decimal(0) };
+      return { apy: new Decimal(0), apr: new Decimal(0), rewardsPerSecond: rewardPerTimeUnitSecond };
     }
     const { decimals } = this.stats;
     const totalBorrows = this.getBorrowedAmount();
@@ -1631,7 +1814,7 @@ export class KaminoReserve {
     const rewardsInYear = rewardPerTimeUnitSecond.mul(60 * 60 * 24 * 365);
     const rewardsInYearValue = rewardsInYear.mul(rewardToken.price);
     const apr = rewardsInYearValue.div(totalValue);
-    return { apy: aprToApy(apr, 365), apr };
+    return { apy: aprToApy(apr, 365), apr, rewardsPerSecond: rewardPerTimeUnitSecond };
   }
 
   private formatReserveData(parsedData: ReserveFields, deprecatedAssets: string[]): ReserveDataType {
@@ -1677,7 +1860,8 @@ export class KaminoReserve {
   }
 
   /**
-   * Compound current borrow rate over elapsed slots
+   * Compound current borrow rate over the elapsed accrual duration (slots for a `Legacy` reserve, seconds for a
+   * `TrueApr` one - see {@link accrualDurationSince}).
    *
    * This also calculates protocol fees, which are taken for all obligations that have borrowed from current reserve.
    *
@@ -1685,11 +1869,15 @@ export class KaminoReserve {
    *
    * https://github.com/Kamino-Finance/klend/blob/release/1.3.0/programs/klend/src/state/reserve.rs#L517
    *
-   * @param slotsElapsed
+   * Note: the variable rate fed into the compounding is {@link configuredBorrowRate} - the curve value the program
+   * itself compounds, with no slot-rate adjustment. The {@link rateAdjustmentFactor} correction only describes the
+   * annual rate a `Legacy` reserve *realizes* and belongs to the display getters, never to accrual.
+   *
+   * @param duration
    * @param referralFeeBps
    */
   private compoundInterest(
-    slotsElapsed: bigint,
+    duration: AccrualDuration,
     referralFeeBps: number
   ): {
     compoundedInterestRate: Decimal;
@@ -1702,16 +1890,16 @@ export class KaminoReserve {
     newAccProtocolFees: Decimal;
     pendingReferralFees: Decimal;
   } {
-    const currentBorrowRate = this.calculateBorrowRate();
+    const currentBorrowRate = this.configuredBorrowRate();
     const protocolTakeRate = new Decimal(this.state.config.protocolTakeRatePct).div(100);
     const referralRate = new Decimal(referralFeeBps).div(10_000);
     const fixedHostInterestRate = this.getFixedHostInterestRate();
 
     const compoundedInterestRate = this.approximateCompoundedInterest(
       new Decimal(currentBorrowRate).plus(fixedHostInterestRate),
-      slotsElapsed
+      duration
     );
-    const compoundedFixedRate = this.approximateCompoundedInterest(fixedHostInterestRate, slotsElapsed);
+    const compoundedFixedRate = this.approximateCompoundedInterest(fixedHostInterestRate, duration);
 
     const previousDebt = this.getBorrowedAmount();
     const newDebt = previousDebt.mul(compoundedInterestRate);
@@ -1744,14 +1932,16 @@ export class KaminoReserve {
   }
 
   /**
-   * Approximation to match the smart contract calculation
+   * Approximation to match the smart contract calculation (`approximate_compounded_interest`): compounds the yearly
+   * `rate` per accrual unit over the given {@link AccrualDuration}.
    * https://github.com/Kamino-Finance/klend/blob/release/1.3.0/programs/klend/src/state/reserve.rs#L1026
    * @param rate
-   * @param elapsedSlots
+   * @param duration
    */
-  private approximateCompoundedInterest(rate: Decimal, elapsedSlots: bigint): Decimal {
-    const base = rate.div(SLOTS_PER_YEAR);
-    switch (elapsedSlots) {
+  private approximateCompoundedInterest(rate: Decimal, duration: AccrualDuration): Decimal {
+    const { elapsedUnits, unitsPerYear } = duration;
+    const base = rate.div(unitsPerYear.toString());
+    switch (elapsedUnits) {
       case 0n:
         return new Decimal(1);
       case 1n:
@@ -1765,7 +1955,7 @@ export class KaminoReserve {
         return pow2.mul(pow2);
       }
     }
-    const exp = elapsedSlots;
+    const exp = elapsedUnits;
     const expMinus1 = exp - 1n;
     const expMinus2 = exp - 2n;
 
@@ -2136,8 +2326,9 @@ export const RESERVE_CONFIG_UPDATER = new ConfigUpdater(UpdateConfigMode.fromDec
   [UpdateConfigMode.UpdateDebtTermSeconds.kind]: config.debtTermSeconds,
   [UpdateConfigMode.UpdateEarlyRepayRemainingInterestPct.kind]: config.earlyRepayRemainingInterestPct,
   [UpdateConfigMode.UpdateReserveEmergencyMode.kind]: config.emergencyMode,
-  [UpdateConfigMode.UpdateRewardsAmountPerSlot.kind]: config.rewardsAmountPerSlot,
+  [UpdateConfigMode.UpdateRewardsAmountPerAccrualUnit.kind]: config.rewardsAmountPerAccrualUnit,
   [UpdateConfigMode.UpdateReservePermissionedOps.kind]: config.permissionedOps,
+  [UpdateConfigMode.UpdateInterestRateBasis.kind]: config.interestRateBasis, // note: the program rejects a change to `Legacy`
 }));
 
 export const ENTIRE_RESERVE_CONFIG_UPDATER = new PriorityOrderedConfigUpdater(RESERVE_CONFIG_UPDATER);
@@ -2230,14 +2421,18 @@ export function shouldSkipValidation(mode: UpdateConfigModeKind, reserve: Reserv
 
 /**
  * Returns a ReserveConfig matching the on-chain defaults after init_reserve
- * (status = Hidden, everything else zeroed).
+ * (status = Hidden, interest rate basis = TrueApr, everything else zeroed).
  * Used as the baseline for diffing when no existing reserve config is available
  * (reserve does not exist on-chain yet)
  */
-function defaultReserveConfig(): ReserveConfig {
+export function defaultReserveConfig(): ReserveConfig {
   const layout = ReserveConfig.layout();
   const zeroed = ReserveConfig.fromDecoded(layout.decode(Buffer.alloc(layout.span)));
-  return new ReserveConfig({ ...zeroed, status: ReserveStatusEnum.Hidden.discriminator });
+  return new ReserveConfig({
+    ...zeroed,
+    status: ReserveStatusEnum.Hidden.discriminator,
+    interestRateBasis: InterestRateBasis.TrueApr,
+  });
 }
 
 export function buildReserveConfigPriority(previous: ReserveConfig | undefined, changed: ReserveConfig) {

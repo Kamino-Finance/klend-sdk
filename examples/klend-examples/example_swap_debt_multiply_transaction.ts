@@ -212,7 +212,6 @@ function printSwapDebtPreview(preview: SwapDebtObligationsPreview): void {
     newElevationGroup,
     slippagePct: new Decimal(slippageBps).div(100),
     referrer: none(),
-    currentSlot: ctx.currentSlot,
     currentLedgerInstant: ctx.currentLedgerInstant,
     // Swap the new (target) debt back into the old (source) debt to repay the flash loan.
     quoter: getKswapQuoter(kswapSdk, ctx.wallet.address, slippageBps, targetDebtReserve, sourceDebtReserve),
@@ -235,7 +234,6 @@ function printSwapDebtPreview(preview: SwapDebtObligationsPreview): void {
     isClosingSourceDebt,
     flashBorrowToken,
     newElevationGroup,
-    slot: ctx.currentSlot,
     currentLedgerInstant: ctx.currentLedgerInstant,
     referrer: none(),
     slippagePct: new Decimal(slippageBps).div(100),

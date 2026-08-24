@@ -1,18 +1,13 @@
 import Decimal from 'decimal.js';
 import { KaminoMarket, KaminoObligation, KaminoReserve } from '../classes';
 import { FeeCalculation } from '../classes/shared';
-import { Address, Slot } from '@solana/kit';
+import { Address } from '@solana/kit';
 import { isFlashLoanEnabled } from '../leverage/utils';
 import { SwapCollFlashBorrowToken } from './swap_collateral_operations';
 import { SwapDebtFlashBorrowToken } from './swap_debt_operations';
 import { assertPositiveFiniteDecimal, getSlippageFactor } from './swap_calcs';
 import { resolveSourceDebtRepayLamports } from './swap_debt_sizing';
-import {
-  LedgerInstant,
-  LedgerInstantCompatible,
-  normalizeLedgerInstantArgument,
-  requireMatchingLedgerInstant,
-} from '../utils/ledger';
+import { LedgerInstant } from '../utils/ledger';
 
 export type SwapCollLiquidityFlashBorrowToken = Extract<SwapCollFlashBorrowToken, 'sourceColl' | 'targetColl'>;
 
@@ -59,11 +54,11 @@ export interface DetermineSwapDebtFlashBorrowTypeInputs {
    * Slippage percentage (e.g. `0.5` for 0.5%). Required.
    */
   slippagePct: Decimal;
-  currentSlot: Slot;
-  currentLedgerInstant?: LedgerInstant;
+  /** The ledger instant (slot + block time) the repay sizing is estimated at. */
+  currentLedgerInstant: LedgerInstant;
 }
 
-export type DetermineSwapDebtFlashBorrowTypeParams = LedgerInstantCompatible<DetermineSwapDebtFlashBorrowTypeInputs>;
+export type DetermineSwapDebtFlashBorrowTypeParams = DetermineSwapDebtFlashBorrowTypeInputs;
 
 export interface ChooseSwapDebtFlashBorrowTokenInputs {
   sourceDebtReserve: KaminoReserve;
@@ -185,15 +180,7 @@ export function determineSwapDebtFlashBorrowType(
     throw new Error('amount must be positive');
   }
   assertPositiveFiniteDecimal('determineSwapDebtFlashBorrowType: priceSourceToTarget', props.priceSourceToTarget);
-  const slotOrInstant = props.currentSlot ?? props.currentLedgerInstant;
-  if (slotOrInstant === undefined) {
-    throw new Error('determineSwapDebtFlashBorrowType: either currentSlot or currentLedgerInstant is required');
-  }
-  const { currentSlot } = normalizeLedgerInstantArgument(
-    slotOrInstant,
-    props.currentLedgerInstant,
-    'determineSwapDebtFlashBorrowType'
-  );
+  const currentLedgerInstant = props.currentLedgerInstant;
 
   // When closing the source debt, the actual flow in `getSwapDebtIxs` ignores `amount` and sizes the flash loan /
   // external swap around the full outstanding position (plus IR/buffer). Reuse the builder's canonical sizing
@@ -205,18 +192,15 @@ export function determineSwapDebtFlashBorrowType(
     sourceDebtReserve,
     isClosingSourceDebt: props.isClosingSourceDebt ?? false,
     sourceDebtSwapAmount: props.amount,
-    currentSlot,
+    currentLedgerInstant,
   });
   // Fixed-term source debt is debited `principal + early-repay penalty` on-chain, so the build flow funds the penalty
   // too (flash-borrowed directly on the sourceDebt side, or swapped for on the targetDebt side). Size both candidates
   // against that funding so a reserve that covers only the principal — but not the penalty — is not greenlit. Open-term
   // / variable source debt → penalty 0 → funding equals the principal (unchanged behaviour).
   const sourceFundingLamports = sourceDebtReserve.getKind().isFixedRate()
-    ? props.obligation.calculateEarlyRepayFunding(
-        sourceDebtReserve,
-        sourceDebtRepayLamports,
-        requireMatchingLedgerInstant(currentSlot, props.currentLedgerInstant, 'determineSwapDebtFlashBorrowType')
-      ).fundingLamports
+    ? props.obligation.calculateEarlyRepayFunding(sourceDebtReserve, sourceDebtRepayLamports, currentLedgerInstant)
+        .fundingLamports
     : sourceDebtRepayLamports;
   const slippageFactor = getSlippageFactor(props.slippagePct);
   const requiredTargetDebtLamports = sourceFundingLamports

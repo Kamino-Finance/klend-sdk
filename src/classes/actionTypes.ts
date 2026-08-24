@@ -1,4 +1,5 @@
-import { Address, Option, Slot, TransactionSigner } from '@solana/kit';
+import { Address, Option, TransactionSigner } from '@solana/kit';
+import type { LedgerInstant } from '../utils/ledger';
 import BN from 'bn.js';
 import { ObligationType, ScopePriceRefreshConfig } from '../utils';
 import { KaminoObligation } from './obligation';
@@ -35,7 +36,7 @@ export interface InitializeActionProps {
   owner: TransactionSigner;
   obligation: KaminoObligation | ObligationType;
   referrer?: Option<Address>;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
   payer?: TransactionSigner;
   permissionAuthority?: TransactionSigner;
 }
@@ -56,7 +57,7 @@ export interface BuildDepositTxnsProps {
   requestElevationGroup?: boolean;
   initUserMetadata?: { skipInitialization: boolean; skipLutCreation: boolean };
   referrer?: Option<Address>;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
   overrideElevationGroupRequest?: number;
   permissionAuthority?: TransactionSigner;
   obligationCustomizations?: ObligationCustomizations;
@@ -78,7 +79,7 @@ export interface BuildBorrowTxnsProps {
   requestElevationGroup?: boolean;
   initUserMetadata?: { skipInitialization: boolean; skipLutCreation: boolean };
   referrer?: Option<Address>;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
   overrideElevationGroupRequest?: number;
   rollOver?: boolean;
   permissionAuthority?: TransactionSigner;
@@ -124,7 +125,7 @@ export interface BuildDepositReserveLiquidityTxnsProps {
   includeAtaIxs?: boolean;
   requestElevationGroup?: boolean;
   referrer?: Option<Address>;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
   permissionAuthority?: TransactionSigner;
 }
 
@@ -142,7 +143,7 @@ export interface BuildRedeemReserveCollateralTxnsProps {
   includeAtaIxs?: boolean;
   requestElevationGroup?: boolean;
   referrer?: Option<Address>;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
 }
 
 /**
@@ -161,7 +162,7 @@ export interface BuildWithdrawTxnsProps {
   requestElevationGroup?: boolean;
   initUserMetadata?: { skipInitialization: boolean; skipLutCreation: boolean };
   referrer?: Option<Address>;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
   overrideElevationGroupRequest?: number;
   obligationCustomizations?: ObligationCustomizations;
 }
@@ -182,7 +183,7 @@ export interface BuildWithdrawFromObligationAndEnqueueTxnsProps {
   requestElevationGroup?: boolean;
   initUserMetadata?: { skipInitialization: boolean; skipLutCreation: boolean };
   referrer?: Option<Address>;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
   userDestinationLiquidityAta?: Address;
   progressCallbackType?: ProgressCallbackType.None | ProgressCallbackType.KlendQueueAccountingHandlerOnKvault;
   progressCallbackCustomAccount0?: Option<Address>;
@@ -200,7 +201,7 @@ export interface BuildRepayTxnsProps {
   obligation: KaminoObligation | ObligationType;
   useV2Ixs: boolean;
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
   extraComputeBudget?: number;
   includeAtaIxs?: boolean;
   requestElevationGroup?: boolean;
@@ -233,7 +234,7 @@ export interface BuildDepositAndBorrowTxnsProps {
   overrideElevationGroupRequest?: number;
   initUserMetadata?: { skipInitialization: boolean; skipLutCreation: boolean };
   referrer?: Option<Address>;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
   rollOver?: boolean;
   permissionAuthority?: TransactionSigner;
 }
@@ -246,7 +247,7 @@ export interface BuildRefreshObligationTxnsProps {
   payer: TransactionSigner;
   obligation: KaminoObligation;
   extraComputeBudget?: number;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
 }
 
 /**
@@ -258,7 +259,7 @@ export interface BuildRequestElevationGroupTxnsProps {
   obligation: KaminoObligation;
   elevationGroup: number;
   extraComputeBudget?: number;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
 }
 
 /**
@@ -271,7 +272,7 @@ export interface BuildDepositAndWithdrawV2TxnsProps {
   withdrawAmount: string | BN;
   withdrawReserveAddress: Address;
   owner: TransactionSigner;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
   obligation: KaminoObligation | ObligationType;
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined;
   extraComputeBudget?: number;
@@ -292,7 +293,7 @@ export interface BuildRepayAndWithdrawTxnsProps {
   withdrawAmount: string | BN;
   withdrawReserveAddress: Address;
   payer: TransactionSigner;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
   obligation: KaminoObligation | ObligationType;
   useV2Ixs: boolean;
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined;
@@ -313,7 +314,7 @@ export interface BuildRepayAndWithdrawV2TxnsProps {
   withdrawAmount: string | BN;
   withdrawReserveAddress: Address;
   payer: TransactionSigner;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
   obligation: KaminoObligation | ObligationType;
   scopeRefreshConfig: ScopePriceRefreshConfig | undefined;
   extraComputeBudget?: number;
@@ -343,7 +344,7 @@ export interface BuildLiquidateTxnsProps {
   initUserMetadata?: { skipInitialization: boolean; skipLutCreation: boolean };
   referrer?: Option<Address>;
   maxAllowedLtvOverridePercent?: number;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
   permissionAuthority?: TransactionSigner;
 }
 
@@ -354,7 +355,7 @@ export interface BuildWithdrawReferrerFeeTxnsProps {
   owner: TransactionSigner;
   reserveAddress: Address;
   kaminoMarket: KaminoMarket;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
 }
 
 /**
@@ -373,7 +374,7 @@ export interface BuildDepositObligationCollateralTxnsProps {
   requestElevationGroup?: boolean;
   initUserMetadata?: { skipInitialization: boolean; skipLutCreation: boolean };
   referrer?: Option<Address>;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
   permissionAuthority?: TransactionSigner;
 }
 
@@ -426,7 +427,7 @@ export interface BuildDepositAndSetBorrowOrderTxnsProps {
   requestElevationGroup?: boolean;
   initUserMetadata?: { skipInitialization: boolean; skipLutCreation: boolean };
   referrer?: Option<Address>;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
   overrideElevationGroupRequest?: number;
   permissionAuthority?: TransactionSigner;
 }
@@ -469,9 +470,7 @@ export interface BuildDepositAndFillBorrowOrderTxnsProps {
   extraComputeBudget?: number;
   includeAtaIxs?: boolean;
   referrer?: Option<Address>;
-  currentSlot: Slot;
-  /** Current unix time in seconds, used to resolve {@link orderIdx} when it is omitted. */
-  currentTimestamp: number;
+  currentLedgerInstant: LedgerInstant;
 }
 
 /**
@@ -502,5 +501,5 @@ export interface BuildRolloverFixedTermBorrowTxnsProps {
    */
   scopeRefreshConfig?: ScopePriceRefreshConfig;
   extraComputeBudget?: number;
-  currentSlot: Slot;
+  currentLedgerInstant: LedgerInstant;
 }

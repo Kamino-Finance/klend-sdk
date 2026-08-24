@@ -1,7 +1,6 @@
 import dotenv from 'dotenv';
 import { Command } from 'commander';
 import {
-  DEFAULT_RECENT_SLOT_DURATION_MS,
   KaminoMarket,
   KaminoObligation,
   toJson,
@@ -9,6 +8,7 @@ import {
   getAllLendingMarketAccounts,
   KaminoManager,
   DEFAULT_PUBLIC_KEY,
+  getCurrentLedgerInstant,
 } from '../lib';
 import { address, Base58EncodedBytes } from '@solana/kit';
 import BN from 'bn.js';
@@ -43,13 +43,18 @@ async function main() {
     .option(`--env <string>`, 'Environment: mainnet-beta (default), staging, devnet')
     .action(async ({ rpc, reserveAddress, market, env: envFlag }) => {
       const env = await initEnv(parseEnv(envFlag), undefined, false, undefined, rpc);
-      const kaminoMarket = await getMarket(env.c.rpc, address(market), env.klendProgramId);
+      const kaminoMarket = await getMarket(
+        env.c.rpc,
+        address(market),
+        env.klendProgramId,
+        await getMedianSlotDurationInMsFromLastEpochs()
+      );
 
       const reserve = kaminoMarket.getReserveByAddress(address(reserveAddress));
 
-      const slot = await env.c.rpc.getSlot().send();
+      const currentLedgerInstant = await getCurrentLedgerInstant(env.c.rpc);
 
-      const borrowApr = reserve!.calculateBorrowAPR(slot, kaminoMarket.state.referralFeeBps);
+      const borrowApr = reserve!.calculateBorrowAPR(currentLedgerInstant, kaminoMarket.state.referralFeeBps);
       const utilizationRatio = reserve!.calculateUtilizationRatio();
 
       console.log(
@@ -118,7 +123,12 @@ async function main() {
     .option(`--env <string>`, 'Environment: mainnet-beta (default), staging, devnet')
     .action(async ({ rpc, market, obligation, env: envFlag }) => {
       const env = await initEnv(parseEnv(envFlag), undefined, false, undefined, rpc);
-      const kaminoMarket = await getMarket(env.c.rpc, address(market), env.klendProgramId);
+      const kaminoMarket = await getMarket(
+        env.c.rpc,
+        address(market),
+        env.klendProgramId,
+        await getMedianSlotDurationInMsFromLastEpochs()
+      );
       const kaminoObligation = await KaminoObligation.load(kaminoMarket, address(obligation));
       console.log(toJson(kaminoObligation?.refreshedStats));
     });
@@ -337,12 +347,16 @@ async function main() {
       const kaminoMarket = await KaminoMarket.load(
         env.c.rpc,
         marketAddress,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        await getMedianSlotDurationInMsFromLastEpochs(),
         programId
       );
 
-      const slot = await env.c.rpc.getSlot().send();
-      const obligations = await kaminoMarket!.getAllUserObligationsForReserve(address(user), address(reserve), slot);
+      const currentLedgerInstant = await getCurrentLedgerInstant(env.c.rpc);
+      const obligations = await kaminoMarket!.getAllUserObligationsForReserve(
+        address(user),
+        address(reserve),
+        currentLedgerInstant
+      );
 
       for (const obligation of obligations) {
         console.log('obligation address: ', obligation.obligationAddress.toString());
@@ -363,7 +377,7 @@ async function main() {
       const kaminoMarket = await KaminoMarket.load(
         env.c.rpc,
         marketAddress,
-        DEFAULT_RECENT_SLOT_DURATION_MS,
+        await getMedianSlotDurationInMsFromLastEpochs(),
         programId
       );
 
@@ -384,7 +398,12 @@ async function main() {
     .option(`--env <string>`, 'Environment: mainnet-beta (default), staging, devnet')
     .action(async ({ rpc, owner, market, enabled, minBoFillValue, multisig, simulate, env: envFlag }) => {
       const env = await initEnv(parseEnv(envFlag), owner, multisig, undefined, rpc);
-      const kaminoMarket = await getMarket(env.c.rpc, address(market), env.klendProgramId);
+      const kaminoMarket = await getMarket(
+        env.c.rpc,
+        address(market),
+        env.klendProgramId,
+        await getMedianSlotDurationInMsFromLastEpochs()
+      );
       const signer = await env.getSigner(kaminoMarket);
       const mode: SendTxMode = simulate ? 'simulate' : multisig ? 'multisig' : 'execute';
       const enabledValue = enabled ? 1 : 0;
@@ -394,7 +413,11 @@ async function main() {
         borrowOrderExecutionEnabled: enabledValue,
         ...(minBoFillValue !== undefined && { minBorrowOrderFillValue: new BN(minBoFillValue) }),
       });
-      const kaminoManager = new KaminoManager(env.c.rpc, DEFAULT_RECENT_SLOT_DURATION_MS, env.klendProgramId);
+      const kaminoManager = new KaminoManager(
+        env.c.rpc,
+        await getMedianSlotDurationInMsFromLastEpochs(),
+        env.klendProgramId
+      );
       const ixs = kaminoManager.updateLendingMarketIxs(
         signer,
         { address: kaminoMarket.address, state: kaminoMarket.state },

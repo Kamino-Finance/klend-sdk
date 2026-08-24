@@ -1,22 +1,27 @@
 import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
-import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } from '@kamino-finance/klend-sdk';
+import {
+  getMedianSlotDurationInMsFromLastEpochs,
+  KaminoManager,
+  KaminoVault,
+  getCurrentLedgerInstant,
+} from '@kamino-finance/klend-sdk';
 import { sendAndConfirmTx } from '../utils/tx';
 
 (async () => {
   const c = getConnectionPool();
   const investor = await getKeypair();
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
-  const slot = await c.rpc.getSlot().send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc);
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
-  const kaminoVault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
+  const kaminoVault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT, slotDuration);
   const vaultState = await kaminoVault.getState();
   const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
 
   const withdrawAllAndBlockReserveIxs = await kaminoManager.withdrawEverythingFromAllReservesAndBlockInvest(
     kaminoVault,
-    slot,
+    currentLedgerInstant,
     vaultReservesMap,
     investor
   );

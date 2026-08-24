@@ -7,6 +7,7 @@ import {
   getMedianSlotDurationInMsFromLastEpochs,
   KaminoManager,
   KaminoVault,
+  getCurrentLedgerInstant,
 } from '@kamino-finance/klend-sdk';
 import { sendAndConfirmTx } from '../utils/tx';
 
@@ -26,7 +27,7 @@ import { sendAndConfirmTx } from '../utils/tx';
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
-  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
+  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT, slotDuration);
 
   // read the vault state so we can use the LUT in transactions
   const vaultState = await vault.getState();
@@ -36,14 +37,14 @@ import { sendAndConfirmTx } from '../utils/tx';
   const globalConfigState = await kaminoManager.loadKVaultGlobalConfig();
   const farmState = await kaminoManager.loadVaultFarmState(vaultState);
   const sharesToExit = new Decimal(100.0);
-  const slot = await c.rpc.getSlot({ commitment: 'confirmed' }).send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc, 'confirmed');
   const computeBudgetIx = buildComputeBudgetIx(1_000_000);
 
   const result = await kaminoManager.withdrawRedeemAndEnqueueIxs(
     user,
     vault,
     sharesToExit,
-    slot,
+    currentLedgerInstant,
     vaultReservesMap,
     vaultState,
     globalConfigState,

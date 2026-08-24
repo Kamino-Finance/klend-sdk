@@ -1315,25 +1315,25 @@ export class UpdateReserveEmergencyMode {
   }
 }
 
-export interface UpdateRewardsAmountPerSlotJSON {
-  kind: "UpdateRewardsAmountPerSlot"
+export interface UpdateRewardsAmountPerAccrualUnitJSON {
+  kind: "UpdateRewardsAmountPerAccrualUnit"
 }
 
-export class UpdateRewardsAmountPerSlot {
+export class UpdateRewardsAmountPerAccrualUnit {
   static readonly discriminator = 57
-  static readonly kind = "UpdateRewardsAmountPerSlot"
+  static readonly kind = "UpdateRewardsAmountPerAccrualUnit"
   readonly discriminator = 57
-  readonly kind = "UpdateRewardsAmountPerSlot"
+  readonly kind = "UpdateRewardsAmountPerAccrualUnit"
 
-  toJSON(): UpdateRewardsAmountPerSlotJSON {
+  toJSON(): UpdateRewardsAmountPerAccrualUnitJSON {
     return {
-      kind: "UpdateRewardsAmountPerSlot",
+      kind: "UpdateRewardsAmountPerAccrualUnit",
     }
   }
 
   toEncodable() {
     return {
-      UpdateRewardsAmountPerSlot: {},
+      UpdateRewardsAmountPerAccrualUnit: {},
     }
   }
 }
@@ -1357,6 +1357,29 @@ export class UpdateReservePermissionedOps {
   toEncodable() {
     return {
       UpdateReservePermissionedOps: {},
+    }
+  }
+}
+
+export interface UpdateInterestRateBasisJSON {
+  kind: "UpdateInterestRateBasis"
+}
+
+export class UpdateInterestRateBasis {
+  static readonly discriminator = 59
+  static readonly kind = "UpdateInterestRateBasis"
+  readonly discriminator = 59
+  readonly kind = "UpdateInterestRateBasis"
+
+  toJSON(): UpdateInterestRateBasisJSON {
+    return {
+      kind: "UpdateInterestRateBasis",
+    }
+  }
+
+  toEncodable() {
+    return {
+      UpdateInterestRateBasis: {},
     }
   }
 }
@@ -1538,11 +1561,14 @@ export function fromDecoded(obj: any): types.UpdateConfigModeKind {
   if ("UpdateReserveEmergencyMode" in obj) {
     return new UpdateReserveEmergencyMode()
   }
-  if ("UpdateRewardsAmountPerSlot" in obj) {
-    return new UpdateRewardsAmountPerSlot()
+  if ("UpdateRewardsAmountPerAccrualUnit" in obj) {
+    return new UpdateRewardsAmountPerAccrualUnit()
   }
   if ("UpdateReservePermissionedOps" in obj) {
     return new UpdateReservePermissionedOps()
+  }
+  if ("UpdateInterestRateBasis" in obj) {
+    return new UpdateInterestRateBasis()
   }
 
   throw new Error("Invalid enum object")
@@ -1723,11 +1749,14 @@ export function fromJSON(
     case "UpdateReserveEmergencyMode": {
       return new UpdateReserveEmergencyMode()
     }
-    case "UpdateRewardsAmountPerSlot": {
-      return new UpdateRewardsAmountPerSlot()
+    case "UpdateRewardsAmountPerAccrualUnit": {
+      return new UpdateRewardsAmountPerAccrualUnit()
     }
     case "UpdateReservePermissionedOps": {
       return new UpdateReservePermissionedOps()
+    }
+    case "UpdateInterestRateBasis": {
+      return new UpdateInterestRateBasis()
     }
   }
 }
@@ -1791,8 +1820,9 @@ export function layout(property?: string) {
     borsh.struct([], "UpdateDebtTermSeconds"),
     borsh.struct([], "UpdateEarlyRepayRemainingInterestPct"),
     borsh.struct([], "UpdateReserveEmergencyMode"),
-    borsh.struct([], "UpdateRewardsAmountPerSlot"),
+    borsh.struct([], "UpdateRewardsAmountPerAccrualUnit"),
     borsh.struct([], "UpdateReservePermissionedOps"),
+    borsh.struct([], "UpdateInterestRateBasis"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

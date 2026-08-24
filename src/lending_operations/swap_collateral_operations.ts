@@ -20,7 +20,7 @@ import {
   uniqueAccountsWithProgramIds,
   WRAPPED_SOL_MINT,
 } from '../utils';
-import { Account, Address, Instruction, isSome, none, Option, Slot, TransactionSigner } from '@solana/kit';
+import { Account, Address, Instruction, isSome, none, Option, TransactionSigner } from '@solana/kit';
 import Decimal from 'decimal.js';
 import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
 import { AddressLookupTable } from '@solana-program/address-lookup-table';
@@ -28,13 +28,7 @@ import { getCloseAccountInstruction } from '@solana-program/token-2022';
 import { bufferWithdrawForRedeemDrift, redeemWithdrawAmount, sizeRedeemFundedPull } from './redeem_drift';
 import { getSlippageFactor, sizeViaDebtFlashBorrow } from './swap_calcs';
 import { calcFlashLoanFees } from './repay_with_collateral_calcs';
-import {
-  DistributiveOmit,
-  LedgerInstant,
-  LedgerInstantCompatible,
-  requireMatchingLedgerInstant,
-  resolveLedgerInput,
-} from '../utils/ledger';
+import type { LedgerInstant } from '../utils/ledger';
 
 /**
  * Which token to flash borrow for a swap-collateral operation.
@@ -112,8 +106,8 @@ export interface SwapCollIxsInputs<QuoteResponse> {
   owner: TransactionSigner;
   obligation: KaminoObligation;
   referrer: Option<Address>;
-  currentSlot: Slot;
-  currentLedgerInstant?: LedgerInstant;
+  /** The ledger instant (slot + block time) the position estimates are evaluated at. */
+  currentLedgerInstant: LedgerInstant;
   budgetAndPriorityFeeIxs?: Instruction[];
   scopeRefreshIx: Instruction[];
   useV2Ixs: boolean;
@@ -122,7 +116,7 @@ export interface SwapCollIxsInputs<QuoteResponse> {
   logger?: (msg: string, ...extra: unknown[]) => void;
 }
 
-export type SwapCollIxsParams<QuoteResponse> = LedgerInstantCompatible<SwapCollIxsInputs<QuoteResponse>>;
+export type SwapCollIxsParams<QuoteResponse> = SwapCollIxsInputs<QuoteResponse>;
 
 /**
  * Outputs from the `getSwapCollIxs()` operation.
@@ -207,21 +201,7 @@ export async function getSwapCollIxs<QuoteResponse>(
 ): Promise<Array<SwapCollIxsOutputs<QuoteResponse>>> {
   // Preserve fail-fast validation before the compatibility path performs any RPC lookup.
   getSlippageFactor(inputs.slippagePct);
-  const requiresLedgerInstant =
-    inputs.flashBorrowToken === 'debt' &&
-    inputs.debtReserveAddress !== undefined &&
-    (() => {
-      const debtReserve = inputs.market.getExistingReserveByAddress(inputs.debtReserveAddress);
-      return debtReserve.getKind().isFixedRate() || !debtReserve.state.config.debtMaturityTimestamp.eqn(0);
-    })();
-  const ledger = await resolveLedgerInput(
-    inputs.market.getRpc(),
-    inputs.currentSlot,
-    inputs.currentLedgerInstant,
-    requiresLedgerInstant,
-    'getSwapCollIxs'
-  );
-  const normalizedInputs = { ...inputs, ...ledger };
+  const normalizedInputs = { ...inputs };
   const flashBorrowToken = normalizedInputs.flashBorrowToken ?? 'targetColl';
   if (flashBorrowToken === 'targetColl') {
     return getSwapCollViaTargetColl(normalizedInputs);
@@ -236,7 +216,7 @@ export async function getSwapCollIxs<QuoteResponse>(
  * Inputs for {@link getSwapCollKlendAccounts}: the routing/sizing inputs of {@link getSwapCollIxs} minus the
  * quoter/swapper (and logger), since the klend account footprint is discovered without an external swap.
  */
-export type SwapCollKlendAccountsInputs = DistributiveOmit<SwapCollIxsParams<unknown>, 'quoter' | 'swapper' | 'logger'>;
+export type SwapCollKlendAccountsInputs = Omit<SwapCollIxsParams<unknown>, 'quoter' | 'swapper' | 'logger'>;
 
 /**
  * Light helper: returns the exact, final set of klend accounts (and program ids) a {@link getSwapCollIxs} call with
@@ -247,23 +227,8 @@ export type SwapCollKlendAccountsInputs = DistributiveOmit<SwapCollIxsParams<unk
 export async function getSwapCollKlendAccounts(inputs: SwapCollKlendAccountsInputs): Promise<KlendAccountsResult> {
   // Preserve fail-fast validation before the compatibility path performs any RPC lookup.
   getSlippageFactor(inputs.slippagePct);
-  const requiresLedgerInstant =
-    inputs.flashBorrowToken === 'debt' &&
-    inputs.debtReserveAddress !== undefined &&
-    (() => {
-      const debtReserve = inputs.market.getExistingReserveByAddress(inputs.debtReserveAddress);
-      return debtReserve.getKind().isFixedRate() || !debtReserve.state.config.debtMaturityTimestamp.eqn(0);
-    })();
-  const ledger = await resolveLedgerInput(
-    inputs.market.getRpc(),
-    inputs.currentSlot,
-    inputs.currentLedgerInstant,
-    requiresLedgerInstant,
-    'getSwapCollKlendAccounts'
-  );
   const fullInputs: SwapCollIxsInputs<unknown> = {
     ...inputs,
-    ...ledger,
     quoter: ACCOUNT_DISCOVERY_QUOTER,
     swapper: ACCOUNT_DISCOVERY_SWAPPER,
   };
@@ -512,12 +477,7 @@ async function computeViaDebtKlendAccounts<QuoteResponse>(
   // The via-debt flow repays then RE-BORROWS the debt; reject up front if the debt is a fixed-term reserve past its
   // maturity (the on-chain re-borrow would revert with ReserveDebtMaturityReached).
   if (!debtReserve.state.config.debtMaturityTimestamp.eqn(0)) {
-    debtReserve.assertCanOriginateDebt(
-      Number(
-        requireMatchingLedgerInstant(context.currentSlot, context.currentLedgerInstant, 'computeViaDebtKlendAccounts')
-          .blockTime
-      )
-    );
+    debtReserve.assertCanOriginateDebt(Number(context.currentLedgerInstant.blockTime));
   }
 
   // Flash-borrow amount: we want to repay most (not all) of the debt, so the borrow reserve stays in the
@@ -544,7 +504,7 @@ async function computeViaDebtKlendAccounts<QuoteResponse>(
     ? context.obligation.calculateEarlyRepayFunding(
         debtReserve,
         repayDebtPrincipalLamports,
-        requireMatchingLedgerInstant(context.currentSlot, context.currentLedgerInstant, 'computeViaDebtKlendAccounts')
+        context.currentLedgerInstant
       ).fundingLamports
     : repayDebtPrincipalLamports;
   const { flashRepayDebtLamports } = calculateViaDebtFlashLoanAmounts(flashBorrowDebtLamports, debtReserve, context);
@@ -712,8 +672,7 @@ type SwapCollContext<QuoteResponse> = {
   quoter: SwapQuoteProvider<QuoteResponse>;
   swapper: SwapIxsProvider<QuoteResponse>;
   referrer: Option<Address>;
-  currentSlot: Slot;
-  currentLedgerInstant?: LedgerInstant;
+  currentLedgerInstant: LedgerInstant;
   useV2Ixs: boolean;
   scopeRefreshIx: Instruction[];
   logger: (msg: string, ...extra: unknown[]) => void;
@@ -742,10 +701,7 @@ function extractArgsAndContext<QuoteResponse>(
     inputs.targetCollReserveAddress,
     'Target collateral'
   );
-  const currentSlot = inputs.currentSlot ?? inputs.currentLedgerInstant?.slot;
-  if (currentSlot === undefined) {
-    throw new Error('swap-collateral inputs were not normalized with a current slot');
-  }
+  const currentLedgerInstant = inputs.currentLedgerInstant;
   return [
     {
       sourceCollSwapAmount: inputs.sourceCollSwapAmount,
@@ -765,8 +721,7 @@ function extractArgsAndContext<QuoteResponse>(
       swapper: inputs.swapper,
       referrer: inputs.referrer,
       scopeRefreshIx: inputs.scopeRefreshIx,
-      currentSlot,
-      currentLedgerInstant: inputs.currentLedgerInstant,
+      currentLedgerInstant,
       useV2Ixs: inputs.useV2Ixs,
       swapSizingBufferPct: inputs.slippagePct,
     },
@@ -994,7 +949,7 @@ async function getViaDebtKlendIxs(
     obligation: context.obligation,
     useV2Ixs: context.useV2Ixs,
     scopeRefreshConfig: undefined,
-    currentSlot: context.currentSlot,
+    currentLedgerInstant: context.currentLedgerInstant,
     payer: context.owner,
     extraComputeBudget: 0,
     includeAtaIxs: false,
@@ -1021,7 +976,7 @@ async function getViaDebtKlendIxs(
     requestElevationGroup: false,
     initUserMetadata: { skipInitialization: true, skipLutCreation: true },
     referrer: context.referrer,
-    currentSlot: context.currentSlot,
+    currentLedgerInstant: context.currentLedgerInstant,
     overrideElevationGroupRequest: undefined,
   });
   const withdrawSourceCollIxs = removeBudgetIxs(KaminoAction.actionToIxs(withdrawAction));
@@ -1046,7 +1001,7 @@ async function getViaDebtKlendIxs(
     requestElevationGroup: requestsElevationGroupBeforeDeposit,
     initUserMetadata: { skipInitialization: true, skipLutCreation: true },
     referrer: context.referrer,
-    currentSlot: context.currentSlot,
+    currentLedgerInstant: context.currentLedgerInstant,
     overrideElevationGroupRequest: requestsElevationGroupBeforeDeposit ? finalElevationGroupId : undefined,
     obligationCustomizations: args.isClosingSourceColl
       ? { removedDepositReserves: [context.sourceCollReserve.address] }
@@ -1071,7 +1026,7 @@ async function getViaDebtKlendIxs(
     requestElevationGroup: requestsElevationGroupChange,
     initUserMetadata: { skipInitialization: true, skipLutCreation: true },
     referrer: context.referrer,
-    currentSlot: context.currentSlot,
+    currentLedgerInstant: context.currentLedgerInstant,
     overrideElevationGroupRequest: requestsElevationGroupChange ? finalElevationGroupId : undefined,
     obligationCustomizations: {
       // At the time the borrow ix runs on-chain, the obligation already has the target coll deposited; the borrow's
@@ -1213,7 +1168,7 @@ async function getDepositTargetCollIxs(
     requestElevationGroup: removesElevationGroup,
     initUserMetadata: { skipInitialization: true, skipLutCreation: true },
     referrer: context.referrer,
-    currentSlot: context.currentSlot,
+    currentLedgerInstant: context.currentLedgerInstant,
     overrideElevationGroupRequest: removesElevationGroup ? 0 : undefined,
   });
   return {
@@ -1276,7 +1231,7 @@ async function getWithdrawSourceCollIxs(
     requestElevationGroup: requestedElevationGroup !== undefined,
     initUserMetadata: { skipInitialization: true, skipLutCreation: true },
     referrer: context.referrer,
-    currentSlot: context.currentSlot,
+    currentLedgerInstant: context.currentLedgerInstant,
     overrideElevationGroupRequest: requestedElevationGroup,
     obligationCustomizations: context.obligation.deposits.has(context.targetCollReserve.address)
       ? undefined
@@ -1432,7 +1387,7 @@ function checkResultingObligationValid(
     borrowReserveAddress: viaDebt?.debtReserve.address,
     market: context.market,
     newElevationGroup: args.newElevationGroup?.elevationGroup ?? 0,
-    slot: context.currentSlot,
+    currentLedgerInstant: context.currentLedgerInstant,
   });
   const maxLtv = resultingStats.borrowLimit.div(resultingStats.userTotalCollateralDeposit);
   if (resultingStats.loanToValue > maxLtv) {

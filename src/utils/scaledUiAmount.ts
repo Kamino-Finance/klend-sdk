@@ -1,6 +1,7 @@
-import { Address, Rpc, GetMultipleAccountsApi, GetAccountInfoApi, isSome } from '@solana/kit';
+import { Address, Rpc, GetMultipleAccountsApi, isSome } from '@solana/kit';
 import { fetchAllMaybeMint, type Extension } from '@solana-program/token-2022';
 import Decimal from 'decimal.js';
+import type { LedgerInstant } from './ledger';
 
 /**
  * Extracts the effective scaledUiAmount multiplier from a mint's extensions.
@@ -9,12 +10,14 @@ import Decimal from 'decimal.js';
  * The multiplier accounts for scheduled updates: if `newMultiplierEffectiveTimestamp`
  * has passed, `newMultiplier` is used instead of `multiplier`.
  */
-function getScaledUiAmountMultiplierFromExtensions(extensions: Extension[]): Decimal {
+function getScaledUiAmountMultiplierFromExtensions(
+  extensions: Extension[],
+  currentLedgerInstant: LedgerInstant
+): Decimal {
   for (const ext of extensions) {
     if (ext.__kind === 'ScaledUiAmountConfig') {
-      const now = Math.floor(Date.now() / 1000);
-      const effectiveTimestamp = Number(ext.newMultiplierEffectiveTimestamp);
-      if (effectiveTimestamp > 0 && now >= effectiveTimestamp) {
+      const effectiveTimestamp = ext.newMultiplierEffectiveTimestamp;
+      if (effectiveTimestamp > 0n && currentLedgerInstant.blockTime >= effectiveTimestamp) {
         return new Decimal(ext.newMultiplier);
       }
       return new Decimal(ext.multiplier);
@@ -31,8 +34,9 @@ function getScaledUiAmountMultiplierFromExtensions(extensions: Extension[]): Dec
  * Mints that fail to fetch are silently skipped (multiplier defaults to 1).
  */
 export async function fetchScaledUiAmountMultipliers(
-  rpc: Rpc<GetMultipleAccountsApi & GetAccountInfoApi>,
-  mintAddresses: Address[]
+  rpc: Rpc<GetMultipleAccountsApi>,
+  mintAddresses: Address[],
+  currentLedgerInstant: LedgerInstant
 ): Promise<Map<Address, Decimal>> {
   const result = new Map<Address, Decimal>();
 
@@ -50,7 +54,7 @@ export async function fetchScaledUiAmountMultipliers(
 
     const extensions = account.data.extensions;
     if (isSome(extensions)) {
-      const multiplier = getScaledUiAmountMultiplierFromExtensions(extensions.value);
+      const multiplier = getScaledUiAmountMultiplierFromExtensions(extensions.value, currentLedgerInstant);
       if (!multiplier.eq(1)) {
         result.set(mintAddresses[i], multiplier);
       }

@@ -1,4 +1,4 @@
-import { SLOTS_PER_SECOND, SLOTS_PER_YEAR } from '../utils/constants';
+import { SLOTS_PER_YEAR } from '../utils/constants';
 import { WRAPPED_SOL_MINT } from '../utils/consts';
 import Decimal from 'decimal.js';
 import { Account, Address } from '@solana/kit';
@@ -79,16 +79,13 @@ export const estimateCurrentScore = (
     totalBalance: string;
   },
   rewardScore: ObligationFarmScoreType,
-  mostRecentSlot: number,
-  mostRecentSlotTime: number
+  currentSlot: number
 ) => {
   const { lastSlot, rewardRates } = rewardStat;
 
-  const estimatedCurrentSlot = mostRecentSlot + SLOTS_PER_SECOND * (Date.now() / 1000 - mostRecentSlotTime);
+  const { rewardRate } = getLatestRewardRate(rewardRates, currentSlot);
 
-  const { rewardRate } = getLatestRewardRate(rewardRates, estimatedCurrentSlot);
-
-  const currentScore = calculateNewScore(rewardStat, rewardScore, rewardRate, estimatedCurrentSlot, lastSlot);
+  const currentScore = calculateNewScore(rewardStat, rewardScore, rewardRate, currentSlot, lastSlot);
 
   return currentScore;
 };
@@ -210,11 +207,20 @@ export const positiveOrZero = (value: Decimal): Decimal => {
   return Decimal.max(value, zero);
 };
 
+/**
+ * Converts an APR to the APY realized by (approximately) per-slot compounding.
+ *
+ * The `SLOTS_PER_YEAR` period count is a compounding-granularity choice, not a slot-time conversion: at n in the
+ * tens of millions, `(1 + apr/n)^n` is within ~1e-7 (relative) of continuous compounding for any realistic rate, so
+ * the live slot duration - or a per-second period count for a `TrueApr` reserve - would change the result by less
+ * than display precision.
+ */
 export function calculateAPYFromAPR(apr: number) {
   const apy = new Decimal(1).plus(new Decimal(apr).dividedBy(SLOTS_PER_YEAR)).toNumber() ** SLOTS_PER_YEAR - 1;
   return apy;
 }
 
+/** The inverse of {@link calculateAPYFromAPR} (the same compounding-granularity note applies). */
 export function calculateAPRFromAPY(apy: Decimal.Value) {
   return new Decimal(apy)
     .plus(1)

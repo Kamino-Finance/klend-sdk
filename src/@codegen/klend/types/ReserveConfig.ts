@@ -12,6 +12,7 @@ export interface ReserveConfigFields {
   blockCtokenUsage: number
   earlyRepayRemainingInterestPct: number
   emergencyMode: number
+  interestRateBasis: number
   reserved1: Array<number>
   protocolOrderExecutionFeePct: number
   protocolTakeRatePct: number
@@ -41,7 +42,7 @@ export interface ReserveConfigFields {
   deleveragingBonusIncreaseBpsPerDay: BN
   debtMaturityTimestamp: BN
   debtTermSeconds: BN
-  rewardsAmountPerSlot: BN
+  rewardsAmountPerAccrualUnit: BN
   permissionedOps: BN
 }
 
@@ -53,6 +54,7 @@ export interface ReserveConfigJSON {
   blockCtokenUsage: number
   earlyRepayRemainingInterestPct: number
   emergencyMode: number
+  interestRateBasis: number
   reserved1: Array<number>
   protocolOrderExecutionFeePct: number
   protocolTakeRatePct: number
@@ -82,7 +84,7 @@ export interface ReserveConfigJSON {
   deleveragingBonusIncreaseBpsPerDay: string
   debtMaturityTimestamp: string
   debtTermSeconds: string
-  rewardsAmountPerSlot: string
+  rewardsAmountPerAccrualUnit: string
   permissionedOps: string
 }
 
@@ -94,6 +96,7 @@ export class ReserveConfig {
   readonly blockCtokenUsage: number
   readonly earlyRepayRemainingInterestPct: number
   readonly emergencyMode: number
+  readonly interestRateBasis: number
   readonly reserved1: Array<number>
   readonly protocolOrderExecutionFeePct: number
   readonly protocolTakeRatePct: number
@@ -123,7 +126,7 @@ export class ReserveConfig {
   readonly deleveragingBonusIncreaseBpsPerDay: BN
   readonly debtMaturityTimestamp: BN
   readonly debtTermSeconds: BN
-  readonly rewardsAmountPerSlot: BN
+  readonly rewardsAmountPerAccrualUnit: BN
   readonly permissionedOps: BN
 
   constructor(fields: ReserveConfigFields) {
@@ -134,6 +137,7 @@ export class ReserveConfig {
     this.blockCtokenUsage = fields.blockCtokenUsage
     this.earlyRepayRemainingInterestPct = fields.earlyRepayRemainingInterestPct
     this.emergencyMode = fields.emergencyMode
+    this.interestRateBasis = fields.interestRateBasis
     this.reserved1 = fields.reserved1
     this.protocolOrderExecutionFeePct = fields.protocolOrderExecutionFeePct
     this.protocolTakeRatePct = fields.protocolTakeRatePct
@@ -175,7 +179,7 @@ export class ReserveConfig {
       fields.deleveragingBonusIncreaseBpsPerDay
     this.debtMaturityTimestamp = fields.debtMaturityTimestamp
     this.debtTermSeconds = fields.debtTermSeconds
-    this.rewardsAmountPerSlot = fields.rewardsAmountPerSlot
+    this.rewardsAmountPerAccrualUnit = fields.rewardsAmountPerAccrualUnit
     this.permissionedOps = fields.permissionedOps
   }
 
@@ -189,7 +193,8 @@ export class ReserveConfig {
         borsh.u8("blockCtokenUsage"),
         borsh.u8("earlyRepayRemainingInterestPct"),
         borsh.u8("emergencyMode"),
-        borsh.array(borsh.u8(), 4, "reserved1"),
+        borsh.u8("interestRateBasis"),
+        borsh.array(borsh.u8(), 3, "reserved1"),
         borsh.u8("protocolOrderExecutionFeePct"),
         borsh.u8("protocolTakeRatePct"),
         borsh.u8("protocolLiquidationFeePct"),
@@ -222,7 +227,7 @@ export class ReserveConfig {
         borsh.u64("deleveragingBonusIncreaseBpsPerDay"),
         borsh.u64("debtMaturityTimestamp"),
         borsh.u64("debtTermSeconds"),
-        borsh.u64("rewardsAmountPerSlot"),
+        borsh.u64("rewardsAmountPerAccrualUnit"),
         borsh.u64("permissionedOps"),
       ],
       property
@@ -239,6 +244,7 @@ export class ReserveConfig {
       blockCtokenUsage: obj.blockCtokenUsage,
       earlyRepayRemainingInterestPct: obj.earlyRepayRemainingInterestPct,
       emergencyMode: obj.emergencyMode,
+      interestRateBasis: obj.interestRateBasis,
       reserved1: obj.reserved1,
       protocolOrderExecutionFeePct: obj.protocolOrderExecutionFeePct,
       protocolTakeRatePct: obj.protocolTakeRatePct,
@@ -276,7 +282,7 @@ export class ReserveConfig {
         obj.deleveragingBonusIncreaseBpsPerDay,
       debtMaturityTimestamp: obj.debtMaturityTimestamp,
       debtTermSeconds: obj.debtTermSeconds,
-      rewardsAmountPerSlot: obj.rewardsAmountPerSlot,
+      rewardsAmountPerAccrualUnit: obj.rewardsAmountPerAccrualUnit,
       permissionedOps: obj.permissionedOps,
     })
   }
@@ -290,6 +296,7 @@ export class ReserveConfig {
       blockCtokenUsage: fields.blockCtokenUsage,
       earlyRepayRemainingInterestPct: fields.earlyRepayRemainingInterestPct,
       emergencyMode: fields.emergencyMode,
+      interestRateBasis: fields.interestRateBasis,
       reserved1: fields.reserved1,
       protocolOrderExecutionFeePct: fields.protocolOrderExecutionFeePct,
       protocolTakeRatePct: fields.protocolTakeRatePct,
@@ -329,7 +336,7 @@ export class ReserveConfig {
         fields.deleveragingBonusIncreaseBpsPerDay,
       debtMaturityTimestamp: fields.debtMaturityTimestamp,
       debtTermSeconds: fields.debtTermSeconds,
-      rewardsAmountPerSlot: fields.rewardsAmountPerSlot,
+      rewardsAmountPerAccrualUnit: fields.rewardsAmountPerAccrualUnit,
       permissionedOps: fields.permissionedOps,
     }
   }
@@ -343,6 +350,7 @@ export class ReserveConfig {
       blockCtokenUsage: this.blockCtokenUsage,
       earlyRepayRemainingInterestPct: this.earlyRepayRemainingInterestPct,
       emergencyMode: this.emergencyMode,
+      interestRateBasis: this.interestRateBasis,
       reserved1: this.reserved1,
       protocolOrderExecutionFeePct: this.protocolOrderExecutionFeePct,
       protocolTakeRatePct: this.protocolTakeRatePct,
@@ -380,7 +388,7 @@ export class ReserveConfig {
         this.deleveragingBonusIncreaseBpsPerDay.toString(),
       debtMaturityTimestamp: this.debtMaturityTimestamp.toString(),
       debtTermSeconds: this.debtTermSeconds.toString(),
-      rewardsAmountPerSlot: this.rewardsAmountPerSlot.toString(),
+      rewardsAmountPerAccrualUnit: this.rewardsAmountPerAccrualUnit.toString(),
       permissionedOps: this.permissionedOps.toString(),
     }
   }
@@ -394,6 +402,7 @@ export class ReserveConfig {
       blockCtokenUsage: obj.blockCtokenUsage,
       earlyRepayRemainingInterestPct: obj.earlyRepayRemainingInterestPct,
       emergencyMode: obj.emergencyMode,
+      interestRateBasis: obj.interestRateBasis,
       reserved1: obj.reserved1,
       protocolOrderExecutionFeePct: obj.protocolOrderExecutionFeePct,
       protocolTakeRatePct: obj.protocolTakeRatePct,
@@ -437,7 +446,7 @@ export class ReserveConfig {
       ),
       debtMaturityTimestamp: new BN(obj.debtMaturityTimestamp),
       debtTermSeconds: new BN(obj.debtTermSeconds),
-      rewardsAmountPerSlot: new BN(obj.rewardsAmountPerSlot),
+      rewardsAmountPerAccrualUnit: new BN(obj.rewardsAmountPerAccrualUnit),
       permissionedOps: new BN(obj.permissionedOps),
     })
   }

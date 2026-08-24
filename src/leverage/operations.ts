@@ -1,4 +1,4 @@
-import { Address, Instruction, Slot, Option, none, TransactionSigner, lamports } from '@solana/kit';
+import { Address, Instruction, Option, none, TransactionSigner, lamports } from '@solana/kit';
 import Decimal from 'decimal.js';
 import {
   KaminoAction,
@@ -88,14 +88,31 @@ import {
 import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
 import { findAssociatedTokenPda, getCloseAccountInstruction } from '@solana-program/token-2022';
 import { LAMPORTS_PER_SOL } from '../utils/consts';
-import { DistributiveOmit, requireMatchingLedgerInstant, resolveLedgerInput } from '../utils/ledger';
+import type { LedgerInstant } from '../utils/ledger';
 import { redeemWithdrawAmount, sizeRedeemFundedPull } from '../lending_operations/redeem_drift';
 
-// Offset for the withdraw slot to underestimate the exchange rate. This is the older,
+// Offset for the withdraw instant to underestimate the exchange rate. This is the older,
 // adjust-path-only mitigation for the same estimated-vs-actual redeem drift addressed by
 // `lending_operations/redeem_drift.ts` (which covers the repay/close/migrate paths) — candidate
 // for unification onto one mechanism.
 export const WITHDRAW_SLOT_OFFSET = 150;
+
+/**
+ * Shifts the given instant back by `slotOffset` slots (and the equivalent wall-clock seconds, at the nominal 2
+ * slots/second - which is what drives the accrual of a `TrueApr` reserve), so that the withdraw sizing uses a
+ * slightly older, underestimated exchange rate (see {@link WITHDRAW_SLOT_OFFSET}).
+ *
+ * The nominal rate is a deliberate choice, not an oversight: real slots are shorter than the nominal 500ms, so
+ * converting the slot offset at the nominal rate shifts the block time back *further* than the same slots took in
+ * reality - i.e. the sizing gets strictly *more* conservative. A live slot duration would only shrink the safety
+ * margin.
+ */
+function ledgerInstantBackBySlots(instant: LedgerInstant, slotOffset: number): LedgerInstant {
+  return {
+    slot: instant.slot - BigInt(slotOffset),
+    blockTime: (instant.blockTime - BigInt(Math.ceil(slotOffset / 2))) as LedgerInstant['blockTime'],
+  };
+}
 
 // Sentinel used to short-circuit a `get*WithLeverageSwapInputs` run once it has handed the klend account set to
 // the quoter — see `captureLeverageKlendAccounts`.
@@ -129,7 +146,7 @@ async function captureLeverageKlendAccounts(
  * Inputs for {@link getDepositLeverageKlendAccounts}: the {@link getDepositWithLeverageSwapInputs} props minus the
  * quoter (and logger), since the klend account footprint is discovered without an external swap.
  */
-export type DepositLeverageKlendAccountsInputs = DistributiveOmit<
+export type DepositLeverageKlendAccountsInputs = Omit<
   DepositWithLeverageSwapInputsParams<unknown>,
   'quoter' | 'logger'
 >;
@@ -150,7 +167,7 @@ export function getDepositLeverageKlendAccounts(
  * Inputs for {@link getWithdrawLeverageKlendAccounts}: the {@link getWithdrawWithLeverageSwapInputs} props minus the
  * quoter (and logger).
  */
-export type WithdrawLeverageKlendAccountsInputs = DistributiveOmit<
+export type WithdrawLeverageKlendAccountsInputs = Omit<
   WithdrawWithLeverageSwapInputsParams<unknown>,
   'quoter' | 'logger'
 >;
@@ -166,10 +183,7 @@ export function getWithdrawLeverageKlendAccounts(
  * Inputs for {@link getAdjustLeverageKlendAccounts}: the {@link getAdjustLeverageSwapInputs} props minus the quoter
  * (and logger).
  */
-export type AdjustLeverageKlendAccountsInputs = DistributiveOmit<
-  AdjustLeverageSwapInputsParams<unknown>,
-  'quoter' | 'logger'
->;
+export type AdjustLeverageKlendAccountsInputs = Omit<AdjustLeverageSwapInputsParams<unknown>, 'quoter' | 'logger'>;
 
 /** Light helper: the accurate, final klend account footprint of an adjust-leverage operation. See {@link getDepositLeverageKlendAccounts}. */
 export function getAdjustLeverageKlendAccounts(
@@ -188,8 +202,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
   slippagePct,
   obligation,
   referrer,
-  currentSlot: suppliedCurrentSlot,
-  currentLedgerInstant: suppliedLedgerInstant,
+  currentLedgerInstant,
   targetLeverage,
   selectedTokenMint,
   obligationTypeTagOverride,
@@ -208,14 +221,6 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
 }> {
   const collReserve = kaminoMarket.getExistingReserveByAddress(collReserveAddress);
   const debtReserve = kaminoMarket.getExistingReserveByAddress(debtReserveAddress);
-  const ledger = await resolveLedgerInput(
-    kaminoMarket.getRpc(),
-    suppliedCurrentSlot,
-    suppliedLedgerInstant,
-    !debtReserve.state.config.debtMaturityTimestamp.eqn(0),
-    'getDepositWithLeverageSwapInputs'
-  );
-  const { currentSlot, currentLedgerInstant } = ledger;
   const log = logger ?? (() => {});
   const collTokenMint = collReserve.getLiquidityMint();
   const debtTokenMint = debtReserve.getLiquidityMint();
@@ -265,7 +270,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
         owner,
         resolvedObligation,
         referrer,
-        currentSlot,
+        currentLedgerInstant,
         depositTokenIsSol,
         scopeRefreshIx,
         calcs,
@@ -325,7 +330,6 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
       initialInputs: {
         calcs: quotePriceCalcs,
         swapQuote,
-        currentSlot,
         currentLedgerInstant,
         obligation: resolvedObligation,
         klendAccounts: uniqueKlendAccounts,
@@ -355,7 +359,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
         owner,
         resolvedObligation,
         referrer,
-        currentSlot,
+        currentLedgerInstant,
         depositTokenIsSol,
         scopeRefreshIx,
         calcs,
@@ -400,7 +404,6 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
       initialInputs: {
         calcs: quotePriceCalcs,
         swapQuote,
-        currentSlot,
         currentLedgerInstant,
         obligation: resolvedObligation,
         klendAccounts: uniqueKlendAccounts,
@@ -419,8 +422,7 @@ export async function getDepositWithLeverageIxs<QuoteResponse>({
   slippagePct,
   obligation,
   referrer,
-  currentSlot: suppliedCurrentSlot,
-  currentLedgerInstant: suppliedLedgerInstant,
+  currentLedgerInstant,
   targetLeverage,
   selectedTokenMint,
   obligationTypeTagOverride,
@@ -436,14 +438,6 @@ export async function getDepositWithLeverageIxs<QuoteResponse>({
   logger,
 }: DepositWithLeverageParams<QuoteResponse>): Promise<Array<DepositLeverageIxsResponse<QuoteResponse>>> {
   const debtReserve = kaminoMarket.getExistingReserveByAddress(debtReserveAddress);
-  const ledger = await resolveLedgerInput(
-    kaminoMarket.getRpc(),
-    suppliedCurrentSlot,
-    suppliedLedgerInstant,
-    !debtReserve.state.config.debtMaturityTimestamp.eqn(0),
-    'getDepositWithLeverageIxs'
-  );
-  const { currentSlot, currentLedgerInstant } = ledger;
   const { swapInputs, initialInputs } = await getDepositWithLeverageSwapInputs({
     owner,
     kaminoMarket,
@@ -454,7 +448,6 @@ export async function getDepositWithLeverageIxs<QuoteResponse>({
     slippagePct,
     obligation,
     referrer,
-    currentSlot,
     currentLedgerInstant,
     targetLeverage,
     selectedTokenMint,
@@ -478,9 +471,7 @@ export async function getDepositWithLeverageIxs<QuoteResponse>({
   // Leverage deposit borrows debt; reject up front if the debt is a fixed-term reserve past its maturity (the
   // on-chain borrow would revert with ReserveDebtMaturityReached).
   if (!debtReserve.state.config.debtMaturityTimestamp.eqn(0)) {
-    debtReserve.assertCanOriginateDebt(
-      Number(requireMatchingLedgerInstant(currentSlot, currentLedgerInstant, 'getDepositWithLeverageIxs').blockTime)
-    );
+    debtReserve.assertCanOriginateDebt(Number(currentLedgerInstant.blockTime));
   }
   const solTokenReserve =
     collReserve.getLiquidityMint() === WRAPPED_SOL_MINT
@@ -511,7 +502,7 @@ export async function getDepositWithLeverageIxs<QuoteResponse>({
       owner,
       initialInputs.obligation,
       referrer,
-      currentSlot,
+      currentLedgerInstant,
       depositTokenIsSol,
       scopeRefreshIx,
       depositCalcs,
@@ -531,7 +522,7 @@ export async function getDepositWithLeverageIxs<QuoteResponse>({
       owner,
       initialInputs.obligation,
       referrer,
-      currentSlot,
+      currentLedgerInstant,
       depositTokenIsSol,
       scopeRefreshIx,
       depositCalcs,
@@ -564,7 +555,7 @@ async function buildDepositWithLeverageIxsCollFlash<QuoteResponse>(
   owner: TransactionSigner,
   obligation: KaminoObligation | ObligationType | undefined,
   referrer: Option<Address>,
-  currentSlot: Slot,
+  currentLedgerInstant: LedgerInstant,
   depositTokenIsSol: boolean,
   scopeRefreshIx: Instruction[],
   calcs: DepositLeverageCalcsResult,
@@ -639,7 +630,7 @@ async function buildDepositWithLeverageIxsCollFlash<QuoteResponse>(
     requestElevationGroup: elevationGroupOverride === 0 ? false : true, // emode
     initUserMetadata: { skipInitialization: true, skipLutCreation: true }, // to be checked and created in a setup tx in the UI
     referrer,
-    currentSlot,
+    currentLedgerInstant,
     rollOver,
   });
 
@@ -680,7 +671,7 @@ async function buildDepositWithLeverageIxsDebtFlash<QuoteResponse>(
   owner: TransactionSigner,
   obligation: KaminoObligation | ObligationType | undefined,
   referrer: Option<Address>,
-  currentSlot: Slot,
+  currentLedgerInstant: LedgerInstant,
   depositTokenIsSol: boolean,
   scopeRefreshIx: Instruction[],
   calcs: DepositLeverageDebtFlashCalcsResult,
@@ -758,7 +749,7 @@ async function buildDepositWithLeverageIxsDebtFlash<QuoteResponse>(
     requestElevationGroup: elevationGroupOverride === 0 ? false : true,
     initUserMetadata: { skipInitialization: true, skipLutCreation: true },
     referrer,
-    currentSlot,
+    currentLedgerInstant,
   });
 
   return swapQuoteIxsArray.map((swapQuoteIxs) => {
@@ -795,8 +786,7 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
   borrowed,
   obligation,
   referrer,
-  currentSlot: suppliedCurrentSlot,
-  currentLedgerInstant: suppliedLedgerInstant,
+  currentLedgerInstant,
   withdrawAmount,
   priceCollToDebt,
   slippagePct,
@@ -817,14 +807,6 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
 }> {
   const collReserve = kaminoMarket.getExistingReserveByAddress(collReserveAddress);
   const debtReserve = kaminoMarket.getExistingReserveByAddress(debtReserveAddress);
-  const ledger = await resolveLedgerInput(
-    kaminoMarket.getRpc(),
-    suppliedCurrentSlot,
-    suppliedLedgerInstant,
-    debtReserve.getKind().isFixedRate(),
-    'getWithdrawWithLeverageSwapInputs'
-  );
-  const { currentSlot, currentLedgerInstant } = ledger;
   const log = logger ?? (() => {});
   const collTokenMint = collReserve.getLiquidityMint();
   const debtTokenMint = debtReserve.getLiquidityMint();
@@ -856,14 +838,13 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
       withdrawAmount,
       deposited,
       borrowed,
-      currentSlot,
+      currentLedgerInstant,
       isClosingPosition,
       selectedTokenIsCollToken,
       selectedTokenMint,
       obligation,
       flashLoanFee,
-      slippagePct,
-      currentLedgerInstant
+      slippagePct
     );
 
     log('Withdraw calcs (debt flash)', toJson(calcs));
@@ -876,7 +857,7 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
         owner,
         obligation,
         referrer,
-        currentSlot,
+        currentLedgerInstant,
         isClosingPosition,
         inputTokenIsSol,
         scopeRefreshIx,
@@ -907,14 +888,13 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
       withdrawAmount,
       deposited,
       borrowed,
-      currentSlot,
+      currentLedgerInstant,
       isClosingPosition,
       selectedTokenIsCollToken,
       selectedTokenMint,
       obligation,
       flashLoanFee,
-      slippagePct,
-      currentLedgerInstant
+      slippagePct
     );
 
     const swapInputAmountQuotePrice = toLamports(
@@ -933,7 +913,6 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
       initialInputs: {
         calcs: calcsQuotePrice,
         swapQuote,
-        currentSlot,
         currentLedgerInstant,
         obligation,
         klendAccounts: uniqueKlendAccounts,
@@ -951,14 +930,13 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
       withdrawAmount,
       deposited,
       borrowed,
-      currentSlot,
+      currentLedgerInstant,
       isClosingPosition,
       selectedTokenIsCollToken,
       selectedTokenMint,
       obligation,
       flashLoanFee,
-      slippagePct,
-      currentLedgerInstant
+      slippagePct
     );
 
     log('Withdraw calcs (coll flash)', toJson(calcs));
@@ -971,7 +949,7 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
         owner,
         obligation,
         referrer,
-        currentSlot,
+        currentLedgerInstant,
         isClosingPosition,
         inputTokenIsSol,
         scopeRefreshIx,
@@ -1002,14 +980,13 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
       withdrawAmount,
       deposited,
       borrowed,
-      currentSlot,
+      currentLedgerInstant,
       isClosingPosition,
       selectedTokenIsCollToken,
       selectedTokenMint,
       obligation,
       flashLoanFee,
-      slippagePct,
-      currentLedgerInstant
+      slippagePct
     );
 
     const swapInputAmountQuotePrice = toLamports(
@@ -1028,7 +1005,6 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
       initialInputs: {
         calcs: calcsQuotePrice,
         swapQuote,
-        currentSlot,
         currentLedgerInstant,
         obligation,
         klendAccounts: uniqueKlendAccounts,
@@ -1046,8 +1022,7 @@ export async function getWithdrawWithLeverageIxs<QuoteResponse>({
   deposited,
   borrowed,
   referrer,
-  currentSlot: suppliedCurrentSlot,
-  currentLedgerInstant: suppliedLedgerInstant,
+  currentLedgerInstant,
   withdrawAmount,
   priceCollToDebt,
   slippagePct,
@@ -1064,14 +1039,6 @@ export async function getWithdrawWithLeverageIxs<QuoteResponse>({
 }: WithdrawWithLeverageParams<QuoteResponse>): Promise<Array<WithdrawLeverageIxsResponse<QuoteResponse>>> {
   const collReserve = kaminoMarket.getExistingReserveByAddress(collReserveAddress);
   const debtReserve = kaminoMarket.getExistingReserveByAddress(debtReserveAddress);
-  const ledger = await resolveLedgerInput(
-    kaminoMarket.getRpc(),
-    suppliedCurrentSlot,
-    suppliedLedgerInstant,
-    debtReserve.getKind().isFixedRate(),
-    'getWithdrawWithLeverageIxs'
-  );
-  const { currentSlot, currentLedgerInstant } = ledger;
 
   const inputTokenIsSol = selectedTokenMint === WRAPPED_SOL_MINT;
   const { swapInputs, initialInputs } = await getWithdrawWithLeverageSwapInputs({
@@ -1083,7 +1050,6 @@ export async function getWithdrawWithLeverageIxs<QuoteResponse>({
     borrowed,
     obligation,
     referrer,
-    currentSlot,
     currentLedgerInstant,
     withdrawAmount,
     priceCollToDebt,
@@ -1126,7 +1092,7 @@ export async function getWithdrawWithLeverageIxs<QuoteResponse>({
       owner,
       obligation,
       referrer,
-      currentSlot,
+      currentLedgerInstant,
       isClosingPosition,
       inputTokenIsSol,
       scopeRefreshIx,
@@ -1146,7 +1112,7 @@ export async function getWithdrawWithLeverageIxs<QuoteResponse>({
       owner,
       obligation,
       referrer,
-      currentSlot,
+      currentLedgerInstant,
       isClosingPosition,
       inputTokenIsSol,
       scopeRefreshIx,
@@ -1178,7 +1144,7 @@ export async function buildWithdrawWithLeverageIxsDebtFlash<QuoteResponse>(
   owner: TransactionSigner,
   obligation: KaminoObligation,
   referrer: Option<Address>,
-  currentSlot: Slot,
+  currentLedgerInstant: LedgerInstant,
   isClosingPosition: boolean,
   depositTokenIsSol: boolean,
   scopeRefreshIx: Instruction[],
@@ -1270,7 +1236,7 @@ export async function buildWithdrawWithLeverageIxsDebtFlash<QuoteResponse>(
     ),
     withdrawReserveAddress: collReserve.address,
     payer: owner,
-    currentSlot,
+    currentLedgerInstant,
     obligation,
     useV2Ixs,
     scopeRefreshConfig: undefined,
@@ -1315,7 +1281,7 @@ async function buildWithdrawWithLeverageIxsCollFlash<QuoteResponse>(
   owner: TransactionSigner,
   obligation: KaminoObligation,
   referrer: Option<Address>,
-  currentSlot: Slot,
+  currentLedgerInstant: LedgerInstant,
   isClosingPosition: boolean,
   depositTokenIsSol: boolean,
   scopeRefreshIx: Instruction[],
@@ -1408,7 +1374,7 @@ async function buildWithdrawWithLeverageIxsCollFlash<QuoteResponse>(
     withdrawAmount: redeemWithdrawAmount(collFlashLeg.redeemCollLamports, isClosingPosition),
     withdrawReserveAddress: collReserve.address,
     payer: owner,
-    currentSlot,
+    currentLedgerInstant,
     obligation,
     useV2Ixs,
     scopeRefreshConfig: undefined,
@@ -1452,8 +1418,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
   depositedLamports,
   borrowedLamports,
   referrer,
-  currentSlot: suppliedCurrentSlot,
-  currentLedgerInstant: suppliedLedgerInstant,
+  currentLedgerInstant,
   targetLeverage,
   priceCollToDebt,
   priceDebtToColl,
@@ -1473,14 +1438,6 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
 }> {
   const collReserve = kaminoMarket.getExistingReserveByAddress(collReserveAddress);
   const debtReserve = kaminoMarket.getExistingReserveByAddress(debtReserveAddress);
-  const ledger = await resolveLedgerInput(
-    kaminoMarket.getRpc(),
-    suppliedCurrentSlot,
-    suppliedLedgerInstant,
-    debtReserve.getKind().isFixedRate() || !debtReserve.state.config.debtMaturityTimestamp.eqn(0),
-    'getAdjustLeverageSwapInputs'
-  );
-  const { currentSlot, currentLedgerInstant } = ledger;
   const collTokenMint = collReserve.getLiquidityMint();
   const debtTokenMint = debtReserve.getLiquidityMint();
   const deposited = fromLamports(depositedLamports, collReserve.stats.decimals);
@@ -1536,7 +1493,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
           debtReserveAddress,
           obligation,
           referrer,
-          currentSlot,
+          currentLedgerInstant,
           calcs,
           scopeRefreshIx,
           dummySwapIxs,
@@ -1607,7 +1564,6 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         initialInputs: {
           calcs: calcsQuotePrice,
           swapQuote,
-          currentSlot,
           currentLedgerInstant,
           obligation,
           klendAccounts: uniqueKlendAccounts,
@@ -1633,7 +1589,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
           debtReserveAddress,
           obligation,
           referrer,
-          currentSlot,
+          currentLedgerInstant,
           calcs,
           scopeRefreshIx,
           dummySwapIxs,
@@ -1692,7 +1648,6 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         initialInputs: {
           calcs: calcsQuotePrice,
           swapQuote,
-          currentSlot,
           currentLedgerInstant,
           obligation,
           klendAccounts: uniqueKlendAccounts,
@@ -1719,7 +1674,6 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         slippagePct,
         obligation,
         debtReserve,
-        currentSlot,
         currentLedgerInstant
       );
 
@@ -1731,7 +1685,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
           debtReserveAddress,
           obligation,
           referrer,
-          currentSlot,
+          currentLedgerInstant,
           calcs,
           scopeRefreshIx,
           dummySwapIxs,
@@ -1774,7 +1728,6 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         slippagePct,
         obligation,
         debtReserve,
-        currentSlot,
         currentLedgerInstant
       );
 
@@ -1795,7 +1748,6 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         initialInputs: {
           calcs: calcsQuotePrice,
           swapQuote,
-          currentSlot,
           currentLedgerInstant,
           obligation,
           klendAccounts: uniqueKlendAccounts,
@@ -1812,7 +1764,6 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         slippagePct,
         obligation,
         debtReserve,
-        currentSlot,
         currentLedgerInstant
       );
 
@@ -1824,7 +1775,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
           debtReserveAddress,
           obligation,
           referrer,
-          currentSlot,
+          currentLedgerInstant,
           calcs,
           scopeRefreshIx,
           dummySwapIxs,
@@ -1865,7 +1816,6 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         slippagePct,
         obligation,
         debtReserve,
-        currentSlot,
         currentLedgerInstant
       );
 
@@ -1886,7 +1836,6 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         initialInputs: {
           calcs: calcsQuotePrice,
           swapQuote,
-          currentSlot,
           currentLedgerInstant,
           obligation,
           klendAccounts: uniqueKlendAccounts,
@@ -1906,8 +1855,7 @@ export async function getAdjustLeverageIxs<QuoteResponse>({
   depositedLamports,
   borrowedLamports,
   referrer,
-  currentSlot: suppliedCurrentSlot,
-  currentLedgerInstant: suppliedLedgerInstant,
+  currentLedgerInstant,
   targetLeverage,
   priceCollToDebt,
   priceDebtToColl,
@@ -1924,14 +1872,6 @@ export async function getAdjustLeverageIxs<QuoteResponse>({
   logger,
 }: AdjustLeverageIxsParams<QuoteResponse>): Promise<Array<AdjustLeverageIxsResponse<QuoteResponse>>> {
   const debtReserve = kaminoMarket.getExistingReserveByAddress(debtReserveAddress);
-  const ledger = await resolveLedgerInput(
-    kaminoMarket.getRpc(),
-    suppliedCurrentSlot,
-    suppliedLedgerInstant,
-    debtReserve.getKind().isFixedRate() || !debtReserve.state.config.debtMaturityTimestamp.eqn(0),
-    'getAdjustLeverageIxs'
-  );
-  const { currentSlot, currentLedgerInstant } = ledger;
   const log = logger ?? (() => {});
   const { swapInputs, initialInputs } = await getAdjustLeverageSwapInputs({
     owner,
@@ -1942,7 +1882,6 @@ export async function getAdjustLeverageIxs<QuoteResponse>({
     depositedLamports,
     borrowedLamports,
     referrer,
-    currentSlot,
     currentLedgerInstant,
     targetLeverage,
     priceCollToDebt,
@@ -1966,9 +1905,7 @@ export async function getAdjustLeverageIxs<QuoteResponse>({
     // Increasing leverage borrows more debt; reject up front if the debt is a fixed-term reserve past its maturity
     // (the on-chain borrow would revert with ReserveDebtMaturityReached).
     if (!debtReserve.state.config.debtMaturityTimestamp.eqn(0)) {
-      debtReserve.assertCanOriginateDebt(
-        Number(requireMatchingLedgerInstant(currentSlot, currentLedgerInstant, 'getAdjustLeverageIxs').blockTime)
-      );
+      debtReserve.assertCanOriginateDebt(Number(currentLedgerInstant.blockTime));
     }
     const depositSwapper: SwapIxsProvider<QuoteResponse> = swapper;
 
@@ -1995,7 +1932,7 @@ export async function getAdjustLeverageIxs<QuoteResponse>({
         debtReserveAddress,
         obligation,
         referrer,
-        currentSlot,
+        currentLedgerInstant,
         increaseCalcs,
         scopeRefreshIx,
         swapIxsArray,
@@ -2012,7 +1949,7 @@ export async function getAdjustLeverageIxs<QuoteResponse>({
         debtReserveAddress,
         obligation,
         referrer,
-        currentSlot,
+        currentLedgerInstant,
         increaseCalcs,
         scopeRefreshIx,
         swapIxsArray,
@@ -2061,7 +1998,7 @@ export async function getAdjustLeverageIxs<QuoteResponse>({
         debtReserveAddress,
         obligation,
         referrer,
-        currentSlot,
+        currentLedgerInstant,
         decreaseCalcs,
         scopeRefreshIx,
         swapIxsArray,
@@ -2080,7 +2017,7 @@ export async function getAdjustLeverageIxs<QuoteResponse>({
         debtReserveAddress,
         obligation,
         referrer,
-        currentSlot,
+        currentLedgerInstant,
         decreaseCalcs,
         scopeRefreshIx,
         swapIxsArray,
@@ -2130,7 +2067,7 @@ async function buildIncreaseLeverageIxsCollFlash<QuoteResponse>(
   debtReserveAddress: Address,
   obligation: KaminoObligation,
   referrer: Option<Address>,
-  currentSlot: Slot,
+  currentLedgerInstant: LedgerInstant,
   calcs: AdjustLeverageCalcsResult,
   scopeRefreshIx: Instruction[],
   swapQuoteIxsArray: SwapIxs<QuoteResponse>[],
@@ -2188,7 +2125,7 @@ async function buildIncreaseLeverageIxsCollFlash<QuoteResponse>(
     requestElevationGroup: false,
     initUserMetadata: { skipInitialization: true, skipLutCreation: true },
     referrer,
-    currentSlot,
+    currentLedgerInstant,
   });
 
   // 4. Borrow tokens in borrow token reserve that will be swapped to repay flash loan
@@ -2205,7 +2142,7 @@ async function buildIncreaseLeverageIxsCollFlash<QuoteResponse>(
     requestElevationGroup: false,
     initUserMetadata: { skipInitialization: true, skipLutCreation: true }, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     referrer,
-    currentSlot,
+    currentLedgerInstant,
   });
 
   return buildFlashLeverageOutputs(
@@ -2234,7 +2171,7 @@ async function buildIncreaseLeverageIxsDebtFlash<QuoteResponse>(
   debtReserveAddress: Address,
   obligation: KaminoObligation,
   referrer: Option<Address>,
-  currentSlot: Slot,
+  currentLedgerInstant: LedgerInstant,
   calcs: AdjustDepositDebtFlashCalcsResult,
   scopeRefreshIx: Instruction[],
   swapQuoteIxsArray: SwapIxs<QuoteResponse>[],
@@ -2299,7 +2236,7 @@ async function buildIncreaseLeverageIxsDebtFlash<QuoteResponse>(
     requestElevationGroup: false,
     initUserMetadata: { skipInitialization: true, skipLutCreation: true },
     referrer,
-    currentSlot,
+    currentLedgerInstant,
   });
 
   // 4. Borrow debt to repay flash (= flashBorrow + SC fee, computed via the shared helper above).
@@ -2316,7 +2253,7 @@ async function buildIncreaseLeverageIxsDebtFlash<QuoteResponse>(
     requestElevationGroup: false,
     initUserMetadata: { skipInitialization: true, skipLutCreation: true },
     referrer,
-    currentSlot,
+    currentLedgerInstant,
   });
 
   return buildFlashLeverageOutputs(
@@ -2338,7 +2275,7 @@ async function buildDecreaseLeverageIxsDebtFlash<QuoteResponse>(
   debtReserveAddress: Address,
   obligation: KaminoObligation,
   referrer: Option<Address>,
-  currentSlot: Slot,
+  currentLedgerInstant: LedgerInstant,
   calcs: AdjustLeverageCalcsResult,
   scopeRefreshIx: Instruction[],
   swapQuoteIxsArray: SwapIxs<QuoteResponse>[],
@@ -2422,7 +2359,7 @@ async function buildDecreaseLeverageIxsDebtFlash<QuoteResponse>(
     obligation,
     useV2Ixs,
     scopeRefreshConfig: undefined,
-    currentSlot,
+    currentLedgerInstant,
     payer: undefined,
     extraComputeBudget: 0,
     includeAtaIxs: false,
@@ -2431,7 +2368,7 @@ async function buildDecreaseLeverageIxsDebtFlash<QuoteResponse>(
     referrer,
   });
 
-  const withdrawSlot = currentSlot - BigInt(withdrawSlotOffset);
+  const withdrawInstant = ledgerInstantBackBySlots(currentLedgerInstant, withdrawSlotOffset);
   // 6. Withdraw collateral (a little bit more to be able to pay for the slippage on swap)
   const withdrawAction = await KaminoAction.buildWithdrawTxns({
     kaminoMarket,
@@ -2446,7 +2383,7 @@ async function buildDecreaseLeverageIxsDebtFlash<QuoteResponse>(
     requestElevationGroup: false,
     initUserMetadata: { skipInitialization: true, skipLutCreation: true }, // to be checked and create in a setup tx in the UI (won't be the case for adjust anyway as this would be created in deposit)
     referrer,
-    currentSlot: withdrawSlot,
+    currentLedgerInstant: withdrawInstant,
   });
 
   return swapQuoteIxsArray.map((swapQuoteIxs) => {
@@ -2488,7 +2425,7 @@ async function buildDecreaseLeverageIxsCollFlash<QuoteResponse>(
   debtReserveAddress: Address,
   obligation: KaminoObligation,
   referrer: Option<Address>,
-  currentSlot: Slot,
+  currentLedgerInstant: LedgerInstant,
   calcs: AdjustWithdrawCollFlashCalcsResult,
   scopeRefreshIx: Instruction[],
   swapQuoteIxsArray: SwapIxs<QuoteResponse>[],
@@ -2575,7 +2512,7 @@ async function buildDecreaseLeverageIxsCollFlash<QuoteResponse>(
     obligation,
     useV2Ixs,
     scopeRefreshConfig: undefined,
-    currentSlot,
+    currentLedgerInstant,
     payer: undefined,
     extraComputeBudget: 0,
     includeAtaIxs: false,
@@ -2586,7 +2523,7 @@ async function buildDecreaseLeverageIxsCollFlash<QuoteResponse>(
 
   // 4. Withdraw coll = the canonical redeem (the swap spend `depositTokenWithdrawAmount` + the flash fee), so the
   //    ATA holds `flashBorrow + fee` at flash-repay (deleverage nets nothing out). fee==0 → unchanged sizing.
-  const withdrawSlot = currentSlot - BigInt(withdrawSlotOffset);
+  const withdrawInstant = ledgerInstantBackBySlots(currentLedgerInstant, withdrawSlotOffset);
   const withdrawAction = await KaminoAction.buildWithdrawTxns({
     kaminoMarket,
     amount: collFlashLeg.redeemCollLamports.toString(),
@@ -2600,7 +2537,7 @@ async function buildDecreaseLeverageIxsCollFlash<QuoteResponse>(
     requestElevationGroup: false,
     initUserMetadata: { skipInitialization: true, skipLutCreation: true },
     referrer,
-    currentSlot: withdrawSlot,
+    currentLedgerInstant: withdrawInstant,
   });
 
   return swapQuoteIxsArray.map((swapQuoteIxs) => {

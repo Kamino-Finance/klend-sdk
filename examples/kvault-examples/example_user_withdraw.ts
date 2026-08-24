@@ -2,7 +2,12 @@ import { getConnectionPool } from '../utils/connection';
 import { getKeypair } from '../utils/keypair';
 import { EXAMPLE_USDC_VAULT } from '../utils/constants';
 import Decimal from 'decimal.js/decimal';
-import { getMedianSlotDurationInMsFromLastEpochs, KaminoManager, KaminoVault } from '@kamino-finance/klend-sdk';
+import {
+  getMedianSlotDurationInMsFromLastEpochs,
+  KaminoManager,
+  KaminoVault,
+  getCurrentLedgerInstant,
+} from '@kamino-finance/klend-sdk';
 import { sendAndConfirmTx } from '../utils/tx';
 
 (async () => {
@@ -11,7 +16,7 @@ import { sendAndConfirmTx } from '../utils/tx';
   const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
 
   const kaminoManager = new KaminoManager(c.rpc, slotDuration);
-  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT);
+  const vault = new KaminoVault(c.rpc, EXAMPLE_USDC_VAULT, slotDuration);
 
   // read the vault state so we can use the LUT in the tx
   const vaultState = await vault.getState();
@@ -22,12 +27,12 @@ import { sendAndConfirmTx } from '../utils/tx';
 
   // withdraw 100 shares from the vault
   const sharesToWithdraw = new Decimal(100.0);
-  const slot = await c.rpc.getSlot({ commitment: 'confirmed' }).send();
+  const currentLedgerInstant = await getCurrentLedgerInstant(c.rpc, 'confirmed');
   const withdrawIx = await kaminoManager.withdrawFromVaultIxs(
     user,
     vault,
     sharesToWithdraw,
-    slot,
+    currentLedgerInstant,
     vaultReservesMap,
     farmState,
     null
