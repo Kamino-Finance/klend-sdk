@@ -59,6 +59,7 @@ export interface VaultStateFields {
   padding2: Array<number>
   depositCap: BN
   rewardInfo: types.VaultRewardInfoFields
+  permissioningAuthority: Address
   padding3: Array<BN>
 }
 
@@ -106,6 +107,7 @@ export interface VaultStateJSON {
   padding2: Array<number>
   depositCap: string
   rewardInfo: types.VaultRewardInfoJSON
+  permissioningAuthority: string
   padding3: Array<string>
 }
 
@@ -153,6 +155,7 @@ export class VaultState {
   readonly padding2: Array<number>
   readonly depositCap: BN
   readonly rewardInfo: types.VaultRewardInfo
+  readonly permissioningAuthority: Address
   readonly padding3: Array<BN>
 
   static readonly discriminator = Buffer.from([
@@ -203,7 +206,8 @@ export class VaultState {
     borsh.array(borsh.u8(), 6, "padding2"),
     borsh.u64("depositCap"),
     types.VaultRewardInfo.layout("rewardInfo"),
-    borsh.array(borsh.u128(), 232, "padding3"),
+    borshAddress("permissioningAuthority"),
+    borsh.array(borsh.u128(), 230, "padding3"),
   ])
 
   constructor(fields: VaultStateFields) {
@@ -254,6 +258,7 @@ export class VaultState {
     this.padding2 = fields.padding2
     this.depositCap = fields.depositCap
     this.rewardInfo = new types.VaultRewardInfo({ ...fields.rewardInfo })
+    this.permissioningAuthority = fields.permissioningAuthority
     this.padding3 = fields.padding3
   }
 
@@ -354,6 +359,7 @@ export class VaultState {
       padding2: dec.padding2,
       depositCap: dec.depositCap,
       rewardInfo: types.VaultRewardInfo.fromDecoded(dec.rewardInfo),
+      permissioningAuthority: dec.permissioningAuthority,
       padding3: dec.padding3,
     })
   }
@@ -407,6 +413,7 @@ export class VaultState {
       padding2: this.padding2,
       depositCap: this.depositCap.toString(),
       rewardInfo: this.rewardInfo.toJSON(),
+      permissioningAuthority: this.permissioningAuthority,
       padding3: this.padding3.map((item) => item.toString()),
     }
   }
@@ -460,6 +467,7 @@ export class VaultState {
       padding2: obj.padding2,
       depositCap: new BN(obj.depositCap),
       rewardInfo: types.VaultRewardInfo.fromJSON(obj.rewardInfo),
+      permissioningAuthority: address(obj.permissioningAuthority),
       padding3: obj.padding3.map((item) => new BN(item)),
     })
   }

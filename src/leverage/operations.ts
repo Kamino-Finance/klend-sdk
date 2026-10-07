@@ -52,6 +52,7 @@ import {
   calcCollFlashLegLamports,
   depositLeverageCalcs,
   depositLeverageCalcsDebtFlash,
+  flashRepayTokenAmount,
   withdrawLeverageCalcs,
   withdrawLeverageCalcsCollFlash,
 } from './calcs';
@@ -249,15 +250,18 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
   if (flashBorrowType !== 'debt') {
     // Coll flash path (default): flash borrow coll -> deposit coll -> borrow debt -> swap debt->coll -> flash repay coll
     const flashLoanFee = collReserve.getFlashLoanFee();
+    // The origination fee grows the debt the position owes, so it sizes into the target leverage.
+    const borrowFee = debtReserve.getBorrowFee();
 
     const calcs = depositLeverageCalcs({
-      depositAmount: depositAmount,
+      depositAmount,
       depositTokenIsCollToken: selectedTokenIsCollToken,
       depositTokenIsSol,
       priceDebtToColl,
       targetLeverage,
       slippagePct,
       flashLoanFee,
+      borrowFee,
     });
 
     log('Deposit calcs (coll flash)', toJson(calcs));
@@ -293,13 +297,14 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
     const swapQuote = await quoter(swapInputsForQuote, uniqueKlendAccounts);
 
     const quotePriceCalcs = depositLeverageCalcs({
-      depositAmount: depositAmount,
+      depositAmount,
       depositTokenIsCollToken: selectedTokenIsCollToken,
       depositTokenIsSol,
       priceDebtToColl: swapQuote.priceAInB,
       targetLeverage,
       slippagePct,
       flashLoanFee,
+      borrowFee,
     });
 
     const swapInputAmountQuotePrice = toLamports(quotePriceCalcs.swapDebtTokenIn, debtReserve.stats.decimals).ceil();
@@ -338,6 +343,8 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
   } else {
     // Debt flash path: flash borrow debt -> swap debt->coll -> deposit coll -> borrow debt -> flash repay debt
     const flashLoanFee = debtReserve.getFlashLoanFee();
+    // The origination fee grows the debt the position owes, so it sizes into the target leverage.
+    const borrowFee = debtReserve.getBorrowFee();
 
     const calcs = depositLeverageCalcsDebtFlash({
       depositAmount,
@@ -347,6 +354,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
       targetLeverage,
       slippagePct,
       flashLoanFee,
+      borrowFee,
     });
 
     log('Deposit calcs (debt flash)', toJson(calcs));
@@ -389,6 +397,7 @@ export async function getDepositWithLeverageSwapInputs<QuoteResponse>({
       targetLeverage,
       slippagePct,
       flashLoanFee,
+      borrowFee,
     });
 
     const swapInputAmountQuotePrice = toLamports(quotePriceCalcs.swapDebtTokenIn, debtReserve.stats.decimals).ceil();
@@ -812,6 +821,10 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
   const debtTokenMint = debtReserve.getLiquidityMint();
   const selectedTokenIsCollToken = selectedTokenMint === collTokenMint;
   const inputTokenIsSol = selectedTokenMint === WRAPPED_SOL_MINT;
+  const debtPayoutLamports =
+    !isClosingPosition && !selectedTokenIsCollToken
+      ? toLamports(withdrawAmount, debtReserve.getMintDecimals()).ceil()
+      : new Decimal(0);
 
   // Closing to the debt token swaps the FULL withdrawn collateral: the exact-in is sized from the
   // off-chain estimate of the deposit (`deposited`), while the U64_MAX withdraw redeems the
@@ -905,7 +918,12 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
     return {
       swapInputs: {
         inputAmountLamports: sizeSwapInForRedeemDrift(swapInputAmountQuotePrice),
-        minOutAmountLamports: calcsQuotePrice.repayFundingAmount,
+        minOutAmountLamports: toLamports(
+          flashRepayTokenAmount(calcsQuotePrice.repayFundingAmount, debtReserve),
+          debtReserve.getMintDecimals()
+        )
+          .ceil()
+          .add(debtPayoutLamports),
         inputMint: collTokenMint,
         outputMint: debtTokenMint,
       },
@@ -997,7 +1015,9 @@ export async function getWithdrawWithLeverageSwapInputs<QuoteResponse>({
     return {
       swapInputs: {
         inputAmountLamports: sizeSwapInForRedeemDrift(swapInputAmountQuotePrice),
-        minOutAmountLamports: calcsQuotePrice.repayFundingAmount,
+        minOutAmountLamports: toLamports(calcsQuotePrice.repayFundingAmount, debtReserve.getMintDecimals())
+          .ceil()
+          .add(debtPayoutLamports),
         inputMint: collTokenMint,
         outputMint: debtTokenMint,
       },
@@ -1229,9 +1249,9 @@ export async function buildWithdrawWithLeverageIxsDebtFlash<QuoteResponse>(
     repayReserveAddress: debtReserve.address,
     // Buffered (non-close) so the redeem covers the exact-in swap it funds despite exchange-rate
     // drift — see `lending_operations/redeem_drift.ts`. No cap needed: `depositTokenWithdrawAmount`
-    // is a partial slice strictly below the deposit, and near-total withdraws route as closes.
+    // and its buffer are sized together to preserve the remaining position’s LTV.
     withdrawAmount: redeemWithdrawAmount(
-      toLamports(calcs.depositTokenWithdrawAmount, collReserve!.stats.decimals),
+      toLamports(calcs.depositTokenWithdrawAmount, collReserve!.stats.decimals).ceil(),
       isClosingPosition
     ),
     withdrawReserveAddress: collReserve.address,
@@ -1369,8 +1389,7 @@ async function buildWithdrawWithLeverageIxsCollFlash<QuoteResponse>(
     repayReserveAddress: debtReserve.address,
     // Buffered (non-close) so the redeem covers the exact-in swap and the coll flash repay it
     // funds despite exchange-rate drift — see `lending_operations/redeem_drift.ts`. No cap needed:
-    // `depositTokenWithdrawAmount` is a partial slice strictly below the deposit, and near-total
-    // withdraws route as closes.
+    // the partial-withdraw calculation includes this buffer in its remaining-LTV check.
     withdrawAmount: redeemWithdrawAmount(collFlashLeg.redeemCollLamports, isClosingPosition),
     withdrawReserveAddress: collReserve.address,
     payer: owner,
@@ -1451,12 +1470,16 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
   const flashLoanFee =
     effectiveFlashBorrowType === 'coll' ? collReserve.getFlashLoanFee() : debtReserve.getFlashLoanFee();
 
+  // Only an increase pays it: a decrease repays debt, which is charged no origination fee.
+  const borrowFee = debtReserve.getBorrowFee();
+
   const { adjustDepositPosition, adjustBorrowPosition } = calcAdjustAmounts({
     currentDepositPosition: deposited,
     currentBorrowPosition: borrowed,
-    targetLeverage: targetLeverage,
-    priceCollToDebt: priceCollToDebt,
-    flashLoanFee: new Decimal(flashLoanFee),
+    targetLeverage,
+    priceCollToDebt,
+    flashLoanFee,
+    borrowFee,
   });
 
   const isDeposit = adjustDepositPosition.gte(0) && adjustBorrowPosition.gte(0);
@@ -1524,7 +1547,8 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         currentBorrowPosition: borrowed,
         targetLeverage,
         priceCollToDebt: new Decimal(1).div(swapQuote.priceAInB),
-        flashLoanFee: new Decimal(flashLoanFee),
+        flashLoanFee,
+        borrowFee,
       });
 
       const calcsQuotePrice = adjustDepositLeverageCalcs(
@@ -1620,7 +1644,8 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         currentBorrowPosition: borrowed,
         targetLeverage,
         priceCollToDebt: new Decimal(1).div(swapQuote.priceAInB),
-        flashLoanFee: new Decimal(flashLoanFee),
+        flashLoanFee,
+        borrowFee,
       });
 
       const calcsQuotePrice = adjustDepositLeverageCalcsDebtFlash(
@@ -1718,7 +1743,8 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         currentBorrowPosition: borrowed,
         targetLeverage,
         priceCollToDebt: swapQuote.priceAInB,
-        flashLoanFee: new Decimal(flashLoanFee),
+        flashLoanFee,
+        borrowFee,
       });
 
       const calcsQuotePrice = adjustWithdrawLeverageCalcs(
@@ -1739,8 +1765,11 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
       return {
         swapInputs: {
           inputAmountLamports: swapInputAmountQuotePrice,
-          // Swap must produce principal + early-repay penalty so the on-chain repay debit succeeds.
-          minOutAmountLamports: toLamports(calcsQuotePrice.repayFundingAmount, debtReserve.stats.decimals),
+          // Fund the debt flash repayment, including the early-repay penalty and flash fee.
+          minOutAmountLamports: toLamports(
+            flashRepayTokenAmount(calcsQuotePrice.repayFundingAmount, debtReserve),
+            debtReserve.getMintDecimals()
+          ).ceil(),
           inputMint: collTokenMint,
           outputMint: debtTokenMint,
         },
@@ -1805,7 +1834,8 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         currentBorrowPosition: borrowed,
         targetLeverage,
         priceCollToDebt: swapQuote.priceAInB,
-        flashLoanFee: new Decimal(flashLoanFee),
+        flashLoanFee,
+        borrowFee,
       });
 
       const calcsQuotePrice = adjustWithdrawLeverageCalcsCollFlash(
@@ -1828,7 +1858,7 @@ export async function getAdjustLeverageSwapInputs<QuoteResponse>({
         swapInputs: {
           inputAmountLamports: swapInputAmountQuotePrice,
           // Swap must produce principal + early-repay penalty so the on-chain repay debit succeeds.
-          minOutAmountLamports: toLamports(calcsQuotePrice.repayFundingAmount, debtReserve.stats.decimals),
+          minOutAmountLamports: toLamports(calcsQuotePrice.repayFundingAmount, debtReserve.getMintDecimals()).ceil(),
           inputMint: collTokenMint,
           outputMint: debtTokenMint,
         },
@@ -2351,9 +2381,12 @@ async function buildDecreaseLeverageIxsDebtFlash<QuoteResponse>(
   });
 
   // 4. Actually do the repay of the flash borrowed amounts
+  const repayAllDebt = calcs.adjustBorrowPosition.abs().gte(obligation.getBorrowAmountByReserve(debtReserve));
   const repayAction = await KaminoAction.buildRepayTxns({
     kaminoMarket,
-    amount: toLamports(Decimal.abs(calcs.adjustBorrowPosition), debtReserve!.stats.decimals).floor().toString(),
+    amount: repayAllDebt
+      ? U64_MAX
+      : toLamports(Decimal.abs(calcs.adjustBorrowPosition), debtReserve.stats.decimals).floor().toString(),
     reserveAddress: debtReserve.address,
     owner,
     obligation,
@@ -2372,7 +2405,11 @@ async function buildDecreaseLeverageIxsDebtFlash<QuoteResponse>(
   // 6. Withdraw collateral (a little bit more to be able to pay for the slippage on swap)
   const withdrawAction = await KaminoAction.buildWithdrawTxns({
     kaminoMarket,
-    amount: toLamports(calcs.withdrawAmountWithSlippageAndFlashLoanFee, collReserve!.stats.decimals).ceil().toString(),
+    obligationCustomizations: repayAllDebt ? { removedBorrowReserves: [debtReserve.address] } : undefined,
+    amount: redeemWithdrawAmount(
+      toLamports(calcs.withdrawAmountWithSlippageAndFlashLoanFee, collReserve.stats.decimals).ceil(),
+      false
+    ),
     reserveAddress: collReserve.address,
     owner,
     obligation,
@@ -2504,9 +2541,12 @@ async function buildDecreaseLeverageIxsCollFlash<QuoteResponse>(
   });
 
   // 3. Repay debt
+  const repayAllDebt = calcs.adjustBorrowPosition.abs().gte(obligation.getBorrowAmountByReserve(debtReserve));
   const repayAction = await KaminoAction.buildRepayTxns({
     kaminoMarket,
-    amount: toLamports(Decimal.abs(calcs.adjustBorrowPosition), debtReserve.stats.decimals).floor().toString(),
+    amount: repayAllDebt
+      ? U64_MAX
+      : toLamports(Decimal.abs(calcs.adjustBorrowPosition), debtReserve.stats.decimals).floor().toString(),
     reserveAddress: debtReserve.address,
     owner,
     obligation,
@@ -2526,7 +2566,8 @@ async function buildDecreaseLeverageIxsCollFlash<QuoteResponse>(
   const withdrawInstant = ledgerInstantBackBySlots(currentLedgerInstant, withdrawSlotOffset);
   const withdrawAction = await KaminoAction.buildWithdrawTxns({
     kaminoMarket,
-    amount: collFlashLeg.redeemCollLamports.toString(),
+    obligationCustomizations: repayAllDebt ? { removedBorrowReserves: [debtReserve.address] } : undefined,
+    amount: redeemWithdrawAmount(collFlashLeg.redeemCollLamports, false),
     reserveAddress: collReserve.address,
     owner,
     obligation,

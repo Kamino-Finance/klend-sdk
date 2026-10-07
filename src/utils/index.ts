@@ -25,6 +25,11 @@ export * from './lookupTable';
 export * from './managerTypes';
 export * from './wallets';
 export * from './fuzz';
+export {
+  type AtomicCloseEmptyUserStateIxs,
+  getAtomicCloseEmptyUserStateIxsIfPossible,
+  getCloseEmptyUserStateIx,
+} from './farmInstructions';
 export * from './rpc';
 export * from './ledger';
 export * from './map';

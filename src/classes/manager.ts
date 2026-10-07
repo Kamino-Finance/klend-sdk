@@ -823,7 +823,7 @@ export class KaminoManager {
    * @param farmState - preloaded vault farm state; provide this to stake into the vault farm
    * @param flcFarmState - preloaded first loss capital farm state; provide this to stake into the first loss capital farm
    * Pass only one of `farmState` or `flcFarmState`, depending on whether you want vault-farm or first loss capital farm behavior. Pass neither to skip staking.
-   * @param [memo] - optional memo string to append as a memo SPL instruction
+   * @param [memo] - optional memo string; a memo SPL instruction
    * @param [minSharesOut] - optional minimum amount of shares to receive, in decimals (will be converted in lamports); if provided the deposit reverts on-chain unless at least this many shares are minted
    * @returns - an instance of DepositIxs which contains the instructions to deposit in vault and the instructions to stake the shares in the farm if the vault has a farm
    */
@@ -836,7 +836,8 @@ export class KaminoManager {
     flcFarmState: FarmState | null,
     payer?: TransactionSigner,
     memo?: string,
-    minSharesOut?: Decimal
+    minSharesOut?: Decimal,
+    permissioningAuthority?: TransactionSigner
   ): Promise<DepositIxs> {
     return this._vaultClient.depositIxs(
       user,
@@ -847,7 +848,8 @@ export class KaminoManager {
       flcFarmState,
       payer,
       memo,
-      minSharesOut
+      minSharesOut,
+      permissioningAuthority
     );
   }
 
@@ -872,7 +874,8 @@ export class KaminoManager {
     farmState: FarmState | null,
     flcFarmState: FarmState | null,
     payer?: TransactionSigner,
-    minSharesOut?: Decimal
+    minSharesOut?: Decimal,
+    permissioningAuthority?: TransactionSigner
   ): Promise<DepositIxs> {
     return this._vaultClient.buySharesIxs(
       user,
@@ -882,7 +885,8 @@ export class KaminoManager {
       farmState,
       flcFarmState,
       payer,
-      minSharesOut
+      minSharesOut,
+      permissioningAuthority
     );
   }
 
@@ -1410,6 +1414,8 @@ export class KaminoManager {
    * @param flcFarmState - preloaded first loss capital farm state; provide this to unstake from the first loss capital farm
    * Pass only one of `farmState` or `flcFarmState`, depending on whether you want vault-farm or first loss capital farm behavior. Pass neither to skip unstaking.
    * @param [withdrawalPenalties] - effective vault/global withdrawal penalties used to plan the net withdrawal amount
+   * @param [closeUserStateIfPossible] - when true, collect claimable farm rewards and close the empty Farms user state in the full-withdrawal transaction
+   * @param [memo] - optional memo string. When the withdraw burns shares, a memo SPL instruction is returned only as `memoIx`. Put `memoIx` in each transaction that holds withdraw instructions; its position in the transaction does not matter
    * @returns an array of instructions to create missing ATAs if needed and the withdraw instructions
    */
   async withdrawFromVaultIxs(
@@ -1421,7 +1427,10 @@ export class KaminoManager {
     farmState: FarmState | null,
     flcFarmState: FarmState | null,
     payer?: TransactionSigner,
-    withdrawalPenalties?: WithdrawPenalties
+    withdrawalPenalties?: WithdrawPenalties,
+    closeUserStateIfPossible = false,
+    permissioningAuthority?: TransactionSigner,
+    memo?: string
   ): Promise<WithdrawIxs> {
     return this._vaultClient.withdrawIxs(
       user,
@@ -1432,7 +1441,10 @@ export class KaminoManager {
       farmState,
       flcFarmState,
       payer,
-      withdrawalPenalties
+      withdrawalPenalties,
+      closeUserStateIfPossible,
+      permissioningAuthority,
+      memo
     );
   }
 
@@ -1450,6 +1462,8 @@ export class KaminoManager {
    * @param flcFarmState - preloaded first loss capital farm state; provide this to unstake from the first loss capital farm
    * Pass only one of `farmState` or `flcFarmState`, depending on whether you want vault-farm or first loss capital farm behavior. Pass neither to skip unstaking.
    * @param [payer] - optional different payer for ATA creation
+   * @param [closeUserStateIfPossible] - when true, collect claimable farm rewards and close the empty Farms user state in the full-exit transaction
+   * @param [memo] - optional memo string. When there are redeemInKind instructions, a memo SPL instruction is returned only as `memoIx`. Put `memoIx` in each transaction that holds redeemInKind instructions; its position in the transaction does not matter
    * @returns RedeemInKindIxs with setup, redeemInKind, cleanup instructions and luts
    */
   async redeemInKindIxs(
@@ -1462,7 +1476,10 @@ export class KaminoManager {
     globalConfigState: KVaultGlobalConfig,
     farmState: FarmState | null,
     flcFarmState: FarmState | null,
-    payer?: TransactionSigner
+    payer?: TransactionSigner,
+    closeUserStateIfPossible = false,
+    permissioningAuthority?: TransactionSigner,
+    memo?: string
   ): Promise<RedeemInKindIxs> {
     return this._vaultClient.redeemInKindIxs(
       user,
@@ -1474,7 +1491,14 @@ export class KaminoManager {
       globalConfigState,
       farmState,
       flcFarmState,
-      payer
+      payer,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      closeUserStateIfPossible,
+      permissioningAuthority,
+      memo
     );
   }
 
@@ -1492,6 +1516,8 @@ export class KaminoManager {
    * @param flcFarmState - preloaded first loss capital farm state when exiting from the first loss capital farm
    * Pass only one of `farmState` or `flcFarmState`, depending on whether you want vault-farm or first loss capital farm behavior. Pass neither if no farm exit is needed.
    * @param [payer] - optional different payer for ATA creation
+   * @param [closeUserStateIfPossible] - when true, collect claimable farm rewards and close the empty Farms user state in the full-exit transaction
+   * @param [memo] - optional memo string. Each leg that burns shares returns a memo SPL instruction only as its `memoIx`. Put each leg's `memoIx` in each transaction that holds that leg's withdraw or redeemInKind instructions; its position in the transaction does not matter
    * @returns WithdrawAndRedeemInKindIxs with both withdraw and redeemInKind instructions
    */
   async withdrawAndRedeemInKindIfNeededIxs(
@@ -1504,7 +1530,10 @@ export class KaminoManager {
     globalConfigState: KVaultGlobalConfig,
     farmState: FarmState | null,
     flcFarmState: FarmState | null,
-    payer?: TransactionSigner
+    payer?: TransactionSigner,
+    closeUserStateIfPossible = false,
+    permissioningAuthority?: TransactionSigner,
+    memo?: string
   ): Promise<WithdrawAndRedeemInKindIxs> {
     return this._vaultClient.withdrawAndRedeemInKindIfNeededIxs(
       user,
@@ -1516,7 +1545,10 @@ export class KaminoManager {
       globalConfigState,
       farmState,
       flcFarmState,
-      payer
+      payer,
+      closeUserStateIfPossible,
+      permissioningAuthority,
+      memo
     );
   }
 
@@ -1535,6 +1567,8 @@ export class KaminoManager {
    * @param flcFarmState - preloaded first loss capital farm state when exiting from the first loss capital farm
    * Pass only one of `farmState` or `flcFarmState`, depending on whether you want vault-farm or first loss capital farm behavior. Pass neither if no farm exit is needed.
    * @param [payer] - optional different payer for ATA creation
+   * @param [closeUserStateIfPossible] - when true, collect claimable farm rewards and close the empty Farms user state in the full-exit transaction
+   * @param [memo] - optional memo string. Each leg that burns shares returns a memo SPL instruction only as its `memoIx`. Put each leg's `memoIx` in each transaction that holds that leg's withdraw or redeemInKind instructions; its position in the transaction does not matter
    * @returns WithdrawRedeemAndEnqueueIxs with withdraw, redeemInKind, and enqueue instructions
    */
   async withdrawRedeemAndEnqueueIxs(
@@ -1547,7 +1581,10 @@ export class KaminoManager {
     globalConfigState: KVaultGlobalConfig,
     farmState: FarmState | null,
     flcFarmState: FarmState | null,
-    payer?: TransactionSigner
+    payer?: TransactionSigner,
+    closeUserStateIfPossible = false,
+    permissioningAuthority?: TransactionSigner,
+    memo?: string
   ): Promise<WithdrawRedeemAndEnqueueIxs> {
     return this._vaultClient.withdrawRedeemAndEnqueueIxs(
       user,
@@ -1559,7 +1596,10 @@ export class KaminoManager {
       globalConfigState,
       farmState,
       flcFarmState,
-      payer
+      payer,
+      closeUserStateIfPossible,
+      permissioningAuthority,
+      memo
     );
   }
 
@@ -1586,7 +1626,8 @@ export class KaminoManager {
     farmState: FarmState | null,
     flcFarmState: FarmState | null,
     payer?: TransactionSigner,
-    withdrawalPenalties?: WithdrawPenalties
+    withdrawalPenalties?: WithdrawPenalties,
+    permissioningAuthority?: TransactionSigner
   ): Promise<WithdrawIxs> {
     return this._vaultClient.sellSharesIxs(
       user,
@@ -1597,7 +1638,8 @@ export class KaminoManager {
       farmState,
       flcFarmState,
       payer,
-      withdrawalPenalties
+      withdrawalPenalties,
+      permissioningAuthority
     );
   }
 

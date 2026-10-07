@@ -26,5 +26,7 @@ export async function processTx(
       break;
     case 'print':
       break;
+    default:
+      throw new Error(`Unsupported transaction mode: ${mode}`);
   }
 }

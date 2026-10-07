@@ -96,3 +96,10 @@ async function deserializeAccountInfo(
     data: Buffer.from(data),
   };
 }
+
+/**
+ * `maxSupportedTransactionVersion` for every `getTransaction` call. Agave 4.2 serves transaction v1 (SIMD-0385) and
+ * answers error -32015 to a caller that supports only v0. `@solana/kit` 2.x types the parameter as `0` because it
+ * predates v1; the RPC transport passes the value through unchanged, so the integer 1 reaches the node as-is.
+ */
+export const MAX_SUPPORTED_TRANSACTION_VERSION = 1 as unknown as 0;

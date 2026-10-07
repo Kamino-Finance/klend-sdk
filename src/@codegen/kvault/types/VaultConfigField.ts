@@ -487,6 +487,29 @@ export class DepositCap {
   }
 }
 
+export interface PermissioningAuthorityJSON {
+  kind: "PermissioningAuthority"
+}
+
+export class PermissioningAuthority {
+  static readonly discriminator = 21
+  static readonly kind = "PermissioningAuthority"
+  readonly discriminator = 21
+  readonly kind = "PermissioningAuthority"
+
+  toJSON(): PermissioningAuthorityJSON {
+    return {
+      kind: "PermissioningAuthority",
+    }
+  }
+
+  toEncodable() {
+    return {
+      PermissioningAuthority: {},
+    }
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromDecoded(obj: any): types.VaultConfigFieldKind {
   if (typeof obj !== "object") {
@@ -555,6 +578,9 @@ export function fromDecoded(obj: any): types.VaultConfigFieldKind {
   }
   if ("DepositCap" in obj) {
     return new DepositCap()
+  }
+  if ("PermissioningAuthority" in obj) {
+    return new PermissioningAuthority()
   }
 
   throw new Error("Invalid enum object")
@@ -627,6 +653,9 @@ export function fromJSON(
     case "DepositCap": {
       return new DepositCap()
     }
+    case "PermissioningAuthority": {
+      return new PermissioningAuthority()
+    }
   }
 }
 
@@ -653,6 +682,7 @@ export function layout(property?: string) {
     borsh.struct([], "AllowInvestInWhitelistedReservesOnly"),
     borsh.struct([], "RewardPerSecond"),
     borsh.struct([], "DepositCap"),
+    borsh.struct([], "PermissioningAuthority"),
   ])
   if (property !== undefined) {
     return ret.replicate(property)

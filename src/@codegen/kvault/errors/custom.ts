@@ -64,6 +64,7 @@ export type CustomError =
   | VaultDepositCapReached
   | MaxInvestAmountMustBeGreaterThanZero
   | SharesOutBelowMinimum
+  | InvalidPermissioningAuthority
 
 export class DepositAmountsZero extends Error {
   static readonly code = 7000
@@ -786,6 +787,17 @@ export class SharesOutBelowMinimum extends Error {
   }
 }
 
+export class InvalidPermissioningAuthority extends Error {
+  static readonly code = 7065
+  readonly code = 7065
+  readonly name = "InvalidPermissioningAuthority"
+  readonly msg = "Invalid permissioning authority"
+
+  constructor(readonly logs?: string[]) {
+    super("7065: Invalid permissioning authority")
+  }
+}
+
 export function fromCode(code: number, logs?: string[]): CustomError | null {
   switch (code) {
     case 7000:
@@ -918,6 +930,8 @@ export function fromCode(code: number, logs?: string[]): CustomError | null {
       return new MaxInvestAmountMustBeGreaterThanZero(logs)
     case 7064:
       return new SharesOutBelowMinimum(logs)
+    case 7065:
+      return new InvalidPermissioningAuthority(logs)
   }
 
   return null

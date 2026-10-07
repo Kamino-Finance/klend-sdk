@@ -15,12 +15,14 @@ import {
   calcCollFlashLegLamports,
   depositLeverageCalcs,
   depositLeverageCalcsDebtFlash,
-  withdrawLeverageCalcs,
   withdrawLeverageCalcsCollFlash,
+  withdrawLeverageCalcs,
+  PartialWithdrawalSizingError,
 } from './calcs';
 import type { FlashBorrowType } from './types';
-import { determineFlashBorrowType } from './utils';
+import { determineFlashBorrowType, isFlashLoanEnabled } from './utils';
 import type { LedgerInstant } from '../utils/ledger';
+import { bufferWithdrawForRedeemDrift } from '../lending_operations/redeem_drift';
 
 /**
  * Intent-level helpers that pick a viable `FlashBorrowType` for each leverage operation.
@@ -84,6 +86,7 @@ export function determineDepositLeverageFlashBorrowType(props: {
     targetLeverage,
     slippagePct,
     flashLoanFee: collReserve.getFlashLoanFee(),
+    borrowFee: debtReserve.getBorrowFee(),
   });
   const requiredCollLamports = collFlashCalcs.flashBorrowInCollToken.mul(collReserve.getMintFactor()).ceil();
 
@@ -96,6 +99,7 @@ export function determineDepositLeverageFlashBorrowType(props: {
     targetLeverage,
     slippagePct,
     flashLoanFee: debtReserve.getFlashLoanFee(),
+    borrowFee: debtReserve.getBorrowFee(),
   });
   const requiredDebtLamports = debtFlashCalcs.flashBorrowInDebtToken.mul(debtReserve.getMintFactor()).ceil();
 
@@ -109,7 +113,7 @@ export function determineDepositLeverageFlashBorrowType(props: {
  *  - debt-flash flash-borrows the repay amount in debt lamports.
  *  - coll-flash flash-borrows the swap-in amount in coll lamports AND redeems collateral from the
  *    same reserve in the same tx, so coll-flash viability accounts for both legs (flash + redeem).
- *  - Sizes come from `withdrawLeverageCalcs` and `withdrawLeverageCalcsCollFlash`.
+ *  - Each flash side uses its own withdrawal calculation, including its route-specific funding costs.
  *
  * @throws if neither side is viable.
  */
@@ -127,7 +131,10 @@ export function determineWithdrawLeverageFlashBorrowType(props: {
   priceCollToDebt: Decimal;
   /** Current obligation deposit (coll lamports decimal). Defaults to obligation's coll position. */
   depositedLamports?: Decimal;
-  /** Current obligation borrow (debt lamports decimal). Defaults to obligation's debt position. */
+  /**
+   * Optional current-debt override in lamports. It must include accrued interest from the same snapshot as
+   * `currentLedgerInstant`.
+   */
   borrowedLamports?: Decimal;
   slippagePct: Decimal;
   /** The ledger instant (slot + block time) the repay sizing is estimated at. */
@@ -165,65 +172,66 @@ export function determineWithdrawLeverageFlashBorrowType(props: {
 
   const selectedTokenIsCollToken = selectedTokenMint === collReserve.getLiquidityMint();
 
-  // Debt-flash: flash borrow = repayAmount.
-  const debtFlashCalcs = withdrawLeverageCalcs(
-    kaminoMarket,
-    collReserve,
-    debtReserve,
-    priceCollToDebt,
-    withdrawAmount,
-    deposited,
-    borrowed,
-    currentLedgerInstant,
-    isClosingPosition,
-    selectedTokenIsCollToken,
-    selectedTokenMint,
-    obligation,
-    debtReserve.getFlashLoanFee(),
-    slippagePct
-  );
-  // Size against the funding amount (principal + fixed-term early-repay penalty): debt-flash borrows the debt the
-  // on-chain repay actually debits (`repay + penalty`), matching the build flow. Open-term debt → penalty 0 → funding
-  // equals the principal `repayAmount`.
-  const requiredDebtLamports = debtFlashCalcs.repayFundingAmount.mul(debtReserve.getMintFactor()).ceil();
-
-  // Coll-flash: flash borrow = flashBorrowInCollToken.
-  const collFlashCalcs = withdrawLeverageCalcsCollFlash(
-    kaminoMarket,
-    collReserve,
-    debtReserve,
-    priceCollToDebt,
-    withdrawAmount,
-    deposited,
-    borrowed,
-    currentLedgerInstant,
-    isClosingPosition,
-    selectedTokenIsCollToken,
-    selectedTokenMint,
-    obligation,
-    collReserve.getFlashLoanFee(),
-    slippagePct
-  );
-  // Coll-flash also redeems collateral from the SAME reserve in the same tx
-  // (WithdrawObligationCollateralAndRedeemReserveCollateral), before the flash loan is repaid. On a close that's the
-  // entire deposit; on a partial it's the canonical redeem (`depositTokenWithdrawAmount` + the flash fee) from
-  // `calcCollFlashLegLamports` — the same sizing the build flow executes. Pass it so a thin collateral reserve that
-  // can't cover flash-borrow + redeem falls back to debt-flash instead of self-colliding (6008).
-  const collFlashLeg = calcCollFlashLegLamports({
-    collReserve,
-    flashBorrowCollTokens: collFlashCalcs.flashBorrowInCollToken,
-    redeemBaseCollTokens: collFlashCalcs.depositTokenWithdrawAmount,
-  });
-  const redeemCollLamports = isClosingPosition
-    ? deposited.mul(collReserve.getMintFactor()).ceil()
-    : collFlashLeg.redeemCollLamports;
-
-  return determineFlashBorrowType(
-    collReserve,
-    debtReserve,
-    collFlashLeg.flashBorrowLamports,
-    requiredDebtLamports,
-    redeemCollLamports
+  let sizingError: PartialWithdrawalSizingError | undefined;
+  const liquidityDiagnostics: string[] = [];
+  for (const flash of ['coll', 'debt'] as const) {
+    const flashReserve = flash === 'coll' ? collReserve : debtReserve;
+    if (!isFlashLoanEnabled(flashReserve)) {
+      liquidityDiagnostics.push(`${flash}: enabled=false`);
+      continue;
+    }
+    const calculate = flash === 'coll' ? withdrawLeverageCalcsCollFlash : withdrawLeverageCalcs;
+    let calcs;
+    try {
+      calcs = calculate(
+        kaminoMarket,
+        collReserve,
+        debtReserve,
+        priceCollToDebt,
+        withdrawAmount,
+        deposited,
+        borrowed,
+        currentLedgerInstant,
+        isClosingPosition,
+        selectedTokenIsCollToken,
+        selectedTokenMint,
+        obligation,
+        flashReserve.getFlashLoanFee(),
+        slippagePct
+      );
+    } catch (error) {
+      if (!(error instanceof PartialWithdrawalSizingError)) throw error;
+      sizingError = error;
+      continue;
+    }
+    if (flash === 'coll') {
+      const leg = calcCollFlashLegLamports({
+        collReserve,
+        flashBorrowCollTokens: calcs.collTokenSwapIn,
+        redeemBaseCollTokens: calcs.depositTokenWithdrawAmount,
+      });
+      const redeem = isClosingPosition
+        ? deposited.mul(collReserve.getMintFactor()).ceil()
+        : bufferWithdrawForRedeemDrift(leg.redeemCollLamports);
+      const required = leg.flashBorrowLamports.add(redeem);
+      if (collReserve.getLiquidityAvailableAmount().gte(required)) return 'coll';
+      liquidityDiagnostics.push(
+        `coll: enabled=true, available=${collReserve.getLiquidityAvailableAmount()}, required=${required}` +
+          ` (${leg.flashBorrowLamports} flash + ${redeem} redeem)`
+      );
+    } else {
+      const required = calcs.repayFundingAmount.mul(debtReserve.getMintFactor()).ceil();
+      if (debtReserve.getLiquidityAvailableAmount().gte(required)) return 'debt';
+      liquidityDiagnostics.push(
+        `debt: enabled=true, available=${debtReserve.getLiquidityAvailableAmount()}, required=${required}`
+      );
+    }
+  }
+  if (sizingError) throw sizingError;
+  throw new Error(
+    `Neither collateral nor debt reserve supports flash borrowing the required amount. ${liquidityDiagnostics.join(
+      '. '
+    )}.`
   );
 }
 
@@ -278,14 +286,14 @@ export function determineAdjustLeverageFlashBorrowType(props: {
     debtReserve.stats.decimals
   );
 
-  // Direction is determined by the sign of the position deltas — the flash-loan-fee on this call
-  // is a tiny perturbation that won't flip the sign; using the coll fee here is incidental.
+  // Decreases exclude flash fees from the position deltas; the withdrawal leg funds those fees.
   const { adjustDepositPosition, adjustBorrowPosition } = calcAdjustAmounts({
     currentDepositPosition: deposited,
     currentBorrowPosition: borrowed,
     targetLeverage,
     priceCollToDebt,
-    flashLoanFee: new Decimal(collReserve.getFlashLoanFee()),
+    flashLoanFee: collReserve.getFlashLoanFee(),
+    borrowFee: debtReserve.getBorrowFee(),
   });
   const isIncrease = adjustDepositPosition.gte(0) && adjustBorrowPosition.gte(0);
   const isDecrease = adjustDepositPosition.lte(0) && adjustBorrowPosition.lte(0);
@@ -340,7 +348,7 @@ export function determineAdjustLeverageFlashBorrowType(props: {
       redeemBaseCollTokens: collFlashCalcs.depositTokenWithdrawAmount,
     });
     requiredCollLamports = collFlashLeg.flashBorrowLamports;
-    redeemCollLamports = collFlashLeg.redeemCollLamports;
+    redeemCollLamports = bufferWithdrawForRedeemDrift(collFlashLeg.redeemCollLamports);
   }
 
   return determineFlashBorrowType(

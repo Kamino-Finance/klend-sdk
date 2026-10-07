@@ -31,23 +31,26 @@ export function calcRepayAmountWithSlippage(
   repayFundingLamports: Decimal;
   flashRepayAmountLamports: Decimal;
 } {
+  const debtLiquidity = obligation.state.borrows.find((borrow) => borrow.borrowReserve === debtReserve.address)!;
   const interestRateAccrued = obligation
-    .estimateObligationInterestRate(
-      kaminoMarket,
-      debtReserve,
-      obligation.state.borrows.find((borrow) => borrow.borrowReserve === debtReserve.address)!,
-      currentLedgerInstant
-    )
+    .estimateObligationInterestRate(kaminoMarket, debtReserve, debtLiquidity, currentLedgerInstant)
     .toDecimalPlaces(debtReserve.state.liquidity.mintDecimals.toNumber(), Decimal.ROUND_CEIL);
+  // Project the stored debt once: `amount` and the position are already hydrated. The estimate is at least 1, so a full
+  // repay never funds less than the stored debt.
   // add 0.1% to interestRateAccrued because we don't want to estimate slightly less than SC and end up not repaying enough
-  const repayAmountIrAdjusted = amount
+  const repayAmountIrAdjusted = lamportsToDecimal(
+    KaminoObligation.getBorrowAmount(debtLiquidity),
+    debtReserve.stats.decimals
+  )
     .mul(interestRateAccrued.mul(new Decimal('1.001')))
     .toDecimalPlaces(debtReserve.state.liquidity.mintDecimals.toNumber(), Decimal.ROUND_CEIL);
+
+  const amountWithBuffer = amount.mul(new Decimal('1.001'));
 
   let repayAmount: Decimal;
   // Ensure when repaying close to the full amount, we repay the full amount as otherwise we might end up having a small amount left
   if (
-    repayAmountIrAdjusted.greaterThanOrEqualTo(
+    amountWithBuffer.greaterThanOrEqualTo(
       lamportsToDecimal(
         obligation.getBorrowByReserve(debtReserve.address)?.amount || new Decimal(0),
         debtReserve.stats.decimals
@@ -155,7 +158,7 @@ export function calcMaxWithdrawCollateral(
   // Calculate the market value of the remaining debt after repaying
   const remainingBorrowLamports = borrow.amount.sub(repayAmountLamports).ceil();
   const remainingBorrowAmount = remainingBorrowLamports.div(debtReserve.getMintFactor());
-  let remainingBorrowsValue = remainingBorrowAmount.mul(debtReserve.getOracleMarketPrice());
+  let remainingBorrowsValue = remainingBorrowAmount.mul(debtReserve.getValidOracleMarketPrice());
   if (obligation.getBorrows().length > 1) {
     remainingBorrowsValue = obligation
       .getBorrows()
@@ -211,7 +214,7 @@ export function calcMaxWithdrawCollateral(
       .add(maxBorrowableValueRemainingAgainstDeposits)
       .sub(remainingBorrowsValue);
 
-    const denominator = depositReserve.getOracleMarketPrice().mul(maxWithdrawLtv);
+    const denominator = depositReserve.getValidOracleMarketPrice().mul(maxWithdrawLtv);
     const maxCollWithdrawAmount = numerator.div(denominator);
     const maxWithdrawableCollLamports = maxCollWithdrawAmount.mul(depositReserve.getMintFactor()).floor();
 
@@ -385,9 +388,11 @@ function calculatePostOperationLtv(
 ): [Decimal, Decimal] {
   const repayValue = repayAmountLamports
     .div(debtReserve.getMintFactor())
-    .mul(debtReserve.getOracleMarketPrice())
+    .mul(debtReserve.getValidOracleMarketPrice())
     .mul(debtReserve.getBorrowFactor());
-  const collWithdrawValue = collWithdrawAmount.div(collReserve.getMintFactor()).mul(collReserve.getOracleMarketPrice());
+  const collWithdrawValue = collWithdrawAmount
+    .div(collReserve.getMintFactor())
+    .mul(collReserve.getValidOracleMarketPrice());
 
   const newBorrowBfValue = Decimal.max(
     new Decimal(0),
@@ -415,8 +420,8 @@ export function getMaxCollateralFromRepayAmount(
 ) {
   // sanity check: we have extra collateral to swap, but we want to ensure we don't quote for way more than needed and get a bad px
   return repayAmount
-    .mul(debtReserve.getOracleMarketPrice())
-    .div(collReserve.getOracleMarketPrice())
+    .mul(debtReserve.getValidOracleMarketPrice())
+    .div(collReserve.getValidOracleMarketPrice())
     .mul('1.1')
     .mul(collReserve.getMintFactor())
     .ceil();

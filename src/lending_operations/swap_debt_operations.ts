@@ -305,8 +305,8 @@ function resolveDefaultSwapDebtFlashBorrowToken<QuoteResponse>(
 ): SwapDebtFlashBorrowToken {
   const sourceReserve = inputs.market.getExistingReserveByAddress(inputs.sourceDebtReserveAddress);
   const targetReserve = inputs.market.getExistingReserveByAddress(inputs.targetDebtReserveAddress);
-  const targetPrice = targetReserve.getOracleMarketPrice();
-  const sourcePrice = sourceReserve.getOracleMarketPrice();
+  const targetPrice = targetReserve.getValidOracleMarketPrice();
+  const sourcePrice = sourceReserve.getValidOracleMarketPrice();
   // Both oracle prices feed the source→target ratio that sizes the flash loan. A non-positive/non-finite price can't
   // size the swap — fail fast with a clear error rather than silently routing to `sourceDebt` (which masked a bad
   // oracle) or dividing through to Infinity/NaN lamports.
@@ -479,8 +479,8 @@ async function computeTargetDebtKlendAccounts<QuoteResponse>(
   const sourceFundingLamports = sourceRepayLamports.add(sourceEarlyRepayPenaltyLamports);
 
   // Initial estimate using oracle prices so we can build klend ixs for account discovery.
-  const sourceOraclePx = context.sourceDebtReserve.getOracleMarketPrice();
-  const targetOraclePx = context.targetDebtReserve.getOracleMarketPrice();
+  const sourceOraclePx = context.sourceDebtReserve.getValidOracleMarketPrice();
+  const targetOraclePx = context.targetDebtReserve.getValidOracleMarketPrice();
   assertPositiveFiniteDecimal('swap-debt source oracle price (targetDebt account discovery)', sourceOraclePx);
   assertPositiveFiniteDecimal('swap-debt target oracle price (targetDebt account discovery)', targetOraclePx);
   const oraclePx = sourceOraclePx.div(targetOraclePx); // price of 1 source denominated in target
@@ -781,8 +781,8 @@ async function computeSourceDebtKlendAccounts<QuoteResponse>(
   // Estimate target debt borrow using oracle prices. priceSourceInTarget = oracle_source / oracle_target.
   // Both prices feed the ratio below; a non-positive/non-finite value on either side would propagate
   // Infinity/NaN/negative lamports into the estimated borrow and account discovery.
-  const sourceOraclePx = context.sourceDebtReserve.getOracleMarketPrice();
-  const targetOraclePx = context.targetDebtReserve.getOracleMarketPrice();
+  const sourceOraclePx = context.sourceDebtReserve.getValidOracleMarketPrice();
+  const targetOraclePx = context.targetDebtReserve.getValidOracleMarketPrice();
   assertPositiveFiniteDecimal('swap-debt source oracle price', sourceOraclePx);
   assertPositiveFiniteDecimal('swap-debt target oracle price', targetOraclePx);
   const oraclePx = sourceOraclePx.div(targetOraclePx);
@@ -1329,8 +1329,8 @@ async function computeMultiplyKlendAccounts<QuoteResponse>(
   // Estimate the new-debt swap input from oracle prices (new tokens per old = oracle_old / oracle_new, e.g.
   // 1 USDC @ $1 = 0.05 JITOSOL @ $20) so we can build fake ixs for account discovery.
   // Both prices feed the ratio; guard both so a bad source oracle cannot propagate Infinity/NaN lamports either.
-  const sourceOraclePxOld = sourceDebtReserve.getOracleMarketPrice();
-  const targetOraclePxNew = targetDebtReserve.getOracleMarketPrice();
+  const sourceOraclePxOld = sourceDebtReserve.getValidOracleMarketPrice();
+  const targetOraclePxNew = targetDebtReserve.getValidOracleMarketPrice();
   assertPositiveFiniteDecimal('swap-debt (multiply) source oracle price', sourceOraclePxOld);
   assertPositiveFiniteDecimal('swap-debt (multiply) target oracle price', targetOraclePxNew);
   const oraclePxNewPerOld = sourceOraclePxOld.div(targetOraclePxNew);
@@ -1996,10 +1996,12 @@ function checkResultingMultiplyObligationsValid(
       targetResultingElevationGroup
     );
     // Validate against the ACTUAL deposit (haircut on full migrations), not the pre-haircut slice.
-    const collValueUsd = collDepositLamports.div(collReserve.getMintFactor()).mul(collReserve.getOracleMarketPrice());
+    const collValueUsd = collDepositLamports
+      .div(collReserve.getMintFactor())
+      .mul(collReserve.getValidOracleMarketPrice());
     const debtValueUsd = newDebtWithFeesLamports
       .div(targetDebtReserve.getMintFactor())
-      .mul(targetDebtReserve.getOracleMarketPrice());
+      .mul(targetDebtReserve.getValidOracleMarketPrice());
     const loanToValue = debtValueUsd.mul(borrowFactor).div(collValueUsd);
     if (loanToValue.gt(maxLtv)) {
       throw new Error(
@@ -2217,8 +2219,8 @@ export async function getSwapDebtObligationsPreview(
   //    lamports first, then convert to target — no second fee.
   // (The preview uses the oracle price where the builder uses the live quote, so the executed borrow still differs by
   // the live swap quote + slippage.)
-  const sourceOraclePxPreview = sourceDebtReserve.getOracleMarketPrice();
-  const targetOraclePxPreview = targetDebtReserve.getOracleMarketPrice();
+  const sourceOraclePxPreview = sourceDebtReserve.getValidOracleMarketPrice();
+  const targetOraclePxPreview = targetDebtReserve.getValidOracleMarketPrice();
   assertPositiveFiniteDecimal('swap-debt (multiply preview) source oracle price', sourceOraclePxPreview);
   assertPositiveFiniteDecimal('swap-debt (multiply preview) target oracle price', targetOraclePxPreview);
   const oraclePxNewPerOld = sourceOraclePxPreview.div(targetOraclePxPreview);

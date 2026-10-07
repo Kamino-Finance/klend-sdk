@@ -28,6 +28,7 @@ import {
 import { Rpc } from '@solana/kit';
 import { AddressLookupTable } from '@solana-program/address-lookup-table';
 import { CliConnectionPool } from './CliConnectionPool';
+import { MAX_SUPPORTED_TRANSACTION_VERSION } from '../../utils/rpc';
 
 export async function sendAndConfirmTx(
   c: CliConnectionPool,
@@ -64,7 +65,7 @@ export async function sendAndConfirmTx(
     try {
       tx = await c.rpc
         .getTransaction(sig, {
-          maxSupportedTransactionVersion: 0,
+          maxSupportedTransactionVersion: MAX_SUPPORTED_TRANSACTION_VERSION,
           commitment: 'confirmed',
           encoding: 'json',
         })

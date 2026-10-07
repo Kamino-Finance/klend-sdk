@@ -134,6 +134,7 @@ export type DepositWithLeverageParams<QuoteResponse> = DepositWithLeverageProps<
 
 type BaseDepositLeverageCalcsResult = {
   initDepositInSol: Decimal;
+  /** What the borrow instruction requests, i.e. what the user receives. The reserve's origination fee lands on top. */
   debtTokenToBorrow: Decimal;
   collTokenToDeposit: Decimal;
   swapDebtTokenIn: Decimal;
@@ -166,6 +167,7 @@ export type WithdrawLeverageInitialInputs<QuoteResponse> = {
 export interface WithdrawWithLeverageSwapInputsProps<QuoteResponse> extends BaseLeverageSwapInputsProps<QuoteResponse> {
   obligation: KaminoObligation;
   deposited: Decimal;
+  /** Current debt in debt-token units from the `currentLedgerInstant` snapshot, including accrued interest. */
   borrowed: Decimal;
   withdrawAmount: Decimal;
   priceCollToDebt: Decimal;
@@ -183,6 +185,7 @@ export type WithdrawWithLeverageSwapInputsParams<QuoteResponse> = WithdrawWithLe
 export type WithdrawWithLeverageParams<QuoteResponse> = WithdrawWithLeverageProps<QuoteResponse>;
 
 export type WithdrawLeverageCalcsResult = {
+  /** Total collateral redeemed, including costs and the redemption buffer for partial withdrawals; token units. */
   withdrawAmount: Decimal;
   /** Debt principal repaid to the obligation (the on-chain repay `liquidity_amount`; token units). */
   repayAmount: Decimal;
@@ -244,7 +247,7 @@ export type AdjustLeverageCalcsResult = {
   adjustBorrowPosition: Decimal;
   // Used when flash borrowing debt (current decrease path)
   amountToFlashBorrowDebt: Decimal;
-  // Used when flash borrowing coll (current increase path)
+  // Used when flash borrowing coll (current increase path). The reserve's origination fee lands on top.
   borrowAmount: Decimal;
   // Used when flash borrowing debt for decrease
   withdrawAmountWithSlippageAndFlashLoanFee: Decimal;
@@ -261,6 +264,7 @@ type BaseAdjustAltFlashCalcsResult = {
 
 export type AdjustDepositDebtFlashCalcsResult = BaseAdjustAltFlashCalcsResult & {
   flashBorrowInDebtToken: Decimal;
+  /** What the borrow instruction requests, i.e. what the user receives. The reserve's origination fee lands on top. */
   debtTokenToBorrow: Decimal;
   swapDebtTokenIn: Decimal;
   swapCollTokenExpectedOut: Decimal;

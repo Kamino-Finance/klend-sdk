@@ -4517,7 +4517,7 @@ export class KaminoAction {
     }
 
     if (
-      (action === 'withdraw' || action === 'withdrawAndEnqueue' || action === 'borrow' || action === 'redeem') &&
+      (action === 'withdrawAndEnqueue' || action === 'borrow' || action === 'redeem') &&
       this.mint !== WRAPPED_SOL_MINT
     ) {
       const reserveAta = await this.getUserTokenAccountAddress(this.reserve);
@@ -4589,7 +4589,10 @@ export class KaminoAction {
       }
     }
 
-    if (action === 'withdraw' || action === 'mint' || action === 'deposit' || action === 'repayAndWithdraw') {
+    if (
+      (action === 'withdraw' || action === 'mint' || action === 'deposit' || action === 'repayAndWithdraw') &&
+      this.mint !== WRAPPED_SOL_MINT
+    ) {
       const reserveAta = await this.getUserTokenAccountAddress(this.reserve);
       const [, createUserTokenAccountIx] = await createAssociatedTokenAccountIdempotentInstruction(
         this.owner,

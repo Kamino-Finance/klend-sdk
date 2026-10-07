@@ -56,6 +56,7 @@ export function decodeVaultState(data: Buffer): VaultState {
     allowInvestInWhitelistedReservesOnly: dec.allowInvestInWhitelistedReservesOnly,
     depositCap: dec.depositCap,
     rewardInfo: new VaultRewardInfo({ ...dec.rewardInfo }),
+    permissioningAuthority: dec.permissioningAuthority,
     padding3: dec.padding3,
   });
 }

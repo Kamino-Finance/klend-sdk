@@ -13,8 +13,6 @@ import {
   RewardInfo,
   RewardType,
   collToLamportsDecimal,
-  getCurrentTimeUnit,
-  TimeUnit,
 } from '@kamino-finance/farms-sdk';
 import {
   address,
@@ -29,7 +27,16 @@ import {
 } from '@solana/kit';
 import Decimal from 'decimal.js/decimal';
 import { DEFAULT_PUBLIC_KEY } from '../utils';
+import {
+  getCloseEmptyUserStateIxIfPossible as getCloseEmptyUserStateIxIfPossibleImpl,
+  getValidatedFarmRewardTimeUnit as getValidatedFarmRewardTimeUnitImpl,
+} from '../utils/farmInstructions';
 import { getScopePricesFromFarm } from '@kamino-finance/farms-sdk/dist/utils/option';
+
+export {
+  type AtomicCloseEmptyUserStateIxs,
+  getAtomicCloseEmptyUserStateIxsIfPossible,
+} from '../utils/farmInstructions';
 
 export const FARMS_GLOBAL_CONFIG_MAINNET: Address = address('6UodrBjL2ZreDy7QdR4YV1oxqMBjVYSEyrFpctqqwGwL');
 export const FARMS_GLOBAL_CONFIG_DEVNET: Address = address('5AnzjL3J8FKpQuC1VN7ABRwrFTjdsuaoWEyxYz68rZFb');
@@ -137,6 +144,30 @@ export async function getFarmUnstakeAndWithdrawIxs(
     farmsProgramId
   );
   return { unstakeIx, withdrawIx };
+}
+
+/**
+ * Returns a close instruction when the user state is empty or a full unstake will make it empty.
+ * An active position must have no configured rewards. This prevents the unstake from creating reward lamports.
+ */
+export async function getCloseEmptyUserStateIxIfPossible(
+  rpc: Rpc<SolanaRpcApi>,
+  user: TransactionSigner,
+  farmAddress: Address,
+  farmState: FarmState,
+  currentLedgerInstant: LedgerInstant,
+  willFullyUnstakeUserState: boolean,
+  farmsProgramId?: Address
+): Promise<Instruction | null> {
+  return getCloseEmptyUserStateIxIfPossibleImpl(
+    rpc,
+    user,
+    farmAddress,
+    farmState,
+    currentLedgerInstant,
+    willFullyUnstakeUserState,
+    farmsProgramId
+  );
 }
 
 export async function getSetupFarmIxsWithFarm(
@@ -311,37 +342,7 @@ export async function getValidatedFarmRewardTimeUnit(
   farmState: FarmState,
   currentLedgerInstant: LedgerInstant
 ): Promise<Decimal> {
-  let timeUnitName: 'block time' | 'slot';
-  switch (farmState.timeUnit) {
-    case TimeUnit.Seconds:
-      timeUnitName = 'block time';
-      break;
-    case TimeUnit.Slots:
-      timeUnitName = 'slot';
-      break;
-    default:
-      throw new Error(`Farm ${farm} has unsupported time unit ${farmState.timeUnit}`);
-  }
-
-  const currentTimeUnit = await getCurrentTimeUnit(
-    farmState,
-    currentLedgerInstant.slot,
-    currentLedgerInstant.blockTime
-  );
-  let latestRewardIssuanceTimeUnit = 0n;
-  for (const rewardInfo of farmState.rewardInfos) {
-    if (rewardInfo.lastIssuanceTs > latestRewardIssuanceTimeUnit) {
-      latestRewardIssuanceTimeUnit = rewardInfo.lastIssuanceTs;
-    }
-  }
-
-  if (currentTimeUnit.lt(latestRewardIssuanceTimeUnit.toString())) {
-    throw new Error(
-      `Ledger instant ${timeUnitName} ${currentTimeUnit.toString()} predates farm ${farm} reward state ${timeUnitName} ${latestRewardIssuanceTimeUnit.toString()}. Fetch a newer ledger instant and retry.`
-    );
-  }
-
-  return currentTimeUnit;
+  return getValidatedFarmRewardTimeUnitImpl(farm, farmState, currentLedgerInstant);
 }
 
 /**

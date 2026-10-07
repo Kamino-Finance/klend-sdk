@@ -1,5 +1,5 @@
 import BN from 'bn.js';
-import { AccountMeta, Address, Instruction, TransactionSigner, UnixTimestamp } from '@solana/kit';
+import { AccountMeta, AccountSignerMeta, Address, Instruction, TransactionSigner, UnixTimestamp } from '@solana/kit';
 import { DepositAccounts, WithdrawAccounts, WithdrawFromAvailableAccounts } from '../@codegen/kvault/instructions';
 import Decimal from 'decimal.js/decimal';
 
@@ -78,6 +78,8 @@ export type WithdrawIxs = {
   unstakeFromFarmIfNeededIxs: Instruction[];
   withdrawIxs: Instruction[];
   postWithdrawIxs: Instruction[]; // if needed: wSOL ATA close ix + share ATA close ix
+  /** The memo ix, set when a memo is passed and the withdraw burns shares. It is in no other group: put it in each tx that holds withdraw ixs. Its position in the tx does not matter. */
+  memoIx?: Instruction;
 };
 
 export type ShareExitLiquidityPlan = {
@@ -180,14 +182,14 @@ export type VaultReleaseCheckResult = {
 
 export type AllDepositAccounts = {
   depositAccounts: DepositAccounts;
-  remainingAccounts: AccountMeta[];
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta>;
   stakeSharesIxs?: Instruction[];
   stakeInFlcFarmIxs?: Instruction[];
 };
 
 export type AllWithdrawAccounts = {
   withdrawAccounts: WithdrawAccounts | WithdrawFromAvailableAccounts;
-  remainingAccounts: AccountMeta[];
+  remainingAccounts: Array<AccountMeta | AccountSignerMeta>;
   unstakeSharesIxs?: Instruction[];
 };
 
@@ -202,6 +204,8 @@ export type RedeemInKindIxs = {
   redeemInKindIxs: RedeemInKindReserveIx[];
   cleanupIxs: Instruction[];
   luts: Address[];
+  /** The memo ix, set when a memo is passed and there are redeemInKind ixs. It is in no other group: put it in each tx that holds redeemInKind ixs. Its position in the tx does not matter. */
+  memoIx?: Instruction;
 };
 
 export type WithdrawAndRedeemInKindIxs = {

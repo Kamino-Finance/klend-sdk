@@ -86,6 +86,7 @@ export type VaultConfigFieldKind =
   | VaultConfigField.AllowInvestInWhitelistedReservesOnly
   | VaultConfigField.RewardPerSecond
   | VaultConfigField.DepositCap
+  | VaultConfigField.PermissioningAuthority
 export type VaultConfigFieldJSON =
   | VaultConfigField.PerformanceFeeBpsJSON
   | VaultConfigField.ManagementFeeBpsJSON
@@ -108,6 +109,7 @@ export type VaultConfigFieldJSON =
   | VaultConfigField.AllowInvestInWhitelistedReservesOnlyJSON
   | VaultConfigField.RewardPerSecondJSON
   | VaultConfigField.DepositCapJSON
+  | VaultConfigField.PermissioningAuthorityJSON
 
 export { VaultAllocation } from "./VaultAllocation"
 export type {

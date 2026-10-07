@@ -1,6 +1,6 @@
 import { Address } from '@solana/kit';
 import Decimal from 'decimal.js';
-import { KaminoMarket, KaminoObligation, KaminoReserve, toJson } from '../classes';
+import { FeeCalculation, KaminoMarket, KaminoObligation, KaminoReserve, toJson } from '../classes';
 import {
   AdjustLeverageCalcsResult,
   AdjustDepositDebtFlashCalcsResult,
@@ -14,6 +14,7 @@ import { fuzzyEqual } from '../utils';
 import { assertPositiveFiniteDecimal } from '../lending_operations/swap_calcs';
 import { LedgerInstant } from '../utils/ledger';
 import { calcFlashLoanFees } from '../lending_operations/repay_with_collateral_calcs';
+import { bufferWithdrawForRedeemDrift } from '../lending_operations/redeem_drift';
 
 const closingPositionDiffTolerance = 0.0001;
 
@@ -35,6 +36,8 @@ export interface LeverageCalcsArgs {
   targetLeverage: Decimal;
   activeLeverageOption: LeverageOption;
   flashLoanFeeRatio: Decimal;
+  /** Origination fee rate the debt reserve charges on top of a borrow, as a ratio (0.01 = 1%). */
+  borrowFeeRatio: Decimal;
   slippagePct: Decimal;
   debtBorrowFactorPct: Decimal;
   priceCollToDebt: Decimal;
@@ -48,6 +51,12 @@ export interface LeverageCalcsResult {
   netValue: Decimal;
   netValueUsd: Decimal;
   ltv: Decimal;
+  /**
+   * The origination fee charged by the debt reserve on the new borrow, in debt tokens.
+   * Already included in `totalBorrowed` (and thus in `netValue`, `netValueUsd` and `ltv`). Zero for
+   * operations that only repay.
+   */
+  borrowOriginationFeeAmount: Decimal;
 }
 
 export async function calculateMultiplyEffects(
@@ -63,6 +72,7 @@ export async function calculateMultiplyEffects(
     targetLeverage,
     activeLeverageOption,
     flashLoanFeeRatio,
+    borrowFeeRatio,
     slippagePct,
     debtBorrowFactorPct,
     priceCollToDebt,
@@ -74,6 +84,7 @@ export async function calculateMultiplyEffects(
   const {
     adjustDepositPosition: depositModeEstimatedDepositAmount,
     adjustBorrowPosition: depositModeEstimatedBorrowAmount,
+    borrowOriginationFeeAmount: depositModeEstimatedOriginationFee,
   } = estimateDepositMode({
     priceCollToDebt,
     priceDebtToColl,
@@ -82,6 +93,7 @@ export async function calculateMultiplyEffects(
     selectedTokenMint,
     collTokenMint: collTokenMint,
     flashLoanFee: flashLoanFeeRatio,
+    borrowFee: borrowFeeRatio,
     slippagePct,
   });
 
@@ -90,25 +102,27 @@ export async function calculateMultiplyEffects(
     adjustDepositPosition: withdrawModeEstimatedDepositTokenWithdrawn,
     adjustBorrowPosition: withdrawModeEstimatedBorrowTokenWithdrawn,
   } = estimateWithdrawMode({
-    priceCollToDebt: priceCollToDebt,
+    priceCollToDebt,
     collTokenMint,
     selectedTokenMint,
     amount: withdrawAmount,
-    deposited: new Decimal(deposited),
-    borrowed: new Decimal(borrowed),
+    deposited,
+    borrowed,
   });
 
   // calculate estimations for adjust operation
   const {
     adjustDepositPosition: adjustModeEstimatedDepositAmount,
     adjustBorrowPosition: adjustModeEstimateBorrowAmount,
+    borrowOriginationFeeAmount: adjustModeEstimatedOriginationFee,
   } = estimateAdjustMode(priceCollToDebt, {
     targetLeverage,
     debtTokenMint,
     collTokenMint,
-    totalDeposited: new Decimal(deposited),
-    totalBorrowed: new Decimal(borrowed),
+    totalDeposited: deposited,
+    totalBorrowed: borrowed,
     flashLoanFee: flashLoanFeeRatio, // TODO: is this the right flash borrow?
+    borrowFee: borrowFeeRatio,
   });
 
   if (logEstimations) {
@@ -126,7 +140,12 @@ export async function calculateMultiplyEffects(
     );
   }
 
-  let [isClosingPosition, totalDeposited, totalBorrowed] = [false, new Decimal(0), new Decimal(0)];
+  let [isClosingPosition, totalDeposited, totalBorrowed, borrowOriginationFeeAmount] = [
+    false,
+    new Decimal(0),
+    new Decimal(0),
+    new Decimal(0),
+  ];
 
   switch (activeLeverageOption) {
     case LeverageOption.deposit: {
@@ -134,23 +153,21 @@ export async function calculateMultiplyEffects(
       isClosingPosition = false;
       totalDeposited = deposited.add(depositModeEstimatedDepositAmount);
       totalBorrowed = borrowed.add(depositModeEstimatedBorrowAmount);
+      borrowOriginationFeeAmount = depositModeEstimatedOriginationFee;
       break;
     }
     case LeverageOption.close:
     case LeverageOption.withdraw: {
       isClosingPosition =
-        (withdrawModeEstimatedDepositTokenWithdrawn.gte(new Decimal(deposited)) ||
-          withdrawModeEstimatedBorrowTokenWithdrawn.gte(new Decimal(borrowed)) ||
-          fuzzyEqual(
-            withdrawModeEstimatedDepositTokenWithdrawn,
-            new Decimal(deposited),
-            closingPositionDiffTolerance
-          ) ||
-          fuzzyEqual(withdrawModeEstimatedBorrowTokenWithdrawn, new Decimal(borrowed), closingPositionDiffTolerance)) &&
+        (withdrawModeEstimatedDepositTokenWithdrawn.gte(deposited) ||
+          withdrawModeEstimatedBorrowTokenWithdrawn.gte(borrowed) ||
+          fuzzyEqual(withdrawModeEstimatedDepositTokenWithdrawn, deposited, closingPositionDiffTolerance) ||
+          fuzzyEqual(withdrawModeEstimatedBorrowTokenWithdrawn, borrowed, closingPositionDiffTolerance)) &&
         !fuzzyEqual(withdrawModeEstimatedDepositTokenWithdrawn, new Decimal(0), closingPositionDiffTolerance);
 
       totalDeposited = isClosingPosition ? new Decimal(0) : deposited.sub(withdrawModeEstimatedDepositTokenWithdrawn);
       totalBorrowed = isClosingPosition ? new Decimal(0) : borrowed.sub(withdrawModeEstimatedBorrowTokenWithdrawn);
+      // Withdrawing and closing repay debt, and a repay is charged no origination fee.
       break;
     }
     case LeverageOption.adjust: {
@@ -158,6 +175,8 @@ export async function calculateMultiplyEffects(
       isClosingPosition = false;
       totalDeposited = deposited.add(adjustModeEstimatedDepositAmount);
       totalBorrowed = borrowed.add(adjustModeEstimateBorrowAmount);
+      // Zero when the adjust is a deleverage: `calcAdjustAmounts` charges the increase only.
+      borrowOriginationFeeAmount = adjustModeEstimatedOriginationFee;
       break;
     }
   }
@@ -179,6 +198,7 @@ export async function calculateMultiplyEffects(
     netValue: netValueSol,
     netValueUsd: netValueUsd,
     ltv,
+    borrowOriginationFeeAmount,
   };
 }
 
@@ -275,8 +295,8 @@ export function calcWithdrawAmounts(params: WithdrawParams): WithdrawResult {
 
   const targetBorrow = calcBorrowAmount({
     depositTokenAmount: initialDepositInCollateralToken.minus(amountToWithdrawDepositToken),
-    priceCollToDebt: new Decimal(priceCollToDebt),
-    targetLeverage: new Decimal(targetLeverage),
+    priceCollToDebt,
+    targetLeverage,
     flashLoanFeeRatio: new Decimal(0),
   });
 
@@ -297,6 +317,7 @@ interface UseEstimateAdjustAmountsProps {
   totalDeposited: Decimal;
   totalBorrowed: Decimal;
   flashLoanFee: Decimal;
+  borrowFee: Decimal;
 }
 
 /**
@@ -307,7 +328,7 @@ interface UseEstimateAdjustAmountsProps {
  */
 export const estimateAdjustMode = (
   priceCollToDebt: Decimal,
-  { targetLeverage, totalDeposited, totalBorrowed, flashLoanFee }: UseEstimateAdjustAmountsProps
+  { targetLeverage, totalDeposited, totalBorrowed, flashLoanFee, borrowFee }: UseEstimateAdjustAmountsProps
 ) => {
   return calcAdjustAmounts({
     currentBorrowPosition: totalBorrowed,
@@ -315,6 +336,7 @@ export const estimateAdjustMode = (
     priceCollToDebt,
     targetLeverage,
     flashLoanFee,
+    borrowFee,
   });
 };
 
@@ -324,11 +346,14 @@ export interface AdjustLeverageParams {
   currentDepositPosition: Decimal;
   priceCollToDebt: Decimal;
   flashLoanFee: Decimal;
+  borrowFee: Decimal;
 }
 
 interface AdjustLeverageResult {
   adjustDepositPosition: Decimal;
   adjustBorrowPosition: Decimal;
+  /** Origination fee already included in `adjustBorrowPosition`, in debt token units. Zero on a decrease. */
+  borrowOriginationFeeAmount: Decimal;
 }
 
 /**
@@ -347,24 +372,33 @@ export function calcAdjustAmounts({
   currentDepositPosition,
   priceCollToDebt,
   flashLoanFee,
+  borrowFee,
 }: AdjustLeverageParams): AdjustLeverageResult {
   assertPositiveFiniteDecimal('calcAdjustAmounts: priceCollToDebt', priceCollToDebt);
   const initialDeposit = currentDepositPosition.minus(currentBorrowPosition.div(priceCollToDebt));
   const targetDeposit = initialDeposit.mul(targetLeverage);
 
+  // Target debt BEFORE the origination fee: the fee applies to the borrow delta only, so it is added below once the
+  // direction (increase vs decrease) is known.
+  // Decreases fund the flash fee in the withdrawal leg; adding it to remaining debt can reverse a tiny repay delta.
   const targetBorrow = calcBorrowAmount({
     depositTokenAmount: initialDeposit,
-    priceCollToDebt: new Decimal(priceCollToDebt),
-    targetLeverage: new Decimal(targetLeverage),
-    flashLoanFeeRatio: flashLoanFee,
+    priceCollToDebt,
+    targetLeverage,
+    flashLoanFeeRatio: targetDeposit.lt(currentDepositPosition) ? new Decimal(0) : flashLoanFee,
   });
 
   const adjustDepositPosition = targetDeposit.minus(currentDepositPosition);
-  const adjustBorrowPosition = targetBorrow.minus(currentBorrowPosition);
+  const borrowDelta = targetBorrow.minus(currentBorrowPosition);
+
+  // Origination fee is only added on top of extra borrows. If we repay, no fees.
+  const borrowOriginationFeeAmount = borrowDelta.gt(0) ? borrowDelta.mul(borrowFee) : new Decimal(0);
+  const adjustBorrowPosition = borrowDelta.add(borrowOriginationFeeAmount);
 
   return {
     adjustDepositPosition,
     adjustBorrowPosition,
+    borrowOriginationFeeAmount,
   };
 }
 
@@ -376,7 +410,15 @@ interface UseTransactionInfoStats {
   selectedTokenMint: Address;
   collTokenMint: Address;
   flashLoanFee: Decimal;
+  borrowFee: Decimal;
   slippagePct: Decimal;
+}
+
+interface DepositModeResult {
+  adjustDepositPosition: Decimal;
+  adjustBorrowPosition: Decimal;
+  /** Origination fee already included in `adjustBorrowPosition`, in debt token units. */
+  borrowOriginationFeeAmount: Decimal;
 }
 
 // Given a deposit amount of Deposit|Borrow token
@@ -389,28 +431,31 @@ export const estimateDepositMode = ({
   selectedTokenMint,
   collTokenMint,
   flashLoanFee,
+  borrowFee,
   slippagePct,
-}: UseTransactionInfoStats) => {
+}: UseTransactionInfoStats): DepositModeResult => {
   const isDepositingCollToken = selectedTokenMint === collTokenMint;
 
   const finalCollTokenAmount = isDepositingCollToken
-    ? new Decimal(amount).mul(targetLeverage).toNumber()
-    : new Decimal(amount).mul(priceDebtToColl).mul(targetLeverage).toNumber();
+    ? new Decimal(amount).mul(targetLeverage)
+    : new Decimal(amount).mul(priceDebtToColl).mul(targetLeverage);
 
   const depositCollTokenAmount = isDepositingCollToken ? amount : amount.mul(priceDebtToColl);
   const borrowAmount = calcBorrowAmount({
     depositTokenAmount: depositCollTokenAmount,
-    targetLeverage: new Decimal(targetLeverage),
-    priceCollToDebt: new Decimal(priceCollToDebt),
-    flashLoanFeeRatio: new Decimal(flashLoanFee),
+    targetLeverage,
+    priceCollToDebt,
+    flashLoanFeeRatio: flashLoanFee,
   });
 
   const slippageFactor = new Decimal(1).add(slippagePct.div(new Decimal(100)));
   const borrowAmountWithSlippage = borrowAmount.mul(slippageFactor);
+  const borrowOriginationFeeAmount = borrowAmountWithSlippage.mul(borrowFee);
 
   return {
     adjustDepositPosition: finalCollTokenAmount,
-    adjustBorrowPosition: borrowAmountWithSlippage.toNumber(),
+    adjustBorrowPosition: borrowAmountWithSlippage.add(borrowOriginationFeeAmount),
+    borrowOriginationFeeAmount,
   };
 };
 
@@ -422,6 +467,7 @@ export const depositLeverageCalcs = (props: {
   targetLeverage: Decimal;
   slippagePct: Decimal;
   flashLoanFee: Decimal;
+  borrowFee: Decimal;
 }): DepositLeverageCalcsResult => {
   // Initialize local variables from the props object
   const {
@@ -432,8 +478,10 @@ export const depositLeverageCalcs = (props: {
     targetLeverage,
     slippagePct,
     flashLoanFee,
+    borrowFee,
   } = props;
   const slippage = slippagePct.div('100');
+  const borrowFeeFactor = new Decimal(1).add(borrowFee);
 
   const initDepositInSol = depositTokenIsSol ? depositAmount : new Decimal(0);
 
@@ -450,9 +498,14 @@ export const depositLeverageCalcs = (props: {
   // `flashBorrow + fee(flashBorrow)` when the SC fee is `flashBorrow·rate ≥ 1 lamport`. The old `spend·(1 + fee)` flash
   // borrow caused the SC to charge fee on the inflated amount, leaving the ATA short by `O(fee²)` (dust-reliant). See
   // `fixed_rate_penalty_sizing_units.test.ts` for the SC-debit invariant.
+  //
+  // The debt reserve charges its origination fee on top of the borrow, so the obligation owes
+  // `debt · (1 + originationFee)`. Leverage is measured against what is owed, hence the fee factor in `y`:
+  //   L = finalColl / (finalColl − debt · (1 + originationFee) · priceDebtToColl)
+  // `debt` itself stays the borrow-instruction amount, which is what funds the swap.
+  const y = targetLeverage.mul(priceDebtToColl).mul(borrowFeeFactor);
+  const x = flashLoanFee.add('1').mul(slippage.add('1')).div(priceDebtToColl);
   if (depositTokenIsCollToken) {
-    const y = targetLeverage.mul(priceDebtToColl);
-    const x = flashLoanFee.add('1').mul(slippage.add('1')).div(priceDebtToColl);
     const finalColl = depositAmount.mul(x).div(x.sub(targetLeverage.sub('1').div(y)));
     const debt = finalColl.sub(depositAmount).mul(x);
     // Exact spend: the collateral the flash loan bridges = finalColl − depositAmount (user supplies depositAmount).
@@ -467,8 +520,6 @@ export const depositLeverageCalcs = (props: {
       swapCollTokenExpectedOut: finalColl.sub(depositAmount),
     };
   } else {
-    const y = targetLeverage.mul(priceDebtToColl);
-    const x = flashLoanFee.add('1').mul(slippage.add('1')).div(priceDebtToColl);
     const finalColl = depositAmount.div(x.sub(targetLeverage.sub('1').div(y)));
     // Exact spend: the user pays in debt token, so the flash loan bridges the ENTIRE collateral deposit (finalColl).
     const flashBorrowColl = finalColl;
@@ -485,6 +536,7 @@ export const depositLeverageCalcs = (props: {
   }
 };
 
+/** @throws {PartialWithdrawalSizingError} When a partial payout cannot be sized while preserving remaining LTV. */
 export function withdrawLeverageCalcs(
   market: KaminoMarket,
   collReserve: KaminoReserve,
@@ -492,42 +544,38 @@ export function withdrawLeverageCalcs(
   priceCollToDebt: Decimal,
   withdrawAmount: Decimal,
   deposited: Decimal,
+  /** Current debt in token units, including accrued interest from the same snapshot as `currentLedgerInstant`. */
   borrowed: Decimal,
   currentLedgerInstant: LedgerInstant,
   isClosingPosition: boolean,
   selectedTokenIsCollToken: boolean,
+  // Retained for positional API compatibility; selectedTokenIsCollToken determines the payout token.
   selectedTokenMint: Address,
   obligation: KaminoObligation,
+  // Retained for positional API compatibility; canonical fees come from debtReserve.
   flashLoanFee: Decimal,
   slippagePct: Decimal
 ): WithdrawLeverageCalcsResult {
-  // Closing-position branch below divides by `priceCollToDebt` directly (bypassing `calcWithdrawAmounts`), so guard
-  // here as well as in the leaf calc.
   assertPositiveFiniteDecimal('withdrawLeverageCalcs: priceCollToDebt', priceCollToDebt);
-  // 1. Calculate coll_amount and debt_amount to repay such that we maintain leverage and we withdraw to
-  // the wallet `amountInDepositTokenToWithdrawToWallet` amount of collateral token
-  // We need to withdraw withdrawAmountInDepositToken coll tokens
-  // and repay repayAmountInBorrowToken debt tokens
-  const { adjustDepositPosition: withdrawAmountCalculated, adjustBorrowPosition: initialRepayAmount } =
-    isClosingPosition
-      ? { adjustDepositPosition: deposited, adjustBorrowPosition: borrowed }
-      : calcWithdrawAmounts({
-          collTokenMint: collReserve.getLiquidityMint(),
-          priceCollToDebt: new Decimal(priceCollToDebt),
-          currentDepositPosition: deposited,
-          currentBorrowPosition: borrowed,
-          withdrawAmount: new Decimal(withdrawAmount),
-          selectedTokenMint: selectedTokenMint,
-        });
+  if (!isClosingPosition) {
+    const result = partialWithdrawalCalcs(
+      collReserve,
+      debtReserve,
+      priceCollToDebt,
+      withdrawAmount,
+      deposited,
+      borrowed,
+      currentLedgerInstant,
+      selectedTokenIsCollToken ? 'coll' : 'debt',
+      obligation,
+      slippagePct,
+      'debt'
+    );
+    return result;
+  }
 
-  // Add slippage for the accrued interest rate amount
-  const irSlippageBpsForDebt = obligation!
-    .estimateObligationInterestRate(market, debtReserve!, obligation?.state.borrows[0]!, currentLedgerInstant)
-    .toDecimalPlaces(debtReserve?.getMintDecimals()!, Decimal.ROUND_CEIL);
-  // add 0.1 to irSlippageBpsForDebt because we don't want to estimate slightly less than SC and end up not repaying enough
-  const repayAmount = initialRepayAmount
-    .mul(irSlippageBpsForDebt.add('0.1').div('10_000').add('1'))
-    .toDecimalPlaces(debtReserve?.getMintDecimals()!, Decimal.ROUND_CEIL);
+  const withdrawAmountCalculated = deposited;
+  const repayAmount = fullRepayAmount(market, obligation, debtReserve, currentLedgerInstant);
 
   // Fixed-term debt charges an early-repay penalty on top of the repay. The flash-borrow / coll→debt swap must
   // produce repayAmount + penalty so the on-chain repay debit (`repay + penalty`) succeeds; the repay instruction
@@ -539,26 +587,11 @@ export function withdrawLeverageCalcs(
     currentLedgerInstant
   );
 
-  // 6. Get swap ixs
-  // 5. Get swap estimations to understand how much we need to borrow from borrow reserve
-  // prevent withdrawing more then deposited if we close position
-  const depositTokenWithdrawAmount = !isClosingPosition
-    ? withdrawAmountCalculated.mul(new Decimal(1).plus(flashLoanFee))
+  const flashRepayDebtTokens = flashRepayTokenAmount(repayFundingAmount, debtReserve);
+  const collTokenSwapIn = selectedTokenIsCollToken
+    ? flashRepayDebtTokens.mul(new Decimal(1).add(slippagePct.div(100))).div(priceCollToDebt)
     : withdrawAmountCalculated;
-
-  // We are swapping debt token
-  // When withdrawing coll, it means we just need to swap enough to pay for the flash borrow (sized on the funding
-  // amount = principal + penalty)
-  const swapAmountIfWithdrawingColl = repayFundingAmount
-    .mul(new Decimal(1).plus(flashLoanFee))
-    .mul(new Decimal(1).plus(slippagePct.div(100)))
-    .div(priceCollToDebt);
-
-  // When withdrawing debt, it means we need to swap just the collateral we are withdrwaing
-  // enough to cover the debt we are repaying, leaving the remaining in the wallet
-  const swapAmountIfWithdrawingDebt = withdrawAmountCalculated;
-
-  const collTokenSwapIn = selectedTokenIsCollToken ? swapAmountIfWithdrawingColl : swapAmountIfWithdrawingDebt;
+  const depositTokenWithdrawAmount = deposited;
   const debtTokenExpectedSwapOut = collTokenSwapIn.mul(priceCollToDebt).div(new Decimal(1).add(slippagePct.div(100)));
 
   return {
@@ -650,12 +683,12 @@ export function adjustDepositLeverageCalcs(
   assertPositiveFiniteDecimal('adjustDepositLeverageCalcs: priceDebtToColl', priceDebtToColl);
   const amountToFlashBorrowDebt = adjustDepositPosition
     .div(priceDebtToColl)
-    .mul(new Decimal(new Decimal(1).add(slippagePct.div(100))))
+    .mul(new Decimal(1).add(slippagePct.div(100)))
     .toDecimalPlaces(debtReserve!.stats.decimals, Decimal.ROUND_UP);
 
   const borrowAmount = adjustDepositPosition
     .mul(new Decimal(1).plus(flashLoanFee))
-    .mul(new Decimal(new Decimal(1).add(slippagePct.div(100))))
+    .mul(new Decimal(1).add(slippagePct.div(100)))
     .div(priceDebtToColl);
 
   return {
@@ -683,16 +716,24 @@ export function adjustWithdrawLeverageCalcs(
 ): AdjustLeverageCalcsResult {
   // Fixed-term debt charges an early-repay penalty on top of the repay. We flash-borrow the funding amount
   // (principal + penalty) and repay only the principal; the extra penalty cost is paid by withdrawing proportionally
-  // more collateral (scaled by funding/principal). Open-term debt → penalty 0 → unchanged behaviour.
+  // more collateral, including rounded flash fees and the full-repayment cushion.
   const absRepay = Decimal.abs(adjustBorrowPosition);
   const { earlyRepayPenaltyAmount, repayFundingAmount } =
     obligation && debtReserve && currentLedgerInstant !== undefined
-      ? leverageEarlyRepayPenalty(obligation, debtReserve, absRepay, currentLedgerInstant)
+      ? leverageEarlyRepayPenalty(
+          obligation,
+          debtReserve,
+          absRepay.gte(obligation.getBorrowAmountByReserve(debtReserve))
+            ? fullRepayAmount(obligation.market, obligation, debtReserve, currentLedgerInstant)
+            : absRepay,
+          currentLedgerInstant
+        )
       : { earlyRepayPenaltyAmount: new Decimal(0), repayFundingAmount: absRepay };
-  const fundingScale = absRepay.gt(0) ? repayFundingAmount.div(absRepay) : new Decimal(1);
-
+  const flashRepayAmount = debtReserve
+    ? flashRepayTokenAmount(repayFundingAmount, debtReserve)
+    : repayFundingAmount.mul(new Decimal(1).add(flashLoanFee));
+  const fundingScale = absRepay.gt(0) ? flashRepayAmount.div(absRepay) : new Decimal(1);
   const withdrawAmountWithSlippageAndFlashLoanFee = Decimal.abs(adjustDepositPosition)
-    .mul(new Decimal(1).plus(flashLoanFee))
     .mul(new Decimal(1).add(slippagePct.div(100)))
     .mul(fundingScale);
 
@@ -722,6 +763,7 @@ export const depositLeverageCalcsDebtFlash = (props: {
   targetLeverage: Decimal;
   slippagePct: Decimal;
   flashLoanFee: Decimal;
+  borrowFee: Decimal;
 }): DepositLeverageDebtFlashCalcsResult => {
   const {
     depositAmount,
@@ -731,11 +773,16 @@ export const depositLeverageCalcsDebtFlash = (props: {
     targetLeverage,
     slippagePct,
     flashLoanFee,
+    borrowFee,
   } = props;
   const slippage = slippagePct.div('100');
   const initDepositInSol = depositTokenIsSol ? depositAmount : new Decimal(0);
 
   assertPositiveFiniteDecimal('depositLeverageCalcsDebtFlash: priceDebtToColl', priceDebtToColl);
+
+  const slippageFactor = slippage.add('1');
+  const flashFeeFactor = flashLoanFee.add('1');
+  const borrowFeeFactor = borrowFee.add('1');
 
   if (depositTokenIsCollToken) {
     // User deposits coll. We flash borrow debt, swap to coll, deposit all, borrow debt to repay flash.
@@ -743,16 +790,14 @@ export const depositLeverageCalcsDebtFlash = (props: {
     // Definitions:
     //   collTotal      = depositAmount + flashBorrowDebt * priceDebtToColl / (1 + slippage)
     //   debtToBorrow   = flashBorrowDebt * (1 + flashLoanFee)
-    //   leverage       = collTotal / (collTotal - debtToBorrow * priceDebtToColl)
+    //   debtOwed       = debtToBorrow * (1 + originationFee)
+    //   leverage       = collTotal / (collTotal - debtOwed * priceDebtToColl)
     //
-    // Solving for flashBorrowDebt:
+    // Solving for flashBorrowDebt, with feeFactors = (1 + flashLoanFee) * (1 + originationFee):
     //   flashBorrowDebt = depositAmount * (leverage - 1)
-    //                     / (priceDebtToColl * (leverage * (1 + flashLoanFee) - (leverage - 1) / (1 + slippage)))
-    const slippageFactor = slippage.add('1');
-    const flashFeeFactor = flashLoanFee.add('1');
-
+    //                     / (priceDebtToColl * (leverage * feeFactors - (leverage - 1) / (1 + slippage)))
     const denominator = priceDebtToColl.mul(
-      targetLeverage.mul(flashFeeFactor).sub(targetLeverage.sub('1').div(slippageFactor))
+      targetLeverage.mul(flashFeeFactor).mul(borrowFeeFactor).sub(targetLeverage.sub('1').div(slippageFactor))
     );
     const flashBorrowDebt = depositAmount.mul(targetLeverage.sub('1')).div(denominator);
 
@@ -776,15 +821,17 @@ export const depositLeverageCalcsDebtFlash = (props: {
     // Definitions:
     //   collTotal      = (depositAmount + flashBorrowDebt) * priceDebtToColl / (1 + slippage)
     //   debtToBorrow   = flashBorrowDebt * (1 + flashLoanFee)
-    //   leverage       = collTotal / (collTotal - debtToBorrow * priceDebtToColl)
+    //   debtOwed       = debtToBorrow * (1 + originationFee)
+    //   leverage       = collTotal / (collTotal - debtOwed * priceDebtToColl)
     //
     // Solving for flashBorrowDebt:
     //   flashBorrowDebt = depositAmount * (leverage - 1)
-    //                     / ((1 + slippage) * leverage * (1 + flashLoanFee) - (leverage - 1))
-    const slippageFactor = slippage.add('1');
-    const flashFeeFactor = flashLoanFee.add('1');
-
-    const denominator = slippageFactor.mul(targetLeverage).mul(flashFeeFactor).sub(targetLeverage.sub('1'));
+    //                     / ((1 + slippage) * leverage * (1 + flashLoanFee) * (1 + originationFee) - (leverage - 1))
+    const denominator = slippageFactor
+      .mul(targetLeverage)
+      .mul(flashFeeFactor)
+      .mul(borrowFeeFactor)
+      .sub(targetLeverage.sub('1'));
     if (denominator.isZero()) {
       throw new Error(
         'depositLeverageCalcsDebtFlash: denominator is zero — check targetLeverage, slippage, and flashLoanFee'
@@ -814,6 +861,8 @@ export const depositLeverageCalcsDebtFlash = (props: {
  *
  * We flash borrow enough coll to swap for the debt repayment amount,
  * then repay debt, withdraw coll, and use the withdrawn coll to repay the flash loan.
+ *
+ * @throws {PartialWithdrawalSizingError} When a partial payout cannot be sized while preserving remaining LTV.
  */
 export function withdrawLeverageCalcsCollFlash(
   market: KaminoMarket,
@@ -822,35 +871,38 @@ export function withdrawLeverageCalcsCollFlash(
   priceCollToDebt: Decimal,
   withdrawAmount: Decimal,
   deposited: Decimal,
+  /** Current debt in token units, including accrued interest from the same snapshot as `currentLedgerInstant`. */
   borrowed: Decimal,
   currentLedgerInstant: LedgerInstant,
   isClosingPosition: boolean,
   selectedTokenIsCollToken: boolean,
+  // Retained for positional API compatibility; selectedTokenIsCollToken determines the payout token.
   selectedTokenMint: Address,
   obligation: KaminoObligation,
+  // Used by close-to-debt sizing; partial withdrawals read canonical fees from collReserve.
   flashLoanFee: Decimal,
   slippagePct: Decimal
 ): WithdrawLeverageCollFlashCalcsResult {
-  // 1. Calculate proportional withdraw/repay amounts (same as existing)
-  const { adjustDepositPosition: withdrawAmountCalculated, adjustBorrowPosition: initialRepayAmount } =
-    isClosingPosition
-      ? { adjustDepositPosition: deposited, adjustBorrowPosition: borrowed }
-      : calcWithdrawAmounts({
-          collTokenMint: collReserve.getLiquidityMint(),
-          priceCollToDebt: new Decimal(priceCollToDebt),
-          currentDepositPosition: deposited,
-          currentBorrowPosition: borrowed,
-          withdrawAmount: new Decimal(withdrawAmount),
-          selectedTokenMint: selectedTokenMint,
-        });
+  assertPositiveFiniteDecimal('withdrawLeverageCalcsCollFlash: priceCollToDebt', priceCollToDebt);
+  if (!isClosingPosition) {
+    const result = partialWithdrawalCalcs(
+      collReserve,
+      debtReserve,
+      priceCollToDebt,
+      withdrawAmount,
+      deposited,
+      borrowed,
+      currentLedgerInstant,
+      selectedTokenIsCollToken ? 'coll' : 'debt',
+      obligation,
+      slippagePct,
+      'coll'
+    );
+    return { ...result, flashBorrowInCollToken: result.collTokenSwapIn };
+  }
 
-  // 2. Add IR slippage to repay amount
-  const irSlippageBpsForDebt = obligation!
-    .estimateObligationInterestRate(market, debtReserve!, obligation?.state.borrows[0]!, currentLedgerInstant)
-    .toDecimalPlaces(debtReserve?.getMintDecimals()!, Decimal.ROUND_CEIL);
-  const repayAmount = initialRepayAmount
-    .mul(irSlippageBpsForDebt.add('0.1').div('10_000').add('1'))
-    .toDecimalPlaces(debtReserve?.getMintDecimals()!, Decimal.ROUND_CEIL);
+  const withdrawAmountCalculated = deposited;
+  const repayAmount = fullRepayAmount(market, obligation, debtReserve, currentLedgerInstant);
 
   // Fixed-term debt charges an early-repay penalty on top of the repay; the coll→debt swap must produce
   // repayAmount + penalty so the on-chain repay debit succeeds. The repay instruction amount stays the principal.
@@ -864,11 +916,19 @@ export function withdrawLeverageCalcsCollFlash(
   // 3. Calculate how much coll to flash borrow for the swap
   // When withdrawing coll: swap just enough coll->debt to cover the repayment (incl. penalty)
   // When withdrawing debt: swap all withdrawn coll to debt; user keeps surplus debt after repay
-  assertPositiveFiniteDecimal('withdrawLeverageCalcsCollFlash: priceCollToDebt', priceCollToDebt);
   const swapAmountIfWithdrawingColl = repayFundingAmount
     .mul(new Decimal(1).add(slippagePct.div(100)))
     .div(priceCollToDebt);
-  const swapAmountIfWithdrawingDebt = withdrawAmountCalculated;
+  let swapAmountIfWithdrawingDebt = withdrawAmountCalculated;
+  if (!selectedTokenIsCollToken) {
+    const collateralLamports = deposited.mul(collReserve.getMintFactor()).floor();
+    const fees = collReserve.calculateFees(collateralLamports, flashLoanFee, FeeCalculation.Inclusive, 0, false);
+    swapAmountIfWithdrawingDebt = collateralLamports
+      .sub(fees.protocolFees)
+      .sub(fees.referrerFees)
+      .floor()
+      .div(collReserve.getMintFactor());
+  }
   const collTokenSwapIn = selectedTokenIsCollToken ? swapAmountIfWithdrawingColl : swapAmountIfWithdrawingDebt;
   const debtTokenExpectedSwapOut = collTokenSwapIn.mul(priceCollToDebt).div(new Decimal(1).add(slippagePct.div(100)));
 
@@ -879,12 +939,7 @@ export function withdrawLeverageCalcsCollFlash(
   // exactly the spend keeps the flash fee `= fee(collSwapIn)`, funded by the withdraw leg below.
   const flashBorrowInCollToken = collTokenSwapIn;
 
-  // 5. Collateral to withdraw from the obligation (token-domain base, WITHOUT the flash fee). The build/selector layers
-  //    add `flashRepayDebit − flashBorrow = fee(collSwapIn)` lamports on top via the shared `calcFlashLoanFees` helper
-  //    (so the 1-lamport minimum fee and the referrer split are honoured exactly as the SC computes them). Balance at
-  //    flash-repay: ATA = flashBorrow − collSwapIn + (withdraw + fee) = withdraw + fee ≥ flashBorrow + fee = SC debit,
-  //    and the user nets `withdraw − collSwapIn = withdrawAmountCalculated − collSwapIn`, identical to the fee==0 case.
-  //    (For close position the build function passes U64_MAX, so this value is unused.)
+  // Collateral-flash fees are added in atomic units by calcCollFlashLegLamports.
   const depositTokenWithdrawAmount = withdrawAmountCalculated;
 
   return {
@@ -953,10 +1008,17 @@ export function adjustWithdrawLeverageCalcsCollFlash(
 
   // Fixed-term debt charges an early-repay penalty on top of the repay; the coll→debt swap must produce
   // principal + penalty so the repay debit succeeds. The repay instruction amount stays the principal, and the extra
-  // collateral needed is scaled proportionally (funding/principal). Open-term debt → penalty 0 → unchanged behaviour.
+  // collateral needed is scaled proportionally, including the full-repayment cushion.
   const { earlyRepayPenaltyAmount, repayFundingAmount } =
     obligation && debtReserve && currentLedgerInstant !== undefined
-      ? leverageEarlyRepayPenalty(obligation, debtReserve, absDebtRepay, currentLedgerInstant)
+      ? leverageEarlyRepayPenalty(
+          obligation,
+          debtReserve,
+          absDebtRepay.gte(obligation.getBorrowAmountByReserve(debtReserve))
+            ? fullRepayAmount(obligation.market, obligation, debtReserve, currentLedgerInstant)
+            : absDebtRepay,
+          currentLedgerInstant
+        )
       : { earlyRepayPenaltyAmount: new Decimal(0), repayFundingAmount: absDebtRepay };
 
   // Flash borrow coll to swap for debt repayment (incl. penalty)
@@ -987,4 +1049,127 @@ export function adjustWithdrawLeverageCalcsCollFlash(
     earlyRepayPenaltyAmount,
     repayFundingAmount,
   };
+}
+
+/**
+ * A partial payout has no verified sizing that preserves the remaining position’s LTV.
+ * Callers can reduce the payout or explicitly close the position. Atomic rounding can also
+ * refuse a boundary-sized payout whose remaining position would be dust.
+ */
+export class PartialWithdrawalSizingError extends Error {
+  constructor() {
+    super('Cannot size this partial withdrawal while preserving leverage; reduce the amount or close the position');
+    this.name = 'PartialWithdrawalSizingError';
+  }
+}
+
+function partialWithdrawalCalcs(
+  collReserve: KaminoReserve,
+  debtReserve: KaminoReserve,
+  priceCollToDebt: Decimal,
+  withdrawAmount: Decimal,
+  deposited: Decimal,
+  borrowed: Decimal,
+  currentLedgerInstant: LedgerInstant,
+  selectedToken: 'coll' | 'debt',
+  obligation: KaminoObligation,
+  slippagePct: Decimal,
+  flash: 'coll' | 'debt'
+): WithdrawLeverageCalcsResult {
+  const collFactor = collReserve.getMintFactor();
+  const debtFactor = debtReserve.getMintFactor();
+  const slippageFactor = new Decimal(1).add(slippagePct.div(100));
+  const payoutFactor = selectedToken === 'coll' ? collFactor : debtFactor;
+  const payout = withdrawAmount.mul(payoutFactor).ceil().div(payoutFactor);
+  // A nonzero flash fee has a one-lamport minimum; the canonical fee calculator requires principal > fee.
+  const minimumSwapLamports = flash === 'coll' && collReserve.getFlashLoanFee().gt(0) ? 2 : 1;
+  const evaluate = (repayLamports: Decimal) => {
+    const repayAmount = repayLamports.div(debtFactor);
+    const { earlyRepayPenaltyAmount, repayFundingAmount } = leverageEarlyRepayPenalty(
+      obligation,
+      debtReserve,
+      repayAmount,
+      currentLedgerInstant
+    );
+    const debtDebit = flash === 'debt' ? flashRepayTokenAmount(repayFundingAmount, debtReserve) : repayFundingAmount;
+    const requiredOutput = selectedToken === 'coll' ? debtDebit : debtDebit.add(payout);
+    const swapLamports = Decimal.max(
+      requiredOutput.mul(slippageFactor).div(priceCollToDebt).mul(collFactor).ceil(),
+      minimumSwapLamports
+    );
+    const collTokenSwapIn = swapLamports.div(collFactor);
+    const depositTokenWithdrawAmount = selectedToken === 'coll' ? collTokenSwapIn.add(payout) : collTokenSwapIn;
+    const redeemLamports =
+      flash === 'coll'
+        ? calcCollFlashLegLamports({
+            collReserve,
+            flashBorrowCollTokens: collTokenSwapIn,
+            redeemBaseCollTokens: depositTokenWithdrawAmount,
+          }).redeemCollLamports
+        : depositTokenWithdrawAmount.mul(collFactor).ceil();
+    const totalWithdraw = bufferWithdrawForRedeemDrift(redeemLamports).div(collFactor);
+    return {
+      withdrawAmount: totalWithdraw,
+      repayAmount,
+      earlyRepayPenaltyAmount,
+      repayFundingAmount,
+      collTokenSwapIn,
+      debtTokenExpectedSwapOut: collTokenSwapIn.mul(priceCollToDebt).div(slippageFactor),
+      depositTokenWithdrawAmount,
+    };
+  };
+  const preservesLeverage = (result: WithdrawLeverageCalcsResult) =>
+    result.withdrawAmount.lt(deposited) && result.repayAmount.mul(deposited).gte(borrowed.mul(result.withdrawAmount));
+  // The debt-flash route has the same two-lamport minimum when its fee is nonzero.
+  let low = new Decimal(flash === 'debt' && debtReserve.getFlashLoanFee().gt(0) ? 2 : 1);
+  let high = borrowed.mul(debtFactor).ceil().sub(1);
+  if (high.lt(low)) throw new PartialWithdrawalSizingError();
+  let result = evaluate(high);
+  // Atomic fee/redemption jumps can make a boundary-sized request infeasible at this endpoint.
+  // Keep a verified feasible upper bound; callers can reduce a refused partial amount or close explicitly.
+  if (!preservesLeverage(result)) throw new PartialWithdrawalSizingError();
+  while (low.lt(high)) {
+    const mid = low.add(high).div(2).floor();
+    const candidate = evaluate(mid);
+    if (preservesLeverage(candidate)) {
+      high = mid;
+      result = candidate;
+    } else {
+      low = mid.add(1);
+    }
+  }
+  return result;
+}
+
+function fullRepayAmount(
+  market: KaminoMarket,
+  obligation: KaminoObligation,
+  debtReserve: KaminoReserve,
+  currentLedgerInstant: LedgerInstant
+): Decimal {
+  const borrow = obligation.state.borrows.find((position) => position.borrowReserve === debtReserve.address);
+  if (!borrow) {
+    throw new Error(`Unable to find obligation borrow to repay for reserve ${debtReserve.address}`);
+  }
+  // The estimate is at least 1, so a stale reserve projection never sizes the repay below the stored debt.
+  const debt = KaminoObligation.getBorrowAmount(borrow)
+    .mul(obligation.estimateObligationInterestRate(market, debtReserve, borrow, currentLedgerInstant))
+    .div(debtReserve.getMintFactor());
+  return bufferRepayAmount(debt, debtReserve);
+}
+
+// 1.1 bps covers interest accrued after sizing: about 58 minutes at 100% APR.
+function bufferRepayAmount(amount: Decimal, debtReserve: KaminoReserve): Decimal {
+  return amount.mul('1.00011').toDecimalPlaces(debtReserve.getMintDecimals(), Decimal.ROUND_CEIL);
+}
+
+export function flashRepayTokenAmount(amount: Decimal, reserve: KaminoReserve): Decimal {
+  return calcFlashLoanFees({
+    reserve,
+    referralFeeBps: 0,
+    hasReferral: false,
+    flashBorrowAmountLamports: amount.mul(reserve.getMintFactor()).ceil(),
+  })
+    .flashRepayDebitLamports.ceil()
+    .div(reserve.getMintFactor());
 }

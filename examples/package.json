@@ -71,6 +71,8 @@
     "kvault:user_claim_rewards": "yarn tsx kvault-examples/example_user_claim_rewards.ts",
     "kvault:user_deposit": "yarn tsx kvault-examples/example_user_deposit.ts",
     "kvault:user_deposit_into_flc": "yarn tsx kvault-examples/example_user_deposit_into_flc.ts",
+    "kvault:user_full_withdraw_and_close_user_state": "yarn tsx kvault-examples/example_user_full_withdraw_and_close_user_state.ts",
+    "kvault:user_full_withdraw_with_atomic_close_helper": "yarn tsx kvault-examples/example_user_full_withdraw_with_atomic_close_helper.ts",
     "kvault:user_withdraw": "yarn tsx kvault-examples/example_user_withdraw.ts",
     "kvault:user_withdraw_from_flc": "yarn tsx kvault-examples/example_user_withdraw_from_flc.ts",
     "kvault:read-vault-holding-and-pending-rewards": "yarn tsx kvault-examples/example_read_vault_holding_and_pending_rewards.ts",

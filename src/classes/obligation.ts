@@ -1383,6 +1383,10 @@ export class KaminoObligation {
     return finalizeSwapObligationStats(refreshedStats);
   }
 
+  /**
+   * Returns the projected-to-stored cumulative borrow-rate multiplier, at least 1. On-chain accrual rejects a lower
+   * rate, so a stale reserve projection below the stored rate returns 1.
+   */
   estimateObligationInterestRate = (
     market: KaminoMarket,
     reserve: KaminoReserve,
@@ -1396,11 +1400,14 @@ export class KaminoObligation {
 
     const formerCumulativeBorrowRate = KaminoObligation.getCumulativeBorrowRate(borrow);
 
-    if (newCumulativeBorrowRate.gt(formerCumulativeBorrowRate)) {
+    if (formerCumulativeBorrowRate.isZero()) {
+      throw new Error(`Obligation cumulative borrow rate for reserve ${reserve.address} is zero`);
+    }
+    if (newCumulativeBorrowRate.gte(formerCumulativeBorrowRate)) {
       return newCumulativeBorrowRate.div(formerCumulativeBorrowRate);
     }
 
-    return new Decimal(0);
+    return new Decimal(1);
   };
 
   static getOraclePx = (reserve: KaminoReserve) => {
@@ -1768,7 +1775,7 @@ export class KaminoObligation {
     const maxObligationBorrowPower = borrowLimit // adjusted available amount
       .minus(userTotalBorrowBorrowFactorAdjusted)
       .div(borrowFactor)
-      .div(reserve.getOracleMarketPrice())
+      .div(reserve.getValidOracleMarketPrice())
       .mul(reserve.getMintFactor());
 
     // If it has any collateral outside emode, then return 0
@@ -1999,7 +2006,7 @@ export class KaminoObligation {
     const maxObligationBorrowPower = this.refreshedStats.borrowLimit // adjusted available amount
       .minus(this.refreshedStats.userTotalBorrowBorrowFactorAdjusted)
       .div(borrowFactor)
-      .div(reserve.getOracleMarketPrice())
+      .div(reserve.getValidOracleMarketPrice())
       .mul(reserve.getMintFactor());
     const reserveAvailableAmount = reserve.getLiquidityAvailableAmount();
     let reserveBorrowCapRemained = reserve.stats.reserveBorrowLimit.sub(reserve.getBorrowedAmount());
@@ -2133,7 +2140,7 @@ export class KaminoObligation {
     }
 
     const maxWithdrawAmountBeforeLimit = maxWithdrawValue
-      .div(depositReserve.getOracleMarketPrice())
+      .div(depositReserve.getValidOracleMarketPrice())
       .mul(depositReserve.getMintFactor());
 
     const maxWithdrawAmount = Decimal.max(

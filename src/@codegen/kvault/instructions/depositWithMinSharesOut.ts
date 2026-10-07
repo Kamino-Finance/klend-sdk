@@ -38,7 +38,7 @@ export interface DepositWithMinSharesOutAccounts {
   program: Address
 }
 
-export const layout = borsh.struct([
+export const layout = borsh.struct<DepositWithMinSharesOutArgs>([
   borsh.u64("maxAmount"),
   borsh.u64("minSharesOut"),
 ])

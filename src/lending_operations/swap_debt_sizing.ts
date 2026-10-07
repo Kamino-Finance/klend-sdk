@@ -34,12 +34,10 @@ export function resolveSourceDebtRepayLamports(params: {
     const irRatio = obligation
       .estimateObligationInterestRate(market, sourceDebtReserve, debtLiquidity, currentLedgerInstant)
       .toDecimalPlaces(sourceDebtReserve.state.liquidity.mintDecimals.toNumber(), Decimal.ROUND_CEIL);
-    const irMultiplier = irRatio.lte(0) ? new Decimal('1.001') : irRatio.mul(new Decimal('1.001'));
-    return obligation
-      .getBorrowAmountByReserve(sourceDebtReserve)
-      .mul(sourceDebtReserve.getMintFactor())
-      .mul(irMultiplier)
-      .toDecimalPlaces(0, Decimal.ROUND_CEIL);
+    const irMultiplier = irRatio.mul(new Decimal('1.001'));
+    // Project the stored borrow once: the position is already hydrated. The estimate is at least 1, so the close never
+    // funds less than the stored debt.
+    return KaminoObligation.getBorrowAmount(debtLiquidity).mul(irMultiplier).toDecimalPlaces(0, Decimal.ROUND_CEIL);
   }
   return sourceDebtSwapAmount.mul(sourceDebtReserve.getMintFactor()).ceil();
 }

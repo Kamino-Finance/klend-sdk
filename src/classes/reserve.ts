@@ -91,7 +91,12 @@ import { kaminoCdn, KaminoCdnData } from './cdnClient';
 
 export type KaminoReserveRpcApi = GetProgramAccountsApi & GetAccountInfoApi & GetMultipleAccountsApi;
 
-export const DEFAULT_RECENT_SLOT_DURATION_MS = 350;
+/**
+ * Fallback slot duration for callers that do not measure one. Mainnet slots are 300 ms (SIMD-0525, since epoch 1024)
+ * and are stepping down towards 200 ms, so prefer {@link getMedianSlotDurationInMsFromLastEpochs} or a
+ * `getRecentPerformanceSamples` measurement over this constant.
+ */
+export const DEFAULT_RECENT_SLOT_DURATION_MS = 300;
 
 /**
  * An elapsed accrual duration, expressed in the accrual units of a reserve's {@link InterestRateBasis} (slots for
@@ -484,21 +489,40 @@ export class KaminoReserve {
    * The reserve token's current market price in USD, as loaded from the reserve's oracle (or, on an all-zeroed-feeds
    * refresh miss, from the reserve's own cached on-chain price - see `getTokenOracleDataSync()`).
    *
-   * Like the program's `load_non_zero()`, this refuses to hand a zero price to any financial math: a zero here means
-   * the reserve was never refreshed with a live price (e.g. a Scope-computed feed before its first crank). Such a
-   * reserve can still be loaded and administered (including building the very transaction which cranks its price),
-   * just not priced.
+   * This is `0` for a reserve which was never refreshed with a live price (e.g. a freshly onboarded reserve, or a
+   * Scope-computed feed before its first crank) - see {@link hasValidOraclePrice}. Such a reserve cannot carry debt
+   * yet, so a zero value is the true one for market-wide aggregates (TVL etc.), which must keep working through a
+   * reserve onboarding; callers that need a strictly usable price (the way the program's `load_non_zero()` refuses a
+   * zero one per operation) should check {@link hasValidOraclePrice} first.
    */
   getOracleMarketPrice(): Decimal {
-    const { price, valid } = this.tokenOraclePrice;
-    if (!valid && price.isZero()) {
+    return this.tokenOraclePrice.price;
+  }
+
+  /**
+   * Whether {@link getOracleMarketPrice} is a live (or cached-from-a-live-refresh), non-zero price, i.e. one the
+   * program would accept for valuing positions. `false` for a reserve never refreshed with a live price.
+   */
+  hasValidOraclePrice(): boolean {
+    return this.tokenOraclePrice.valid && !this.getOracleMarketPrice().isZero();
+  }
+
+  /**
+   * {@link getOracleMarketPrice}, but strict: throws unless {@link hasValidOraclePrice}.
+   *
+   * Use this in operation-level math (borrow power, max borrow/withdraw, swap and repay quotes) - the program's
+   * `load_non_zero()` rejects such operations on a never-priced reserve, so a zero here would only produce
+   * `Infinity` or a misleading positive quote. Market-wide aggregates (TVL etc.) keep using the zero-tolerant getter.
+   */
+  getValidOracleMarketPrice(): Decimal {
+    if (!this.hasValidOraclePrice()) {
       throw new Error(
         `Reserve ${
           this.address
         } (${this.getTokenSymbol()}) has no valid oracle price: all its price feeds and its cached price are zeroed (was it ever refreshed?)`
       );
     }
-    return price;
+    return this.getOracleMarketPrice();
   }
 
   /**
@@ -1065,7 +1089,7 @@ export class KaminoReserve {
    * for a `TrueApr` reserve; the slot-rate correction for a `Legacy` one, whose per-slot drip realizes faster than
    * the nominal slot year when slots are shorter). This keeps the value addable to {@link calculateSupplyAPR}, which
    * is wall-clock-adjusted the same way. Note that the on-chain cap is defined in nominal slot-year terms, so the
-   * capped result reads adjusted too: e.g. a binding 10% cap realizes ~12.5% at 400ms slots.
+   * capped result reads adjusted too: e.g. a binding 10% cap realizes ~16.7% at 300ms slots.
    *
    * Returns `0` only when rewards are configured off (market cap is `0` or RPS is `0`), or
    * when `total_supply` is zero (no depositors to earn the rate).

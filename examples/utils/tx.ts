@@ -28,6 +28,7 @@ import {
 } from '@solana/kit';
 import { AddressLookupTable, fetchAllAddressLookupTable } from '@solana-program/address-lookup-table';
 import { ConnectionPool } from './connection';
+import { MAX_SUPPORTED_TRANSACTION_VERSION } from '../../src/utils/rpc';
 
 export type SimulationResponse = ReturnType<SimulateTransactionApi['simulateTransaction']>;
 
@@ -78,7 +79,11 @@ export async function sendAndConfirmTx(
     let tx;
     try {
       tx = await rpc
-        .getTransaction(sig, { maxSupportedTransactionVersion: 0, commitment: 'confirmed', encoding: 'json' })
+        .getTransaction(sig, {
+          maxSupportedTransactionVersion: MAX_SUPPORTED_TRANSACTION_VERSION,
+          commitment: 'confirmed',
+          encoding: 'json',
+        })
         .send();
     } catch (e2) {
       console.log(`(${withDescription}) Error fetching transaction logs:`, e2);

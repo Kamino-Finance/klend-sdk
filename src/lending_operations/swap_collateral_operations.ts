@@ -494,7 +494,7 @@ async function computeViaDebtKlendAccounts<QuoteResponse>(
     outstandingDebtLamports,
     minNetValueUsd: context.market.getMinNetValueObligation(),
     debtMintFactor: debtReserve.getMintFactor(),
-    debtPriceUsd: debtReserve.getOracleMarketPrice(),
+    debtPriceUsd: debtReserve.getValidOracleMarketPrice(),
   });
   // Fixed-term debt charges an early-repay penalty on top of the repay. The flash-borrow must cover principal +
   // penalty so the repay debit succeeds; the repay instruction amount stays the principal, and the re-borrow that

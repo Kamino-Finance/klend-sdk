@@ -3,7 +3,6 @@ import {
   AccountInfoWithJsonData,
   AccountInfoWithPubkey,
   Address,
-  Base58EncodedBytes,
   fetchEncodedAccount,
   GetAccountInfoApi,
   GetMultipleAccountsApi,
@@ -291,15 +290,10 @@ export async function getAllStandardTokenProgramTokenAccounts(
   rpc: Rpc<SolanaRpcApi>,
   wallet: Address
 ): Promise<AccountInfoWithPubkey<AccountInfoBase & AccountInfoWithJsonData>[]> {
-  return rpc
-    .getProgramAccounts(TOKEN_PROGRAM_ADDRESS, {
-      filters: [
-        { dataSize: 165n },
-        { memcmp: { offset: 32n, bytes: wallet.toString() as Base58EncodedBytes, encoding: 'base58' } },
-      ],
-      encoding: 'jsonParsed',
-    })
+  const { value } = await rpc
+    .getTokenAccountsByOwner(wallet, { programId: TOKEN_PROGRAM_ADDRESS }, { encoding: 'jsonParsed' })
     .send();
+  return [...value];
 }
 
 // Type definitions for parsed token account data

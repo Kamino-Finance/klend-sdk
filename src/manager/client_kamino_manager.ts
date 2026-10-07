@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { Account, Address, address, generateKeyPairSigner, Instruction, TransactionSigner } from '@solana/kit';
 import {
   AssetReserveConfigCli,
@@ -73,6 +73,10 @@ import { noopSigner, parseKeypairFile } from '../utils/signer';
 import { checkReserveWhitelistCommand, printVaultReserveAllocations, printVaultReserveFarmIncentives } from './print';
 import { assertCreateMarketLutCliOptions, resolveCreateMarketLutTxSigner } from './utils/createMarketLutCli';
 import { getWalletType } from '../utils/wallets';
+import {
+  buildSetCtokenCapToCurrentIxs,
+  getCurrentCtokenAllocationCapLamports,
+} from './utils/setVaultReserveCtokenCapToCurrentCli';
 
 dotenv.config({
   path: `.env${process.env.ENV ? '.' + process.env.ENV : ''}`,
@@ -2211,7 +2215,10 @@ async function main() {
     .option('--ctoken-allocation-cap <string>', 'Ctoken allocation cap in ctoken lamports')
     .option(`--staging`, 'If true, will use the staging programs')
     .option(`--devnet`, 'If true, will use devnet programs and RPC')
-    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
+    .option(
+      `--multisig <string>`,
+      'Optional multisig address for environment setup. The vault authority is loaded from vault state'
+    )
     .option(`--skip-lut-update`, 'If set, it will skip the LUT update')
     .option(`--use-allocation-admin`, 'Sign as allocationAdmin instead of vault admin')
     .option(`--CU <number>`, 'The number of compute units to use for the transaction')
@@ -2230,9 +2237,6 @@ async function main() {
         useAllocationAdmin,
         CU: cu,
       }) => {
-        if (mode === 'multisig' && !multisig) {
-          throw new Error('If using multisig mode, multisig is required');
-        }
         const ms = multisig ? address(multisig) : undefined;
         const env = await initEnv(staging, ms, undefined, undefined, devnet);
         const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
@@ -2324,6 +2328,100 @@ async function main() {
         mode === 'execute' && console.log('Vault allocation updated');
       }
     );
+
+  commands
+    .command('set-vault-reserve-ctoken-cap-to-current')
+    .description('Set the ctoken allocation cap of a vault reserve allocation to its current ctoken allocation')
+    .requiredOption('--vault <string>', 'Vault address')
+    .requiredOption('--reserve <string>', 'Reserve address')
+    .addOption(
+      new Option(
+        `--mode <string>`,
+        'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
+      )
+        .choices(['simulate', 'multisig', 'execute'])
+        .makeOptionMandatory()
+    )
+    .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
+    .option(
+      `--multisig <string>`,
+      'Multisig to use in multisig mode; defaults to the vault admin (or allocationAdmin with --use-allocation-admin)'
+    )
+    .option(`--skip-lut-update`, 'If set, it will skip the LUT update')
+    .option(`--use-allocation-admin`, 'Sign as allocationAdmin instead of vault admin')
+    .option(`--CU <number>`, 'The number of compute units to use for the transaction')
+    .action(async ({ vault, reserve, mode, staging, devnet, multisig, skipLutUpdate, useAllocationAdmin, CU: cu }) => {
+      const ms = multisig ? address(multisig) : undefined;
+      const env = await initEnv(staging, ms, undefined, undefined, devnet);
+      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
+      const reserveAddress = address(reserve);
+      const vaultAddress = address(vault);
+      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, slotDuration, undefined, env.kvaultProgramId);
+      const vaultState = await kaminoVault.getState();
+      const defaultSigner = await env.getSigner({ vaultState, useVaultAllocationAdmin: useAllocationAdmin });
+      const signer = mode === 'multisig' ? noopSigner(ms ?? defaultSigner.address) : defaultSigner;
+      mode === 'multisig' && console.log('Multisig signer', signer.address);
+      const computeUnits = cu ? cu : DEFAULT_CU_PER_TX;
+
+      const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
+      const existentAllocation = kaminoManager.getVaultAllocations(vaultState).get(reserveAddress);
+      if (!existentAllocation) {
+        throw new Error('Reserve is not in the vault allocations');
+      }
+      const ctokenAllocationCapLamportsBn = getCurrentCtokenAllocationCapLamports(
+        existentAllocation.ctokenAllocationLamports
+      );
+
+      const reserveState = await Reserve.fetch(env.c.rpc, reserveAddress, env.klendProgramId);
+      if (!reserveState) {
+        throw new Error('Reserve not found');
+      }
+
+      const allocationWeightValue = existentAllocation.targetWeight.toNumber();
+      const tokenAllocationCapTokens = existentAllocation.tokenAllocationCapLamports.div(
+        new Decimal(10).pow(Number(vaultState.tokenMintDecimals.toString()))
+      );
+
+      console.log('allocationWeightValue', allocationWeightValue);
+      console.log('tokenAllocationCapTokens', tokenAllocationCapTokens.toString());
+      console.log(
+        'ctokenAllocationCapLamports',
+        existentAllocation.ctokenAllocationCapLamports?.toFixed(0) ?? 'uncapped',
+        '->',
+        ctokenAllocationCapLamportsBn.toString()
+      );
+
+      const reserveAllocationConfig = new ReserveAllocationConfig(
+        { address: reserveAddress, state: reserveState },
+        allocationWeightValue,
+        tokenAllocationCapTokens,
+        ctokenAllocationCapLamportsBn
+      );
+
+      const instructions = await kaminoManager.updateVaultReserveAllocationIxs(
+        kaminoVault,
+        reserveAllocationConfig,
+        signer
+      );
+      const txInstructions = buildSetCtokenCapToCurrentIxs(
+        instructions.updateReserveAllocationIx,
+        getPriorityFeeAndCuIxs({
+          priorityFeeMultiplier: 2500,
+          computeUnits,
+        }),
+        instructions.updateLUTIxs,
+        skipLutUpdate
+      );
+
+      const lookupTables: Account<AddressLookupTable>[] = [];
+      if (vaultState.vaultLookupTable !== DEFAULT_PUBLIC_KEY) {
+        lookupTables.push(await fetchAddressLookupTable(env.c.rpc, vaultState.vaultLookupTable));
+      }
+      await processTx(env.c, signer, txInstructions, mode, lookupTables);
+
+      mode === 'execute' && console.log('Vault reserve ctoken allocation cap updated');
+    });
 
   commands
     .command('deposit')
@@ -2731,8 +2829,27 @@ async function main() {
         globalConfig,
         confirmedSlot
       );
+      const vaultAllocations = kaminoManager.getVaultAllocations(kaminoVaultState);
+      const reservesOverview = new Map(
+        Array.from(vaultOverview.reservesOverview.entries()).map(([reserveAddress, reserveOverview]) => {
+          const allocation = vaultAllocations.get(reserveAddress);
+          if (!allocation) {
+            throw new Error(`Reserve allocation not found for ${reserveAddress}`);
+          }
 
-      console.log('vaultOverview', vaultOverview);
+          return [
+            reserveAddress,
+            {
+              ...reserveOverview,
+              ctokenAllocationLamports: allocation.ctokenAllocationLamports.toString(),
+              tokenAllocationCapLamports: allocation.tokenAllocationCapLamports.toString(),
+              ctokenAllocationCapLamports: allocation.ctokenAllocationCapLamports?.toString(),
+            },
+          ] as const;
+        })
+      );
+
+      console.log('vaultOverview', { ...vaultOverview, reservesOverview });
       vaultOverview.reservesFarmsIncentives.reserveFarmsIncentives.forEach((incentive, reserveAddress) => {
         console.log('reserve ', reserveAddress);
         console.log('reserve incentive', incentive);
