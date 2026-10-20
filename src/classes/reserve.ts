@@ -2,6 +2,7 @@
 import BN from 'bn.js';
 import {
   Address,
+  createAddressWithSeed,
   Instruction,
   TransactionSigner,
   Rpc,
@@ -82,11 +83,15 @@ import { aprToApy, KaminoPrices } from '@kamino-finance/kliquidity-sdk';
 import { FarmAndKey, RewardInfo } from '@kamino-finance/farms-sdk';
 import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
 import { maxBigInt, minBigInt } from '../utils/bigint';
-import { getCreateAccountInstruction, SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
+import {
+  getCreateAccountInstruction,
+  getCreateAccountWithSeedInstruction,
+  SYSTEM_PROGRAM_ADDRESS,
+} from '@solana-program/system';
 import { SYSVAR_INSTRUCTIONS_ADDRESS, SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 import { noopSigner } from '../utils/signer';
 import { fetchFarmStateOrNull, getRewardPerTimeUnitSecond } from './farm_utils';
-import { Scope, ScopeEntryMetadata } from '@kamino-finance/scope-sdk';
+import { Scope, ScopeEntryMetadata, U16_MAX } from '@kamino-finance/scope-sdk';
 import { kaminoCdn, KaminoCdnData } from './cdnClient';
 
 export type KaminoReserveRpcApi = GetProgramAccountsApi & GetAccountInfoApi & GetMultipleAccountsApi;
@@ -97,6 +102,73 @@ export type KaminoReserveRpcApi = GetProgramAccountsApi & GetAccountInfoApi & Ge
  * `getRecentPerformanceSamples` measurement over this constant.
  */
 export const DEFAULT_RECENT_SLOT_DURATION_MS = 300;
+
+const MAX_SCOPE_TOKEN_ID = 511;
+
+export function normalizeScopeChain(scopeChain: readonly number[]): number[] {
+  if (scopeChain.length < 1 || scopeChain.length > 4) {
+    throw new Error('scopeChain must contain one to four u16 values');
+  }
+  if (scopeChain.some((entry) => !Number.isInteger(entry) || entry < 0 || entry > U16_MAX)) {
+    throw new Error('scopeChain must contain one to four u16 values');
+  }
+
+  const firstPaddingIndex = scopeChain.indexOf(U16_MAX);
+  if (firstPaddingIndex !== -1 && scopeChain.slice(firstPaddingIndex).some((entry) => entry !== U16_MAX)) {
+    throw new Error(`scopeChain must use ${U16_MAX} only as trailing padding`);
+  }
+
+  const tokenIds = firstPaddingIndex === -1 ? scopeChain : scopeChain.slice(0, firstPaddingIndex);
+  if (tokenIds.length === 0 || tokenIds.some((entry) => entry > MAX_SCOPE_TOKEN_ID)) {
+    throw new Error(`scopeChain Scope token IDs must be between 0 and ${MAX_SCOPE_TOKEN_ID}`);
+  }
+
+  const normalizedChain = [...tokenIds, ...Array(4 - tokenIds.length).fill(U16_MAX)];
+  if (!Scope.isScopeChainValid(normalizedChain)) {
+    throw new Error('scopeChain must define a valid Scope chain');
+  }
+  return normalizedChain;
+}
+
+type UnsupportedReserveConfigModeKind = Extract<
+  UpdateConfigModeKind,
+  { kind: `Deprecated${string}` | 'UpdateFarmCollateral' | 'UpdateFarmDebt' }
+>;
+
+/** Reserve configuration modes that have field-by-field update support. */
+export type ForceableReserveConfigModeKind = Exclude<UpdateConfigModeKind, UnsupportedReserveConfigModeKind>;
+
+export type SeededReserveAccount = {
+  base: TransactionSigner;
+  seed: string;
+};
+
+type ReserveAccountCreation =
+  | {
+      reserveAddress: TransactionSigner;
+      seededReserveAccount?: never;
+    }
+  | {
+      reserveAddress?: never;
+      seededReserveAccount: SeededReserveAccount;
+    };
+
+export type CreateReserveIxsWithAuthorityParams = {
+  rpc: Rpc<GetMinimumBalanceForRentExemptionApi>;
+  payer: TransactionSigner;
+  reserveAuthority: TransactionSigner;
+  initialLiquiditySource: Address;
+  lendingMarket: Address;
+  liquidityMint: Address;
+  liquidityMintTokenProgram: Address;
+  programId: Address;
+} & ReserveAccountCreation;
+
+export type CreateReserveIxsWithAuthorityResult = {
+  createReserveAccountIx: Instruction;
+  initReserveIx: Instruction;
+  reserveAddress: Address;
+};
 
 /**
  * An elapsed accrual duration, expressed in the accrual units of a reserve's {@link InterestRateBasis} (slots for
@@ -2220,32 +2292,78 @@ export async function createReserveIxs(
   reserveAddress: TransactionSigner,
   programId: Address
 ): Promise<Instruction[]> {
-  const size = BigInt(Reserve.layout.span + 8);
-  const createReserveIx = getCreateAccountInstruction({
+  const { createReserveAccountIx, initReserveIx } = await createReserveIxsWithAuthority({
+    rpc,
     payer: owner,
-    space: size,
-    lamports: await rpc.getMinimumBalanceForRentExemption(size).send(),
-    programAddress: programId,
-    newAccount: reserveAddress,
+    reserveAuthority: owner,
+    initialLiquiditySource: ownerLiquiditySource,
+    lendingMarket,
+    liquidityMint,
+    liquidityMintTokenProgram,
+    reserveAddress,
+    programId,
   });
+
+  return [createReserveAccountIx, initReserveIx];
+}
+
+export async function createReserveIxsWithAuthority({
+  rpc,
+  payer,
+  reserveAuthority,
+  initialLiquiditySource,
+  lendingMarket,
+  liquidityMint,
+  liquidityMintTokenProgram,
+  reserveAddress,
+  seededReserveAccount,
+  programId,
+}: CreateReserveIxsWithAuthorityParams): Promise<CreateReserveIxsWithAuthorityResult> {
+  const size = BigInt(Reserve.layout.span + 8);
+  const lamports = await rpc.getMinimumBalanceForRentExemption(size).send();
+  const newReserveAddress = seededReserveAccount
+    ? await createAddressWithSeed({
+        baseAddress: seededReserveAccount.base.address,
+        seed: seededReserveAccount.seed,
+        programAddress: programId,
+      })
+    : reserveAddress.address;
+  const createReserveAccountIx = seededReserveAccount
+    ? getCreateAccountWithSeedInstruction({
+        payer,
+        newAccount: newReserveAddress,
+        baseAccount: seededReserveAccount.base,
+        base: seededReserveAccount.base.address,
+        seed: seededReserveAccount.seed,
+        amount: lamports,
+        space: size,
+        programAddress: programId,
+      })
+    : getCreateAccountInstruction({
+        payer,
+        space: size,
+        lamports,
+        programAddress: programId,
+        newAccount: reserveAddress,
+      });
 
   const { liquiditySupplyVault, collateralMint, collateralSupplyVault, feeVault } = await reservePdas(
     programId,
-    reserveAddress.address
+    newReserveAddress
   );
   const [lendingMarketAuthority] = await lendingMarketAuthPda(lendingMarket, programId);
 
   const accounts: InitReserveAccounts = {
-    signer: owner,
+    signer: reserveAuthority,
     lendingMarket: lendingMarket,
     lendingMarketAuthority: lendingMarketAuthority,
-    reserve: reserveAddress.address,
+    reserve: newReserveAddress,
     reserveLiquidityMint: liquidityMint,
     reserveLiquiditySupply: liquiditySupplyVault,
     feeReceiver: feeVault,
     reserveCollateralMint: collateralMint,
     reserveCollateralSupply: collateralSupplyVault,
-    initialLiquiditySource: ownerLiquiditySource,
+    initialLiquiditySource,
     liquidityTokenProgram: liquidityMintTokenProgram,
     collateralTokenProgram: TOKEN_PROGRAM_ADDRESS,
     systemProgram: SYSTEM_PROGRAM_ADDRESS,
@@ -2255,7 +2373,7 @@ export async function createReserveIxs(
 
   const initReserveIx = initReserve(accounts, undefined, programId);
 
-  return [createReserveIx, initReserveIx];
+  return { createReserveAccountIx, initReserveIx, reserveAddress: newReserveAddress };
 }
 
 export async function updateReserveConfigIx(
@@ -2383,24 +2501,44 @@ export function parseForChangesReserveConfigAndGetIxs(
   reserveConfig: ReserveConfig,
   programId: Address,
   lendingMarketOwner: TransactionSigner = noopSigner(marketWithAddress.state.lendingMarketOwner),
-  globalAdminSigner?: TransactionSigner
+  globalAdminSigner?: TransactionSigner,
+  forceFields: readonly UpdateConfigModeKind[] = [],
+  initialReserveAuthority?: TransactionSigner
 ): Promise<ReserveConfigUpdateIx[]> {
+  if (initialReserveAuthority && reserve !== undefined) {
+    throw new Error('The initial reserve authority can only configure a new reserve');
+  }
+  if (
+    initialReserveAuthority &&
+    (marketWithAddress.state.proposerAuthority === DEFAULT_PUBLIC_KEY ||
+      initialReserveAuthority.address !== marketWithAddress.state.proposerAuthority)
+  ) {
+    throw new Error('The initial reserve authority must match the lending market proposer authority');
+  }
+
+  for (const mode of forceFields) {
+    if (!RESERVE_CONFIG_UPDATER.supportsMode(mode)) {
+      throw new Error(`Reserve config update mode ${mode.kind} is not supported by the field-by-field updater`);
+    }
+  }
+
   const currentConfig = reserve?.config ?? defaultReserveConfig();
   const encodedConfigUpdates = ENTIRE_RESERVE_CONFIG_UPDATER.encodeAllUpdates(
     currentConfig,
     reserveConfig,
-    buildReserveConfigPriority(currentConfig, reserveConfig)
+    buildReserveConfigPriority(currentConfig, reserveConfig),
+    forceFields
   );
 
   return Promise.all(
     encodedConfigUpdates.map(async (encodedConfigUpdate) => {
-      const requiresGlobalAdmin = isGlobalAdminOnly(encodedConfigUpdate.mode);
-      if (requiresGlobalAdmin && !globalAdminSigner) {
+      const requiresGlobalAdmin = isGlobalAdminOnly(encodedConfigUpdate.mode) && !initialReserveAuthority;
+      if (requiresGlobalAdmin && !globalAdminSigner && !initialReserveAuthority) {
         throw new Error(
           `Global admin signer is required for update mode ${encodedConfigUpdate.mode.kind} (${encodedConfigUpdate.mode.discriminator})`
         );
       }
-      const signer = requiresGlobalAdmin ? globalAdminSigner! : lendingMarketOwner;
+      const signer = initialReserveAuthority ?? (requiresGlobalAdmin ? globalAdminSigner! : lendingMarketOwner);
       const ix = await updateReserveConfigIx(
         signer,
         marketWithAddress.address,
@@ -2408,7 +2546,7 @@ export function parseForChangesReserveConfigAndGetIxs(
         encodedConfigUpdate.mode,
         encodedConfigUpdate.value,
         programId,
-        shouldSkipValidation(encodedConfigUpdate.mode, reserve)
+        shouldSkipValidation(encodedConfigUpdate.mode, reserve, marketWithAddress.state.minInitialDepositAmount)
       );
       return { ix, requiresGlobalAdmin };
     })
@@ -2426,7 +2564,17 @@ const VALIDATED_DISCRIMINATORS = [
   UpdateConfigMode.UpdateBorrowLimit.discriminator,
 ];
 
-export function shouldSkipValidation(mode: UpdateConfigModeKind, reserve: Reserve | undefined): boolean {
+/**
+ * Returns whether a reserve config update can skip the program's config integrity validation
+ * @param mode - the config update mode; deposit and borrow limit updates never skip validation
+ * @param reserve - the current reserve state, or undefined when the reserve does not exist yet
+ * @param minInitialDepositAmount - the market's value: the program rejects a skip once the reserve holds more than it
+ */
+export function shouldSkipValidation(
+  mode: UpdateConfigModeKind,
+  reserve: Reserve | undefined,
+  minInitialDepositAmount: BN = new BN(MIN_INITIAL_DEPOSIT)
+): boolean {
   if (VALIDATED_DISCRIMINATORS.includes(mode.discriminator)) {
     return false;
   }
@@ -2436,9 +2584,9 @@ export function shouldSkipValidation(mode: UpdateConfigModeKind, reserve: Reserv
   }
 
   const isUsed =
-    reserve.liquidity.totalAvailableAmount.gtn(MIN_INITIAL_DEPOSIT) ||
+    reserve.liquidity.totalAvailableAmount.gt(minInitialDepositAmount) ||
     reserve.liquidity.borrowedAmountSf.gtn(0) ||
-    reserve.collateral.mintTotalSupply.gtn(MIN_INITIAL_DEPOSIT);
+    reserve.collateral.mintTotalSupply.gt(minInitialDepositAmount);
   const isUsageBlocked = reserve.config.depositLimit.isZero() && reserve.config.borrowLimit.isZero();
   return isUsageBlocked && !isUsed;
 }
@@ -2456,6 +2604,71 @@ export function defaultReserveConfig(): ReserveConfig {
     ...zeroed,
     status: ReserveStatusEnum.Hidden.discriminator,
     interestRateBasis: InterestRateBasis.TrueApr,
+  });
+}
+
+export type CrossMintReserveConfigTemplateOracle = {
+  scopePriceFeed: Address;
+  scopePriceChain: readonly number[];
+  scopeTwapChain?: readonly number[];
+  targetTokenName: readonly number[];
+};
+
+/**
+ * Builds a blocked target config from a source reserve without copying mint-specific values or capacity limits.
+ * The explicit allowlist prevents native-unit limits and source oracle accounts from leaking across mints.
+ */
+export function buildCrossMintReserveConfigTemplate(
+  source: ReserveConfig,
+  oracle: CrossMintReserveConfigTemplateOracle
+): ReserveConfig {
+  if (oracle.scopePriceFeed === DEFAULT_PUBLIC_KEY) {
+    throw new Error('A target Scope price feed is required');
+  }
+  if (oracle.targetTokenName.length !== 32) {
+    throw new Error('The target token name must be encoded as exactly 32 bytes');
+  }
+
+  const defaults = defaultReserveConfig();
+  const scopePriceChain = normalizeScopeChain(oracle.scopePriceChain);
+  const scopeTwapChain = oracle.scopeTwapChain
+    ? normalizeScopeChain(oracle.scopeTwapChain)
+    : new Array(4).fill(U16_MAX);
+  if (source.tokenInfo.maxTwapDivergenceBps.gtn(0) && scopeTwapChain[0] === U16_MAX) {
+    throw new Error('A target Scope TWAP chain is required when the source TWAP divergence check is enabled');
+  }
+
+  return new ReserveConfig({
+    ...defaults,
+    loanToValuePct: source.loanToValuePct,
+    liquidationThresholdPct: source.liquidationThresholdPct,
+    minLiquidationBonusBps: source.minLiquidationBonusBps,
+    maxLiquidationBonusBps: source.maxLiquidationBonusBps,
+    badDebtLiquidationBonusBps: source.badDebtLiquidationBonusBps,
+    minDeleveragingBonusBps: source.minDeleveragingBonusBps,
+    deleveragingMarginCallPeriodSecs: source.deleveragingMarginCallPeriodSecs,
+    deleveragingThresholdDecreaseBpsPerDay: source.deleveragingThresholdDecreaseBpsPerDay,
+    deleveragingBonusIncreaseBpsPerDay: source.deleveragingBonusIncreaseBpsPerDay,
+    borrowRateCurve: source.borrowRateCurve,
+    borrowFactorPct: source.borrowFactorPct,
+    disableUsageAsCollOutsideEmode: source.disableUsageAsCollOutsideEmode,
+    utilizationLimitBlockBorrowingAbovePct: source.utilizationLimitBlockBorrowingAbovePct,
+    autodeleverageEnabled: source.autodeleverageEnabled,
+    debtTermSeconds: source.debtTermSeconds,
+    earlyRepayRemainingInterestPct: source.earlyRepayRemainingInterestPct,
+    tokenInfo: {
+      ...defaults.tokenInfo,
+      name: Array.from(oracle.targetTokenName),
+      heuristic: source.tokenInfo.heuristic,
+      maxTwapDivergenceBps: source.tokenInfo.maxTwapDivergenceBps,
+      maxAgePriceSeconds: source.tokenInfo.maxAgePriceSeconds,
+      maxAgeTwapSeconds: source.tokenInfo.maxAgeTwapSeconds,
+      scopeConfiguration: {
+        priceFeed: oracle.scopePriceFeed,
+        priceChain: scopePriceChain,
+        twapChain: scopeTwapChain,
+      },
+    },
   });
 }
 
@@ -2513,6 +2726,8 @@ export function priorityOf(
     case UpdateConfigMode.UpdateDepositLimit.discriminator:
     case UpdateConfigMode.UpdateBorrowLimit.discriminator:
       return 63;
+    case UpdateConfigMode.UpdateProposerAuthorityLock.discriminator:
+      return 64;
     case UpdateConfigMode.UpdateMaxLiquidationBonusBps.discriminator:
       return maxLiquidationBonusShouldUpdateFirst ? 61 : 63;
     default:

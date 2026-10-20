@@ -25,9 +25,56 @@ export type SetFarmsToVaultIxs = {
   setFLCFarmToVaultIx?: Instruction;
 };
 
+/** One entry per KaminoVaultConfig field that createVaultIxs writes with update_vault_config */
+export type VaultSetupConfigFields<T> = {
+  performanceFeeBps: T;
+  managementFeeBps: T;
+  minDepositAmount: T;
+  minWithdrawAmount: T;
+  minInvestAmount: T;
+  minInvestDelaySlots: T;
+  withdrawalPenaltyBps: T;
+  withdrawalPenaltyLamports: T;
+  crankFundFeePerReserve: T;
+  name: T;
+  allowAllocationsInWhitelistedReservesOnly: T;
+  allowInvestInWhitelistedReservesOnly: T;
+};
+
+export type VaultSetupStatus = {
+  /** true when every flag below is true; with the config, finishVaultSetup without override then returns no ixs */
+  allSet: boolean;
+  /**
+   * per field, with the config: true when the vault has a non-zero value, or the config value is zero/false/empty (createVaultIxs does not send it).
+   * Without the config: true for every field, except crankFundFeePerReserve (at least 1) and name (non-empty).
+   */
+  configFields: VaultSetupConfigFields<boolean>;
+  vaultFarmSet: boolean;
+  firstLossCapitalFarmSet: boolean;
+  sharesMetadataSet: boolean;
+};
+
+/** the farm address is derived from the admin and a seed, so the admin is the only signer; send all the ixs in one tx */
+export type CreateAndSetVaultFarmIxs = {
+  farm: Address;
+  /** empty when an initialized farm of the admin is already at the farm address */
+  setupFarmIxs: Instruction[];
+  updateFarmIxs: Instruction[];
+  setFarmToVaultIx: Instruction;
+};
+
+/** Ixs that finish a partially created vault; undefined means nothing to do for that part. Send each farm in its own tx. */
+export type FinishVaultSetupIxs = {
+  configFieldIxs: VaultSetupConfigFields<Instruction | undefined>;
+  vaultFarmIxs?: CreateAndSetVaultFarmIxs;
+  firstLossCapitalFarmIxs?: CreateAndSetVaultFarmIxs;
+  sharesMetadataIx?: Instruction;
+};
+
 export type AcceptVaultOwnershipIxs = {
   acceptVaultOwnershipIx: Instruction;
   acceptFLCFarmOwnershipIx?: Instruction;
+  acceptVaultFarmOwnershipIx?: Instruction;
   initNewLUTIx: Instruction;
   updateLUTIxs: Instruction[]; // this has to be executed in a transaction after the initNewLUTIx is executed
 };

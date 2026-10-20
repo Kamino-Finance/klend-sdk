@@ -1,13 +1,22 @@
 import dotenv from 'dotenv';
 import { Command, Option } from 'commander';
-import { Account, Address, address, generateKeyPairSigner, Instruction, TransactionSigner } from '@solana/kit';
+import { join } from 'path';
+import {
+  Account,
+  Address,
+  address,
+  createAddressWithSeed,
+  generateKeyPairSigner,
+  Instruction,
+  TransactionSigner,
+} from '@solana/kit';
 import {
   AssetReserveConfigCli,
   CDN_ENDPOINT,
   createLookupTableIx,
   DEFAULT_CU_PER_TX,
   DEFAULT_PUBLIC_KEY,
-  encodeTokenName,
+  DEFAULT_RECENT_SLOT_DURATION_MS,
   extendLookupTableIxs,
   getKvaultGlobalConfigPda,
   getMedianSlotDurationInMsFromLastEpochs,
@@ -31,8 +40,11 @@ import {
   Reserve,
   ReserveAllocationConfig,
   ReserveConfigUpdateIx,
+  RESERVE_CONFIG_UPDATER,
   ReserveWithAddress,
   sleep,
+  type CloneReserveConfigCustomizations,
+  type ReserveAccountCreation,
 } from '../lib';
 import {
   BorrowRateCurve,
@@ -46,6 +58,7 @@ import {
   WithdrawalCaps,
 } from '../@codegen/klend/types';
 import { Fraction } from '../classes/fraction';
+import type { ForceableReserveConfigModeKind } from '../classes/reserve';
 import { simulateReserveApy } from './simulateReserveApy';
 import { trimPoints } from '../classes/curve';
 import { PermissionedOp } from '../classes/permission';
@@ -55,9 +68,10 @@ import BN from 'bn.js';
 import { PythConfiguration, SwitchboardConfiguration, UpdateReserveWhitelistMode } from '../@codegen/kvault/types';
 import { ReserveWhitelistEntry } from '../@codegen/kvault/accounts';
 import { getReserveWhitelistEntryPda } from '../classes/vault';
+import { getReserveStatesForMarket } from '../classes/market';
 import { getMarketsFromApi } from '../utils/api';
 import * as fs from 'fs';
-import { MarketWithAddress } from '../utils/managerTypes';
+import { encodeTokenName, MarketWithAddress } from '../utils/managerTypes';
 import { ManagementFeeBps, PendingVaultAdmin, PerformanceFeeBps } from '../@codegen/kvault/types/VaultConfigField';
 import { getAccountOwner, getCurrentLedgerInstant } from '../utils/rpc';
 import { fetchMint, findAssociatedTokenPda } from '@solana-program/token-2022';
@@ -73,6 +87,24 @@ import { noopSigner, parseKeypairFile } from '../utils/signer';
 import { checkReserveWhitelistCommand, printVaultReserveAllocations, printVaultReserveFarmIncentives } from './print';
 import { assertCreateMarketLutCliOptions, resolveCreateMarketLutTxSigner } from './utils/createMarketLutCli';
 import { getWalletType } from '../utils/wallets';
+import {
+  parseReserveCommandTxMode,
+  parseReserveConfigForceFields,
+  parseScopePriceChain,
+  parseScopeTwapChain,
+  getReserveAccountCreationAction,
+  planAddAssetMultisigReserveSetupIxs,
+  planInitReserveAndCloneConfigIxs,
+  planReserveAccountSetupIxs,
+  resolveCloneReserveAuthorityType,
+  resolveReserveLiquidityTokenProgram,
+  resolveReserveAuthorityType,
+  assertInitializedReserveMatchesTarget,
+  assertReserveMintsMatch,
+  selectReserveConfigCopyStrategy,
+  selectMarketReserveConfigFiles,
+  validateReserveAccountCreationOptions,
+} from './utils/reserveConfigCli';
 import {
   buildSetCtokenCapToCurrentIxs,
   getCurrentCtokenAllocationCapLamports,
@@ -400,7 +432,126 @@ function selectPrimaryVaultShareFarmStates<
   };
 }
 
-async function main() {
+const RESERVE_COMMAND_MODE_DESCRIPTION =
+  'simulate|multisig|execute - simulate shows the transaction simulation, execute sends the transaction, multisig returns the bs58 transaction message';
+
+function reserveAuthorityAddress(market: { state: LendingMarket }, requestedType: string | undefined): Address {
+  const authorityType = resolveReserveAuthorityType(requestedType, market.state.proposerAuthority);
+  return authorityType === 'proposer-authority' ? market.state.proposerAuthority : market.state.lendingMarketOwner;
+}
+
+function reserveAuthoritySigner(
+  env: ManagerEnv,
+  market: { state: LendingMarket },
+  requestedType: string | undefined,
+  mode: SendTxMode
+): TransactionSigner {
+  const authorityAddress = reserveAuthorityAddress(market, requestedType);
+  return env.getSignerForAddress(authorityAddress, mode);
+}
+
+async function initReserveCommandContext({
+  mode,
+  staging,
+  devnet,
+  multisig,
+  loadSlotDuration = true,
+}: {
+  mode: string;
+  staging?: boolean;
+  devnet?: boolean;
+  multisig?: string;
+  loadSlotDuration?: boolean;
+}) {
+  const sendMode = parseReserveCommandTxMode(mode);
+  if (sendMode === 'multisig' && !multisig) {
+    throw new Error('If using multisig mode, multisig pubkey is required');
+  }
+
+  const multisigAddress = multisig ? address(multisig) : undefined;
+  const env = await initEnv(staging, multisigAddress, undefined, undefined, devnet);
+  const slotDuration = loadSlotDuration
+    ? await getMedianSlotDurationInMsFromLastEpochs()
+    : DEFAULT_RECENT_SLOT_DURATION_MS;
+  return { sendMode, env, slotDuration };
+}
+
+async function loadGlobalAdminSigner(
+  mode: SendTxMode,
+  globalAdmin: string | undefined
+): Promise<TransactionSigner | undefined> {
+  if (!globalAdmin) {
+    return undefined;
+  }
+  return mode === 'multisig' ? noopSigner(address(globalAdmin)) : parseKeypairFile(globalAdmin);
+}
+
+async function loadReserveAccountCreation(
+  signer: TransactionSigner,
+  reserveKeyPath: string | undefined,
+  reserveSeed: string | undefined
+): Promise<ReserveAccountCreation> {
+  if (reserveSeed !== undefined) {
+    return { seededReserveAccount: { base: signer, seed: reserveSeed } };
+  }
+  return {
+    reserveKeypair: reserveKeyPath ? await parseKeypairFile(reserveKeyPath) : await generateKeyPairSigner(),
+  };
+}
+
+function parseForceFields(value: string | undefined): ForceableReserveConfigModeKind[] {
+  return parseReserveConfigForceFields(value, (mode) =>
+    RESERVE_CONFIG_UPDATER.supportsMode(mode)
+  ) as ForceableReserveConfigModeKind[];
+}
+
+function parseU32(value: string, fieldName: string): number {
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`${fieldName} must be an integer u32`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed > 0xffffffff) {
+    throw new Error(`${fieldName} must be an integer u32`);
+  }
+  return parsed;
+}
+
+function parseU64(value: string, fieldName: string): BN {
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`${fieldName} must be an integer u64`);
+  }
+  const parsed = new BN(value);
+  if (parsed.bitLength() > 64) {
+    throw new Error(`${fieldName} must be an integer u64`);
+  }
+  return parsed;
+}
+
+function parseCloneReserveConfigCustomizations({
+  fixedBorrowRateBps,
+  debtTermSeconds,
+  clearElevationGroups,
+}: {
+  fixedBorrowRateBps?: string;
+  debtTermSeconds?: string;
+  clearElevationGroups?: boolean;
+}) {
+  const customizations: CloneReserveConfigCustomizations = {};
+
+  if (fixedBorrowRateBps !== undefined) {
+    customizations.fixedBorrowRateBps = parseU32(fixedBorrowRateBps, '--fixed-borrow-rate-bps');
+  }
+  if (debtTermSeconds !== undefined) {
+    customizations.debtTermSeconds = parseU64(debtTermSeconds, '--debt-term-seconds');
+  }
+  if (clearElevationGroups) {
+    customizations.clearElevationGroups = true;
+  }
+
+  return customizations;
+}
+
+export function buildKaminoManagerCommand(): Command {
   const commands = new Command();
 
   commands.name('kamino-manager-cli').description('CLI to interact with the kvaults and klend programs');
@@ -1924,6 +2075,7 @@ async function main() {
         [
           instructions.acceptVaultOwnershipIx,
           ...(instructions.acceptFLCFarmOwnershipIx ? [instructions.acceptFLCFarmOwnershipIx] : []),
+          ...(instructions.acceptVaultFarmOwnershipIx ? [instructions.acceptVaultFarmOwnershipIx] : []),
           ...getPriorityFeeAndCuIxs({
             priorityFeeMultiplier: 2500,
             computeUnits,
@@ -1934,6 +2086,11 @@ async function main() {
       );
 
       mode === 'execute' && console.log(`Vault ownership accepted by ${pendingAdmin.address}`);
+
+      // the new LUT ix needs a recent slot, which is stale when a multisig executes; vault LUTs are managed by a backend service
+      if (mode === 'multisig') {
+        return;
+      }
 
       await processTx(
         env.c,
@@ -3585,556 +3742,743 @@ async function main() {
     .requiredOption('--market <string>', 'Market address to add asset to')
     .requiredOption('--mint <string>', 'Reserve liquidity token mint')
     .requiredOption('--reserve-config-path <string>', 'Path for the reserve config')
-    .requiredOption(
-      `--mode <string>`,
-      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
+    .requiredOption(`--mode <string>`, RESERVE_COMMAND_MODE_DESCRIPTION)
+    .option('--signer-type <string>', 'lending-market-owner|proposer-authority', 'lending-market-owner')
+    .option(
+      '--execute-reserve-account-creation',
+      'In multisig mode, execute the system reserve account creation with the configured admin payer'
     )
     .option(
       '--global-admin <string>',
       'Global admin signer (keypair path in execute/simulate modes, pubkey in multisig mode)'
     )
     .option('--reserve-key-path <string>', 'Path to the reserve key pair file')
+    .option('--reserve-seed <string>', 'Seed for a reserve account derived from the selected reserve authority')
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ market, mint, reserveConfigPath, mode, staging, globalAdmin, multisig, reserveKeyPath }) => {
-      if (mode === 'multisig' && !multisig) {
-        throw new Error('If using multisig mode, multisig pubkey is required');
-      }
-      const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
-      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
-      const tokenMint = address(mint);
-      const marketAddress = address(market);
-      const existingMarket = await KaminoMarket.load(env.c.rpc, marketAddress, slotDuration, env.klendProgramId, false);
-      if (existingMarket === null) {
-        throw new Error(`Market ${marketAddress} does not exist`);
-      }
-      const signer = await env.getSigner({ market: existingMarket });
-      const mintAccount = await fetchMint(env.c.rpc, mint);
-      const tokenMintProgramId = mintAccount.programAddress;
-      const kaminoManager = new KaminoManager(
-        env.c.rpc,
-        slotDuration,
-        env.klendProgramId,
-        env.kvaultProgramId,
-        undefined,
-        env.farmsProgramId
-      );
-
-      const reserveConfigFromFile = JSON.parse(fs.readFileSync(reserveConfigPath, 'utf8'));
-
-      const reserveConfig = parseReserveConfigFromFile(reserveConfigFromFile);
-      const assetConfig = new AssetReserveConfigCli(tokenMint, tokenMintProgramId, reserveConfig);
-
-      const [adminAta] = await findAssociatedTokenPda({
-        mint: tokenMint,
-        owner: signer.address,
-        tokenProgram: tokenMintProgramId,
-      });
-
-      let globalAdminSigner: TransactionSigner | undefined = undefined;
-      if (globalAdmin) {
-        globalAdminSigner =
-          mode === 'multisig' ? noopSigner(address(globalAdmin)) : await parseKeypairFile(globalAdmin as string);
-      }
-
-      let reserveKeypair: TransactionSigner | undefined = undefined;
-      if (reserveKeyPath) {
-        reserveKeypair = await parseKeypairFile(reserveKeyPath);
-      } else {
-        reserveKeypair = await generateKeyPairSigner();
-      }
-
-      const { createReserveIxs, configUpdateIxs } = await kaminoManager.addAssetToMarketIxs({
-        admin: signer,
-        adminLiquiditySource: adminAta,
-        marketAddress: marketAddress,
-        assetConfig: assetConfig,
-        reserveKeypair,
-        globalAdminSigner,
-      });
-
-      console.log('reserve: ', reserveKeypair.address);
-
-      await processTx(
-        env.c,
-        signer,
-        [
-          ...createReserveIxs,
-          ...getPriorityFeeAndCuIxs({
-            priorityFeeMultiplier: 2500,
-          }),
-        ],
+    .action(
+      async ({
+        market,
+        mint,
+        reserveConfigPath,
         mode,
-        []
-      );
-
-      const [lut, createLutIxs] = await createUpdateReserveConfigLutIxs(env, marketAddress, reserveKeypair.address);
-
-      await processTx(
-        env.c,
-        signer,
-        [
-          ...createLutIxs,
-          ...getPriorityFeeAndCuIxs({
-            priorityFeeMultiplier: 2500,
-          }),
-        ],
-        mode
-      );
-
-      const lutAcc = await fetchAddressLookupTable(env.c.rpc, lut);
-
-      await sendReserveConfigUpdateIxs(env, signer, configUpdateIxs, mode, [lutAcc]);
-
-      mode === 'execute' &&
-        console.log(
-          'Reserve Created with config:',
-          JSON.parse(JSON.stringify(reserveConfig)),
-          '\nreserve address:',
-          reserveKeypair.address
+        signerType,
+        staging,
+        devnet,
+        globalAdmin,
+        multisig,
+        reserveKeyPath,
+        reserveSeed,
+        executeReserveAccountCreation,
+      }) => {
+        const { sendMode, env, slotDuration } = await initReserveCommandContext({
+          mode,
+          staging,
+          devnet,
+          multisig,
+        });
+        const tokenMint = address(mint);
+        const marketAddress = address(market);
+        const existingMarket = await KaminoMarket.load(
+          env.c.rpc,
+          marketAddress,
+          slotDuration,
+          env.klendProgramId,
+          false
         );
-    });
-
-  commands
-    .command('update-reserve-config')
-    .requiredOption('--reserve <string>', 'Reserve address')
-    .requiredOption('--reserve-config-path <string>', 'Path for the reserve config')
-    .requiredOption(
-      `--mode <string>`,
-      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
-    )
-    .option(
-      '--global-admin <string>',
-      'Global admin signer (keypair path in execute/simulate modes, pubkey in multisig mode)'
-    )
-    .option(`--staging`, 'If true, will use the staging programs')
-    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ reserve, reserveConfigPath, mode, staging, globalAdmin, multisig }) => {
-      if (mode === 'multisig' && !multisig) {
-        throw new Error('If using multisig mode, multisig pubkey is required');
-      }
-      const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
-      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
-      const reserveAddress = address(reserve);
-      const reserveState = await Reserve.fetch(env.c.rpc, reserveAddress, env.klendProgramId);
-      if (reserveState === null) {
-        throw new Error(`Reserve ${reserveAddress} not found`);
-      }
-
-      const marketAddress = reserveState.lendingMarket;
-      const marketState = await KaminoMarket.load(env.c.rpc, marketAddress, slotDuration, env.klendProgramId, false);
-      if (marketState === null) {
-        throw new Error(`Market ${marketAddress} not found`);
-      }
-      const signer = await env.getSigner({ market: marketState });
-      const marketWithAddress: MarketWithAddress = {
-        address: marketAddress,
-        state: marketState.state,
-      };
-
-      const kaminoManager = new KaminoManager(
-        env.c.rpc,
-        slotDuration,
-        env.klendProgramId,
-        env.kvaultProgramId,
-        undefined,
-        env.farmsProgramId
-      );
-
-      const reserveConfigFromFile = JSON.parse(fs.readFileSync(reserveConfigPath, 'utf8'));
-
-      const reserveConfig = parseReserveConfigFromFile(reserveConfigFromFile, reserveState.config);
-
-      const updateIxs = await kaminoManager.updateReserveIxs(
-        signer,
-        marketWithAddress,
-        reserveAddress,
-        reserveConfig,
-        reserveState,
-        globalAdmin
-      );
-
-      if (updateIxs.length === 0) {
-        console.log('No changes to reserve config');
-        return;
-      }
-
-      await sendReserveConfigUpdateIxs(env, signer, updateIxs, mode);
-      mode === 'execute' && console.log('Reserve Updated with config -> ', JSON.parse(JSON.stringify(reserveConfig)));
-    });
-
-  commands
-    .command('download-reserve-config')
-    .requiredOption('--reserve <string>', 'Reserve address')
-    .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ reserve, staging }) => {
-      const env = await initEnv(undefined, staging);
-      const reserveAddress = address(reserve);
-      const reserveState = await Reserve.fetch(env.c.rpc, reserveAddress, env.klendProgramId);
-      if (!reserveState) {
-        throw new Error('Reserve not found');
-      }
-
-      fs.mkdirSync('./configs/' + reserveState.lendingMarket, { recursive: true });
-
-      const decoder = new TextDecoder('utf-8');
-      const reserveName = decoder.decode(Uint8Array.from(reserveState.config.tokenInfo.name)).replace(/\0/g, '');
-
-      const reserveConfigDisplay = parseReserveConfigToFile(reserveState.config);
-
-      fs.writeFileSync(
-        './configs/' + reserveState.lendingMarket + '/' + reserveName + '-' + reserveAddress.toString() + '.json',
-        JSON.stringify(reserveConfigDisplay, null, 2)
-      );
-    });
-
-  commands
-    .command('download-lending-market-config')
-    .requiredOption('--lending-market <string>', 'Lending Market Address')
-    .option(`--staging`, 'If true, will use the staging programs')
-    .action(async ({ lendingMarket, staging }) => {
-      const env = await initEnv(false, staging);
-      const lendingMarketAddress = address(lendingMarket);
-      const lendingMarketState = await LendingMarket.fetch(env.c.rpc, lendingMarketAddress, env.klendProgramId);
-
-      if (!lendingMarketState) {
-        throw new Error('Lending Market not found');
-      }
-
-      fs.mkdirSync('./configs/' + lendingMarketAddress.toString(), { recursive: true });
-
-      const lendingMarketConfigForFile = lendingMarketToConfigFileJSON(lendingMarketState);
-      const marketName = parseZeroPaddedUtf8(lendingMarketState.name);
-
-      fs.writeFileSync(
-        './configs/' +
-          lendingMarketAddress.toString() +
-          '/market-' +
-          marketName +
-          '-' +
-          lendingMarketAddress.toString() +
-          '.json',
-        JSON.stringify(lendingMarketConfigForFile, null, 2)
-      );
-    });
-
-  commands
-    .command('check-vault-release-status')
-    .requiredOption('--vault <string>', 'Vault address')
-    .option(`--staging`, 'If true, will use the staging programs')
-    .option(`--devnet`, 'If true, will use devnet programs and RPC')
-    .action(async ({ vault, staging, devnet }) => {
-      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
-      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
-      const kaminoManager = new KaminoManager(env.c.rpc, slotDuration, env.klendProgramId, env.kvaultProgramId);
-      const kaminoVault = new KaminoVault(env.c.rpc, address(vault), slotDuration, undefined, env.kvaultProgramId);
-
-      const result = await kaminoManager.checkVaultReleaseStatus(kaminoVault);
-
-      if (result.errors.length > 0) {
-        console.log('\nErrors:');
-        for (const error of result.errors) {
-          console.log(`  ❌ ${error}`);
+        if (existingMarket === null) {
+          throw new Error(`Market ${marketAddress} does not exist`);
         }
-      }
-      if (result.warnings.length > 0) {
-        console.log('\nWarnings:');
-        for (const warning of result.warnings) {
-          console.log(`  ⚠️  ${warning}`);
+        const hasReserveSeed = validateReserveAccountCreationOptions({
+          reserveKeyPath,
+          reserveSeed,
+          executeReserveAccountCreation,
+        });
+        const authorityType = resolveReserveAuthorityType(signerType, existingMarket.state.proposerAuthority);
+        const signer = reserveAuthoritySigner(env, existingMarket, authorityType, sendMode);
+        const payer = hasReserveSeed ? signer : env.signerConfig.admin ?? (await env.getSigner());
+        const mintAccount = await fetchMint(env.c.rpc, mint);
+        const tokenMintProgramId = mintAccount.programAddress;
+        const kaminoManager = new KaminoManager(
+          env.c.rpc,
+          slotDuration,
+          env.klendProgramId,
+          env.kvaultProgramId,
+          undefined,
+          env.farmsProgramId
+        );
+
+        const reserveConfigFromFile = JSON.parse(fs.readFileSync(reserveConfigPath, 'utf8'));
+
+        const reserveConfig = parseReserveConfigFromFile(reserveConfigFromFile);
+        const assetConfig = new AssetReserveConfigCli(tokenMint, tokenMintProgramId, reserveConfig);
+
+        const [adminAta] = await findAssociatedTokenPda({
+          mint: tokenMint,
+          owner: signer.address,
+          tokenProgram: tokenMintProgramId,
+        });
+
+        const globalAdminSigner = await loadGlobalAdminSigner(sendMode, globalAdmin);
+
+        const reserveAccountCreation = await loadReserveAccountCreation(signer, reserveKeyPath, reserveSeed);
+
+        const { reserveAddress, createReserveIxs, configUpdateIxs, marketOwnerConfigUpdateIxs } =
+          await kaminoManager.addAssetToMarketIxs({
+            admin: signer,
+            payer,
+            reserveAuthority: signer,
+            reserveAuthorityType: authorityType,
+            adminLiquiditySource: adminAta,
+            marketAddress: marketAddress,
+            assetConfig: assetConfig,
+            ...reserveAccountCreation,
+            globalAdminSigner,
+          });
+
+        console.log('reserve: ', reserveAddress);
+
+        if (sendMode === 'multisig') {
+          const reserveSetupPlan = planAddAssetMultisigReserveSetupIxs(
+            createReserveIxs,
+            env.klendProgramId,
+            hasReserveSeed
+          );
+          if (reserveSetupPlan.immediateIxs.length > 0) {
+            if (!executeReserveAccountCreation) {
+              throw new Error(
+                'Multisig mode requires --execute-reserve-account-creation when the reserve account is new'
+              );
+            }
+            const adminPayer = env.getConfiguredAdminSigner();
+            await processTx(
+              env.c,
+              adminPayer,
+              [...reserveSetupPlan.immediateIxs, ...getPriorityFeeAndCuIxs({ priorityFeeMultiplier: 2500 })],
+              'execute',
+              []
+            );
+          }
+          if (reserveSetupPlan.multisigIxs.length > 0) {
+            await processTx(
+              env.c,
+              signer,
+              [...reserveSetupPlan.multisigIxs, ...getPriorityFeeAndCuIxs({ priorityFeeMultiplier: 2500 })],
+              'multisig',
+              []
+            );
+          }
+          await sendReserveConfigUpdateIxs(env, signer, configUpdateIxs, 'multisig');
+          printMarketOwnerActivationNotice(marketOwnerConfigUpdateIxs, reserveAddress);
+          return;
         }
-      }
-      if (result.success) {
-        console.log('\n✅ Vault is ready for release');
-      } else {
-        console.log('\n❌ Vault is NOT ready for release');
-      }
-    });
 
-  commands
-    .command('claim-rewards-for-vault')
-    .requiredOption('--vault <string>', 'Vault address')
-    .requiredOption(
-      `--mode <string>`,
-      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
-    )
-    .option(`--staging`, 'If true, will use the staging programs')
-    .option(`--devnet`, 'If true, will use devnet programs and RPC')
-    .option(`--user <string>`, 'User address')
-    .action(async ({ vault, mode, staging, devnet, user }) => {
-      const env = await initEnv(staging, undefined, undefined, undefined, devnet);
-      const vaultAddress = address(vault);
-      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
-      const kaminoVault = new KaminoVault(env.c.rpc, vaultAddress, slotDuration);
-      const kaminoManager = new KaminoManager(
-        env.c.rpc,
-        slotDuration,
-        env.klendProgramId,
-        env.kvaultProgramId,
-        undefined,
-        env.farmsProgramId
-      );
-      const userWallet = user ? noopSigner(address(user)) : await env.getSigner();
-      const vaultState = await kaminoVault.getState();
-      const vaultReservesMap = await kaminoManager.loadVaultReserves(vaultState);
-      const rewardsIxs = await kaminoManager.getClaimAllRewardsForVaultIxs(
-        userWallet,
-        kaminoVault,
-        vaultReservesMap,
-        await getCurrentLedgerInstant(env.c.rpc)
-      );
-
-      if (rewardsIxs.length > 0) {
         await processTx(
           env.c,
-          userWallet,
+          payer,
           [
-            ...rewardsIxs,
+            ...createReserveIxs,
             ...getPriorityFeeAndCuIxs({
               priorityFeeMultiplier: 2500,
-              computeUnits: 400_000,
             }),
           ],
-          mode,
+          sendMode,
           []
         );
-      } else {
-        console.log('No rewards to claim');
-      }
-    });
 
-  commands
-    .command('create-market')
-    .requiredOption(
-      `--mode <string>`,
-      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
-    )
-    .option(`--staging`, 'If true, will use the staging programs')
-    .option(`--devnet`, 'If true, will use devnet programs and RPC')
-    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ mode, staging, devnet, multisig }) => {
-      if (mode === 'multisig' && !multisig) {
-        throw new Error('If using multisig mode, multisig pubkey is required');
-      }
-      const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms, undefined, undefined, devnet);
-      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
-      const admin = await env.getSigner();
+        const [lut, createLutIxs] = await createUpdateReserveConfigLutIxs(env, marketAddress, reserveAddress);
 
-      const kaminoManager = new KaminoManager(
-        env.c.rpc,
-        slotDuration,
-        env.klendProgramId,
-        env.kvaultProgramId,
-        undefined,
-        env.farmsProgramId
-      );
-
-      const { market: marketKp, ixs: createMarketIxs } = await kaminoManager.createMarketIxs({
-        admin,
-      });
-
-      await processTx(
-        env.c,
-        admin,
-        [
-          ...createMarketIxs,
-          ...getPriorityFeeAndCuIxs({
-            priorityFeeMultiplier: 2500,
-          }),
-        ],
-        mode,
-        []
-      );
-
-      mode === 'execute' && console.log('Market created:', marketKp.address);
-    });
-
-  commands
-    .command('add-asset-to-market')
-    .requiredOption('--market <string>', 'Market address to add asset to')
-    .requiredOption('--mint <string>', 'Reserve liquidity token mint')
-    .requiredOption('--reserve-config-path <string>', 'Path for the reserve config')
-    .requiredOption(
-      `--mode <string>`,
-      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
-    )
-    .option(
-      '--global-admin <string>',
-      'Global admin signer (keypair path in execute/simulate modes, pubkey in multisig mode)'
-    )
-    .option('--reserve-key-path <string>', 'Path to the reserve key pair file')
-    .option(`--staging`, 'If true, will use the staging programs')
-    .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ market, mint, reserveConfigPath, mode, staging, globalAdmin, multisig, reserveKeyPath }) => {
-      if (mode === 'multisig' && !multisig) {
-        throw new Error('If using multisig mode, multisig pubkey is required');
-      }
-      const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
-      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
-      const tokenMint = address(mint);
-      const marketAddress = address(market);
-      const existingMarket = await KaminoMarket.load(env.c.rpc, marketAddress, slotDuration, env.klendProgramId, false);
-      if (existingMarket === null) {
-        throw new Error(`Market ${marketAddress} does not exist`);
-      }
-      const signer = await env.getSigner({ market: existingMarket });
-      const mintAccount = await fetchMint(env.c.rpc, mint);
-      const tokenMintProgramId = mintAccount.programAddress;
-      const kaminoManager = new KaminoManager(
-        env.c.rpc,
-        slotDuration,
-        env.klendProgramId,
-        env.kvaultProgramId,
-        undefined,
-        env.farmsProgramId
-      );
-
-      const reserveConfigFromFile = JSON.parse(fs.readFileSync(reserveConfigPath, 'utf8'));
-
-      const reserveConfig = parseReserveConfigFromFile(reserveConfigFromFile);
-      const assetConfig = new AssetReserveConfigCli(tokenMint, tokenMintProgramId, reserveConfig);
-
-      const [adminAta] = await findAssociatedTokenPda({
-        mint: tokenMint,
-        owner: signer.address,
-        tokenProgram: tokenMintProgramId,
-      });
-
-      let globalAdminSigner: TransactionSigner | undefined = undefined;
-      if (globalAdmin) {
-        globalAdminSigner =
-          mode === 'multisig' ? noopSigner(address(globalAdmin)) : await parseKeypairFile(globalAdmin as string);
-      }
-
-      let reserveKeypair: TransactionSigner | undefined = undefined;
-      if (reserveKeyPath) {
-        reserveKeypair = await parseKeypairFile(reserveKeyPath);
-      } else {
-        reserveKeypair = await generateKeyPairSigner();
-      }
-
-      const { createReserveIxs, configUpdateIxs } = await kaminoManager.addAssetToMarketIxs({
-        admin: signer,
-        adminLiquiditySource: adminAta,
-        marketAddress: marketAddress,
-        assetConfig: assetConfig,
-        reserveKeypair,
-        globalAdminSigner,
-      });
-
-      console.log('reserve: ', reserveKeypair.address);
-
-      await processTx(
-        env.c,
-        signer,
-        [
-          ...createReserveIxs,
-          ...getPriorityFeeAndCuIxs({
-            priorityFeeMultiplier: 2500,
-          }),
-        ],
-        mode,
-        []
-      );
-
-      const [lut, createLutIxs] = await createUpdateReserveConfigLutIxs(env, marketAddress, reserveKeypair.address);
-
-      await processTx(
-        env.c,
-        signer,
-        [
-          ...createLutIxs,
-          ...getPriorityFeeAndCuIxs({
-            priorityFeeMultiplier: 2500,
-          }),
-        ],
-        mode
-      );
-
-      const lutAcc = await fetchAddressLookupTable(env.c.rpc, lut);
-
-      await sendReserveConfigUpdateIxs(env, signer, configUpdateIxs, mode, [lutAcc]);
-
-      mode === 'execute' &&
-        console.log(
-          'Reserve Created with config:',
-          JSON.parse(JSON.stringify(reserveConfig)),
-          '\nreserve address:',
-          reserveKeypair.address
+        await processTx(
+          env.c,
+          signer,
+          [...createLutIxs, ...getPriorityFeeAndCuIxs({ priorityFeeMultiplier: 2500 })],
+          sendMode
         );
-    });
+
+        const lutAcc = await fetchAddressLookupTable(env.c.rpc, lut);
+        await sendReserveConfigUpdateIxs(env, signer, configUpdateIxs, sendMode, [lutAcc]);
+        printMarketOwnerActivationNotice(marketOwnerConfigUpdateIxs, reserveAddress);
+
+        sendMode === 'execute' &&
+          console.log(
+            'Reserve Created with config:',
+            JSON.parse(JSON.stringify(reserveConfig)),
+            '\nreserve address:',
+            reserveAddress
+          );
+      }
+    );
 
   commands
     .command('update-reserve-config')
     .requiredOption('--reserve <string>', 'Reserve address')
     .requiredOption('--reserve-config-path <string>', 'Path for the reserve config')
-    .requiredOption(
-      `--mode <string>`,
-      'simulate|multisig|execute - simulate - to print txn simulation and to get tx simulation link in explorer, execute - execute tx, multisig - to get bs58 tx for multisig usage'
-    )
+    .requiredOption(`--mode <string>`, RESERVE_COMMAND_MODE_DESCRIPTION)
+    .option('--signer-type <string>', 'lending-market-owner|proposer-authority')
+    .option('--force-fields <string>', 'Comma-separated reserve config update modes to force')
     .option(
       '--global-admin <string>',
       'Global admin signer (keypair path in execute/simulate modes, pubkey in multisig mode)'
     )
     .option(`--staging`, 'If true, will use the staging programs')
+    .option(`--devnet`, 'If true, will use devnet programs and RPC')
     .option(`--multisig <string>`, 'If using multisig mode this is required, otherwise will be ignored')
-    .action(async ({ reserve, reserveConfigPath, mode, staging, globalAdmin, multisig }) => {
-      if (mode === 'multisig' && !multisig) {
-        throw new Error('If using multisig mode, multisig pubkey is required');
+    .action(
+      async ({ reserve, reserveConfigPath, mode, signerType, forceFields, staging, devnet, globalAdmin, multisig }) => {
+        const { sendMode, env, slotDuration } = await initReserveCommandContext({
+          mode,
+          staging,
+          devnet,
+          multisig,
+        });
+        const reserveAddress = address(reserve);
+        const reserveState = await Reserve.fetch(env.c.rpc, reserveAddress, env.klendProgramId);
+        if (reserveState === null) {
+          throw new Error(`Reserve ${reserveAddress} not found`);
+        }
+
+        const marketAddress = reserveState.lendingMarket;
+        const marketState = await KaminoMarket.load(env.c.rpc, marketAddress, slotDuration, env.klendProgramId, false);
+        if (marketState === null) {
+          throw new Error(`Market ${marketAddress} not found`);
+        }
+        const signer = reserveAuthoritySigner(env, marketState, signerType ?? 'lending-market-owner', sendMode);
+        const marketWithAddress: MarketWithAddress = {
+          address: marketAddress,
+          state: marketState.state,
+        };
+
+        const kaminoManager = new KaminoManager(
+          env.c.rpc,
+          slotDuration,
+          env.klendProgramId,
+          env.kvaultProgramId,
+          undefined,
+          env.farmsProgramId
+        );
+
+        const reserveConfigFromFile = JSON.parse(fs.readFileSync(reserveConfigPath, 'utf8'));
+
+        const reserveConfig = parseReserveConfigFromFile(reserveConfigFromFile, reserveState.config);
+        const globalAdminSigner = await loadGlobalAdminSigner(sendMode, globalAdmin);
+        const forcedModes = parseForceFields(forceFields);
+
+        const updateIxs = await kaminoManager.updateReserveIxs(
+          signer,
+          marketWithAddress,
+          reserveAddress,
+          reserveConfig,
+          reserveState,
+          globalAdminSigner,
+          forcedModes
+        );
+
+        if (updateIxs.length === 0) {
+          console.log('No changes to reserve config');
+          return;
+        }
+
+        await sendReserveConfigUpdateIxs(env, signer, updateIxs, sendMode);
+        sendMode === 'execute' &&
+          console.log('Reserve Updated with config -> ', JSON.parse(JSON.stringify(reserveConfig)));
       }
-      const ms = multisig ? address(multisig) : undefined;
-      const env = await initEnv(staging, ms);
-      const slotDuration = await getMedianSlotDurationInMsFromLastEpochs();
-      const reserveAddress = address(reserve);
-      const reserveState = await Reserve.fetch(env.c.rpc, reserveAddress, env.klendProgramId);
-      if (reserveState === null) {
-        throw new Error(`Reserve ${reserveAddress} not found`);
+    );
+
+  commands
+    .command('clone-reserve-config')
+    .requiredOption('--target-market <string>', 'Target lending market address')
+    .requiredOption('--source-reserve <string>', 'Source reserve address')
+    .requiredOption('--target-reserve <string>', 'Target reserve address')
+    .requiredOption('--mode <string>', RESERVE_COMMAND_MODE_DESCRIPTION)
+    .option('--signer-type <string>', 'lending-market-owner|proposer-authority')
+    .option('--fixed-borrow-rate-bps <string>', 'Fixed borrow rate in basis points')
+    .option('--debt-term-seconds <string>', 'Debt term in seconds')
+    .option('--clear-elevation-groups', 'Clear elevation groups in a cross-market clone')
+    .option('--staging', 'If true, will use the staging programs')
+    .option('--devnet', 'If true, will use devnet programs and RPC')
+    .option('--multisig <string>', 'Multisig address')
+    .action(
+      async ({
+        targetMarket,
+        sourceReserve,
+        targetReserve,
+        mode,
+        signerType,
+        fixedBorrowRateBps,
+        debtTermSeconds,
+        clearElevationGroups,
+        staging,
+        devnet,
+        multisig,
+      }) => {
+        const { sendMode, env, slotDuration } = await initReserveCommandContext({
+          mode,
+          staging,
+          devnet,
+          multisig,
+        });
+        const targetMarketAddress = address(targetMarket);
+        const targetReserveAddress = address(targetReserve);
+        const sourceReserveAddress = address(sourceReserve);
+        const [market, sourceReserveState, targetReserveState] = await Promise.all([
+          KaminoMarket.load(env.c.rpc, targetMarketAddress, slotDuration, env.klendProgramId, false),
+          Reserve.fetch(env.c.rpc, sourceReserveAddress, env.klendProgramId),
+          Reserve.fetch(env.c.rpc, targetReserveAddress, env.klendProgramId),
+        ]);
+        if (!market) {
+          throw new Error(`Market ${targetMarketAddress} not found`);
+        }
+        if (!targetReserveState) {
+          throw new Error(`Target reserve ${targetReserveAddress} not found`);
+        }
+        if (!sourceReserveState) {
+          throw new Error(`Source reserve ${sourceReserveAddress} not found`);
+        }
+        assertReserveMintsMatch(sourceReserveState.liquidity.mintPubkey, targetReserveState.liquidity.mintPubkey);
+
+        const authorityType = resolveCloneReserveAuthorityType(
+          signerType,
+          market.state.proposerAuthority,
+          targetReserveState.config.proposerAuthorityLocked
+        );
+        const signer = reserveAuthoritySigner(env, market, authorityType, sendMode);
+        const customizations = parseCloneReserveConfigCustomizations({
+          fixedBorrowRateBps,
+          debtTermSeconds,
+          clearElevationGroups,
+        });
+
+        const kaminoManager = new KaminoManager(
+          env.c.rpc,
+          slotDuration,
+          env.klendProgramId,
+          env.kvaultProgramId,
+          undefined,
+          env.farmsProgramId
+        );
+        const ix = kaminoManager.cloneReserveConfigIx({
+          signer,
+          targetMarketAddress,
+          sourceReserveAddress,
+          targetReserveAddress,
+          customizations,
+        });
+
+        await processTx(env.c, signer, [ix, ...getPriorityFeeAndCuIxs({ priorityFeeMultiplier: 2500 })], sendMode, []);
       }
+    );
 
-      const marketAddress = reserveState.lendingMarket;
-      const marketState = await KaminoMarket.load(env.c.rpc, marketAddress, slotDuration, env.klendProgramId, false);
-      if (marketState === null) {
-        throw new Error(`Market ${marketAddress} not found`);
+  commands
+    .command('init-reserve-and-clone-config')
+    .requiredOption('--target-market <string>', 'Target lending market address')
+    .requiredOption('--mint <string>', 'Target reserve liquidity token mint')
+    .requiredOption('--source-reserve <string>', 'Source reserve address')
+    .requiredOption('--mode <string>', RESERVE_COMMAND_MODE_DESCRIPTION)
+    .option('--signer-type <string>', 'lending-market-owner|proposer-authority')
+    .option('--reserve-key-path <string>', 'Path to the new reserve keypair file')
+    .option('--reserve-seed <string>', 'Seed for a reserve account derived from the selected reserve authority')
+    .option('--fixed-borrow-rate-bps <string>', 'Fixed borrow rate in basis points')
+    .option('--debt-term-seconds <string>', 'Debt term in seconds')
+    .option('--clear-elevation-groups', 'Clear elevation groups in a cross-market clone')
+    .option('--allow-mint-mismatch', 'Copy selected risk and rate fields instead of using the on-chain clone')
+    .option('--scope-price-feed <string>', 'Target Scope price-feed account for a cross-mint config copy')
+    .option('--scope-price-chain <string>', 'Comma-separated Scope price-chain token IDs to apply after cloning')
+    .option(
+      '--scope-twap-chain <string>',
+      'Comma-separated target Scope TWAP-chain token IDs. Required for cross-mint copies when the source TWAP divergence check is enabled'
+    )
+    .option('--token-name <string>', 'Target reserve token name for a cross-mint config copy')
+    .option(
+      '--execute-reserve-account-creation',
+      'In multisig mode, execute the system reserve account creation with the configured admin payer'
+    )
+    .option('--staging', 'If true, will use the staging programs')
+    .option('--devnet', 'If true, will use devnet programs and RPC')
+    .option('--multisig <string>', 'Multisig address')
+    .action(
+      async ({
+        targetMarket,
+        mint,
+        sourceReserve,
+        mode,
+        signerType,
+        reserveKeyPath,
+        reserveSeed,
+        fixedBorrowRateBps,
+        debtTermSeconds,
+        clearElevationGroups,
+        allowMintMismatch,
+        scopePriceFeed,
+        scopePriceChain,
+        scopeTwapChain,
+        tokenName,
+        executeReserveAccountCreation,
+        staging,
+        devnet,
+        multisig,
+      }) => {
+        const parsedScopePriceChain = scopePriceChain === undefined ? undefined : parseScopePriceChain(scopePriceChain);
+        const parsedScopeTwapChain = scopeTwapChain === undefined ? undefined : parseScopeTwapChain(scopeTwapChain);
+        const { sendMode, env, slotDuration } = await initReserveCommandContext({
+          mode,
+          staging,
+          devnet,
+          multisig,
+          loadSlotDuration: false,
+        });
+        const hasReserveSeed = validateReserveAccountCreationOptions({
+          reserveKeyPath,
+          reserveSeed,
+          executeReserveAccountCreation,
+        });
+        if (sendMode === 'multisig' && !reserveKeyPath && !hasReserveSeed) {
+          throw new Error(
+            'Multisig mode requires --reserve-key-path or --reserve-seed so an interrupted setup can resume'
+          );
+        }
+        const targetMarketAddress = address(targetMarket);
+        const sourceReserveAddress = address(sourceReserve);
+        const tokenMint = address(mint);
+        const [market, sourceReserveState] = await Promise.all([
+          KaminoMarket.load(env.c.rpc, targetMarketAddress, slotDuration, env.klendProgramId, false),
+          Reserve.fetch(env.c.rpc, sourceReserveAddress, env.klendProgramId),
+        ]);
+        if (!market) {
+          throw new Error(`Market ${targetMarketAddress} not found`);
+        }
+        if (!sourceReserveState) {
+          throw new Error(`Source reserve ${sourceReserveAddress} not found`);
+        }
+        const parsedScopePriceFeed = scopePriceFeed === undefined ? undefined : address(scopePriceFeed);
+        const copyStrategy = selectReserveConfigCopyStrategy({
+          sourceMint: sourceReserveState.liquidity.mintPubkey,
+          targetMint: tokenMint,
+          mode: sendMode,
+          allowMintMismatch,
+          scopePriceFeed: parsedScopePriceFeed,
+          scopePriceChain: parsedScopePriceChain,
+          scopeTwapChain: parsedScopeTwapChain,
+          targetTokenName: tokenName,
+        });
+        const tokenMintProgramId = await resolveReserveLiquidityTokenProgram(
+          copyStrategy,
+          sourceReserveState.liquidity.tokenProgram,
+          async () => (await fetchMint(env.c.rpc, tokenMint)).programAddress
+        );
+        const isCrossMarketClone = sourceReserveState.lendingMarket !== targetMarketAddress;
+        const sourceUsesElevationGroups = sourceReserveState.config.elevationGroups.some((group) => group !== 0);
+        if (copyStrategy.kind === 'clone' && isCrossMarketClone && sourceUsesElevationGroups && !clearElevationGroups) {
+          throw new Error('Cross-market clone requires --clear-elevation-groups when the source uses elevation groups');
+        }
+        if (copyStrategy.kind === 'template' && (fixedBorrowRateBps !== undefined || debtTermSeconds !== undefined)) {
+          throw new Error(
+            '--fixed-borrow-rate-bps and --debt-term-seconds are not supported with --allow-mint-mismatch'
+          );
+        }
+
+        const signer = reserveAuthoritySigner(env, market, signerType, sendMode);
+        const payer = hasReserveSeed ? signer : env.signerConfig.admin ?? (await env.getSigner());
+        const reserveAccountCreation = await loadReserveAccountCreation(signer, reserveKeyPath, reserveSeed);
+        const reserveAddress = reserveAccountCreation.seededReserveAccount
+          ? await createAddressWithSeed({
+              baseAddress: reserveAccountCreation.seededReserveAccount.base.address,
+              seed: reserveAccountCreation.seededReserveAccount.seed,
+              programAddress: env.klendProgramId,
+            })
+          : reserveAccountCreation.reserveKeypair.address;
+        const reserveAccountInfo =
+          reserveKeyPath || hasReserveSeed
+            ? await env.c.rpc.getAccountInfo(reserveAddress, { encoding: 'base64' }).send()
+            : undefined;
+        const reserveAccount = reserveAccountInfo?.value
+          ? {
+              owner: reserveAccountInfo.value.owner,
+              data: Buffer.from(reserveAccountInfo.value.data[0], 'base64'),
+            }
+          : null;
+        const reserveAccountCreationAction =
+          reserveKeyPath || hasReserveSeed
+            ? getReserveAccountCreationAction(
+                reserveAccount,
+                env.klendProgramId,
+                Reserve.layout.span + Reserve.discriminator.length
+              )
+            : 'create';
+        const targetReserveState =
+          reserveAccountCreationAction === 'initialized' && reserveAccount
+            ? Reserve.decode(Buffer.from(reserveAccount.data))
+            : undefined;
+        if (targetReserveState) {
+          assertInitializedReserveMatchesTarget(targetReserveState, targetMarketAddress, tokenMint, tokenMintProgramId);
+        }
+        const [initialLiquiditySource] = await findAssociatedTokenPda({
+          mint: tokenMint,
+          owner: signer.address,
+          tokenProgram: tokenMintProgramId,
+        });
+        const customizations = parseCloneReserveConfigCustomizations({
+          fixedBorrowRateBps,
+          debtTermSeconds,
+          clearElevationGroups,
+        });
+        const kaminoManager = new KaminoManager(
+          env.c.rpc,
+          slotDuration,
+          env.klendProgramId,
+          env.kvaultProgramId,
+          undefined,
+          env.farmsProgramId
+        );
+        if (copyStrategy.kind === 'template') {
+          const { createReserveAccountIx, initReserveIx, configUpdateIxs } =
+            await kaminoManager.initReserveFromConfigTemplateIxs({
+              payer,
+              reserveAuthority: signer,
+              initialLiquiditySource,
+              marketAddress: targetMarketAddress,
+              liquidityMint: tokenMint,
+              liquidityTokenProgram: tokenMintProgramId,
+              ...reserveAccountCreation,
+              targetMarketState: market.state,
+              targetReserve: targetReserveState,
+              sourceReserveConfig: sourceReserveState.config,
+              scopePriceFeed: copyStrategy.scopePriceFeed,
+              scopePriceChain: copyStrategy.scopePriceChain,
+              scopeTwapChain: copyStrategy.scopeTwapChain,
+              targetTokenName: encodeTokenName(copyStrategy.targetTokenName),
+            });
+
+          console.log('reserve:', reserveAddress);
+
+          if (sendMode === 'multisig') {
+            if (reserveAccountCreationAction === 'create' && !hasReserveSeed && !executeReserveAccountCreation) {
+              throw new Error(
+                'Multisig mode requires --execute-reserve-account-creation when the reserve account is new'
+              );
+            }
+            if (reserveAccountCreationAction === 'create' && !hasReserveSeed) {
+              const adminPayer = env.getConfiguredAdminSigner();
+              await processTx(
+                env.c,
+                adminPayer,
+                [createReserveAccountIx, ...getPriorityFeeAndCuIxs({ priorityFeeMultiplier: 2500 })],
+                'execute',
+                []
+              );
+            }
+            const reserveSetupIxs = planReserveAccountSetupIxs(
+              reserveAccountCreationAction,
+              createReserveAccountIx,
+              initReserveIx,
+              hasReserveSeed
+            );
+            if (reserveSetupIxs.length > 0) {
+              await processTx(
+                env.c,
+                signer,
+                [...reserveSetupIxs, ...getPriorityFeeAndCuIxs({ priorityFeeMultiplier: 2500 })],
+                'multisig',
+                []
+              );
+            }
+            await sendReserveConfigUpdateIxs(env, signer, configUpdateIxs, 'multisig');
+            return;
+          }
+
+          const reserveSetupIxs = [
+            ...(reserveAccountCreationAction === 'create' ? [createReserveAccountIx] : []),
+            ...(reserveAccountCreationAction === 'initialized' ? [] : [initReserveIx]),
+          ];
+          if (reserveSetupIxs.length > 0) {
+            await processTx(
+              env.c,
+              payer,
+              [...reserveSetupIxs, ...getPriorityFeeAndCuIxs({ priorityFeeMultiplier: 2500 })],
+              'execute',
+              []
+            );
+          }
+          await sendReserveConfigUpdateIxs(env, signer, configUpdateIxs, 'execute');
+          console.log(`Reserve ${reserveAddress} initialized from config template ${sourceReserveAddress}`);
+          return;
+        }
+
+        const { createReserveAccountIx, initReserveIx, cloneReserveConfigIx, postCloneConfigUpdateIxs } =
+          await kaminoManager.initReserveAndCloneConfigIxs({
+            payer,
+            reserveAuthority: signer,
+            initialLiquiditySource,
+            marketAddress: targetMarketAddress,
+            liquidityMint: tokenMint,
+            liquidityTokenProgram: tokenMintProgramId,
+            ...reserveAccountCreation,
+            sourceReserveAddress,
+            customizations,
+            scopePriceChain: parsedScopePriceChain,
+          });
+
+        console.log('reserve:', reserveAddress);
+
+        const transactionPlan = planInitReserveAndCloneConfigIxs(
+          sendMode,
+          createReserveAccountIx,
+          initReserveIx,
+          cloneReserveConfigIx,
+          env.klendProgramId,
+          {
+            includeCreateReserveAccount: reserveAccountCreationAction === 'create',
+            includeInitReserve: reserveAccountCreationAction !== 'initialized',
+            createReserveAccountInMainTransaction: hasReserveSeed,
+            postCloneIxs: postCloneConfigUpdateIxs,
+          }
+        );
+
+        if (sendMode === 'multisig') {
+          if (reserveAccountCreationAction === 'create' && !hasReserveSeed && !executeReserveAccountCreation) {
+            throw new Error(
+              'Multisig mode requires --execute-reserve-account-creation when the reserve account is new'
+            );
+          }
+          if (reserveAccountCreationAction === 'create' && !hasReserveSeed) {
+            const adminPayer = env.getConfiguredAdminSigner();
+            await processTx(
+              env.c,
+              adminPayer,
+              [...transactionPlan.immediateIxs, ...getPriorityFeeAndCuIxs({ priorityFeeMultiplier: 2500 })],
+              'execute',
+              []
+            );
+          }
+          await processTx(
+            env.c,
+            signer,
+            [...transactionPlan.mainTransactionIxs, ...getPriorityFeeAndCuIxs({ priorityFeeMultiplier: 2500 })],
+            'multisig',
+            []
+          );
+          return;
+        }
+
+        await processTx(
+          env.c,
+          payer,
+          [...transactionPlan.mainTransactionIxs, ...getPriorityFeeAndCuIxs({ priorityFeeMultiplier: 2500 })],
+          sendMode,
+          []
+        );
+        if (sendMode === 'execute') {
+          console.log(`Reserve ${reserveAddress} initialized and config cloned from ${sourceReserveAddress}`);
+        }
       }
-      const signer = await env.getSigner({ market: marketState });
-      const marketWithAddress: MarketWithAddress = {
-        address: marketAddress,
-        state: marketState.state,
-      };
+    );
 
-      const kaminoManager = new KaminoManager(
-        env.c.rpc,
-        slotDuration,
-        env.klendProgramId,
-        env.kvaultProgramId,
-        undefined,
-        env.farmsProgramId
-      );
+  commands
+    .command('update-all-market-reserves-configs')
+    .requiredOption('--market <string>', 'Lending market address')
+    .requiredOption('--configs-dir <string>', 'Directory with reserve config JSON files')
+    .requiredOption('--mode <string>', RESERVE_COMMAND_MODE_DESCRIPTION)
+    .option('--signer-type <string>', 'lending-market-owner|proposer-authority')
+    .option('--force-fields <string>', 'Comma-separated reserve config update modes to force')
+    .option(
+      '--global-admin <string>',
+      'Global admin signer (keypair path in execute/simulate modes, pubkey in multisig mode)'
+    )
+    .option('--staging', 'If true, will use the staging programs')
+    .option('--devnet', 'If true, will use devnet programs and RPC')
+    .option('--multisig <string>', 'Multisig address')
+    .option('--allow-partial', 'Allow configs for only a subset of the market reserves')
+    .action(
+      async ({
+        market,
+        configsDir,
+        mode,
+        signerType,
+        forceFields,
+        globalAdmin,
+        staging,
+        devnet,
+        multisig,
+        allowPartial,
+      }) => {
+        const { sendMode, env, slotDuration } = await initReserveCommandContext({
+          mode,
+          staging,
+          devnet,
+          multisig,
+        });
+        const marketAddress = address(market);
+        const [marketState, marketReserves] = await Promise.all([
+          LendingMarket.fetch(env.c.rpc, marketAddress, env.klendProgramId),
+          getReserveStatesForMarket(marketAddress, env.c.rpc, env.klendProgramId),
+        ]);
+        if (!marketState) {
+          throw new Error(`Market ${marketAddress} not found`);
+        }
 
-      const reserveConfigFromFile = JSON.parse(fs.readFileSync(reserveConfigPath, 'utf8'));
+        const signer = reserveAuthoritySigner(
+          env,
+          { state: marketState },
+          signerType ?? 'lending-market-owner',
+          sendMode
+        );
+        const forcedModes = parseForceFields(forceFields);
+        const globalAdminSigner = await loadGlobalAdminSigner(sendMode, globalAdmin);
+        const configFiles = fs.readdirSync(configsDir);
+        const kaminoManager = new KaminoManager(
+          env.c.rpc,
+          slotDuration,
+          env.klendProgramId,
+          env.kvaultProgramId,
+          undefined,
+          env.farmsProgramId
+        );
+        const marketWithAddress: MarketWithAddress = {
+          address: marketAddress,
+          state: marketState,
+        };
+        const updatePlans: { reserve: Address; config: ReserveConfig; ixs: ReserveConfigUpdateIx[] }[] = [];
+        const selectedConfigFiles = selectMarketReserveConfigFiles(
+          configFiles,
+          marketReserves.map((reserve) => reserve.address),
+          { allowPartial, marketAddress }
+        );
+        const marketReservesByAddress = new Map(marketReserves.map((reserve) => [reserve.address, reserve]));
 
-      const reserveConfig = parseReserveConfigFromFile(reserveConfigFromFile, reserveState.config);
+        for (const { reserveAddress, configFile } of selectedConfigFiles) {
+          const marketReserve = marketReservesByAddress.get(reserveAddress);
+          if (!marketReserve) {
+            throw new Error(`Reserve ${reserveAddress} was not loaded for market ${marketAddress}`);
+          }
+          const configJson = JSON.parse(fs.readFileSync(join(configsDir, configFile), 'utf8'));
+          const config = parseReserveConfigFromFile(configJson, marketReserve.state.config);
+          const ixs = await kaminoManager.updateReserveIxs(
+            signer,
+            marketWithAddress,
+            marketReserve.address,
+            config,
+            marketReserve.state,
+            globalAdminSigner,
+            forcedModes
+          );
+          updatePlans.push({ reserve: marketReserve.address, config, ixs });
+        }
 
-      const updateIxs = await kaminoManager.updateReserveIxs(
-        signer,
-        marketWithAddress,
-        reserveAddress,
-        reserveConfig,
-        reserveState,
-        globalAdmin
-      );
-
-      if (updateIxs.length === 0) {
-        console.log('No changes to reserve config');
-        return;
+        const plansWithChanges = updatePlans.filter((plan) => plan.ixs.length > 0);
+        for (const plan of updatePlans) {
+          if (plan.ixs.length === 0) {
+            console.log(`No changes to reserve ${plan.reserve}`);
+          }
+        }
+        for (const [index, plan] of plansWithChanges.entries()) {
+          console.log(`[${index + 1}/${plansWithChanges.length}] Updating reserve ${plan.reserve}`);
+          await sendReserveConfigUpdateIxs(env, signer, plan.ixs, sendMode);
+          if (sendMode === 'execute') {
+            console.log(`Reserve ${plan.reserve} updated`, JSON.parse(JSON.stringify(plan.config)));
+          }
+        }
       }
-
-      await sendReserveConfigUpdateIxs(env, signer, updateIxs, mode);
-      mode === 'execute' && console.log('Reserve Updated with config -> ', JSON.parse(JSON.stringify(reserveConfig)));
-    });
+    );
 
   commands
     .command('download-reserve-config')
@@ -4550,17 +4894,19 @@ async function main() {
       console.log(walletType);
     });
 
-  await commands.parseAsync();
+  return commands;
 }
 
-main()
-  .then(() => {
-    process.exit();
-  })
-  .catch((e) => {
+async function main(): Promise<void> {
+  await buildKaminoManagerCommand().parseAsync();
+}
+
+if (require.main === module) {
+  main().catch((e) => {
     console.error('\n\nKamino manager CLI exited with error:\n\n', e);
-    process.exit(1);
+    process.exitCode = 1;
   });
+}
 
 /** JSON for human-edited market configs: no deprecated/reserved/padding blobs (filled from chain in parse). */
 function lendingMarketToConfigFileJSON(market: LendingMarket): Record<string, unknown> {
@@ -4631,7 +4977,7 @@ function parseLendingMarketConfigFromFile(fileObj: Record<string, unknown>, fall
  * rejects flipping back to `Legacy`), and `rewardsAmountPerAccrualUnit`. Without an existing config (a new reserve),
  * they default to the `init_reserve` state: `TrueApr` and no rewards.
  */
-function parseReserveConfigFromFile(reserveConfigFromFile: any, existingConfig?: ReserveConfig): ReserveConfig {
+export function parseReserveConfigFromFile(reserveConfigFromFile: any, existingConfig?: ReserveConfig): ReserveConfig {
   const reserveConfigFields: ReserveConfigFields = {
     status: reserveConfigFromFile.status,
     loanToValuePct: reserveConfigFromFile.loanToValuePct,
@@ -4695,8 +5041,9 @@ function parseReserveConfigFromFile(reserveConfigFromFile: any, existingConfig?:
     ),
     reserved1: Array(3).fill(0),
     minDeleveragingBonusBps: reserveConfigFromFile.minDeleveragingBonusBps,
-    proposerAuthorityLocked: 0,
-    blockCtokenUsage: 0,
+    proposerAuthorityLocked:
+      reserveConfigFromFile.proposerAuthorityLocked ?? existingConfig?.proposerAuthorityLocked ?? 0,
+    blockCtokenUsage: reserveConfigFromFile.blockCtokenUsage ?? existingConfig?.blockCtokenUsage ?? 0,
     debtMaturityTimestamp: new BN(reserveConfigFromFile.debtMaturityTimestamp),
     debtTermSeconds: new BN(reserveConfigFromFile.debtTermSeconds),
     earlyRepayRemainingInterestPct: reserveConfigFromFile.earlyRepayRemainingInterestPct,
@@ -4883,6 +5230,15 @@ async function sendReserveConfigUpdateIxs(
       luts
     );
   }
+}
+
+function printMarketOwnerActivationNotice(updateIxs: ReserveConfigUpdateIx[], reserve: Address): void {
+  if (updateIxs.length === 0) {
+    return;
+  }
+  console.log(
+    `Reserve ${reserve} remains blocked. Run update-reserve-config as lending-market-owner to apply deposit and borrow limits.`
+  );
 }
 
 async function createUpdateReserveConfigLutIxs(

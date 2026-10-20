@@ -189,11 +189,17 @@ export class ConfigUpdater<M extends BorshEnum, C> {
    * Please note that more than one {@link EncodedConfigUpdate}s can be associated with a single `M` enum value (in
    * cases where e.g. an array property is updated by individual updates of its elements).
    */
-  encodeAllUpdates(currentConfig: C | undefined, newConfig: C): EncodedConfigUpdate<M>[] {
+  encodeAllUpdates(
+    currentConfig: C | undefined,
+    newConfig: C,
+    forceModes: readonly M[] = []
+  ): EncodedConfigUpdate<M>[] {
     const updates: EncodedConfigUpdate<M>[] = [];
+    const forcedModeKinds = new Set(forceModes.map((mode) => mode.kind));
     for (const [mode, itemUpdaters] of this.itemUpdaters.values()) {
       for (const itemUpdater of itemUpdaters) {
-        const value = itemUpdater.encodeUpdatedItemFrom(currentConfig, newConfig);
+        const comparisonConfig = forcedModeKinds.has(mode.kind) ? undefined : currentConfig;
+        const value = itemUpdater.encodeUpdatedItemFrom(comparisonConfig, newConfig);
         if (value === undefined) {
           continue;
         }
@@ -233,6 +239,11 @@ export class ConfigUpdater<M extends BorshEnum, C> {
       orThrow(`updaters for ${mode.kind} were not set (should not be possible, due to type-safety)`);
     return itemUpdaters;
   }
+
+  /** Returns true when this updater can produce field-by-field updates for the given mode. */
+  supportsMode(mode: M): boolean {
+    return (this.itemUpdaters.get(mode.kind)?.[1].length ?? 0) > 0;
+  }
 }
 
 /** Reserve config fields have cross-dependencies with each other.
@@ -250,9 +261,10 @@ export class PriorityOrderedConfigUpdater<M extends BorshEnum, C> {
   encodeAllUpdates(
     currentConfig: C | undefined,
     newConfig: C,
-    priorityOf: (mode: M) => number
+    priorityOf: (mode: M) => number,
+    forceModes: readonly M[] = []
   ): EncodedConfigUpdate<M>[] {
-    const updates = this.updater.encodeAllUpdates(currentConfig, newConfig);
+    const updates = this.updater.encodeAllUpdates(currentConfig, newConfig, forceModes);
     return [...updates].sort((left, right) => priorityOf(left.mode) - priorityOf(right.mode));
   }
 }

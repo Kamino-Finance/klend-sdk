@@ -136,7 +136,9 @@ const getDedupUserLookupTableAddresses = async (
       console.log(addressAndLogs.log);
       return addressAndLogs.address;
     });
-    return [...new Set<Address>(addressNotInLut)];
+    const missingAddresses = [...new Set<Address>(addressNotInLut)];
+    // Keep using the existing LUT when extending it would exceed its capacity.
+    return userLookupTable.addresses.length + missingAddresses.length > 256 ? [] : missingAddresses;
   } else {
     const addressNotInLut = requiredAddresses.map((addressAndLogs) => {
       console.log(addressAndLogs.log);

@@ -6,7 +6,9 @@ import {
   Address,
   address,
   Base58EncodedBytes,
+  createAddressWithSeed,
   fetchEncodedAccount,
+  fetchEncodedAccounts,
   generateKeyPairSigner,
   getAddressEncoder,
   getBase58Decoder,
@@ -174,6 +176,10 @@ import {
   CreateVaultFarms,
   SetFarmsToVaultIxs,
   ShareExitLiquidityPlan,
+  CreateAndSetVaultFarmIxs,
+  FinishVaultSetupIxs,
+  VaultSetupConfigFields,
+  VaultSetupStatus,
 } from './vault_types';
 import type { LedgerInstant } from '../utils/ledger';
 import { getCurrentLedgerInstant } from '../utils/rpc';
@@ -201,14 +207,27 @@ import {
   getUserSharesInTokensStakedInFarm,
 } from './farm_utils';
 import { getAtomicCloseEmptyUserStateIxsIfPossible } from '../utils/farmInstructions';
-import { getCreateAccountInstruction, SYSTEM_PROGRAM_ADDRESS } from '@solana-program/system';
+import {
+  getAllocateWithSeedInstruction,
+  getCreateAccountInstruction,
+  getTransferSolInstruction,
+  SYSTEM_PROGRAM_ADDRESS,
+} from '@solana-program/system';
 import { getInitializeKVaultSharesMetadataIx, getUpdateSharesMetadataIx, resolveMetadata } from '../utils/metadata';
 import { decodeReserveWhitelistEntry, decodeVaultState } from '../utils/vault';
 import { fetchMaybeToken, findAssociatedTokenPda, getCloseAccountInstruction } from '@solana-program/token-2022';
 import { TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
 import { SYSVAR_INSTRUCTIONS_ADDRESS, SYSVAR_RENT_ADDRESS } from '@solana/sysvars';
 import { noopSigner } from '../utils/signer';
-import { Farms, UserState } from '@kamino-finance/farms-sdk';
+import {
+  decodeFarmState,
+  Farms,
+  getFarmAuthorityPDA,
+  getFarmVaultPDA,
+  initializeFarm,
+  SIZE_FARM_STATE,
+  UserState,
+} from '@kamino-finance/farms-sdk';
 import {
   computeReservesAllocation,
   ctokenAllocationCapLamportsToLiquidityLamports,
@@ -247,6 +266,10 @@ export const DEFAULT_CU_PER_TX = 1_400_000;
 const RESERVE_WITHDRAW_LIQUIDITY_ROUNDING_BUFFER_LAMPORTS = new Decimal(1);
 
 const FLC_FARM_COOLDOWN = 30 * 24 * 60 * 60; // 30 days in seconds
+
+const MAX_ADDRESS_SEED_LENGTH = 32;
+// finishVaultSetup tries these many seeds per farm, in case a seed address holds an account it cannot reuse
+const FARM_SEED_CANDIDATES = 10;
 
 const addressEncoder = getAddressEncoder();
 const base58Decoder = getBase58Decoder();
@@ -895,6 +918,260 @@ export class KaminoVaultClient {
   }
 
   /**
+   * This method reports which parts of the setup done by createVaultIxs the vault is missing; the vault lookup table is not checked
+   * @param vault - the vault to check; its state is reloaded
+   * @param [vaultConfig] - the config the vault was created with; when absent, every config field may be zero/false except crankFundFeePerReserve (at least 1) and name (non-empty)
+   * @returns a struct with one flag per setup part; with the config, allSet is true when finishVaultSetup without override returns no ixs
+   */
+  async getVaultSetupStatus(vault: KaminoVault, vaultConfig?: KaminoVaultConfig): Promise<VaultSetupStatus> {
+    const vaultState = await vault.reloadState();
+    return this.loadVaultSetupStatus(vaultState, vaultConfig);
+  }
+
+  /**
+   * This method builds the ixs that finish the setup of a partially created vault, as createVaultIxs would have done it.
+   * Like createVaultIxs it never sends a zero/false/empty config value, so override cannot reset a field to zero.
+   * It never replaces an existing farm, and it does not create or populate the vault lookup table.
+   * It creates the farms at addresses derived from the admin and the vault, so the admin is the only signer (multisig compatible),
+   * and it reuses a farm that an earlier attempt created at that address.
+   * @param vault - the vault to finish; its state is reloaded
+   * @param vaultConfig - the config to apply; admin must be the vault admin and signs the ixs, tokenMint and tokenMintProgramId are not used
+   * @param [overrideIfFieldExists] - if true, also rewrite the config fields and the shares metadata the vault already has
+   * @param [useDevnetFarms] - if true, new farms use the devnet farms global config
+   * @param [vaultReservesMap] - optional preloaded reserve states for the vault allocation; loaded when absent
+   * @returns a struct with the ixs for each missing setup part
+   */
+  async finishVaultSetup(
+    vault: KaminoVault,
+    vaultConfig: KaminoVaultConfig,
+    overrideIfFieldExists: boolean = false,
+    useDevnetFarms: boolean = false,
+    vaultReservesMap?: Map<Address, KaminoReserve>
+  ): Promise<FinishVaultSetupIxs> {
+    const vaultState = await vault.reloadState();
+    const admin = vaultConfig.admin;
+    // a wrong admin would derive the farm addresses from its own key and could create farms the vault cannot use
+    if (admin.address !== vaultState.vaultAdminAuthority) {
+      throw new Error(`vaultConfig.admin ${admin.address} is not the admin of vault ${vault.address}`);
+    }
+    const reservesMap = vaultReservesMap ?? (await this.loadVaultReserves(vaultState));
+    const status = await this.loadVaultSetupStatus(vaultState, vaultConfig);
+
+    const buildUpdateConfigIx = async (mode: VaultConfigFieldKind, value: string): Promise<Instruction> => {
+      // validations are bypassed because new farms are created in the same tx as the ix that sets them
+      const { updateVaultConfigIx } = await this.updateVaultConfigIxs(
+        vault,
+        mode,
+        value,
+        reservesMap,
+        admin,
+        undefined,
+        true,
+        true,
+        true
+      );
+      return updateVaultConfigIx;
+    };
+    const buildConfigFieldIx = async (field: VaultSetupConfigFieldValues): Promise<Instruction | undefined> => {
+      const value = getVaultSetupConfigFieldValueToWrite(field, overrideIfFieldExists);
+      return value === undefined ? undefined : buildUpdateConfigIx(field.mode, value);
+    };
+
+    const fields = getVaultSetupConfigFieldValues(vaultState, vaultConfig);
+    const configFieldIxs: VaultSetupConfigFields<Instruction | undefined> = {
+      performanceFeeBps: await buildConfigFieldIx(fields.performanceFeeBps),
+      managementFeeBps: await buildConfigFieldIx(fields.managementFeeBps),
+      minDepositAmount: await buildConfigFieldIx(fields.minDepositAmount),
+      minWithdrawAmount: await buildConfigFieldIx(fields.minWithdrawAmount),
+      minInvestAmount: await buildConfigFieldIx(fields.minInvestAmount),
+      minInvestDelaySlots: await buildConfigFieldIx(fields.minInvestDelaySlots),
+      withdrawalPenaltyBps: await buildConfigFieldIx(fields.withdrawalPenaltyBps),
+      withdrawalPenaltyLamports: await buildConfigFieldIx(fields.withdrawalPenaltyLamports),
+      crankFundFeePerReserve: await buildConfigFieldIx(fields.crankFundFeePerReserve),
+      name: await buildConfigFieldIx(fields.name),
+      allowAllocationsInWhitelistedReservesOnly: await buildConfigFieldIx(
+        fields.allowAllocationsInWhitelistedReservesOnly
+      ),
+      allowInvestInWhitelistedReservesOnly: await buildConfigFieldIx(fields.allowInvestInWhitelistedReservesOnly),
+    };
+
+    let vaultFarmIxs: CreateAndSetVaultFarmIxs | undefined;
+    if (!status.vaultFarmSet) {
+      const farmIxs = await this.createSeededVaultFarm(
+        admin,
+        vault.address,
+        vaultState.sharesMint,
+        getFarmSeedCandidates(vault.address, '', 'vf'),
+        useDevnetFarms
+      );
+      const setFarmToVaultIx = await buildUpdateConfigIx(new VaultConfigField.Farm(), farmIxs.farm);
+      vaultFarmIxs = { ...farmIxs, setFarmToVaultIx };
+    }
+
+    let firstLossCapitalFarmIxs: CreateAndSetVaultFarmIxs | undefined;
+    if (!status.firstLossCapitalFarmSet) {
+      const farmIxs = await this.createSeededVaultFarm(
+        admin,
+        vault.address,
+        vaultState.sharesMint,
+        getFarmSeedCandidates(vault.address, 'flc', 'flc'),
+        useDevnetFarms
+      );
+      const updateCooldownIx = await new Farms(this._rpc, this._farmsProgramId).updateFarmConfigIx(
+        admin,
+        farmIxs.farm,
+        DEFAULT_PUBLIC_KEY,
+        FarmConfigOption.WithdrawCooldownPeriod,
+        FLC_FARM_COOLDOWN,
+        undefined,
+        undefined,
+        true
+      );
+      const setFarmToVaultIx = await buildUpdateConfigIx(new VaultConfigField.FirstLossCapitalFarm(), farmIxs.farm);
+      firstLossCapitalFarmIxs = {
+        ...farmIxs,
+        updateFarmIxs: [...farmIxs.updateFarmIxs, updateCooldownIx],
+        setFarmToVaultIx,
+      };
+    }
+
+    const sharesMetadataIx =
+      status.sharesMetadataSet && !overrideIfFieldExists
+        ? undefined
+        : await this.getSetSharesMetadataIx(
+            this.getConnection(),
+            admin,
+            vault.address,
+            vaultState.sharesMint,
+            vaultState.baseVaultAuthority,
+            vaultConfig.vaultTokenSymbol,
+            vaultConfig.vaultTokenName,
+            undefined,
+            this._kaminoVaultProgramId
+          );
+
+    return {
+      configFieldIxs,
+      vaultFarmIxs,
+      firstLossCapitalFarmIxs,
+      sharesMetadataIx,
+    };
+  }
+
+  private async loadVaultSetupStatus(
+    vaultState: VaultState,
+    vaultConfig?: KaminoVaultConfig
+  ): Promise<VaultSetupStatus> {
+    const [sharesMetadata] = await getKVaultSharesMetadataPda(vaultState.sharesMint, METADATA_PROGRAM_ID);
+    const sharesMetadataAccount = await fetchEncodedAccount(this.getConnection(), sharesMetadata);
+
+    const configFields = getVaultSetupConfigFieldsSet(vaultState, vaultConfig);
+    const vaultFarmSet = vaultState.vaultFarm !== DEFAULT_PUBLIC_KEY;
+    const firstLossCapitalFarmSet = vaultState.firstLossCapitalFarm !== DEFAULT_PUBLIC_KEY;
+    const sharesMetadataSet = sharesMetadataAccount.exists;
+
+    return {
+      allSet:
+        Object.values(configFields).every((fieldSet) => fieldSet) &&
+        vaultFarmSet &&
+        firstLossCapitalFarmSet &&
+        sharesMetadataSet,
+      configFields,
+      vaultFarmSet,
+      firstLossCapitalFarmSet,
+      sharesMetadataSet,
+    };
+  }
+
+  /**
+   * This method builds the ixs that create a vault farm at an address derived from the admin and a seed, so the admin is the only signer.
+   * It reuses the farm at the first seed address that holds a farm of the admin for this vault, and returns no setup ixs then.
+   * Otherwise it creates the farm at the first seed address that holds no account or only lamports.
+   * @param admin - the vault admin; it pays for and administers the farm
+   * @param vaultAddress - the address of the vault
+   * @param vaultSharesMint - the mint of the vault shares
+   * @param seeds - the candidate seeds of the farm address, in order of preference
+   * @param useDevnetFarms - if true, a new farm uses the devnet farms global config
+   * @returns a struct with the farm address, the setup ixs and the update ixs
+   */
+  private async createSeededVaultFarm(
+    admin: TransactionSigner,
+    vaultAddress: Address,
+    vaultSharesMint: Address,
+    seeds: string[],
+    useDevnetFarms: boolean
+  ): Promise<Omit<CreateAndSetVaultFarmIxs, 'setFarmToVaultIx'>> {
+    const farmsSDK = new Farms(this._rpc, this._farmsProgramId);
+    const farmsProgramId = farmsSDK.getProgramID();
+    const farms = await Promise.all(
+      seeds.map((seed) => createAddressWithSeed({ baseAddress: admin.address, programAddress: farmsProgramId, seed }))
+    );
+    const farmAccounts = await fetchEncodedAccounts(this.getConnection(), farms);
+
+    const reusableIndex = farmAccounts.findIndex((account) => {
+      if (
+        !account.exists ||
+        account.programAddress !== farmsProgramId ||
+        BigInt(account.data.length) !== SIZE_FARM_STATE
+      ) {
+        return false;
+      }
+      const farmState = decodeFarmState(account).data;
+      return (
+        farmState.farmAdmin === admin.address &&
+        farmState.token.mint === vaultSharesMint &&
+        (farmState.vaultId === DEFAULT_PUBLIC_KEY || farmState.vaultId === vaultAddress)
+      );
+    });
+    // an account with only lamports is free: anyone can send lamports to a seed address
+    const freeIndex = farmAccounts.findIndex(
+      (account) => !account.exists || (account.programAddress === SYSTEM_PROGRAM_ADDRESS && account.data.length === 0)
+    );
+    const index = reusableIndex !== -1 ? reusableIndex : freeIndex;
+    if (index === -1) {
+      throw new Error(`Every farm seed address of vault ${vaultAddress} holds an account that cannot be reused`);
+    }
+    const farm = farms[index];
+    const seed = seeds[index];
+
+    const setupFarmIxs: Instruction[] = [];
+    if (index !== reusableIndex) {
+      const globalConfig = useDevnetFarms ? FARMS_GLOBAL_CONFIG_DEVNET : FARMS_GLOBAL_CONFIG_MAINNET;
+      const [farmVault, farmVaultAuthority, rentLamports] = await Promise.all([
+        getFarmVaultPDA(farmsProgramId, farm, vaultSharesMint),
+        getFarmAuthorityPDA(farmsProgramId, farm),
+        this.getConnection().getMinimumBalanceForRentExemption(SIZE_FARM_STATE).send(),
+      ]);
+      // transfer and allocate instead of createAccountWithSeed, which fails if anyone sent lamports to the address first
+      setupFarmIxs.push(
+        getTransferSolInstruction({ source: admin, destination: farm, amount: rentLamports }),
+        getAllocateWithSeedInstruction({
+          newAccount: farm,
+          baseAccount: admin,
+          base: admin.address,
+          seed,
+          space: SIZE_FARM_STATE,
+          programAddress: farmsProgramId,
+        }),
+        initializeFarm(globalConfig, admin, farm, farmVault, farmVaultAuthority, vaultSharesMint)
+      );
+    }
+
+    const updateFarmVaultIdIx = await farmsSDK.updateFarmConfigIx(
+      admin,
+      farm,
+      DEFAULT_PUBLIC_KEY,
+      FarmConfigOption.UpdateVaultId,
+      vaultAddress,
+      undefined,
+      undefined,
+      true
+    );
+
+    return { farm, setupFarmIxs, updateFarmIxs: [updateFarmVaultIdIx] };
+  }
+
+  /**
    * This method creates a farm for a vault
    * @param signer - the signer of the transaction
    * @param vaultSharesMint - the mint of the vault shares
@@ -1520,6 +1797,24 @@ export class KaminoVaultClient {
           true
         );
         extraIxs.push(updatePendingFlcFarmAdminIx);
+      }
+
+      // only the farm admin can set the pending farm admin; a vault farm with another admin keeps it
+      if (vaultState.vaultFarm !== DEFAULT_PUBLIC_KEY) {
+        const vaultFarmState = await fetchFarmStateOrNull(this.getConnection(), vaultState.vaultFarm);
+        if (vaultFarmState && vaultFarmState.farmAdmin === admin.address) {
+          const updatePendingVaultFarmAdminIx = await farmsSDK.updateFarmConfigIx(
+            admin,
+            vaultState.vaultFarm,
+            DEFAULT_PUBLIC_KEY,
+            FarmConfigOption.UpdatePendingFarmAdmin,
+            newPubkey,
+            undefined,
+            undefined,
+            true
+          );
+          extraIxs.push(updatePendingVaultFarmAdminIx);
+        }
       }
 
       if (!skipLutUpdate) {
@@ -2188,6 +2483,15 @@ export class KaminoVaultClient {
       }
     }
 
+    let acceptVaultFarmOwnershipIx: Instruction | undefined = undefined;
+    if (vaultState.vaultFarm !== DEFAULT_PUBLIC_KEY) {
+      const vaultFarmState = await fetchFarmStateOrNull(this.getConnection(), vaultState.vaultFarm);
+      if (vaultFarmState && vaultFarmState.pendingFarmAdmin === vaultState.pendingAdmin) {
+        const farmsSDK = new Farms(this._rpc, this._farmsProgramId);
+        acceptVaultFarmOwnershipIx = await farmsSDK.updateFarmAdminIx(signer, vaultState.vaultFarm);
+      }
+    }
+
     // read the current LUT and create a new one for the new admin and backfill it
     const accountsInExistentLUT = (await getAccountsInLut(this.getConnection(), vaultState.vaultLookupTable)).filter(
       (account) => account !== vaultState.vaultAdminAuthority
@@ -2222,6 +2526,7 @@ export class KaminoVaultClient {
     const acceptVaultOwnershipIxs: AcceptVaultOwnershipIxs = {
       acceptVaultOwnershipIx,
       acceptFLCFarmOwnershipIx,
+      acceptVaultFarmOwnershipIx,
       initNewLUTIx: initNewLutIx,
       updateLUTIxs: lutIxs,
     };
@@ -4424,14 +4729,13 @@ export class KaminoVaultClient {
     if (isWhitelistOnlyFlag) {
       const flag = parseBooleanFlag(value);
       return Buffer.from([flag]);
+    } else if (mode.kind === new VaultConfigField.Name().kind) {
+      // checked before the number check, so an all-digit name is not encoded as a u64
+      const data = Array.from(this.encodeVaultName(value));
+      return Buffer.from(data);
     } else if (isNaN(+value) || value == DEFAULT_PUBLIC_KEY) {
-      if (mode.kind === new VaultConfigField.Name().kind) {
-        const data = Array.from(this.encodeVaultName(value));
-        return Buffer.from(data);
-      } else {
-        const data = address(value);
-        return Buffer.from(addressEncoder.encode(data));
-      }
+      const data = address(value);
+      return Buffer.from(addressEncoder.encode(data));
     } else {
       const buffer = Buffer.alloc(8);
       buffer.writeBigUInt64LE(BigInt(value.toString()));
@@ -8862,6 +9166,9 @@ export class KaminoVaultConfig {
     this.performanceFeeRatePercentage = args.performanceFeeRatePercentage;
     this.managementFeeRatePercentage = args.managementFeeRatePercentage;
     this.tokenMintProgramId = args.tokenMintProgramId;
+    if (args.name.length > 0 && args.name.trim().length === 0) {
+      throw new Error('Vault name cannot contain only whitespace');
+    }
     this.name = args.name;
     this.vaultTokenSymbol = args.vaultTokenSymbol;
     this.vaultTokenName = args.vaultTokenName;
@@ -9028,6 +9335,168 @@ function parseVaultAdmin(vault: VaultState, signer?: TransactionSigner) {
 
 function parseVaultPendingAdmin(vault: VaultState, signer?: TransactionSigner) {
   return signer ?? noopSigner(vault.pendingAdmin);
+}
+
+/** a config field as createVaultIxs encodes it; undefined means zero/false/empty, which createVaultIxs does not send */
+type VaultSetupConfigFieldValues = {
+  mode: VaultConfigFieldKind;
+  configValue: string | undefined;
+  vaultValue: string | undefined;
+};
+
+function getVaultSetupConfigFieldValues(
+  vaultState: VaultState,
+  vaultConfig: KaminoVaultConfig
+): VaultSetupConfigFields<VaultSetupConfigFieldValues> {
+  const numberField = (
+    mode: VaultConfigFieldKind,
+    configValue: number,
+    vaultValue: BN
+  ): VaultSetupConfigFieldValues => ({
+    mode,
+    configValue: configValue > 0 ? configValue.toString() : undefined,
+    vaultValue: vaultValue.isZero() ? undefined : vaultValue.toString(),
+  });
+  const flagField = (
+    mode: VaultConfigFieldKind,
+    configValue: boolean,
+    vaultValue: number
+  ): VaultSetupConfigFieldValues => ({
+    mode,
+    configValue: configValue ? '1' : undefined,
+    vaultValue: vaultValue === 0 ? undefined : vaultValue.toString(),
+  });
+  const vaultName = decodeVaultName(vaultState.name);
+
+  return {
+    performanceFeeBps: numberField(
+      new VaultConfigField.PerformanceFeeBps(),
+      vaultConfig.getPerformanceFeeBps(),
+      vaultState.performanceFeeBps
+    ),
+    managementFeeBps: numberField(
+      new VaultConfigField.ManagementFeeBps(),
+      vaultConfig.getManagementFeeBps(),
+      vaultState.managementFeeBps
+    ),
+    minDepositAmount: numberField(
+      new VaultConfigField.MinDepositAmount(),
+      vaultConfig.minDepositAmount,
+      vaultState.minDepositAmount
+    ),
+    minWithdrawAmount: numberField(
+      new VaultConfigField.MinWithdrawAmount(),
+      vaultConfig.minWithdrawAmount,
+      vaultState.minWithdrawAmount
+    ),
+    minInvestAmount: numberField(
+      new VaultConfigField.MinInvestAmount(),
+      vaultConfig.minInvestAmount,
+      vaultState.minInvestAmount
+    ),
+    minInvestDelaySlots: numberField(
+      new VaultConfigField.MinInvestDelaySlots(),
+      vaultConfig.minInvestDelaySlots,
+      vaultState.minInvestDelaySlots
+    ),
+    withdrawalPenaltyBps: numberField(
+      new VaultConfigField.WithdrawalPenaltyBps(),
+      vaultConfig.withdrawalPenaltyBps,
+      vaultState.withdrawalPenaltyBps
+    ),
+    withdrawalPenaltyLamports: numberField(
+      new VaultConfigField.WithdrawalPenaltyLamports(),
+      vaultConfig.withdrawalPenaltyLamports,
+      vaultState.withdrawalPenaltyLamports
+    ),
+    crankFundFeePerReserve: numberField(
+      new VaultConfigField.CrankFundFeePerReserve(),
+      vaultConfig.crankFundFeePerReserve,
+      vaultState.crankFundFeePerReserve
+    ),
+    name: {
+      mode: new VaultConfigField.Name(),
+      configValue: vaultConfig.name ? vaultConfig.name : undefined,
+      vaultValue: vaultName ? vaultName : undefined,
+    },
+    allowAllocationsInWhitelistedReservesOnly: flagField(
+      new VaultConfigField.AllowAllocationsInWhitelistedReservesOnly(),
+      vaultConfig.allowAllocationsInWhitelistedReservesOnly,
+      vaultState.allowAllocationsInWhitelistedReservesOnly
+    ),
+    allowInvestInWhitelistedReservesOnly: flagField(
+      new VaultConfigField.AllowInvestInWhitelistedReservesOnly(),
+      vaultConfig.allowInvestInWhitelistedReservesOnly,
+      vaultState.allowInvestInWhitelistedReservesOnly
+    ),
+  };
+}
+
+/** the value finishVaultSetup writes for the field, or undefined when it writes nothing */
+function getVaultSetupConfigFieldValueToWrite(
+  field: VaultSetupConfigFieldValues,
+  overrideIfFieldExists: boolean
+): string | undefined {
+  if (field.configValue === undefined || field.configValue === field.vaultValue) {
+    return undefined;
+  }
+  if (field.vaultValue !== undefined && !overrideIfFieldExists) {
+    return undefined;
+  }
+  return field.configValue;
+}
+
+function getVaultSetupConfigFieldsSet(
+  vaultState: VaultState,
+  vaultConfig?: KaminoVaultConfig
+): VaultSetupConfigFields<boolean> {
+  if (!vaultConfig) {
+    // without a config every field may be zero/false, except the crank fund fee (at least 1) and the name (non-empty)
+    return {
+      performanceFeeBps: true,
+      managementFeeBps: true,
+      minDepositAmount: true,
+      minWithdrawAmount: true,
+      minInvestAmount: true,
+      minInvestDelaySlots: true,
+      withdrawalPenaltyBps: true,
+      withdrawalPenaltyLamports: true,
+      crankFundFeePerReserve: !vaultState.crankFundFeePerReserve.isZero(),
+      name: decodeVaultName(vaultState.name).length > 0,
+      allowAllocationsInWhitelistedReservesOnly: true,
+      allowInvestInWhitelistedReservesOnly: true,
+    };
+  }
+
+  const fields = getVaultSetupConfigFieldValues(vaultState, vaultConfig);
+  const isSet = (field: VaultSetupConfigFieldValues) =>
+    getVaultSetupConfigFieldValueToWrite(field, false) === undefined;
+  return {
+    performanceFeeBps: isSet(fields.performanceFeeBps),
+    managementFeeBps: isSet(fields.managementFeeBps),
+    minDepositAmount: isSet(fields.minDepositAmount),
+    minWithdrawAmount: isSet(fields.minWithdrawAmount),
+    minInvestAmount: isSet(fields.minInvestAmount),
+    minInvestDelaySlots: isSet(fields.minInvestDelaySlots),
+    withdrawalPenaltyBps: isSet(fields.withdrawalPenaltyBps),
+    withdrawalPenaltyLamports: isSet(fields.withdrawalPenaltyLamports),
+    crankFundFeePerReserve: isSet(fields.crankFundFeePerReserve),
+    name: isSet(fields.name),
+    allowAllocationsInWhitelistedReservesOnly: isSet(fields.allowAllocationsInWhitelistedReservesOnly),
+    allowInvestInWhitelistedReservesOnly: isSet(fields.allowInvestInWhitelistedReservesOnly),
+  };
+}
+
+/**
+ * The candidate seeds of a farm that finishVaultSetup creates, each filled up to 32 chars with the vault address.
+ * The first seed has firstPrefix, the next seeds have `${nextPrefix}${index}_`. The first vault farm seed is the one the webapp uses.
+ * '_' is not a base58 char, so the seeds of the vault farm ('', 'vf') and of the FLC farm ('flc', 'flc') never collide.
+ */
+function getFarmSeedCandidates(vaultAddress: Address, firstPrefix: string, nextPrefix: string): string[] {
+  return Array.from({ length: FARM_SEED_CANDIDATES }, (_, index) => {
+    const prefix = index === 0 ? firstPrefix : `${nextPrefix}${index}_`;
+    return prefix + vaultAddress.slice(0, MAX_ADDRESS_SEED_LENGTH - prefix.length);
+  });
 }
 
 function computeNetAPR(grossAPR: Decimal, vault: VaultState): Decimal {

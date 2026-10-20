@@ -41,7 +41,9 @@ import { sendAndConfirmTx } from '../utils/tx';
   );
 
   // 2. Accept admin role + replace the LUT of the vault as the LUT is owned by the admin
-  const acceptAdminIxs = await kaminoManager.acceptVaultOwnershipIxs(vault, vaultReservesMap);
+  // reload so the accept ixs see the new pending admin
+  await vault.reloadState();
+  const acceptAdminIxs = await kaminoManager.acceptVaultOwnershipIxs(vault, vaultReservesMap, newAdmin);
 
   await sendAndConfirmTx(
     c,
@@ -49,6 +51,7 @@ import { sendAndConfirmTx } from '../utils/tx';
     [
       acceptAdminIxs.acceptVaultOwnershipIx,
       ...(acceptAdminIxs.acceptFLCFarmOwnershipIx ? [acceptAdminIxs.acceptFLCFarmOwnershipIx] : []),
+      ...(acceptAdminIxs.acceptVaultFarmOwnershipIx ? [acceptAdminIxs.acceptVaultFarmOwnershipIx] : []),
       acceptAdminIxs.initNewLUTIx,
     ],
     [],

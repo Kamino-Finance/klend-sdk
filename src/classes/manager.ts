@@ -1,5 +1,6 @@
 import {
   Address,
+  createAddressWithSeed,
   Instruction,
   generateKeyPairSigner,
   TransactionSigner,
@@ -39,7 +40,8 @@ import {
   AllOracleAccounts,
   CdnResources,
   CreateKaminoMarketParams,
-  createReserveIxs,
+  createReserveIxsWithAuthority,
+  CreateReserveIxsWithAuthorityResult,
   DEFAULT_PUBLIC_KEY,
   ENV,
   getAllLendingMarketAccounts,
@@ -118,6 +120,8 @@ import {
   RedeemInKindIxs,
   WithdrawAndRedeemInKindIxs,
   WithdrawRedeemAndEnqueueIxs,
+  FinishVaultSetupIxs,
+  VaultSetupStatus,
 } from './vault_types';
 import type { LedgerInstant } from '../utils/ledger';
 import { FarmIncentives, Farms, FarmState } from '@kamino-finance/farms-sdk/dist';
@@ -134,6 +138,16 @@ import { arrayElementConfigItems, ConfigUpdater, PriorityOrderedConfigUpdater } 
 import { OracleMappings } from '@kamino-finance/scope-sdk/dist/@codegen/scope/accounts';
 import { getReserveFarmRewardsAPY as getReserveFarmRewardsAPYUtils, ReserveIncentives } from '../utils/farmUtils';
 import { kaminoCdn } from './cdnClient';
+import { cloneReserveConfig } from '../@codegen/klend/instructions/cloneReserveConfig';
+import {
+  buildReserveConfigPriority,
+  buildCrossMintReserveConfigTemplate,
+  ENTIRE_RESERVE_CONFIG_UPDATER,
+  normalizeScopeChain,
+  RESERVE_CONFIG_UPDATER,
+  type ForceableReserveConfigModeKind,
+  type SeededReserveAccount,
+} from './reserve';
 
 const base58Decoder = getBase58Decoder();
 const addressEncoder = getAddressEncoder();
@@ -154,6 +168,127 @@ export type MarketLutIxs = {
   /** The instructions that insert the market and reserve keys into the lookup table. Send these after `createLutIx` is confirmed. */
   populateLutIxs: Instruction[];
 };
+
+export type ReserveAccountCreation =
+  | {
+      reserveKeypair: TransactionSigner;
+      seededReserveAccount?: never;
+    }
+  | {
+      reserveKeypair?: never;
+      seededReserveAccount: SeededReserveAccount;
+    };
+
+export type CreateReserveIxsParams = {
+  payer: TransactionSigner;
+  reserveAuthority: TransactionSigner;
+  initialLiquiditySource: Address;
+  marketAddress: Address;
+  liquidityMint: Address;
+  liquidityTokenProgram: Address;
+} & ReserveAccountCreation;
+
+export type CreateReserveIxsResult = CreateReserveIxsWithAuthorityResult;
+
+export type CloneReserveConfigIxParams = {
+  signer: TransactionSigner;
+  targetMarketAddress: Address;
+  sourceReserveAddress: Address;
+  targetReserveAddress: Address;
+  customizations?: CloneReserveConfigCustomizations;
+};
+
+export type InitReserveAndCloneConfigIxsParams = CreateReserveIxsParams & {
+  sourceReserveAddress: Address;
+  customizations?: CloneReserveConfigCustomizations;
+  scopePriceChain?: readonly number[];
+};
+
+export type InitReserveAndCloneConfigIxsResult = CreateReserveIxsResult & {
+  cloneReserveConfigIx: Instruction;
+  postCloneConfigUpdateIxs: Instruction[];
+};
+
+export type InitReserveFromConfigTemplateIxsParams = CreateReserveIxsParams & {
+  targetMarketState: LendingMarket;
+  targetReserve?: Reserve;
+  sourceReserveConfig: ReserveConfig;
+  scopePriceFeed: Address;
+  scopePriceChain: readonly number[];
+  scopeTwapChain?: readonly number[];
+  targetTokenName: readonly number[];
+};
+
+export type InitReserveFromConfigTemplateIxsResult = CreateReserveIxsResult & {
+  configUpdateIxs: ReserveConfigUpdateIx[];
+};
+
+export type CloneReserveConfigCustomizations = {
+  fixedBorrowRateBps?: number;
+  debtTermSeconds?: BN;
+  clearElevationGroups?: boolean;
+};
+
+export type ReserveAuthorityType = 'lending-market-owner' | 'proposer-authority';
+
+export type InitializedReserveIdentity = {
+  lendingMarket: Address;
+  liquidity: { mintPubkey: Address; tokenProgram: Address };
+};
+
+export function assertInitializedReserveMatchesTarget(
+  reserve: InitializedReserveIdentity,
+  targetMarket: Address,
+  targetMint: Address,
+  targetTokenProgram: Address
+): void {
+  if (reserve.lendingMarket !== targetMarket) {
+    throw new Error('Existing initialized reserve belongs to a different lending market');
+  }
+  if (reserve.liquidity.mintPubkey !== targetMint) {
+    throw new Error('Existing initialized reserve has a different liquidity mint');
+  }
+  if (reserve.liquidity.tokenProgram !== targetTokenProgram) {
+    throw new Error('Existing initialized reserve has a different liquidity token program');
+  }
+}
+
+function createReserveConfigCustomizations(customizations: CloneReserveConfigCustomizations | undefined): {
+  overrideFixedRateBps: number;
+  fixedBorrowRateBps: number;
+  overrideDebtTermSeconds: number;
+  debtTermSeconds: BN;
+  clearElevationGroups: number;
+} {
+  const fixedBorrowRateBps = customizations?.fixedBorrowRateBps;
+  if (
+    fixedBorrowRateBps !== undefined &&
+    (!Number.isInteger(fixedBorrowRateBps) || fixedBorrowRateBps < 0 || fixedBorrowRateBps > 0xffffffff)
+  ) {
+    throw new Error('fixedBorrowRateBps must be a u32 integer');
+  }
+
+  const debtTermSeconds = customizations?.debtTermSeconds;
+  if (
+    debtTermSeconds !== undefined &&
+    (!BN.isBN(debtTermSeconds) || debtTermSeconds.isNeg() || debtTermSeconds.bitLength() > 64)
+  ) {
+    throw new Error('debtTermSeconds must be a u64 BN');
+  }
+
+  const clearElevationGroups = customizations?.clearElevationGroups;
+  if (clearElevationGroups !== undefined && typeof clearElevationGroups !== 'boolean') {
+    throw new Error('clearElevationGroups must be a boolean');
+  }
+
+  return {
+    overrideFixedRateBps: fixedBorrowRateBps === undefined ? 0 : 1,
+    fixedBorrowRateBps: fixedBorrowRateBps ?? 0,
+    overrideDebtTermSeconds: debtTermSeconds === undefined ? 0 : 1,
+    debtTermSeconds: debtTermSeconds ?? new BN(0),
+    clearElevationGroups: clearElevationGroups ? 1 : 0,
+  };
+}
 
 /**
  * KaminoManager is a class that provides a high-level interface to interact with the Kamino Lend and Kamino Vault programs, in order to create and manage a market, as well as vaults
@@ -195,6 +330,101 @@ export class KaminoManager {
 
   getProgramID() {
     return this._kaminoVaultProgramId;
+  }
+
+  async createReserveIxs(params: CreateReserveIxsParams): Promise<CreateReserveIxsResult> {
+    return createReserveIxsWithAuthority({
+      rpc: this._rpc,
+      payer: params.payer,
+      reserveAuthority: params.reserveAuthority,
+      initialLiquiditySource: params.initialLiquiditySource,
+      lendingMarket: params.marketAddress,
+      liquidityMint: params.liquidityMint,
+      liquidityMintTokenProgram: params.liquidityTokenProgram,
+      ...(params.seededReserveAccount
+        ? { seededReserveAccount: params.seededReserveAccount }
+        : { reserveAddress: params.reserveKeypair }),
+      programId: this._kaminoLendProgramId,
+    });
+  }
+
+  cloneReserveConfigIx(params: CloneReserveConfigIxParams): Instruction {
+    return cloneReserveConfig(
+      {
+        customizations: createReserveConfigCustomizations(params.customizations),
+      },
+      {
+        signer: params.signer,
+        targetLendingMarket: params.targetMarketAddress,
+        sourceReserve: params.sourceReserveAddress,
+        targetReserve: params.targetReserveAddress,
+        instructionSysvarAccount: SYSVAR_INSTRUCTIONS_ADDRESS,
+      },
+      undefined,
+      this._kaminoLendProgramId
+    );
+  }
+
+  async initReserveAndCloneConfigIxs(
+    params: InitReserveAndCloneConfigIxsParams
+  ): Promise<InitReserveAndCloneConfigIxsResult> {
+    const { createReserveAccountIx, initReserveIx, reserveAddress } = await this.createReserveIxs(params);
+    const cloneReserveConfigIx = this.cloneReserveConfigIx({
+      signer: params.reserveAuthority,
+      targetMarketAddress: params.marketAddress,
+      sourceReserveAddress: params.sourceReserveAddress,
+      targetReserveAddress: reserveAddress,
+      customizations: params.customizations,
+    });
+
+    let postCloneConfigUpdateIxs: Instruction[] = [];
+    if (params.scopePriceChain !== undefined) {
+      const mode = new UpdateConfigMode.UpdateTokenInfoScopeChain();
+      const value = RESERVE_CONFIG_UPDATER.forMode(mode).encodeItem(normalizeScopeChain(params.scopePriceChain));
+      const updateIx = await updateReserveConfigIx(
+        params.reserveAuthority,
+        params.marketAddress,
+        reserveAddress,
+        mode,
+        value,
+        this._kaminoLendProgramId,
+        true
+      );
+      postCloneConfigUpdateIxs = [updateIx];
+    }
+
+    return { createReserveAccountIx, initReserveIx, reserveAddress, cloneReserveConfigIx, postCloneConfigUpdateIxs };
+  }
+
+  async initReserveFromConfigTemplateIxs(
+    params: InitReserveFromConfigTemplateIxsParams
+  ): Promise<InitReserveFromConfigTemplateIxsResult> {
+    const { createReserveAccountIx, initReserveIx, reserveAddress } = await this.createReserveIxs(params);
+    const targetConfig = buildCrossMintReserveConfigTemplate(params.sourceReserveConfig, {
+      scopePriceFeed: params.scopePriceFeed,
+      scopePriceChain: params.scopePriceChain,
+      scopeTwapChain: params.scopeTwapChain,
+      targetTokenName: params.targetTokenName,
+    });
+    const initialReserveAuthority =
+      params.targetReserve === undefined &&
+      params.targetMarketState.proposerAuthority !== DEFAULT_PUBLIC_KEY &&
+      params.reserveAuthority.address === params.targetMarketState.proposerAuthority
+        ? params.reserveAuthority
+        : undefined;
+    const configUpdateIxs = await parseForChangesReserveConfigAndGetIxs(
+      { address: params.marketAddress, state: params.targetMarketState },
+      params.targetReserve,
+      reserveAddress,
+      targetConfig,
+      this._kaminoLendProgramId,
+      params.reserveAuthority,
+      undefined,
+      [],
+      initialReserveAuthority
+    );
+
+    return { createReserveAccountIx, initReserveIx, reserveAddress, configUpdateIxs };
   }
 
   /**
@@ -239,50 +469,154 @@ export class KaminoManager {
 
   /**
    * This is a function that helps quickly setting up a reserve for an asset with a default config. The config can be modified later on.
-   * @param params.admin - the admin of the reserve
+   * @param params.admin - the default payer and reserve authority
+   * @param params.payer - optional payer for the reserve account creation
+   * @param params.reserveAuthority - optional authority for reserve initialization and config updates
+   * @param params.marketOwner - optional market owner for activation updates when the proposer creates the reserve
+   * @param params.reserveAuthorityType - optional role of the reserve authority; inferred from the market when omitted
+   * @param params.adminLiquiditySource - the token account that funds the initial reserve deposit
    * @param params.marketAddress - the market to create a reserve for, only the market admin can create a reserve for the market
    * @param params.assetConfig - an object that helps generate a default reserve config with some inputs which have to be configured before calling this function
-   * @returns reserve - keypair used for reserve creation -> to be signed with when executing the transaction
-   * @returns txnIxs - an array of arrays of ixs -> first array for reserve creation, second for updating it with correct params
+   * @param params.reserveKeypair - the signer for a new random reserve account address
+   * @param params.seededReserveAccount - the base signer and seed for a deterministic reserve account address
+   * @param params.globalAdminSigner - optional global admin that signs the global-admin-only config updates; not needed when the proposer creates the reserve
+   * @returns reserveAddress - the random or derived reserve account address
+   * @returns createReserveIxs - account creation and initialization instructions that are still required
+   * @returns configUpdateIxs - reserve-authority configuration instructions
+   * @returns marketOwnerConfigUpdateIxs - market-owner activation instructions
    */
   async addAssetToMarketIxs(params: AddAssetToMarketParams): Promise<{
+    reserveAddress: Address;
     createReserveIxs: Instruction[];
     configUpdateIxs: ReserveConfigUpdateIx[];
+    marketOwnerConfigUpdateIxs: ReserveConfigUpdateIx[];
   }> {
     const market = await LendingMarket.fetch(this._rpc, params.marketAddress, this._kaminoLendProgramId);
     if (!market) {
       throw new Error('Market not found');
     }
     const marketWithAddress: MarketWithAddress = { address: params.marketAddress, state: market };
+    const payer = params.payer ?? params.admin;
+    const reserveAuthority = params.reserveAuthority ?? params.admin;
+    const reserveAddress = params.seededReserveAccount
+      ? await createAddressWithSeed({
+          baseAddress: params.seededReserveAccount.base.address,
+          seed: params.seededReserveAccount.seed,
+          programAddress: this._kaminoLendProgramId,
+        })
+      : params.reserveKeypair.address;
 
-    const reserve = await Reserve.fetch(this._rpc, params.reserveKeypair.address, this._kaminoLendProgramId);
+    let reserve: Reserve | null;
+    let reserveAccountAlreadyCreated = false;
+    try {
+      reserve = await Reserve.fetch(this._rpc, reserveAddress, this._kaminoLendProgramId);
+    } catch (error) {
+      const accountInfo = await this._rpc.getAccountInfo(reserveAddress, { encoding: 'base64' }).send();
+      const accountData = accountInfo.value ? Buffer.from(accountInfo.value.data[0], 'base64') : undefined;
+      const isEmptyReserveAccount =
+        accountInfo.value?.owner === this._kaminoLendProgramId &&
+        accountData !== undefined &&
+        accountData.length === Reserve.layout.span + Reserve.discriminator.length &&
+        accountData.every((byte) => byte === 0);
+      if (!isEmptyReserveAccount) {
+        throw error;
+      }
+      reserve = null;
+      reserveAccountAlreadyCreated = true;
+    }
 
     let createReserveInstructions: Instruction[] = [];
     if (!reserve) {
-      createReserveInstructions = await createReserveIxs(
-        this._rpc,
-        params.admin,
-        params.adminLiquiditySource,
-        params.marketAddress,
-        params.assetConfig.mint,
-        params.assetConfig.mintTokenProgram,
-        params.reserveKeypair,
-        this._kaminoLendProgramId
-      );
+      const { createReserveAccountIx, initReserveIx } = await this.createReserveIxs({
+        payer,
+        reserveAuthority,
+        initialLiquiditySource: params.adminLiquiditySource,
+        marketAddress: params.marketAddress,
+        liquidityMint: params.assetConfig.mint,
+        liquidityTokenProgram: params.assetConfig.mintTokenProgram,
+        ...(params.seededReserveAccount
+          ? { seededReserveAccount: params.seededReserveAccount }
+          : { reserveKeypair: params.reserveKeypair }),
+      });
+      createReserveInstructions = reserveAccountAlreadyCreated
+        ? [initReserveIx]
+        : [createReserveAccountIx, initReserveIx];
     } else {
       console.log('Reserve already exists, skipping creation');
     }
 
-    const configUpdateIxs = await this.updateReserveIxs(
-      params.admin,
+    if (reserve) {
+      assertInitializedReserveMatchesTarget(
+        reserve,
+        params.marketAddress,
+        params.assetConfig.mint,
+        params.assetConfig.mintTokenProgram
+      );
+    }
+
+    const reserveAuthorityMatchesProposer =
+      reserveAuthority.address === market.proposerAuthority && market.proposerAuthority !== DEFAULT_PUBLIC_KEY;
+    const reserveAuthorityMatchesOwner = reserveAuthority.address === market.lendingMarketOwner;
+    // An address that is both owner and proposer uses the owner role unless the caller selects the proposer role
+    const reserveAuthorityType: ReserveAuthorityType =
+      params.reserveAuthorityType ??
+      (reserveAuthorityMatchesProposer && !reserveAuthorityMatchesOwner
+        ? 'proposer-authority'
+        : 'lending-market-owner');
+    if (reserveAuthorityType === 'proposer-authority' && !reserveAuthorityMatchesProposer) {
+      throw new Error('The selected proposer authority does not match the lending market');
+    }
+    const initialReserveAuthority =
+      !reserve && reserveAuthorityType === 'proposer-authority' ? reserveAuthority : undefined;
+
+    const requestedReserveConfig = params.assetConfig.getReserveConfig();
+    const reserveAuthorityConfig = initialReserveAuthority
+      ? new ReserveConfig({
+          ...requestedReserveConfig,
+          depositLimit: new BN(0),
+          borrowLimit: new BN(0),
+        })
+      : requestedReserveConfig;
+
+    const configUpdateIxs = await parseForChangesReserveConfigAndGetIxs(
       marketWithAddress,
-      params.reserveKeypair.address,
-      params.assetConfig.getReserveConfig(),
-      undefined,
-      params.globalAdminSigner
+      reserve ?? undefined,
+      reserveAddress,
+      reserveAuthorityConfig,
+      this._kaminoLendProgramId,
+      reserveAuthority,
+      params.globalAdminSigner,
+      [],
+      initialReserveAuthority
     );
 
-    return { createReserveIxs: createReserveInstructions, configUpdateIxs };
+    let marketOwnerConfigUpdateIxs: ReserveConfigUpdateIx[] = [];
+    if (initialReserveAuthority) {
+      // reuse the caller's signer so kit does not see two signers for one address
+      const marketOwner =
+        params.marketOwner ?? (reserveAuthorityMatchesOwner ? reserveAuthority : noopSigner(market.lendingMarketOwner));
+      const activationUpdates = ENTIRE_RESERVE_CONFIG_UPDATER.encodeAllUpdates(
+        reserveAuthorityConfig,
+        requestedReserveConfig,
+        buildReserveConfigPriority(reserveAuthorityConfig, requestedReserveConfig)
+      );
+      marketOwnerConfigUpdateIxs = await Promise.all(
+        activationUpdates.map(async ({ mode, value }) => ({
+          ix: await updateReserveConfigIx(
+            marketOwner,
+            params.marketAddress,
+            reserveAddress,
+            mode,
+            value,
+            this._kaminoLendProgramId,
+            false
+          ),
+          requiresGlobalAdmin: false,
+        }))
+      );
+    }
+
+    return { reserveAddress, createReserveIxs: createReserveInstructions, configUpdateIxs, marketOwnerConfigUpdateIxs };
   }
 
   /**
@@ -304,6 +638,45 @@ export class KaminoManager {
     useDevnetFarms: boolean = false
   ): Promise<{ vault: TransactionSigner; lut: Address; initVaultIxs: InitVaultIxs }> {
     return this._vaultClient.createVaultIxs(vaultConfig, useDevnetFarms);
+  }
+
+  /**
+   * This method reports which parts of the setup done by createVaultIxs the vault is missing; the vault lookup table is not checked
+   * @param vault - the vault to check; its state is reloaded
+   * @param [vaultConfig] - the config the vault was created with; when absent, every config field may be zero/false except crankFundFeePerReserve (at least 1) and name (non-empty)
+   * @returns a struct with one flag per setup part; with the config, allSet is true when finishVaultSetup without override returns no ixs
+   */
+  async getVaultSetupStatus(vault: KaminoVault, vaultConfig?: KaminoVaultConfig): Promise<VaultSetupStatus> {
+    return this._vaultClient.getVaultSetupStatus(vault, vaultConfig);
+  }
+
+  /**
+   * This method builds the ixs that finish the setup of a partially created vault, as createVaultIxs would have done it.
+   * Like createVaultIxs it never sends a zero/false/empty config value, so override cannot reset a field to zero.
+   * It never replaces an existing farm, and it does not create or populate the vault lookup table.
+   * It creates the farms at addresses derived from the admin and the vault, so the admin is the only signer (multisig compatible),
+   * and it reuses a farm that an earlier attempt created at that address.
+   * @param vault - the vault to finish; its state is reloaded
+   * @param vaultConfig - the config to apply; admin must be the vault admin and signs the ixs, tokenMint and tokenMintProgramId are not used
+   * @param [overrideIfFieldExists] - if true, also rewrite the config fields and the shares metadata the vault already has
+   * @param [useDevnetFarms] - if true, new farms use the devnet farms global config
+   * @param [vaultReservesMap] - optional preloaded reserve states for the vault allocation; loaded when absent
+   * @returns a struct with the ixs for each missing setup part
+   */
+  async finishVaultSetup(
+    vault: KaminoVault,
+    vaultConfig: KaminoVaultConfig,
+    overrideIfFieldExists: boolean = false,
+    useDevnetFarms: boolean = false,
+    vaultReservesMap?: Map<Address, KaminoReserve>
+  ): Promise<FinishVaultSetupIxs> {
+    return this._vaultClient.finishVaultSetup(
+      vault,
+      vaultConfig,
+      overrideIfFieldExists,
+      useDevnetFarms,
+      vaultReservesMap
+    );
   }
 
   /**
@@ -658,6 +1031,7 @@ export class KaminoManager {
    * @param config - the new reserve configuration to be used for the update
    * @param reserveStateOverride - the reserve state, useful to provide, if already fetched outside this method, in order to avoid an extra rpc call to fetch it. Make sure the reserveConfig has not been updated since fetching the reserveState that you pass in.
    * @param globalAdminSigner - optional global admin signer for config modes that require it
+   * @param forceFields - optional config modes to update even when their values have not changed
    * @returns - an array of update instructions with metadata indicating if global admin is required as signer.
    * If there are many fields that are being updated, multiple transactions might be required to fit all ixs.
    */
@@ -667,7 +1041,8 @@ export class KaminoManager {
     reserve: Address,
     config: ReserveConfig,
     reserveStateOverride?: Reserve,
-    globalAdminSigner?: TransactionSigner
+    globalAdminSigner?: TransactionSigner,
+    forceFields: readonly ForceableReserveConfigModeKind[] = []
   ): Promise<ReserveConfigUpdateIx[]> {
     const reserveState = reserveStateOverride
       ? reserveStateOverride
@@ -682,7 +1057,8 @@ export class KaminoManager {
         config,
         this._kaminoLendProgramId,
         lendingMarketOwner,
-        globalAdminSigner
+        globalAdminSigner,
+        forceFields
       ))
     );
 

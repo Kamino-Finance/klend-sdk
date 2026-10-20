@@ -21,6 +21,7 @@ import { NULL_PUBKEY } from './pubkey';
 import { U16_MAX } from '@kamino-finance/scope-sdk';
 import { OracleType } from '@kamino-finance/scope-sdk/dist/@codegen/scope/types';
 import { LendingMarket } from '../lib';
+import type { ReserveAccountCreation, ReserveAuthorityType } from '../classes/manager';
 
 export type ScopeOracleConfig = {
   name: string;
@@ -38,12 +39,15 @@ export type CreateKaminoMarketParams = {
 
 export type AddAssetToMarketParams = {
   admin: TransactionSigner;
+  payer?: TransactionSigner;
+  reserveAuthority?: TransactionSigner;
+  marketOwner?: TransactionSigner;
+  reserveAuthorityType?: ReserveAuthorityType;
   adminLiquiditySource: Address;
   marketAddress: Address;
   assetConfig: AssetConfig;
-  reserveKeypair: TransactionSigner;
   globalAdminSigner?: TransactionSigner;
-};
+} & ReserveAccountCreation;
 
 export interface AssetConfig {
   readonly mint: Address;

@@ -69,6 +69,29 @@ export class ManagerEnv {
     this.farmsGlobalConfig = farmsGlobalConfig;
   }
 
+  getSignerForAddress(requestedAddress: Address, mode?: SendTxMode): TransactionSigner {
+    if (mode === 'execute' && this.signerConfig.admin?.address !== requestedAddress) {
+      throw new Error(`Execute mode requires the configured admin signer for reserve authority ${requestedAddress}`);
+    }
+    if (mode === 'multisig' && this.signerConfig.multisigSigner?.address !== requestedAddress) {
+      throw new Error(`--multisig must match the selected reserve authority ${requestedAddress}`);
+    }
+    if (this.signerConfig.admin?.address === requestedAddress) {
+      return this.signerConfig.admin;
+    }
+    if (this.signerConfig.multisigSigner?.address === requestedAddress) {
+      return this.signerConfig.multisigSigner;
+    }
+    return noopSigner(requestedAddress);
+  }
+
+  getConfiguredAdminSigner(): TransactionSigner {
+    if (!this.signerConfig.admin) {
+      throw new Error('A configured admin signer is required to execute reserve account creation');
+    }
+    return this.signerConfig.admin;
+  }
+
   async getSigner({
     market,
     useLendingMarketOwnerCached,
